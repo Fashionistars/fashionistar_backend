@@ -32,8 +32,8 @@ SECRET_KEY = 'django-insecure-b*tuoe%^o+=^35$0fufrm=oamh^(o0tabn39(7ni12(i-oup+4
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["https://fashionistar-backend.onrender.com", "127.0.0.1"]
-CSRF_TRUSTED_ORIGINS = ['https://fashionistar-backend.onrender.com', 'https://127.0.0.1']
+ALLOWED_HOSTS = ["fashionistar-backend.onrender.com", "127.0.0.1"]
+CSRF_TRUSTED_ORIGINS = ['fashionistar-backend.onrender.com', 'https://127.0.0.1']
 SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
 
 
