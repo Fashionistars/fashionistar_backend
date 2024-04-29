@@ -32,8 +32,11 @@ SECRET_KEY = 'django-insecure-b*tuoe%^o+=^35$0fufrm=oamh^(o0tabn39(7ni12(i-oup+4
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
+# ALLOWED_HOSTS = ["fashionistar-backend.onrender.com", "127.0.0.1"]
+
+
 ALLOWED_HOSTS = ["fashionistar-backend.onrender.com", "127.0.0.1"]
-CSRF_TRUSTED_ORIGINS = ['fashionistar-backend.onrender.com', 'https://127.0.0.1']
+CSRF_TRUSTED_ORIGINS = ['https://fashionistar-backend.onrender.com', 'https://127.0.0.1']
 SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
 
 
@@ -113,10 +116,11 @@ DATABASES = {
     }
 }
 
+DATABASE_URL = env('DATABASE_URL')
 
-# db_from_env = dj_database_url.config(conn_max_age=600)
-# DATABASES['default'].update(db_from_env)
-
+db_from_env = dj_database_url.config(DATABASE_URL,conn_max_age=600)
+DATABASES['default'].update(db_from_env)
+# default='postgres://user:password@localhost:5432/mydatabase',
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
@@ -359,3 +363,4 @@ JAZZMIN_UI_TWEAKS = {
         "success": "btn-success"
     }
 }
+

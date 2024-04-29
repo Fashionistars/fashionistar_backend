@@ -25,11 +25,11 @@ from drf_yasg import openapi
 
 schema_view = get_schema_view(
    openapi.Info(
-      title="E-commerce Backend APIs",
+      title="FASHIONISTAR E-commerce Backend APIs",
       default_version='v1',
-      description="This is the API documentation for e-commerce project APIs",
+      description="This is the API documentation for FASHIONISTAR E-commerce Backend APIs",
       terms_of_service="https://www.google.com/policies/terms/",
-      contact=openapi.Contact(email="desphixs@gmail.com"),
+      contact=openapi.Contact(email="fashionistarclothings@outlook.com"),
       license=openapi.License(name="BSD License"),
    ),
    public=True,
