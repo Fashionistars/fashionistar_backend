@@ -22,7 +22,7 @@ inflection==0.5.1
 jmespath==0.10.0
 marshmallow==3.20.1
 packaging==23.2
-psycopg2==2.9.9
+# psycopg2==2.9.9
 pycparser==2.21
 PyJWT==2.6.0
 python-dateutil==2.8.2
