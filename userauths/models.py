@@ -114,3 +114,14 @@ def save_user_profile(sender, instance, **kwargs):
 
 post_save.connect(create_user_profile, sender=User)
 post_save.connect(save_user_profile, sender=User)
+
+
+class Tokens(models.Model):
+    email = models.EmailField('email address')
+    action = models.CharField(max_length=20)
+    token = models.CharField(max_length=200)
+    exp_date = models.FloatField()
+    date_used = models.DateTimeField(null=True)
+    created_at = models.DateTimeField(auto_now=True)
+    used = models.BooleanField(default=False)
+    confirmed = models.BooleanField(default=False)
