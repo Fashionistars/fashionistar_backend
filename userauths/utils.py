@@ -5,7 +5,6 @@ from typing import Any
 from django.conf import settings
 from django.core.mail import send_mail
 from django.template.loader import TemplateDoesNotExist, render_to_string
-import time
 from .models import *
 
 
@@ -16,7 +15,7 @@ def generate_token():
     Generates 6 digit random token for user 
     email verification and password reset view
     """
-    otp = "".join([f"{secrets.randbelow(10)}" for _ in range(6)])
+    otp = "".join([f"{secrets.randbelow(10)}" for _ in range(4)])
     return otp
 
 
