@@ -31,27 +31,18 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         except:
             token['vendor_id'] = 0
 
-        # ...
-
-        # Return the token with custom claims
         return token
 
-# Define a serializer for user registration, which inherits from serializers.ModelSerializer
 class RegisterSerializer(serializers.ModelSerializer):
-    # Define fields for the serializer, including password and password2
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True, required=True)
 
     class Meta:
-        # Specify the model that this serializer is associated with
         model = User
-        # Define the fields from the model that should be included in the serializer
         fields = ('full_name', 'email', 'phone', 'password', 'password2')
 
     def validate(self, attrs):
-        # Define a validation method to check if the passwords match
         if attrs['password'] != attrs['password2']:
-            # Raise a validation error if the passwords don't match
             raise serializers.ValidationError({"password": "Password fields didn't match."})
 
         # Return the validated attributes
@@ -88,16 +79,7 @@ class ProfileSerializer(serializers.ModelSerializer):
         model = Profile
         fields = '__all__'
 
-    # def __init__(self, *args, **kwargs):
-    #     super(ProfileSerializer, self).__init__(*args, **kwargs)
-    #     # Customize serialization depth based on the request method.
-    #     request = self.context.get('request')
-    #     if request and request.method == 'POST':
-    #         # When creating a new product FAQ, set serialization depth to 0.
-    #         self.Meta.depth = 0
-    #     else:
-    #         # For other methods, set serialization depth to 3.
-    #         self.Meta.depth = 3
+
 
     def to_representation(self, instance):
         response = super().to_representation(instance)
