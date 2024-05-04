@@ -2,10 +2,11 @@ from userauths.models import Profile, User
 from django.contrib.auth.password_validation import validate_password
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework import serializers
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
 
 
-# Define a custom serializer that inherits from TokenObtainPairSerializer
+User = get_user_model()
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     '''
     class MyTokenObtainPairSerializer(TokenObtainPairSerializer):: This line creates a new token serializer called MyTokenObtainPairSerializer that is based on an existing one called TokenObtainPairSerializer. Think of it as customizing the way tokens work.
@@ -32,9 +33,12 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
 
         return token
 
+
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True, required=True)
+    email = serializers.EmailField(required=True)
+    phone = serializers.CharField(required=True)
 
     class Meta:
         model = User
@@ -44,7 +48,12 @@ class RegisterSerializer(serializers.ModelSerializer):
         if attrs['password'] != attrs['password2']:
             raise serializers.ValidationError({"password": "Password fields didn't match."})
 
-        # Return the validated attributes
+        if User.objects.filter(email=attrs['email']).exists():
+            raise serializers.ValidationError({"email": "This email has already been used."})
+
+        if User.objects.filter(phone=attrs['phone']).exists():
+            raise serializers.ValidationError({"phone": "This phone number has already been used."})
+
         return attrs
 
     def create(self, validated_data):
@@ -54,14 +63,13 @@ class RegisterSerializer(serializers.ModelSerializer):
             email=validated_data['email'],
             phone=validated_data['phone']
         )
-        email_username, mobile = user.email.split('@')
-        user.username = email_username
 
+        user.username = validated_data['email']
         user.set_password(validated_data['password'])
         user.save()
 
         return user
-    
+
 
 class UserSerializer(serializers.ModelSerializer):
 
@@ -76,13 +84,11 @@ class ProfileSerializer(serializers.ModelSerializer):
         model = Profile
         fields = '__all__'
 
-
-
     def to_representation(self, instance):
         response = super().to_representation(instance)
         response['user'] = UserSerializer(instance.user).data
         return response
-    
+
 
 class PasswordResetSerializer(serializers.Serializer):
     email = serializers.EmailField()

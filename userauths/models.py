@@ -6,14 +6,19 @@ from django.utils.html import mark_safe
 from shortuuid.django_fields import ShortUUIDField
 from addon.models import Tax
 
-import os
-import uuid
 
 GENDER = (
     ("female", "Female"),
     ("male", "Male"),
 )
 
+VENDOR = 'vendor'
+CLIENT = 'client'
+
+STATUS_CHOICES = [
+    (VENDOR, 'Vendor'),
+    (CLIENT, 'Client'),
+]
 
 
 def user_directory_path(instance, filename):
@@ -37,16 +42,14 @@ def user_directory_path(instance, filename):
         ext = filename.split('.')[-1]
         filename = "%s.%s" % ('file', ext)
         return 'user_{0}/{1}'.format('file', filename)
-    
 
-    
+
 class User(AbstractUser):
     username = models.CharField(max_length=500, null=True, blank=True)
     email = models.EmailField(unique=True)
     full_name = models.CharField(max_length=500, null=True, blank=True)
     phone = models.CharField(max_length=500)
-    # otp = models.CharField(max_length=1000, null=True, blank=True)
-    # reset_token  = models.CharField(max_length=1000, null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=CLIENT)
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']
@@ -72,7 +75,6 @@ class Profile(models.Model):
     image = models.ImageField(upload_to='accounts/users', default='default/default-user.jpg', null=True, blank=True)
     full_name = models.CharField(max_length=1000, null=True, blank=True)
     about = models.TextField( null=True, blank=True)
-    
     gender = models.CharField(max_length=500, choices=GENDER, null=True, blank=True)
     country = models.CharField(max_length=1000, null=True, blank=True)
     city = models.CharField(max_length=500, null=True, blank=True)
@@ -104,7 +106,8 @@ class Profile(models.Model):
     def thumbnail(self):
         return mark_safe('<img src="/media/%s" width="50" height="50" object-fit:"cover" style="border-radius: 30px; object-fit: cover;" />' % (self.image))
     
-    
+
+   
 def create_user_profile(sender, instance, created, **kwargs):
 	if created:
 		Profile.objects.create(user=instance)
