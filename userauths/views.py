@@ -25,7 +25,7 @@ import random
 from userauths.serializer import MyTokenObtainPairSerializer, ProfileSerializer, RegisterSerializer, UserSerializer
 
 # utils
-from utils import EmailManager, generate_token
+from userauths.utils import EmailManager, generate_token
 # Models
 from userauths.models import Profile, User
 
@@ -42,13 +42,14 @@ class RegisterView(generics.CreateAPIView):
 
 @api_view(['GET'])
 def getRoutes(request):
-    """It defines a list of API routes that can be accessed."""
+    # It defines a list of API routes that can be accessed.
     routes = [
         '/api/token/',
         '/api/register/',
         '/api/token/refresh/',
         '/api/test/'
     ]
+    # It returns a DRF Response object containing the list of routes.
     return Response(routes)
 
 
@@ -101,7 +102,6 @@ class PasswordEmailVerify(generics.RetrieveAPIView):
             user.otp = generate_numeric_otp()
             uidb64 = user.pk
             
-             # Generate a token and include it in the reset link sent via email
             refresh = RefreshToken.for_user(user)
             reset_token = str(refresh.access_token)
 
