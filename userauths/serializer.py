@@ -34,49 +34,49 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         return token
 
 
-# class RegisterSerializer(serializers.ModelSerializer):
-#     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
-#     password2 = serializers.CharField(write_only=True, required=True)
-#     email = serializers.EmailField(required=False)
-#     phone = serializers.CharField(required=False)
+class RegisterSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
+    password2 = serializers.CharField(write_only=True, required=True)
+    email = serializers.EmailField(required=False)
+    phone = serializers.CharField(required=False)
 
-#     class Meta:
-#         model = User
-#         fields = ('email', 'phone', 'password', 'password2')
+    class Meta:
+        model = User
+        fields = ('email', 'phone', 'password', 'password2')
 
-#     def validate(self, attrs):
-#         if attrs['password'] != attrs['password2']:
-#             raise serializers.ValidationError({"password": "Password fields didn't match."})
+    def validate(self, attrs):
+        if attrs['password'] != attrs['password2']:
+            raise serializers.ValidationError({"password": "Password fields didn't match."})
 
-#         email = attrs.get('email')
-#         phone = attrs.get('phone')
+        email = attrs.get('email')
+        phone = attrs.get('phone')
 
-#         if not email and not phone:
-#             raise serializers.ValidationError("Email or phone number is required.")
+        if not email and not phone:
+            raise serializers.ValidationError("Email or phone number is required.")
 
-#         if email and User.objects.filter(email=email).exists():
-#             raise serializers.ValidationError({"email": "This email has already been used."})
+        if email and User.objects.filter(email=email).exists():
+            raise serializers.ValidationError({"email": "This email has already been used."})
 
-#         if phone and User.objects.filter(phone=phone).exists():
-#             raise serializers.ValidationError({"phone": "This phone number has already been used."})
+        if phone and User.objects.filter(phone=phone).exists():
+            raise serializers.ValidationError({"phone": "This phone number has already been used."})
 
-#         return attrs
+        return attrs
 
-#     def create(self, validated_data):
-#         email = validated_data.get('email')
-#         phone = validated_data.get('phone')
-#         password = validated_data.get('password')
+    def create(self, validated_data):
+        email = validated_data.get('email')
+        phone = validated_data.get('phone')
+        password = validated_data.get('password')
 
-#         user = User.objects.create_user(
-#             email=email,
-#             phone=phone,
-#             password=password
-#         )
+        user = User.objects.create_user(
+            email=email,
+            phone=phone,
+            password=password
+        )
 
-#         user.username = user.email or user.phone  # Set username based on unique_identifier
-#         user.save()
+        user.username = user.email or user.phone  # Set username based on unique_identifier
+        user.save()
 
-#         return user
+        return user
 
 
 class UserSerializer(serializers.ModelSerializer):

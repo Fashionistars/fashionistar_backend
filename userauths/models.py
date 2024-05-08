@@ -3,6 +3,7 @@ from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
 from django.db.models.signals import post_save
 from django.utils.html import mark_safe
+from django.utils.translation import gettext_lazy as _
 from shortuuid.django_fields import ShortUUIDField
 from addon.models import Tax
 
@@ -45,29 +46,41 @@ def user_directory_path(instance, filename):
 
 
 class User(AbstractUser):
-    username = models.CharField(max_length=100, null=True)
     email = models.EmailField(unique=True, null=True)
     full_name = models.CharField(max_length=500, null=True, blank=True)
     phone = models.CharField(max_length=500, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES)
 
-    USERNAME_FIELD = 'username'
-    REQUIRED_FIELDS = []
-
+    # Default USERNAME_FIELD to email
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = []  
+    
     def __str__(self):
         return self.email
 
-    def __unicode__(self):
-        return self.username
-    @property
-    def username(self):
-        return self.email or self.phone  # Use email if available, otherwise use phone
-
     def save(self, *args, **kwargs):
-        if not self.username:
+        if not self.email and not self.phone:
             raise ValueError(_("Either email or phone must be provided."))
 
         super().save(*args, **kwargs)
+
+    @property
+    def username(self):
+        # Use email if available, otherwise use phone
+        return self.email or self.phone
+
+    @staticmethod
+    def get_username_field():
+        # Get the current USERNAME_FIELD value
+        return User.USERNAME_FIELD
+
+    @staticmethod
+    def set_username_field(field):
+        # Set the USERNAME_FIELD dynamically
+        if field not in ['email', 'phone']:
+            raise ValueError(_("Invalid field for USERNAME_FIELD."))
+
+        User.USERNAME_FIELD = field
 
 
 
