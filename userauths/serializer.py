@@ -42,7 +42,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('full_name', 'email', 'phone', 'password', 'password2')
+        fields = ('email', 'phone', 'password', 'password2')
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
@@ -53,13 +53,14 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         if User.objects.filter(phone=attrs['phone']).exists():
             raise serializers.ValidationError({"phone": "This phone number has already been used."})
+        
+        if not self.email and not self.phone:
+            raise serializers.ValidationError("Email or phone number is required.")
 
         return attrs
 
     def create(self, validated_data):
-        # Define a method to create a new user based on validated data
         user = User.objects.create(
-            full_name=validated_data['full_name'],
             email=validated_data['email'],
             phone=validated_data['phone']
         )

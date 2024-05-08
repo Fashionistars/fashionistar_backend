@@ -45,14 +45,14 @@ def user_directory_path(instance, filename):
 
 
 class User(AbstractUser):
-    username = models.CharField(max_length=500, null=True, blank=True)
-    email = models.EmailField(unique=True)
+    username = models.CharField(max_length=255, null=True, blank=True)
+    email = models.EmailField(unique=True, null=True)
     full_name = models.CharField(max_length=500, null=True, blank=True)
-    phone = models.CharField(max_length=500)
+    phone = models.CharField(max_length=500, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES)
 
-    USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['username']
+    USERNAME_FIELD = 'username'
+    REQUIRED_FIELDS = []
 
     def __str__(self):
         return self.email
@@ -61,13 +61,15 @@ class User(AbstractUser):
         return self.username
 
     def save(self, *args, **kwargs):
-        email_username, mobile = self.email.split('@')
-        if self.full_name == "" or self.full_name == None:
-             self.full_name = self.email
-        if self.username == "" or self.username == None:
-             self.username = email_username
-        super(User, self).save(*args, **kwargs)
+        if not self.username:
+            if self.email:
+                self.USERNAME_FIELD = self.email
+            elif self.phone:
+                self.USERNAME_FIELD = self.phone
+            else:
+                raise ValueError("Either email or phone number must be provided")
     
+        super().save(*args, **kwargs)
 
 
 class Profile(models.Model):
