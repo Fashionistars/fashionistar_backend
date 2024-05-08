@@ -8,7 +8,7 @@ from django.utils.http import urlsafe_base64_encode
 from django.utils.encoding import force_bytes
 
 # Restframework
-from rest_framework import status
+from rest_framework import status, viewsets, generics
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -88,6 +88,13 @@ class RegisterView(generics.CreateAPIView):
         except serializers.ValidationError as error:
             return Response({"mesage": str(error)}, status=status.HTTP_400_BAD_REQUEST)
 
+
+class VerifyUserViewSet(viewsets.ViewSet):
+    """
+    Perform email verification and phone number verification
+    for registration
+    """
+    
 
 @api_view(['GET'])
 def getRoutes(request):
