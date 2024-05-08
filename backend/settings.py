@@ -116,11 +116,6 @@ DATABASES = {
     }
 }
 
-DATABASE_URL = env('DATABASE_URL')
-
-db_from_env = dj_database_url.config(DATABASE_URL,conn_max_age=600)
-DATABASES['default'].update(db_from_env)
-# default='postgres://user:password@localhost:5432/mydatabase',
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators

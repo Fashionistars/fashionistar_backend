@@ -45,7 +45,7 @@ def user_directory_path(instance, filename):
 
 
 class User(AbstractUser):
-    username = models.CharField(max_length=255, null=True, blank=True)
+    username = models.CharField(max_length=100, null=True)
     email = models.EmailField(unique=True, null=True)
     full_name = models.CharField(max_length=500, null=True, blank=True)
     phone = models.CharField(max_length=500, null=True)
@@ -59,17 +59,16 @@ class User(AbstractUser):
 
     def __unicode__(self):
         return self.username
+    @property
+    def username(self):
+        return self.email or self.phone  # Use email if available, otherwise use phone
 
     def save(self, *args, **kwargs):
         if not self.username:
-            if self.email:
-                self.USERNAME_FIELD = self.email
-            elif self.phone:
-                self.USERNAME_FIELD = self.phone
-            else:
-                raise ValueError("Either email or phone number must be provided")
-    
+            raise ValueError(_("Either email or phone must be provided."))
+
         super().save(*args, **kwargs)
+
 
 
 class Profile(models.Model):
