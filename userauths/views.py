@@ -9,7 +9,7 @@ from django.utils.encoding import force_bytes
 
 # Restframework
 from rest_framework import status, viewsets, generics
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework import generics
@@ -36,6 +36,9 @@ from django.conf import settings
 from cryptography.fernet import Fernet
 import base64
 
+# Swagger
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
 
 base_key = settings.SECRET_KEY.encode()
 
@@ -94,7 +97,39 @@ class VerifyUserViewSet(viewsets.ViewSet):
     Perform email verification and phone number verification
     for registration
     """
-    
+    permission_classes = []
+    @swagger_auto_schema(
+        # request_body=VerifyUserSerializer,
+        responses={200: 'Success', 400: 'Bad Request'},
+        operation_description="Verify user with valid email upon signing up"
+    )
+    @action(detail=False, methods=['post'])
+    def verify_user(self, request):
+        """
+        Email verification: Send 4 digits OTP to user email.
+        Phone number verification: Send 4 digits OTP to user valid phone number.(Coming soon!!!)
+        """
+        serializer = VerifyUserSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        otp = serializer.validated_data['otp']
+        
+        token = Tokens.objects.filter(Q(action='register')).order_by('-created_at')[:1].first()
+        key = token.token
+        decrypted_key = cipher_suite.decrypt(key.encode()).decode()
+        
+        if decrypted_key == otp and token.exp_date >= time.time():
+            email = token.email
+            user = User.objects.get(email=email)
+            token.date_used = datetime.now()
+            token.used = True
+            user.verified = True
+            user.is_active = True
+            user.save()
+            token.save()
+            return Response({"message": "User successfully verified"}, status=status.HTTP_200_OK)
+        else:
+            return Response({"error": "Invalid or expired OTP"})
+
 
 @api_view(['GET'])
 def getRoutes(request):

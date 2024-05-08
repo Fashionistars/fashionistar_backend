@@ -39,10 +39,11 @@ class RegisterSerializer(serializers.ModelSerializer):
     password2 = serializers.CharField(write_only=True, required=True)
     email = serializers.EmailField(required=False)
     phone = serializers.CharField(required=False)
+    role = serializers.CharField(required=True)
 
     class Meta:
         model = User
-        fields = ('email', 'phone', 'password', 'password2')
+        fields = ('email', 'phone', 'role', 'password', 'password2')
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
@@ -79,12 +80,19 @@ class RegisterSerializer(serializers.ModelSerializer):
         return user
 
     def to_representation(self, instance):
-        """Convert the CustomUser instance to a JSON-serializable dictionary."""
+        """Convert the User instance to a JSON-serializable dictionary."""
         return {
             'id': instance.id,
             'email': instance.email,
             "phone": instance.phone,
         }
+
+class VerifyUserSerializer(serializers.ModelSerializer):
+    otp = serializers.CharField(write_only=True)
+    
+    class Meta:
+        model = User
+        fields = ['otp',]
 
 
 class UserSerializer(serializers.ModelSerializer):
