@@ -20,15 +20,30 @@ from rest_framework_simplejwt.tokens import RefreshToken
 # Others
 import json
 import random
+import time
+import datetime
 
 # Serializers
-from userauths.serializer import MyTokenObtainPairSerializer, ProfileSerializer, RegisterSerializer, UserSerializer
+from userauths.serializer import *
 
 # utils
 from userauths.utils import EmailManager, generate_token
 # Models
-from userauths.models import Profile, User
+from userauths.models import Profile, User, Tokens
 
+# Hashing
+from django.conf import settings
+from cryptography.fernet import Fernet
+import base64
+
+
+base_key = settings.SECRET_KEY.encode()
+
+# Ensure that the key is 32 bytes by padding or truncating
+base_key = base_key.ljust(32, b'\0')[:32]
+
+# Encode the key in URL-safe base64 format
+cipher_suite = Fernet(base64.urlsafe_b64encode(base_key))
 
 class MyTokenObtainPairView(TokenObtainPairView):
     serializer_class = MyTokenObtainPairSerializer
@@ -37,7 +52,41 @@ class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     permission_classes = (AllowAny,)
     serializer_class = RegisterSerializer
+    
+    def create(self, request, *args, **kwargs):
+        """OTP verification and validation"""
+        token = generate_token()
+        serializer = RegisterSerializer(data=request.data)
+        
+        try:
+            serializer.is_valid(raise_exception=True)
+            user_instance = serializer.save()
+            res_data = serializer.data
+            timestamp = time.time() + 300
+            dt_object = datetime.datetime.fromtimestamp(timestamp)
+            dt_object += datetime.timedelta()
+            
+            EmailManager.send_mail(
+                subject="Fashionistar",
+                recipients=[user_instance.email],
+                template_name="user_invite.html",
+                context={"user": user_instance.id, "token": token, "time": dt_object}
+            )
 
+            encrypted_token = cipher_suite.encrypt(token.encode()).decode()
+            
+            new_token = Tokens()
+            new_token.email = user_instance.email
+            new_token.action = 'register'
+            new_token.token = encrypted_token
+            new_token.exp_date = time.time() + 300
+            new_token.save()
+            
+            res = {"message": "Token sent!", "code": 200, "data": res_data}
+            return Response(res, status=status.HTTP_200_OK)
+        
+        except serializers.ValidationError as error:
+            return Response({"mesage": str(error)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(['GET'])

@@ -78,6 +78,14 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         return user
 
+    def to_representation(self, instance):
+        """Convert the CustomUser instance to a JSON-serializable dictionary."""
+        return {
+            'id': instance.id,
+            'email': instance.email,
+            "phone": instance.phone,
+        }
+
 
 class UserSerializer(serializers.ModelSerializer):
 

@@ -49,8 +49,12 @@ class User(AbstractUser):
     email = models.EmailField(unique=True, null=True)
     full_name = models.CharField(max_length=500, null=True, blank=True)
     phone = models.CharField(max_length=500, null=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES)
-
+    role = models.CharField(max_length=20, choices=STATUS_CHOICES)
+    status = models.BooleanField(default=True)
+    verified = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=False)
+    is_staff = models.BooleanField(default=False)
+    
     # Default USERNAME_FIELD to email
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []  
