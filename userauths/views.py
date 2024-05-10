@@ -88,7 +88,7 @@ class RegisterView(generics.CreateAPIView):
             res = {"message": "Token sent!", "code": 200, "data": res_data}
             return Response(res, status=status.HTTP_200_OK)
         
-        except serializers.ValidationError as error:
+        except Exception as error:
             return Response({"mesage": str(error)}, status=status.HTTP_400_BAD_REQUEST)
 
 

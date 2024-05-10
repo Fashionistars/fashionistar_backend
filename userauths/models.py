@@ -22,6 +22,8 @@ STATUS_CHOICES = [
 ]
 
 
+
+
 def user_directory_path(instance, filename):
     user = None
     

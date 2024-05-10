@@ -64,20 +64,17 @@ class RegisterSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        email = validated_data.get('email')
-        phone = validated_data.get('phone')
-        password = validated_data.get('password')
+            email = validated_data.get('email')
+            phone = validated_data.get('phone')
+            password = validated_data.get('password')
 
-        user = User.objects.create_user(
-            email=email,
-            phone=phone,
-            password=password
-        )
+            user = User.objects.create_user(
+                email=email,
+                phone=phone,
+                password=password
+            )
 
-        user.username = user.email or user.phone  # Set username based on unique_identifier
-        user.save()
-
-        return user
+            return user
 
     def to_representation(self, instance):
         """Convert the User instance to a JSON-serializable dictionary."""
