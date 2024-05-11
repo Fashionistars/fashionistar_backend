@@ -48,10 +48,19 @@ base_key = base_key.ljust(32, b'\0')[:32]
 # Encode the key in URL-safe base64 format
 cipher_suite = Fernet(base64.urlsafe_b64encode(base_key))
 
+
 class MyTokenObtainPairView(TokenObtainPairView):
     serializer_class = MyTokenObtainPairSerializer
 
+
 class RegisterView(generics.CreateAPIView):
+    """
+    Registeration of new user using either email or phone number for signing up
+        Args:
+        email: Input field of the user base on user's choice
+        phone_number: Input field for phone number
+        password: password and password2(Check the serializers.py to see the implementation)
+    """
     queryset = User.objects.all()
     permission_classes = (AllowAny,)
     serializer_class = RegisterSerializer
@@ -72,7 +81,7 @@ class RegisterView(generics.CreateAPIView):
             EmailManager.send_mail(
                 subject="Fashionistar",
                 recipients=[user_instance.email],
-                template_name="user_invite.html",
+                template_name="otp.html",
                 context={"user": user_instance.id, "token": token, "time": dt_object}
             )
 
@@ -88,8 +97,9 @@ class RegisterView(generics.CreateAPIView):
             res = {"message": "Token sent!", "code": 200, "data": res_data}
             return Response(res, status=status.HTTP_200_OK)
         
-        except Exception as error:
-            return Response({"mesage": str(error)}, status=status.HTTP_400_BAD_REQUEST)
+        except serializers.ValidationError as error:
+            return Response({"mesage": "Still error " + str(error)}, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 class VerifyUserViewSet(viewsets.ViewSet):

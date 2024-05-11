@@ -6,6 +6,7 @@ from django.utils.html import mark_safe
 from django.utils.translation import gettext_lazy as _
 from shortuuid.django_fields import ShortUUIDField
 from addon.models import Tax
+from .managers import CustomUserManager
 
 
 GENDER = (
@@ -58,8 +59,10 @@ class User(AbstractUser):
     is_staff = models.BooleanField(default=False)
     
     # Default USERNAME_FIELD to email
-    USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = []  
+    USERNAME_FIELD = 'email' or "phone"
+    REQUIRED_FIELDS = [] 
+    
+    objects = CustomUserManager()
     
     def __str__(self):
         return self.email

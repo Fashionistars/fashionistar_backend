@@ -52,6 +52,9 @@ class RegisterSerializer(serializers.ModelSerializer):
         email = attrs.get('email')
         phone = attrs.get('phone')
 
+        if email and phone:
+            raise serializers.ValidationError("Either use email or phone number")
+        
         if not email and not phone:
             raise serializers.ValidationError("Email or phone number is required.")
 
