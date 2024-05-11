@@ -6,6 +6,7 @@ from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode
 from django.utils.encoding import force_bytes
+from django.core.exceptions import ValidationError
 
 # Restframework
 from rest_framework import status, viewsets, generics
@@ -68,37 +69,53 @@ class RegisterView(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         """OTP verification and validation"""
         token = generate_token()
-        serializer = RegisterSerializer(data=request.data)
+        email = request.data.get('email')
+        phone = request.data.get('phone')
+        if email and phone:
+            raise ValidationError("Either use email or phone number")
         
-        try:
-            serializer.is_valid(raise_exception=True)
-            user_instance = serializer.save()
-            res_data = serializer.data
-            timestamp = time.time() + 300
-            dt_object = datetime.datetime.fromtimestamp(timestamp)
-            dt_object += datetime.timedelta()
-            
-            EmailManager.send_mail(
-                subject="Fashionistar",
-                recipients=[user_instance.email],
-                template_name="otp.html",
-                context={"user": user_instance.id, "token": token, "time": dt_object}
-            )
+        if not email and not phone:
+            raise ValidationError("Either use email or phone number")
 
-            encrypted_token = cipher_suite.encrypt(token.encode()).decode()
-            
-            new_token = Tokens()
-            new_token.email = user_instance.email
-            new_token.action = 'register'
-            new_token.token = encrypted_token
-            new_token.exp_date = time.time() + 300
-            new_token.save()
-            
-            res = {"message": "Token sent!", "code": 200, "data": res_data}
-            return Response(res, status=status.HTTP_200_OK)
-        
-        except serializers.ValidationError as error:
-            return Response({"mesage": "Still error " + str(error)}, status=status.HTTP_400_BAD_REQUEST)
+        if phone:
+            user_data = {
+                'phone': phone,
+                'password': request.data.get('password'),
+                'role': request.data.get('role')
+            }
+            print(user_data)
+        else:
+            serializer = RegisterSerializer(data=request.data) 
+            try:
+                serializer.is_valid(raise_exception=True)
+                user_instance = serializer.save()
+                res_data = serializer.data
+                timestamp = time.time() + 300
+                dt_object = datetime.datetime.fromtimestamp(timestamp)
+                dt_object += datetime.timedelta()
+                
+                EmailManager.send_mail(
+                    subject="Fashionistar",
+                    recipients=[user_instance.email],
+                    template_name="otp.html",
+                    context={"user": user_instance.id, "token": token, "time": dt_object}
+                )
+
+                encrypted_token = cipher_suite.encrypt(token.encode()).decode()
+                
+                new_token = Tokens()
+                new_token.email = user_instance.email
+                new_token.action = 'register'
+                new_token.token = encrypted_token
+                new_token.exp_date = time.time() + 300
+                new_token.save()
+                
+                res = {"message": "Token sent!", "code": 200, "data": res_data}
+                return Response(res, status=status.HTTP_200_OK)
+                
+            except serializers.ValidationError as error:
+                return Response({"mesage": "Still error " + str(error)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"mesage": "Still error "}, status=status.HTTP_400_BAD_REQUEST)
 
 
 
