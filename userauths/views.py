@@ -65,28 +65,29 @@ class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     permission_classes = (AllowAny,)
     serializer_class = RegisterSerializer
-    
+
     def create(self, request, *args, **kwargs):
         """OTP verification and validation"""
         token = generate_token()
         email = request.data.get('email')
         phone = request.data.get('phone')
-        if email and phone:
-            raise ValidationError("Either use email or phone number")
+        # if email and phone:
+        #     raise ValidationError("Either use email or phone number")
         
-        if not email and not phone:
-            raise ValidationError("Either use email or phone number")
+        # if not email and not phone:
+        #     raise ValidationError("Either use email or phone number")
 
-        if phone:
-            user_data = {
-                'phone': phone,
-                'password': request.data.get('password'),
-                'role': request.data.get('role')
-            }
-            print(user_data)
-        else:
-            serializer = RegisterSerializer(data=request.data) 
-            try:
+        serializer = RegisterSerializer(data=request.data) 
+        try:
+            if phone:
+                user_data = {
+                    'phone': phone,
+                    'password': request.data.get('password'),
+                    'role': request.data.get('role')
+                }
+                print(user_data)
+                return Response({"message": "Saved to database"}, status=status.HTTP_202_ACCEPTED)
+            else:
                 serializer.is_valid(raise_exception=True)
                 user_instance = serializer.save()
                 res_data = serializer.data
@@ -113,9 +114,9 @@ class RegisterView(generics.CreateAPIView):
                 res = {"message": "Token sent!", "code": 200, "data": res_data}
                 return Response(res, status=status.HTTP_200_OK)
                 
-            except serializers.ValidationError as error:
-                return Response({"mesage": "Still error " + str(error)}, status=status.HTTP_400_BAD_REQUEST)
-        return Response({"mesage": "Still error "}, status=status.HTTP_400_BAD_REQUEST)
+        except serializers.ValidationError as error:
+            return Response({"mesage": "Still error " + str(error)}, status=status.HTTP_400_BAD_REQUEST)
+        # return Response({"mesage": "Still error "}, status=status.HTTP_400_BAD_REQUEST)
 
 
 
