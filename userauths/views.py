@@ -71,11 +71,6 @@ class RegisterView(generics.CreateAPIView):
         token = generate_token()
         email = request.data.get('email')
         phone = request.data.get('phone')
-        # if email and phone:
-        #     raise ValidationError("Either use email or phone number")
-        
-        # if not email and not phone:
-        #     raise ValidationError("Either use email or phone number")
 
         serializer = RegisterSerializer(data=request.data) 
         try:
@@ -116,7 +111,6 @@ class RegisterView(generics.CreateAPIView):
                 
         except serializers.ValidationError as error:
             return Response({"mesage": "Still error " + str(error)}, status=status.HTTP_400_BAD_REQUEST)
-        # return Response({"mesage": "Still error "}, status=status.HTTP_400_BAD_REQUEST)
 
 
 
