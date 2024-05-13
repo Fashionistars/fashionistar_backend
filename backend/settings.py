@@ -35,7 +35,7 @@ DEBUG = True
 # ALLOWED_HOSTS = ["fashionistar-backend.onrender.com", "127.0.0.1"]
 
 
-ALLOWED_HOSTS = ["fashionistar-backend.onrender.com", "127.0.0.1"]
+ALLOWED_HOSTS = ["fashionistar-backend.onrender.com", "127.0.0.1", "localhost:3000", "localhost3001"]
 CSRF_TRUSTED_ORIGINS = ['https://fashionistar-backend.onrender.com', 'https://127.0.0.1']
 SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
 
