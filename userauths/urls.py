@@ -7,5 +7,5 @@ from .views import *
 
 urlpatterns = [
     path("sign-up", RegisterView.as_view(), name='register'),
-    path('otp-verification', VerifyUserViewSet.as_view({'post': 'verify_email'}), name="otp-verification")
+    path('otp-verification', VerifyUserViewSet.as_view({'post': 'verify_user'}), name="otp-verification")
 ]

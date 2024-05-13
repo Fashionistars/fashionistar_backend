@@ -7,6 +7,7 @@ from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode
 from django.utils.encoding import force_bytes
 from django.core.exceptions import ValidationError
+from django.db.models import Q
 
 # Restframework
 from rest_framework import status, viewsets, generics
@@ -121,7 +122,7 @@ class VerifyUserViewSet(viewsets.ViewSet):
     """
     permission_classes = []
     @swagger_auto_schema(
-        # request_body=VerifyUserSerializer,
+        request_body=VerifyUserSerializer,
         responses={200: 'Success', 400: 'Bad Request'},
         operation_description="Verify user with valid email upon signing up"
     )
@@ -142,7 +143,7 @@ class VerifyUserViewSet(viewsets.ViewSet):
         if decrypted_key == otp and token.exp_date >= time.time():
             email = token.email
             user = User.objects.get(email=email)
-            token.date_used = datetime.now()
+            token.date_used = datetime.datetime.now()
             token.used = True
             user.verified = True
             user.is_active = True

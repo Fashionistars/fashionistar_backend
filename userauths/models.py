@@ -7,6 +7,7 @@ from django.utils.translation import gettext_lazy as _
 from shortuuid.django_fields import ShortUUIDField
 from addon.models import Tax
 from .managers import CustomUserManager
+from django.core.exceptions import ValidationError
 
 
 GENDER = (
@@ -52,7 +53,11 @@ class User(AbstractUser):
     email = models.EmailField(unique=True, null=True)
     full_name = models.CharField(max_length=500, null=True, blank=True)
     phone = models.CharField(max_length=500, null=True)
-    role = models.CharField(max_length=20, choices=STATUS_CHOICES)
+    STATUS_CHOICES = [
+    (VENDOR, 'Vendor'),
+    (CLIENT, 'Client'),
+    ]
+    role = models.CharField(max_length=20, choices=STATUS_CHOICES, default=CLIENT)
     status = models.BooleanField(default=True)
     verified = models.BooleanField(default=False)
     is_active = models.BooleanField(default=False)
@@ -66,6 +71,11 @@ class User(AbstractUser):
     
     def __str__(self):
         return self.email
+    
+    def clean(self):
+        super().clean()
+        if self.role not in dict(self.STATUS_CHOICES).keys():
+            raise ValidationError({'role': 'Invalid role value. Must be either "vendor" or "client".'})
 
     def save(self, *args, **kwargs):
         if not self.email and not self.phone:
