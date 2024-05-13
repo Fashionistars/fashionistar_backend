@@ -35,7 +35,7 @@ DEBUG = True
 # ALLOWED_HOSTS = ["fashionistar-backend.onrender.com", "127.0.0.1"]
 
 
-ALLOWED_HOSTS = ["fashionistar-backend.onrender.com", "127.0.0.1"]
+ALLOWED_HOSTS = ["fashionistar-backend.onrender.com", "127.0.0.1", "localhost:3000", "localhost3001"]
 CSRF_TRUSTED_ORIGINS = ['https://fashionistar-backend.onrender.com', 'https://127.0.0.1']
 SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
 
@@ -116,11 +116,6 @@ DATABASES = {
     }
 }
 
-DATABASE_URL = env('DATABASE_URL')
-
-db_from_env = dj_database_url.config(DATABASE_URL,conn_max_age=600)
-DATABASES['default'].update(db_from_env)
-# default='postgres://user:password@localhost:5432/mydatabase',
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
@@ -364,3 +359,11 @@ JAZZMIN_UI_TWEAKS = {
     }
 }
 
+
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = "smtp.gmail.com"
+EMAIL_PORT = 465
+EMAIL_USE_TLS = False
+EMAIL_USE_SSL = True
+EMAIL_HOST_PASSWORD='zjpskvqwkhubavjg'
+EMAIL_HOST_USER='fashionistar.home.beauty@gmail.com'

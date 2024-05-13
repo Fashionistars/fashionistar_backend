@@ -3,16 +3,26 @@ from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
 from django.db.models.signals import post_save
 from django.utils.html import mark_safe
+from django.utils.translation import gettext_lazy as _
 from shortuuid.django_fields import ShortUUIDField
 from addon.models import Tax
+from .managers import CustomUserManager
+from django.core.exceptions import ValidationError
 
-import os
-import uuid
 
 GENDER = (
     ("female", "Female"),
     ("male", "Male"),
 )
+
+VENDOR = 'vendor'
+CLIENT = 'client'
+
+STATUS_CHOICES = [
+    (VENDOR, 'Vendor'),
+    (CLIENT, 'Client'),
+]
+
 
 
 
@@ -37,34 +47,60 @@ def user_directory_path(instance, filename):
         ext = filename.split('.')[-1]
         filename = "%s.%s" % ('file', ext)
         return 'user_{0}/{1}'.format('file', filename)
-    
 
-    
+
 class User(AbstractUser):
-    username = models.CharField(max_length=500, null=True, blank=True)
-    email = models.EmailField(unique=True)
+    email = models.EmailField(unique=True, null=True)
     full_name = models.CharField(max_length=500, null=True, blank=True)
-    phone = models.CharField(max_length=500)
-    otp = models.CharField(max_length=1000, null=True, blank=True)
-    reset_token  = models.CharField(max_length=1000, null=True, blank=True)
-
-    USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['username']
-
+    phone = models.CharField(max_length=500, null=True)
+    STATUS_CHOICES = [
+    (VENDOR, 'Vendor'),
+    (CLIENT, 'Client'),
+    ]
+    role = models.CharField(max_length=20, choices=STATUS_CHOICES, default=CLIENT)
+    status = models.BooleanField(default=True)
+    verified = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=False)
+    is_staff = models.BooleanField(default=False)
+    
+    # Default USERNAME_FIELD to email
+    USERNAME_FIELD = 'email' or "phone"
+    REQUIRED_FIELDS = [] 
+    
+    objects = CustomUserManager()
+    
     def __str__(self):
         return self.email
-
-    def __unicode__(self):
-        return self.username
+    
+    def clean(self):
+        super().clean()
+        if self.role not in dict(self.STATUS_CHOICES).keys():
+            raise ValidationError({'role': 'Invalid role value. Must be either "vendor" or "client".'})
 
     def save(self, *args, **kwargs):
-        email_username, mobile = self.email.split('@')
-        if self.full_name == "" or self.full_name == None:
-             self.full_name = self.email
-        if self.username == "" or self.username == None:
-             self.username = email_username
-        super(User, self).save(*args, **kwargs)
-    
+        if not self.email and not self.phone:
+            raise ValueError(_("Either email or phone must be provided."))
+
+        super().save(*args, **kwargs)
+
+    @property
+    def username(self):
+        # Use email if available, otherwise use phone
+        return self.email or self.phone
+
+    @staticmethod
+    def get_username_field():
+        # Get the current USERNAME_FIELD value
+        return User.USERNAME_FIELD
+
+    @staticmethod
+    def set_username_field(field):
+        # Set the USERNAME_FIELD dynamically
+        if field not in ['email', 'phone']:
+            raise ValueError(_("Invalid field for USERNAME_FIELD."))
+
+        User.USERNAME_FIELD = field
+
 
 
 class Profile(models.Model):
@@ -72,7 +108,6 @@ class Profile(models.Model):
     image = models.ImageField(upload_to='accounts/users', default='default/default-user.jpg', null=True, blank=True)
     full_name = models.CharField(max_length=1000, null=True, blank=True)
     about = models.TextField( null=True, blank=True)
-    
     gender = models.CharField(max_length=500, choices=GENDER, null=True, blank=True)
     country = models.CharField(max_length=1000, null=True, blank=True)
     city = models.CharField(max_length=500, null=True, blank=True)
@@ -104,7 +139,8 @@ class Profile(models.Model):
     def thumbnail(self):
         return mark_safe('<img src="/media/%s" width="50" height="50" object-fit:"cover" style="border-radius: 30px; object-fit: cover;" />' % (self.image))
     
-    
+
+   
 def create_user_profile(sender, instance, created, **kwargs):
 	if created:
 		Profile.objects.create(user=instance)
@@ -114,3 +150,14 @@ def save_user_profile(sender, instance, **kwargs):
 
 post_save.connect(create_user_profile, sender=User)
 post_save.connect(save_user_profile, sender=User)
+
+
+class Tokens(models.Model):
+    email = models.EmailField('email address')
+    action = models.CharField(max_length=20)
+    token = models.CharField(max_length=200)
+    exp_date = models.FloatField()
+    date_used = models.DateTimeField(null=True)
+    created_at = models.DateTimeField(auto_now=True)
+    used = models.BooleanField(default=False)
+    confirmed = models.BooleanField(default=False)

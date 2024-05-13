@@ -2,11 +2,11 @@ from userauths.models import Profile, User
 from django.contrib.auth.password_validation import validate_password
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework import serializers
-from rest_framework.validators import UniqueValidator
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
 
 
-# Define a custom serializer that inherits from TokenObtainPairSerializer
+User = get_user_model()
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     '''
     class MyTokenObtainPairSerializer(TokenObtainPairSerializer):: This line creates a new token serializer called MyTokenObtainPairSerializer that is based on an existing one called TokenObtainPairSerializer. Think of it as customizing the way tokens work.
@@ -31,49 +31,69 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         except:
             token['vendor_id'] = 0
 
-        # ...
-
-        # Return the token with custom claims
         return token
 
-# Define a serializer for user registration, which inherits from serializers.ModelSerializer
+
 class RegisterSerializer(serializers.ModelSerializer):
-    # Define fields for the serializer, including password and password2
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True, required=True)
+    email = serializers.EmailField(required=False)
+    phone = serializers.CharField(required=False)
+    role = serializers.CharField(required=True)
 
     class Meta:
-        # Specify the model that this serializer is associated with
         model = User
-        # Define the fields from the model that should be included in the serializer
-        fields = ('full_name', 'email', 'phone', 'password', 'password2')
+        fields = ('email', 'phone', 'role', 'password', 'password2')
 
     def validate(self, attrs):
-        # Define a validation method to check if the passwords match
         if attrs['password'] != attrs['password2']:
-            # Raise a validation error if the passwords don't match
             raise serializers.ValidationError({"password": "Password fields didn't match."})
 
-        # Return the validated attributes
+        email = attrs.get('email')
+        phone = attrs.get('phone')
+
+        if email and phone:
+            raise serializers.ValidationError("Either use email or phone number")
+        
+        if not email and not phone:
+            raise serializers.ValidationError("Email or phone number is required.")
+
+        if email and User.objects.filter(email=email).exists():
+            raise serializers.ValidationError({"email": "This email has already been used."})
+
+        if phone and User.objects.filter(phone=phone).exists():
+            raise serializers.ValidationError({"phone": "This phone number has already been used."})
+
         return attrs
 
     def create(self, validated_data):
-        # Define a method to create a new user based on validated data
-        user = User.objects.create(
-            full_name=validated_data['full_name'],
-            email=validated_data['email'],
-            phone=validated_data['phone']
-        )
-        email_username, mobile = user.email.split('@')
-        user.username = email_username
+            email = validated_data.get('email')
+            phone = validated_data.get('phone')
+            password = validated_data.get('password')
 
-        # Set the user's password based on the validated data
-        user.set_password(validated_data['password'])
-        user.save()
+            user = User.objects.create_user(
+                email=email,
+                phone=phone,
+                password=password
+            )
 
-        # Return the created user
-        return user
+            return user
+
+    def to_representation(self, instance):
+        """Convert the User instance to a JSON-serializable dictionary."""
+        return {
+            'id': instance.id,
+            'email': instance.email,
+            "phone": instance.phone,
+        }
+
+class VerifyUserSerializer(serializers.ModelSerializer):
+    otp = serializers.CharField(write_only=True)
     
+    class Meta:
+        model = User
+        fields = ['otp',]
+
 
 class UserSerializer(serializers.ModelSerializer):
 
@@ -88,22 +108,11 @@ class ProfileSerializer(serializers.ModelSerializer):
         model = Profile
         fields = '__all__'
 
-    # def __init__(self, *args, **kwargs):
-    #     super(ProfileSerializer, self).__init__(*args, **kwargs)
-    #     # Customize serialization depth based on the request method.
-    #     request = self.context.get('request')
-    #     if request and request.method == 'POST':
-    #         # When creating a new product FAQ, set serialization depth to 0.
-    #         self.Meta.depth = 0
-    #     else:
-    #         # For other methods, set serialization depth to 3.
-    #         self.Meta.depth = 3
-
     def to_representation(self, instance):
         response = super().to_representation(instance)
         response['user'] = UserSerializer(instance.user).data
         return response
-    
+
 
 class PasswordResetSerializer(serializers.Serializer):
     email = serializers.EmailField()

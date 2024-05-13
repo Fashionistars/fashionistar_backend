@@ -6,10 +6,12 @@ from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode
 from django.utils.encoding import force_bytes
+from django.core.exceptions import ValidationError
+from django.db.models import Q
 
 # Restframework
-from rest_framework import status
-from rest_framework.decorators import api_view
+from rest_framework import status, viewsets, generics
+from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework import generics
@@ -20,32 +22,138 @@ from rest_framework_simplejwt.tokens import RefreshToken
 # Others
 import json
 import random
+import time
+import datetime
 
 # Serializers
-from userauths.serializer import MyTokenObtainPairSerializer, ProfileSerializer, RegisterSerializer, UserSerializer
+from userauths.serializer import *
 
-
+# utils
+from userauths.utils import EmailManager, generate_token
 # Models
-from userauths.models import Profile, User
+from userauths.models import Profile, User, Tokens
+
+# Hashing
+from django.conf import settings
+from cryptography.fernet import Fernet
+import base64
+
+# Swagger
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
+
+base_key = settings.SECRET_KEY.encode()
+
+# Ensure that the key is 32 bytes by padding or truncating
+base_key = base_key.ljust(32, b'\0')[:32]
+
+# Encode the key in URL-safe base64 format
+cipher_suite = Fernet(base64.urlsafe_b64encode(base_key))
 
 
-# This code defines a DRF View class called MyTokenObtainPairView, which inherits from TokenObtainPairView.
 class MyTokenObtainPairView(TokenObtainPairView):
-    # Here, it specifies the serializer class to be used with this view.
     serializer_class = MyTokenObtainPairSerializer
 
-# This code defines another DRF View class called RegisterView, which inherits from generics.CreateAPIView.
+
 class RegisterView(generics.CreateAPIView):
-    # It sets the queryset for this view to retrieve all User objects.
+    """
+    Registeration of new user using either email or phone number for signing up
+        Args:
+        email: Input field of the user base on user's choice
+        phone_number: Input field for phone number
+        password: password and password2(Check the serializers.py to see the implementation)
+    """
     queryset = User.objects.all()
-    # It specifies that the view allows any user (no authentication required).
     permission_classes = (AllowAny,)
-    # It sets the serializer class to be used with this view.
     serializer_class = RegisterSerializer
 
+    def create(self, request, *args, **kwargs):
+        """OTP verification and validation"""
+        token = generate_token()
+        email = request.data.get('email')
+        phone = request.data.get('phone')
+
+        serializer = RegisterSerializer(data=request.data) 
+        try:
+            if phone:
+                user_data = {
+                    'phone': phone,
+                    'password': request.data.get('password'),
+                    'role': request.data.get('role')
+                }
+                print(user_data)
+                return Response({"message": "Saved to database"}, status=status.HTTP_202_ACCEPTED)
+            else:
+                serializer.is_valid(raise_exception=True)
+                user_instance = serializer.save()
+                res_data = serializer.data
+                timestamp = time.time() + 300
+                dt_object = datetime.datetime.fromtimestamp(timestamp)
+                dt_object += datetime.timedelta()
+                
+                EmailManager.send_mail(
+                    subject="Fashionistar",
+                    recipients=[user_instance.email],
+                    template_name="otp.html",
+                    context={"user": user_instance.id, "token": token, "time": dt_object}
+                )
+
+                encrypted_token = cipher_suite.encrypt(token.encode()).decode()
+                
+                new_token = Tokens()
+                new_token.email = user_instance.email
+                new_token.action = 'register'
+                new_token.token = encrypted_token
+                new_token.exp_date = time.time() + 300
+                new_token.save()
+                
+                res = {"message": "Token sent!", "code": 200, "data": res_data}
+                return Response(res, status=status.HTTP_200_OK)
+                
+        except serializers.ValidationError as error:
+            return Response({"mesage": "Still error " + str(error)}, status=status.HTTP_400_BAD_REQUEST)
+            
 
 
-# This is a DRF view defined as a Python function using the @api_view decorator.
+class VerifyUserViewSet(viewsets.ViewSet):
+    """
+    Perform email verification and phone number verification
+    for registration
+    """
+    permission_classes = []
+    @swagger_auto_schema(
+        request_body=VerifyUserSerializer,
+        responses={200: 'Success', 400: 'Bad Request'},
+        operation_description="Verify user with valid email upon signing up"
+    )
+    @action(detail=False, methods=['post'])
+    def verify_user(self, request):
+        """
+        Email verification: Send 4 digits OTP to user email.
+        Phone number verification: Send 4 digits OTP to user valid phone number.(Coming soon!!!)
+        """
+        serializer = VerifyUserSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        otp = serializer.validated_data['otp']
+        
+        token = Tokens.objects.filter(Q(action='register')).order_by('-created_at')[:1].first()
+        key = token.token
+        decrypted_key = cipher_suite.decrypt(key.encode()).decode()
+        
+        if decrypted_key == otp and token.exp_date >= time.time():
+            email = token.email
+            user = User.objects.get(email=email)
+            token.date_used = datetime.datetime.now()
+            token.used = True
+            user.verified = True
+            user.is_active = True
+            user.save()
+            token.save()
+            return Response({"message": "User successfully verified"}, status=status.HTTP_200_OK)
+        else:
+            return Response({"error": "Invalid or expired OTP"})
+
+
 @api_view(['GET'])
 def getRoutes(request):
     # It defines a list of API routes that can be accessed.
@@ -59,40 +167,26 @@ def getRoutes(request):
     return Response(routes)
 
 
-# This is another DRF view defined as a Python function using the @api_view decorator.
-# It is decorated with the @permission_classes decorator specifying that only authenticated users can access this view.
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def testEndPoint(request):
-    # Check if the HTTP request method is GET.
     if request.method == 'GET':
-        # If it is a GET request, it constructs a response message including the username.
         data = f"Congratulations {request.user}, your API just responded to a GET request."
-        # It returns a DRF Response object with the response data and an HTTP status code of 200 (OK).
         return Response({'response': data}, status=status.HTTP_200_OK)
-    # Check if the HTTP request method is POST.
     elif request.method == 'POST':
         try:
-            # If it's a POST request, it attempts to decode the request body from UTF-8 and load it as JSON.
             body = request.body.decode('utf-8')
             data = json.loads(body)
-            # Check if the 'text' key exists in the JSON data.
             if 'text' not in data:
-                # If 'text' is not present, it returns a response with an error message and an HTTP status of 400 (Bad Request).
                 return Response("Invalid JSON data", status=status.HTTP_400_BAD_REQUEST)
             text = data.get('text')
-            # If 'text' exists, it constructs a response message including the received text.
             data = f'Congratulations, your API just responded to a POST request with text: {text}'
-            # It returns a DRF Response object with the response data and an HTTP status code of 200 (OK).
             return Response({'response': data}, status=status.HTTP_200_OK)
         except json.JSONDecodeError:
-            # If there's an error decoding the JSON data, it returns a response with an error message and an HTTP status of 400 (Bad Request).
             return Response("Invalid JSON data", status=status.HTTP_400_BAD_REQUEST)
-    # If the request method is neither GET nor POST, it returns a response with an error message and an HTTP status of 400 (Bad Request).
     return Response("Invalid JSON data", status=status.HTTP_400_BAD_REQUEST)
 
 
-# This code defines another DRF View class called ProfileView, which inherits from generics.RetrieveAPIView and used to show user profile view.
 class ProfileView(generics.RetrieveAPIView):
     permission_classes = (AllowAny,)
     serializer_class = ProfileSerializer
@@ -122,7 +216,6 @@ class PasswordEmailVerify(generics.RetrieveAPIView):
             user.otp = generate_numeric_otp()
             uidb64 = user.pk
             
-             # Generate a token and include it in the reset link sent via email
             refresh = RefreshToken.for_user(user)
             reset_token = str(refresh.access_token)
 
