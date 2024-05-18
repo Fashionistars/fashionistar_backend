@@ -142,13 +142,9 @@ RATING = (
 
 # Model for Product Categories
 class Category(models.Model):
-    # Category title
     title = models.CharField(max_length=100)
-    # Image for the category
     image = models.ImageField(upload_to=user_directory_path, default="category.jpg", null=True, blank=True)
-    # Is the category active?
     active = models.BooleanField(default=True)
-    # Slug for SEO-friendly URLs
     slug = models.SlugField(null=True, blank=True)
 
     class Meta:
@@ -200,11 +196,8 @@ class Tag(models.Model):
 
 # Model for Brands
 class Brand(models.Model):
-    # Brand title
     title = models.CharField(max_length=100)
-    # Image for the brand
     image = models.ImageField(upload_to=user_directory_path, default="brand.jpg", null=True, blank=True)
-    # Is the brand active?
     active = models.BooleanField(default=True)
     
     class Meta:
@@ -219,56 +212,31 @@ class Brand(models.Model):
 
 # Model for Products
 class Product(models.Model):
-    # Product title
     title = models.CharField(max_length=100)
-    # Image for the product
     image = models.FileField(upload_to=user_directory_path, blank=True, null=True, default="product.jpg")
-    # Description for the product using HTML
     description = models.TextField(null=True, blank=True)
-    
-    # Categories that the product belongs to
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name="category")
-    # Tags associated with the product
     tags = models.CharField(max_length=1000, null=True, blank=True)
-    # Brand associated with the product
     brand = models.CharField(max_length=100, null=True, blank=True)
-
-    # Price and other financial details
     price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, null=True, blank=True)
     old_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, null=True, blank=True)
     shipping_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
-    
-    # Stock quantity and availability status
     stock_qty = models.PositiveIntegerField(default=0)
     in_stock = models.BooleanField(default=True)
-    
-    # Product status and type
     status = models.CharField(choices=STATUS, max_length=50, default="published", null=True, blank=True)
     type = models.CharField(choices=PRODUCT_TYPE, max_length=50, default="regular")
-    
-    # Product flags (featured, hot deal, special offer, digital)
     featured = models.BooleanField(default=False)
     hot_deal = models.BooleanField(default=False)
     special_offer = models.BooleanField(default=False)
     digital = models.BooleanField(default=False)
-    
-    # Product statistics (views, orders, saved, rating)
     views = models.PositiveIntegerField(default=0, null=True, blank=True)
     orders = models.PositiveIntegerField(default=0, null=True, blank=True)
     saved = models.PositiveIntegerField(default=0, null=True, blank=True)
     rating = models.IntegerField(default=0, null=True, blank=True)
-    
-    # Vendor associated with the product
     vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, blank=True, related_name="vendor")
-    
-    # Unique short UUIDs for SKU and product
     sku = ShortUUIDField(unique=True, length=5, max_length=50, prefix="SKU", alphabet="1234567890")
     pid = ShortUUIDField(unique=True, length=10, max_length=20, alphabet="abcdefghijklmnopqrstuvxyz")
-    
-    # Slug for SEO-friendly URLs
     slug = models.SlugField(null=True, blank=True)
-    
-    # Date of product creation
     date = models.DateTimeField(default=timezone.now)
 
     class Meta:
@@ -402,7 +370,7 @@ class ProductFaq(models.Model):
         
     def __str__(self):
         return self.question
-    
+
 class Cart(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)

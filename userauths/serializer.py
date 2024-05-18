@@ -101,6 +101,7 @@ class VerifyUserSerializer(serializers.ModelSerializer):
 class LoginSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(write_only=True)
     phone_number = serializers.CharField(write_only=True)
+    password = serializers.CharField(required=True)
     
     
 class UserSerializer(serializers.ModelSerializer):

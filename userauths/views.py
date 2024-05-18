@@ -154,6 +154,12 @@ class VerifyUserViewSet(viewsets.ViewSet):
             return Response({"error": "Invalid or expired OTP"})
 
 
+
+class LoginView(TokenObtainPairView):
+    serializer_class = Lo
+    
+    
+    
 @api_view(['GET'])
 def getRoutes(request):
     # It defines a list of API routes that can be accessed.
