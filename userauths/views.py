@@ -18,7 +18,7 @@ from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework_simplejwt.tokens import RefreshToken
-
+from rest_framework.exceptions import AuthenticationFailed
 # Others
 import json
 import random
@@ -154,11 +154,59 @@ class VerifyUserViewSet(viewsets.ViewSet):
             return Response({"error": "Invalid or expired OTP"})
 
 
-
 class LoginView(TokenObtainPairView):
-    serializer_class = Lo
+    serializer_class = LoginSerializer
+    permission_classes = ()
     
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        
+        try:
+            email = serializer.initial_data['email']
+            phone_number = serializer.initial_data['phone_number']
+            password = serializer.initial_data['password']
+        except:
+            raise AuthenticationFailed('Authentication credentials required')
+        
+        try:
+            user = User.objects.get(email=email)
+            if not user.check_password(password):
+                raise AuthenticationFailed("Invalid authentication credentials")
+            
+            if not user.is_active:
+                raise AuthenticationFailed("Your account is not active.")
+        
+        except User.DoesNotExist:
+            raise AuthenticationFailed("Invalid authentication credentials")
+        
+        if serializer.is_valid():
+            
+            if serializer.is_valid():
+                tokens = serializer.validated_data
+                custom_data = {
+                    'access': str(tokens['access']),
+                    'refresh': str(tokens['refresh']),
+                    'user_id': user.id,
+                }
+                return Response(custom_data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_401_UNAUTHORIZED)
     
+
+class LogoutView(TokenObtainPairView):
+    def post(self, request, *args, **kwargs):
+        refresh_token = request.data.get('refresh_token')
+        
+        if not refresh_token:
+            return Response({'error': "Refresh token is required."}, status=status.HTTP_406_NOT_ACCEPTABLE)
+        
+        try:
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            return Response({"message": "Logout successful."}, status=status.HTTP_202_ACCEPTED)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_403_FORBIDDEN)
+
+
     
 @api_view(['GET'])
 def getRoutes(request):
