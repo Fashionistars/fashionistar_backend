@@ -8,6 +8,7 @@ from shortuuid.django_fields import ShortUUIDField
 from addon.models import Tax
 from .managers import CustomUserManager
 from django.core.exceptions import ValidationError
+from phonenumber_field.modelfields import PhoneNumberField
 
 
 GENDER = (
@@ -52,7 +53,7 @@ def user_directory_path(instance, filename):
 class User(AbstractUser):
     email = models.EmailField(unique=True, null=True)
     full_name = models.CharField(max_length=500, null=True, blank=True)
-    phone = models.CharField(max_length=500, null=True)
+    phone = PhoneNumberField(null=True, blank=True, unique=True)
     STATUS_CHOICES = [
     (VENDOR, 'Vendor'),
     (CLIENT, 'Client'),

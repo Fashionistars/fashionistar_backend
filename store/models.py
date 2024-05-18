@@ -353,15 +353,10 @@ class Product(models.Model):
 
 # Model for Product Gallery
 class Gallery(models.Model):
-    # Product associated with the gallery
     product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True)
-    # Image for the gallery
     image = models.FileField(upload_to=user_directory_path, default="gallery.jpg")
-    # Is the image active?
     active = models.BooleanField(default=True)
-    # Date of gallery image creation
     date = models.DateTimeField(auto_now_add=True)
-    # Unique short UUID for gallery image
     gid = ShortUUIDField(length=10, max_length=25, alphabet="abcdefghijklmnopqrstuvxyz")
 
     class Meta:
@@ -373,50 +368,32 @@ class Gallery(models.Model):
 
 # Model for Product Specifications
 class Specification(models.Model):
-    # Product associated with the specification
     product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True)
-    # Specification title
     title = models.CharField(max_length=100, blank=True, null=True)
-    # Specification content
     content = models.CharField(max_length=1000, blank=True, null=True)
 
 # Model for Product Sizes
 class Size(models.Model):
-    # Product associated with the size
     product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True)
-    # Size name
     name = models.CharField(max_length=100, blank=True, null=True)
-    # Price for the size
     price = models.DecimalField(default=0.00, decimal_places=2, max_digits=12)
 
 # Model for Product Colors
 class Color(models.Model):
-    # Product associated with the color
     product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True)
-    # Color name
     name = models.CharField(max_length=100, blank=True, null=True)
-    # Color code (if applicable)
     color_code = models.CharField(max_length=100, blank=True, null=True)
-    # Image for the color
     image = models.FileField(upload_to=user_directory_path, blank=True, null=True)
 
 # Model for Product FAQs
 class ProductFaq(models.Model):
-    # User who asked the FAQ
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
-    # Unique short UUID for FAQ
     pid = ShortUUIDField(unique=True, length=10, max_length=20, alphabet="abcdefghijklmnopqrstuvxyz")
-    # Product associated with the FAQ
     product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True, related_name="product_faq")
-    # Email of the user who asked the question
     email = models.EmailField()
-    # FAQ question
     question = models.CharField(max_length=1000)
-    # FAQ answer
     answer = models.CharField(max_length=10000, null=True, blank=True)
-    # Is the FAQ active?
     active = models.BooleanField(default=False)
-    # Date of FAQ creation
     date = models.DateTimeField(auto_now_add=True)
     
     class Meta:
@@ -449,36 +426,21 @@ class Cart(models.Model):
 
 # Model for Cart Orders
 class CartOrder(models.Model):
-    # Vendors associated with the order
     vendor = models.ManyToManyField(Vendor, blank=True)
-    # Buyer of the order
     buyer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="buyer", blank=True)
-    # Total price of the order
     sub_total = models.DecimalField(default=0.00, max_digits=12, decimal_places=2)
-    # Shipping cost
     shipping_amount = models.DecimalField(default=0.00, max_digits=12, decimal_places=2)
-    # VAT (Value Added Tax) cost
     tax_fee = models.DecimalField(default=0.00, max_digits=12, decimal_places=2)
-    # Service fee cost
     service_fee = models.DecimalField(default=0.00, max_digits=12, decimal_places=2)
-    # Total cost of the order
     total = models.DecimalField(default=0.00, max_digits=12, decimal_places=2)
 
-    # Order status attributes
     payment_status = models.CharField(max_length=100, choices=PAYMENT_STATUS, default="initiated")
     order_status = models.CharField(max_length=100, choices=ORDER_STATUS, default="Pending")
-    
-    
-    # Discounts
     initial_total = models.DecimalField(default=0.00, max_digits=12, decimal_places=2, help_text="The original total before discounts")
     saved = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, null=True, blank=True, help_text="Amount saved by customer")
-    
-    # Personal Informations
     full_name = models.CharField(max_length=1000)
     email = models.CharField(max_length=1000)
     mobile = models.CharField(max_length=1000)
-    
-     # Shipping Address
     address = models.CharField(max_length=1000, null=True, blank=True)
     city = models.CharField(max_length=1000, null=True, blank=True)
     state = models.CharField(max_length=1000, null=True, blank=True)
@@ -503,16 +465,11 @@ class CartOrder(models.Model):
 
 # Define a model for Cart Order Item
 class CartOrderItem(models.Model):
-    # A foreign key relationship to the CartOrder model with CASCADE deletion
     order = models.ForeignKey(CartOrder, on_delete=models.CASCADE, related_name="orderitem")
-    # A foreign key relationship to the Product model with CASCADE deletion
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="order_item")
-    # Integer field to store the quantity (default is 0)
     qty = models.IntegerField(default=0)
-    # Fields for color and size with max length 100, allowing null and blank values
     color = models.CharField(max_length=100, null=True, blank=True)
     size = models.CharField(max_length=100, null=True, blank=True)
-    # Decimal fields for price, total, shipping, VAT, service fee, grand total, and more
     price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     sub_total = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="Total of Product price * Product Qty")
     shipping_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="Estimated Shipping Fee = shipping_fee * total")
@@ -527,7 +484,6 @@ class CartOrderItem(models.Model):
     initial_total = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="Grand Total of all amount listed above before discount")
     saved = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, null=True, blank=True, help_text="Amount saved by customer")
     
-    # Order stages
     order_placed = models.BooleanField(default=False)
     processing_order = models.BooleanField(default=False)
     quality_check = models.BooleanField(default=False)
@@ -535,7 +491,6 @@ class CartOrderItem(models.Model):
     product_arrived = models.BooleanField(default=False)
     product_delivered = models.BooleanField(default=False)
 
-    # Various fields for delivery status, delivery couriers, tracking ID, coupons, and more
     delivery_status = models.CharField(max_length=100, choices=DELIVERY_STATUS, default="On Hold")
     delivery_couriers = models.ForeignKey("store.DeliveryCouriers", on_delete=models.SET_NULL, null=True, blank=True)
     tracking_id = models.CharField(max_length=100000, null=True, blank=True)
@@ -543,7 +498,6 @@ class CartOrderItem(models.Model):
     coupon = models.ManyToManyField("store.Coupon", blank=True)
     applied_coupon = models.BooleanField(default=False)
     oid = ShortUUIDField(length=10, max_length=25, alphabet="abcdefghijklmnopqrstuvxyz")
-    # A foreign key relationship to the Vendor model with SET_NULL option
     vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True)
     date = models.DateTimeField(default=timezone.now)
     
@@ -565,22 +519,14 @@ class CartOrderItem(models.Model):
 
 # Define a model for Reviews
 class Review(models.Model):
-    # A foreign key relationship to the User model with SET_NULL option, allowing null and blank values
     user = models.ForeignKey(User, on_delete=models.SET_NULL, blank=True, null=True)
-    # A foreign key relationship to the Product model with SET_NULL option, allowing null and blank values, and specifying a related name
     product = models.ForeignKey(Product, on_delete=models.SET_NULL, blank=True, null=True, related_name="reviews")
-    # Text field for the review content
     review = models.TextField()
-    # Field for a reply with max length 1000, allowing null and blank values
     reply = models.CharField(null=True, blank=True, max_length=1000)
-    # Integer field for rating with predefined choices
     rating = models.IntegerField(choices=RATING, default=None)
-    # Boolean field for the active status
     active = models.BooleanField(default=False)
-    # Many-to-many relationships with User model for helpful and not helpful actions
     helpful = models.ManyToManyField(User, blank=True, related_name="helpful")
     not_helpful = models.ManyToManyField(User, blank=True, related_name="not_helpful")
-    # Date and time field
     date = models.DateTimeField(auto_now_add=True)
     
     class Meta:
@@ -609,11 +555,8 @@ def update_product_rating(sender, instance, **kwargs):
 
 # Define a model for Wishlist
 class Wishlist(models.Model):
-    # A foreign key relationship to the User model with CASCADE deletion
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
-    # A foreign key relationship to the Product model with CASCADE deletion, specifying a related name
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="wishlist")
-    # Date and time field
     date = models.DateTimeField(auto_now_add=True)
     
     class Meta:
@@ -626,19 +569,12 @@ class Wishlist(models.Model):
         else:
             return "Wishlist"
         
-# Define a model for Notification
 class Notification(models.Model):
-    # A foreign key relationship to the User model with CASCADE deletion
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
-    # A foreign key relationship to the Vendor model with CASCADE deletion
     vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, blank=True)
-    # A foreign key relationship to the CartOrder model with CASCADE deletion, specifying a related name
     order = models.ForeignKey(CartOrder, on_delete=models.SET_NULL, null=True, blank=True)
-    # A foreign key relationship to the CartOrderItem model with CASCADE deletion, specifying a related name
     order_item = models.ForeignKey(CartOrderItem, on_delete=models.SET_NULL, null=True, blank=True)
-    # Is read Boolean Field
     seen = models.BooleanField(default=False)
-    # Date and time field
     date = models.DateTimeField(auto_now_add=True)
     
     class Meta:
@@ -653,9 +589,7 @@ class Notification(models.Model):
 
 # Define a model for Address
 class Address(models.Model):
-    # A foreign key relationship to the User model with CASCADE deletion
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
-    # Fields for full name, mobile, email, country, state, town/city, address, zip code, and status
     full_name = models.CharField(max_length=200)
     mobile = models.CharField(max_length=50)
     email = models.CharField(max_length=100)
@@ -679,69 +613,47 @@ class Address(models.Model):
 
 # Define a model for Cancelled Order
 class CancelledOrder(models.Model):
-    # A foreign key relationship to the User model with CASCADE deletion
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
-    # A foreign key relationship to the CartOrderItem model with SET_NULL option, allowing null values
     orderitem = models.ForeignKey("store.CartOrderItem", on_delete=models.SET_NULL, null=True)
-    # Field for email with max length 100
     email = models.CharField(max_length=100)
-    # Boolean field for the refunded status
     refunded = models.BooleanField(default=False)
     
     class Meta:
         verbose_name_plural = "Cancelled Order"
     
-    # Method to return a string representation of the object
     def __str__(self):
         if self.user:
             return str(self.user.username)
         else:
             return "Cancelled Order"
 
-# Define a model for Coupon
 class Coupon(models.Model):
-    # A foreign key relationship to the Vendor model with SET_NULL option, allowing null values, and specifying a related name
     vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, related_name="coupon_vendor")
-    # Many-to-many relationship with User model for users who used the coupon
     used_by = models.ManyToManyField(User, blank=True)
-    # Fields for code, type, discount, redemption, date, and more
     code = models.CharField(max_length=1000)
-    # type = models.CharField(max_length=100, choices=DISCOUNT_TYPE, default="Percentage")
     discount = models.IntegerField(default=1, validators=[MinValueValidator(0), MaxValueValidator(100)])
-    # redemption = models.IntegerField(default=0)
     date = models.DateTimeField(auto_now_add=True)
     active = models.BooleanField(default=True)
-    # make_public = models.BooleanField(default=False)
-    # valid_from = models.DateField()
-    # valid_to = models.DateField()
-    # ShortUUID field
     cid = ShortUUIDField(length=10, max_length=25, alphabet="abcdefghijklmnopqrstuvxyz")
     
-    # Method to calculate and save the percentage discount
     def save(self, *args, **kwargs):
         new_discount = int(self.discount) / 100
         self.get_percent = new_discount
         super(Coupon, self).save(*args, **kwargs) 
     
-    # Method to return a string representation of the object
     def __str__(self):
         return self.code
     
     class Meta:
         ordering =['-id']
 
-# Define a model for Coupon Users
 class CouponUsers(models.Model):
-    # A foreign key relationship to the Coupon model with CASCADE deletion
     coupon = models.ForeignKey(Coupon, on_delete=models.CASCADE)
-    # A foreign key relationship to the CartOrder model with CASCADE deletion
     order = models.ForeignKey(CartOrder, on_delete=models.CASCADE)
-    # Fields for full name, email, and mobile
     full_name = models.CharField(max_length=1000)
     email = models.CharField(max_length=1000)
     mobile = models.CharField(max_length=1000)
     
-    # Method to return a string representation of the coupon code
     def __str__(self):
         return str(self.coupon.code)
     

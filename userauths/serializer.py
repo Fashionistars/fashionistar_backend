@@ -4,7 +4,8 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
-
+from rest_framework.decorators import parser_classes
+from rest_framework.parsers import JSONParser
 
 User = get_user_model()
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -86,7 +87,8 @@ class RegisterSerializer(serializers.ModelSerializer):
             'email': instance.email,
             "phone": instance.phone,
         }
-
+        
+        
 class VerifyUserSerializer(serializers.ModelSerializer):
     otp = serializers.CharField(write_only=True)
     
@@ -95,6 +97,12 @@ class VerifyUserSerializer(serializers.ModelSerializer):
         fields = ['otp',]
 
 
+@parser_classes([JSONParser])
+class LoginSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(write_only=True)
+    phone_number = serializers.CharField(write_only=True)
+    
+    
 class UserSerializer(serializers.ModelSerializer):
 
     class Meta:

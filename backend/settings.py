@@ -69,7 +69,7 @@ INSTALLED_APPS = [
     'import_export',
     'anymail',
     'storages',
-
+    'phone_verify',
 
 ]
 
@@ -86,6 +86,21 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'backend.urls'
+
+PHONE_VERIFICATION = {
+    'BACKEND': 'phone_verify.backends.twilio.TwilioBackend',
+    'OPTIONS': {
+        'SID': 'fake',
+        'SECRET': 'fake',
+        'FROM': '+14755292729',
+        'SANDBOX_TOKEN':'123456',
+    },
+    'TOKEN_LENGTH': 6,
+    'MESSAGE': 'Welcome to {app}! Please use security code {security_code} to proceed.',
+    'APP_NAME': 'Phone Verify',
+    'SECURITY_CODE_EXPIRATION_TIME': 3600,  # In seconds only
+    'VERIFY_SECURITY_CODE_ONLY_ONCE': False,  # If False, then a security code can be used multiple times for verification
+}
 
 TEMPLATES = [
     {
@@ -358,6 +373,15 @@ JAZZMIN_UI_TWEAKS = {
         "success": "btn-success"
     }
 }
+
+
+DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
+
+PHONENUMBER_DB_FORMAT = "INTERNATIONAL"
+
+PHONENUMBER_DEFAULT_REGION = "NG"
+
+PHONENUMBER_DEFAULT_FORMAT = "INTERNATIONAL"
 
 
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
