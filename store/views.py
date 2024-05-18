@@ -66,6 +66,10 @@ class CategoryListView(generics.ListAPIView):
     permission_classes = (AllowAny,)
 
 
+class CategoryCreateView(generics.CreateAPIView):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+
 class BrandListView(generics.ListAPIView):
     serializer_class = BrandSerializer
     queryset = Brand.objects.filter(active=True)
