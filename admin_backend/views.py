@@ -1,3 +1,5 @@
+# views.py
+
 from rest_framework import viewsets, status, parsers
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -8,10 +10,10 @@ class CollectionsViewSet(viewsets.ModelViewSet):
     """
     A viewset for viewing and editing Collection instances.
     """
-    queryset = Collections.objects.all()  
+    queryset = Collections.objects.all()
     serializer_class = CollectionsSerializer
-    permission_classes = [IsAuthenticated,]
-    parser_classes =(parsers.MultiPartParser, parsers.FormParser)
+    permission_classes = [IsAuthenticated]
+    parser_classes = (parsers.MultiPartParser, parsers.FormParser)
 
     def create(self, request, *args, **kwargs):
         """
@@ -23,17 +25,12 @@ class CollectionsViewSet(viewsets.ModelViewSet):
         Returns:
             Response: The response object containing the created instance data.
         """
-        try:
-            serializer = self.get_serializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
-            self.perform_create(serializer)
-            headers = self.get_success_headers(serializer.data)
-        
-        except Exception as err:
-            return Response({"message": err}, status=status.HTTP_412_PRECONDITION_FAILED)
-        
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers) 
-    
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
     def update(self, request, *args, **kwargs):
         """
         Update an existing Collection instance.
@@ -44,12 +41,11 @@ class CollectionsViewSet(viewsets.ModelViewSet):
         Returns:
             Response: The response object containing the updated instance data.
         """
-        partial = kwargs.pop('partial', False)  
+        partial = kwargs.pop('partial', False)
         instance = self.get_object()
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
-        
         return Response(serializer.data)
 
     def destroy(self, request, *args, **kwargs):
@@ -64,4 +60,4 @@ class CollectionsViewSet(viewsets.ModelViewSet):
         """
         instance = self.get_object()
         self.perform_destroy(instance)
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response({"message": "Image deleted successfully"}, status=status.HTTP_204_NO_CONTENT)

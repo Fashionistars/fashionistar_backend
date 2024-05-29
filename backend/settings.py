@@ -45,6 +45,7 @@ SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
 INSTALLED_APPS = [
     'jazzmin',
     'drf_yasg',
+    'drf_spectacular',
 
     'django.contrib.admin',
     'django.contrib.auth',
@@ -221,9 +222,33 @@ PAYPAL_CLIENT_ID = env('PAYPAL_CLIENT_ID')
 PAYPAL_SECRET_ID = env('PAYPAL_SECRET_ID')
 
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    )
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    "DEFAULT_PERMISSION_CLASSES": (
+        "rest_framework.permissions.IsAuthenticated",
+        "rest_framework.permissions.AllowAny",
+    ),
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework.authentication.TokenAuthentication",
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
+}
+
+
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Fashionistar Backend Project API',
+    'DESCRIPTION': 'Fashionistar project description',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True,
+    'SECURITY': [{'Bearer': []}],
+    'SECURITY_DEFINITIONS': {
+        'Bearer': {
+            'type': 'http',
+            'scheme': 'bearer',
+            'bearerFormat': 'JWT',
+        },
+    },
 }
 
 ANYMAIL = {
@@ -393,3 +418,14 @@ EMAIL_USE_TLS = False
 EMAIL_USE_SSL = True
 EMAIL_HOST_PASSWORD='zjpskvqwkhubavjg'
 EMAIL_HOST_USER='fashionistar.home.beauty@gmail.com'
+
+
+# swagger settings
+SWAGGER_SETTINGS = {
+    "USE_SESSION_AUTH": True,
+    "relative_paths": False,
+    "DISPLAY_OPERATION_ID": False,
+    "SECURITY_DEFINITIONS": {
+        "Bearer": {"type": "apiKey", "name": "Authorization", "in": "header"},
+    },
+}
