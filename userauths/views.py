@@ -10,6 +10,7 @@ from django.core.exceptions import ValidationError
 from django.db.models import Q
 
 # Restframework
+from rest_framework.views import APIView
 from rest_framework import status, viewsets, generics
 from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
@@ -164,13 +165,11 @@ class LoginView(TokenObtainPairView):
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         
-        try:
-            email = serializer.initial_data['email']
-            phone_number = serializer.initial_data['phone_number']
-            password = serializer.initial_data['password']
-        except:
-            raise AuthenticationFailed('Authentication credentials required')
-        
+        email = serializer.initial_data['email']
+        # phone_number = serializer.initial_data['phone_number']
+            
+        password = serializer.initial_data['password']
+
         try:
             user = User.objects.get(email=email)
             if not user.check_password(password):
@@ -195,21 +194,19 @@ class LoginView(TokenObtainPairView):
         return Response(serializer.errors, status=status.HTTP_401_UNAUTHORIZED)
     
 
-class LogoutView(TokenObtainPairView):
-    def post(self, request, *args, **kwargs):
-        refresh_token = request.data.get('refresh_token')
-        
-        if not refresh_token:
-            return Response({'error': "Refresh token is required."}, status=status.HTTP_406_NOT_ACCEPTABLE)
-        
+class LogoutView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    def post(self, request):
+        serializer = LogoutSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        refresh_token = serializer.validated_data['refresh_token']
         try:
             token = RefreshToken(refresh_token)
             token.blacklist()
-            return Response({"message": "Logout successful."}, status=status.HTTP_202_ACCEPTED)
+            return Response(status=status.HTTP_205_RESET_CONTENT)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_403_FORBIDDEN)
-
-
+            return Response(status=status.HTTP_400_BAD_REQUEST)
     
 @api_view(['GET'])
 def getRoutes(request):

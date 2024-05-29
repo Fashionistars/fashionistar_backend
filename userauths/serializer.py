@@ -99,14 +99,18 @@ class VerifyUserSerializer(serializers.ModelSerializer):
 
 @parser_classes([JSONParser])
 class LoginSerializer(TokenObtainPairSerializer):
-    email = serializers.EmailField(write_only=True)
-    phone_number = serializers.CharField(write_only=True)
+    email = serializers.EmailField(write_only=False)
+    phone_number = serializers.CharField(required=False)
     password = serializers.CharField(required=True)
     default_error_messages = {
         'no_active_account': 'Your account is yet to be activated',
         'invalid_credentials': 'Invalid email or password'
     }
-    
+
+class LogoutSerializer(serializers.Serializer):
+    refresh_token = serializers.CharField()
+
+
 class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
