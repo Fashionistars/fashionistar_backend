@@ -212,10 +212,13 @@ class Brand(models.Model):
 
 # Model for Products
 class Product(models.Model):
+    sku = ShortUUIDField(unique=True, length=5, max_length=50, prefix="SKU", alphabet="1234567890")
+    pid = ShortUUIDField(unique=True, length=10, max_length=20, alphabet="abcdefghijklmnopqrstuvxyz")
+    vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, blank=True, related_name="vendor")
+    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name="category")
     title = models.CharField(max_length=100)
     image = models.FileField(upload_to=user_directory_path, blank=True, null=True, default="product.jpg")
     description = models.TextField(null=True, blank=True)
-    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name="category")
     tags = models.CharField(max_length=1000, null=True, blank=True)
     brand = models.CharField(max_length=100, null=True, blank=True)
     price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, null=True, blank=True)
@@ -233,9 +236,6 @@ class Product(models.Model):
     orders = models.PositiveIntegerField(default=0, null=True, blank=True)
     saved = models.PositiveIntegerField(default=0, null=True, blank=True)
     rating = models.IntegerField(default=0, null=True, blank=True)
-    vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, blank=True, related_name="vendor")
-    sku = ShortUUIDField(unique=True, length=5, max_length=50, prefix="SKU", alphabet="1234567890")
-    pid = ShortUUIDField(unique=True, length=10, max_length=20, alphabet="abcdefghijklmnopqrstuvxyz")
     slug = models.SlugField(null=True, blank=True)
     date = models.DateTimeField(default=timezone.now)
 

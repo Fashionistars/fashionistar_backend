@@ -65,66 +65,25 @@ class ColorSerializer(serializers.ModelSerializer):
 
 # Define a serializer for the Product model
 class ProductSerializer(serializers.ModelSerializer):
-    # Serialize related Category, Tag, and Brand models
-    # category = CategorySerializer(many=True, read_only=True)
-    # tags = TagSerializer(many=True, read_only=True)
     gallery = GallerySerializer(many=True, read_only=True)
     color = ColorSerializer(many=True, read_only=True)
     size = SizeSerializer(many=True, read_only=True)
     specification = SpecificationSerializer(many=True, read_only=True)
-    # rating = serializers.IntegerField(required=False)
-    
-    # specification = SpecificationSerializer(many=True, required=False)
-    # color = ColorSerializer(many=True, required=False)
-    # size = SizeSerializer(many=True, required=False)
-    # gallery = GallerySerializer(many=True, required=False, read_only=True)
+
 
     class Meta:
         model = Product
         fields = [
-            "id",
-            "title",
-            "image",
-            "description",
-            "category",
-            "tags",
-            "brand",
-            "price",
-            "old_price",
-            "shipping_amount",
-            "stock_qty",
-            "in_stock",
-            "status",
-            "type",
-            "featured",
-            "hot_deal",
-            "special_offer",
-            "digital",
-            "views",
-            "orders",
-            "saved",
-            # "rating",
-            "vendor",
-            "sku",
-            "pid",
-            "slug",
-            "date",
-            "gallery",
-            "specification",
-            "size",
-            "color",
-            "product_rating",
-            "rating_count",
-            'order_count',
-            "get_precentage",
+            "id", "title", "image", "description", "category", "tags", "brand", "price", "old_price", "shipping_amount", 
+            "stock_qty", "in_stock", "status", "type", "featured", "hot_deal", "special_offer", "digital", "views", "orders", 
+            "saved", "vendor", "sku", "pid", "slug", "date", "gallery", "specification", "size", "color", "product_rating", "rating_count",
+            'order_count', "get_precentage",
         ]
     
     def __init__(self, *args, **kwargs):
         super(ProductSerializer, self).__init__(*args, **kwargs)
-        # Customize serialization depth based on the request method.
         request = self.context.get('request')
         if request and request.method == 'POST':
-            # When creating a new product, set serialization depth to 0.
             self.Meta.depth = 0
         else:
             # For other methods, set serialization depth to 3.
