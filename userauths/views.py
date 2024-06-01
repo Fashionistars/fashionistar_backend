@@ -74,7 +74,8 @@ class RegisterView(generics.CreateAPIView):
         email = request.data.get('email')
         phone = request.data.get('phone')
 
-        serializer = RegisterSerializer(data=request.data) 
+        serializer = RegisterSerializer(data=request.data)
+        print(request.data)
         try:
             if phone:
                 user_data = {
@@ -195,6 +196,7 @@ class LoginView(TokenObtainPairView):
     
 
 class LogoutView(APIView):
+    """Logout functionality"""
     permission_classes = (IsAuthenticated,)
 
     def post(self, request):

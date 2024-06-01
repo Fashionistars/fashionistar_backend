@@ -9,7 +9,9 @@ from django.db import models
 from django.db import transaction
 from django.urls import reverse
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.db.models.functions import ExtractMonth
+
 # Restframework Packages
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -136,6 +138,8 @@ def MonthlyProductsChartAPIFBV(request, vendor_id):
     return Response(products_by_month)
 
 
+User = get_user_model()
+
 class ProductCreateView(generics.CreateAPIView):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
@@ -143,10 +147,18 @@ class ProductCreateView(generics.CreateAPIView):
     
     @transaction.atomic
     def perform_create(self, serializer):
-        if self.request.user.role != 'Vendor':
-                    raise PermissionDenied("You do not have permission to perform this action.")
+        user = self.request.user
+        # Fetch the user's role directly from the User table
+        try:
+            user_role = User.objects.values_list('role', flat=True).get(pk=user.pk)
+        except User.DoesNotExist:
+            raise PermissionDenied("User not found")
+
+        if user_role != 'Vendor':
+            raise PermissionDenied("You do not have permission to perform this action.")
+
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        serializer.save(vendor=self.request.user.id)
         product_instance = serializer.instance
 
         specifications_data = []

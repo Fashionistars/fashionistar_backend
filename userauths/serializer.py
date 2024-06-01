@@ -71,11 +71,12 @@ class RegisterSerializer(serializers.ModelSerializer):
             email = validated_data.get('email')
             phone = validated_data.get('phone')
             password = validated_data.get('password')
-
+            role = validated_data.get('role')
             user = User.objects.create_user(
                 email=email,
                 phone=phone,
-                password=password
+                password=password,
+                role=role
             )
 
             return user
@@ -86,6 +87,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             'id': instance.id,
             'email': instance.email,
             "phone": instance.phone,
+            'role': instance.role
         }
         
         
