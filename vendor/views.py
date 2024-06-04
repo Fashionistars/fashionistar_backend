@@ -148,19 +148,21 @@ class ProductCreateView(generics.CreateAPIView):
     @transaction.atomic
     def perform_create(self, serializer):
         user = self.request.user
+        print(user)
         # Fetch the user's role directly from the User table
         try:
             user_role = User.objects.values_list('role', flat=True).get(pk=user.pk)
         except User.DoesNotExist:
             raise PermissionDenied("User not found")
 
-        if user_role != 'Vendor':
+        if self.request.user.role != 'Vendor':
             raise PermissionDenied("You do not have permission to perform this action.")
-
+        
         serializer.is_valid(raise_exception=True)
-        serializer.save(vendor=self.request.user.id)
+        serializer.validated_data['vendor'] = user
+        serializer.save()
+        print(serializer.data)
         product_instance = serializer.instance
-
         specifications_data = []
         colors_data = []
         sizes_data = []
@@ -218,10 +220,13 @@ class ProductCreateView(generics.CreateAPIView):
         self.save_nested_data(product_instance, SizeSerializer, sizes_data)
         self.save_nested_data(
             product_instance, GallerySerializer, gallery_data)
-
+    # except Exception as err:
+    #         return Response({"message": err}, status=status.HTTP_501_NOT_IMPLEMENTED)
+    
+        
     def save_nested_data(self, product_instance, serializer_class, data):
         serializer = serializer_class(data=data, many=True, context={
-                                      'product_instance': product_instance})
+                                        'product_instance': product_instance})
         serializer.is_valid(raise_exception=True)
         serializer.save(product=product_instance)
 

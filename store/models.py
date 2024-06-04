@@ -213,8 +213,7 @@ class Brand(models.Model):
 # Model for Products
 class Product(models.Model):
     sku = ShortUUIDField(unique=True, length=5, max_length=50, prefix="SKU", alphabet="1234567890")
-    pid = ShortUUIDField(unique=True, length=10, max_length=20, alphabet="abcdefghijklmnopqrstuvxyz")
-    vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, blank=True, related_name="vendor")
+    vendor = models.ForeignKey(User, on_delete=models.CASCADE, null=False, blank=False, related_name="vendor_role")
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name="category")
     title = models.CharField(max_length=100)
     image = models.FileField(upload_to=user_directory_path, blank=True, null=True, default="product.jpg")

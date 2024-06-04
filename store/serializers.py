@@ -76,7 +76,7 @@ class ProductSerializer(serializers.ModelSerializer):
         fields = [
             "id", "title", "image", "description", "category", "tags", "brand", "price", "old_price", "shipping_amount", 
             "stock_qty", "in_stock", "status", "type", "featured", "hot_deal", "special_offer", "digital", "views", "orders", 
-            "saved", "vendor", "sku", "pid", "slug", "date", "gallery", "specification", "size", "color", "product_rating", "rating_count",
+            "saved", "slug","sku", "date", "gallery", "specification", "size", "color", "product_rating", "rating_count",
             'order_count', "get_precentage",
         ]
     
