@@ -87,12 +87,21 @@ class ProductListView(generics.ListAPIView):
     permission_classes = (AllowAny,)
 
 class ProductDetailView(generics.RetrieveAPIView):
+    """Display product details """
     serializer_class = ProductSerializer
+    permission_classes = [AllowAny,]
 
     def get_object(self):
         # Retrieve the product using the provided slug from the URL
         slug = self.kwargs.get('slug')
-        return Product.objects.get(slug=slug)
+        product = Product.objects.get(slug=slug)
+        return product
+
+    def get(self, request, *args, **kwargs):
+        product = self.get_object()
+        serializer = self.get_serializer(product)
+        return Response(serializer.data, status=status.HTTP_200_OK)    
+    
     
 class CartApiView(generics.ListCreateAPIView):
     serializer_class = CartSerializer
