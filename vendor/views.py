@@ -9,7 +9,9 @@ from django.db import models
 from django.db import transaction
 from django.urls import reverse
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.db.models.functions import ExtractMonth
+
 # Restframework Packages
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -20,28 +22,21 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.views import APIView
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.exceptions import PermissionDenied
 
 # Serializers
 from userauths.serializer import MyTokenObtainPairSerializer, ProfileSerializer, RegisterSerializer
 from store.serializers import CancelledOrderSerializer, CouponSummarySerializer, EarningSummarySerializer, NotificationSerializer, CartSerializer, NotificationSummarySerializer, SummarySerializer, CartOrderItemSerializer, CouponUsersSerializer,  ProductSerializer, TagSerializer, CategorySerializer, DeliveryCouriersSerializer, CartOrderSerializer, GallerySerializer, BrandSerializer, ProductFaqSerializer, ReviewSerializer,  SpecificationSerializer, CouponSerializer, ColorSerializer, SizeSerializer, AddressSerializer, WishlistSerializer, ConfigSettingsSerializer, VendorSerializer
 
 # Models
-from userauths.models import Profile, User
-from store.models import CancelledOrder, Notification, CartOrderItem, CouponUsers, Cart, Product, Tag, Category, DeliveryCouriers, CartOrder, Gallery, Brand, ProductFaq, Review,  Specification, Coupon, Color, Size, Address, Wishlist
-from addon.models import ConfigSettings, Tax
+from userauths.models import Profile
+from store.models import Notification, CartOrderItem, CouponUsers, Cart, Product, Tag, Category, DeliveryCouriers, CartOrder, Gallery, Brand, ProductFaq, Review,  Specification, Coupon, Color, Size, Address, Wishlist
 from vendor.models import Vendor
 
 # Others Packages
-import json
 from decimal import Decimal
-import stripe
-import requests
+
 from datetime import datetime, timedelta
-import calendar
-import urllib
-import requests
-import stripe
-from datetime import datetime as d
 
 
 class DashboardStatsAPIView(generics.ListAPIView):
@@ -143,16 +138,31 @@ def MonthlyProductsChartAPIFBV(request, vendor_id):
     return Response(products_by_month)
 
 
+User = get_user_model()
+
 class ProductCreateView(generics.CreateAPIView):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
-
+    permission_classes = [IsAuthenticated,]
+    
     @transaction.atomic
     def perform_create(self, serializer):
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        product_instance = serializer.instance
+        user = self.request.user
+        print(user)
+        # Fetch the user's role directly from the User table
+        try:
+            user_role = User.objects.values_list('role', flat=True).get(pk=user.pk)
+        except User.DoesNotExist:
+            raise PermissionDenied("User not found")
 
+        if self.request.user.role != 'Vendor':
+            raise PermissionDenied("You do not have permission to perform this action.")
+        
+        serializer.is_valid(raise_exception=True)
+        serializer.validated_data['vendor'] = user
+        serializer.save()
+        print(serializer.data)
+        product_instance = serializer.instance
         specifications_data = []
         colors_data = []
         sizes_data = []
@@ -210,10 +220,13 @@ class ProductCreateView(generics.CreateAPIView):
         self.save_nested_data(product_instance, SizeSerializer, sizes_data)
         self.save_nested_data(
             product_instance, GallerySerializer, gallery_data)
-
+    # except Exception as err:
+    #         return Response({"message": err}, status=status.HTTP_501_NOT_IMPLEMENTED)
+    
+        
     def save_nested_data(self, product_instance, serializer_class, data):
         serializer = serializer_class(data=data, many=True, context={
-                                      'product_instance': product_instance})
+                                        'product_instance': product_instance})
         serializer.is_valid(raise_exception=True)
         serializer.save(product=product_instance)
 
@@ -575,55 +588,6 @@ class NotificationMarkAsSeen(generics.RetrieveUpdateAPIView):
         notification.seen = True
         notification.save()
         return notification
-    
-
-############################ Less Redundant Notfication Code ############################
-# class NotificationAPIView(generics.ListCreateAPIView, generics.RetrieveUpdateAPIView):
-#     serializer_class = NotificationSerializer
-#     permission_classes = (AllowAny, )
-
-#     def get_queryset(self):
-#         vendor_id = self.kwargs['vendor_id']
-#         vendor = Vendor.objects.get(id=vendor_id)
-        
-#         seen_param = self.request.query_params.get('seen', None)
-
-#         if seen_param == 'true':
-#             return Notification.objects.filter(vendor=vendor, seen=True).order_by('seen')
-#         elif seen_param == 'false':
-#             return Notification.objects.filter(vendor=vendor, seen=False).order_by('seen')
-#         else:
-#             return Notification.objects.filter(vendor=vendor).order_by('seen')
-
-#     def list(self, request, *args, **kwargs):
-#         if 'summary' in request.query_params:
-#             return self.get_summary(request, *args, **kwargs)
-#         return super().list(request, *args, **kwargs)
-
-#     def get_summary(self, request, *args, **kwargs):
-#         vendor_id = kwargs['vendor_id']
-#         vendor = Vendor.objects.get(id=vendor_id)
-
-#         un_read_noti = Notification.objects.filter(vendor=vendor, seen=False).count()
-#         read_noti = Notification.objects.filter(vendor=vendor, seen=True).count()
-#         all_noti = Notification.objects.filter(vendor=vendor).count()
-
-#         return Response({
-#             'un_read_noti': un_read_noti,
-#             'read_noti': read_noti,
-#             'all_noti': all_noti,
-#         })
-
-#     def perform_update(self, serializer):
-#         serializer.instance.seen = True
-#         serializer.save()
-
-# Example URL patterns in urls.py:
-# path('notifications/<int:vendor_id>/', NotificationAPIView.as_view(), name='notification-list'),
-# path('notifications/<int:vendor_id>/<int:pk>/', NotificationAPIView.as_view(), name='notification-detail'),
-
-
-
 
 
 class VendorProfileUpdateView(generics.RetrieveUpdateAPIView):

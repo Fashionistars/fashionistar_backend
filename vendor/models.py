@@ -78,7 +78,7 @@ class Vendor(models.Model):
     email = models.EmailField(max_length=100, help_text="Shop Email", null=True, blank=True)
     description = models.TextField(null=True, blank=True)
     mobile = models.CharField(max_length = 150, null=True, blank=True)
-    verified = models.BooleanField(default=False)
+    verified = models.BooleanField(default=True)
     active = models.BooleanField(default=True)
     vid = ShortUUIDField(unique=True, length=10, max_length=20, alphabet="abcdefghijklmnopqrstuvxyz")
     date = models.DateTimeField(auto_now_add=True)

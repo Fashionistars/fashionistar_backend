@@ -10,6 +10,7 @@ from django.core.exceptions import ValidationError
 from django.db.models import Q
 
 # Restframework
+from rest_framework.views import APIView
 from rest_framework import status, viewsets, generics
 from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
@@ -18,7 +19,7 @@ from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework_simplejwt.tokens import RefreshToken
-
+from rest_framework.exceptions import AuthenticationFailed
 # Others
 import json
 import random
@@ -73,7 +74,8 @@ class RegisterView(generics.CreateAPIView):
         email = request.data.get('email')
         phone = request.data.get('phone')
 
-        serializer = RegisterSerializer(data=request.data) 
+        serializer = RegisterSerializer(data=request.data)
+        print(request.data)
         try:
             if phone:
                 user_data = {
@@ -154,6 +156,60 @@ class VerifyUserViewSet(viewsets.ViewSet):
             return Response({"error": "Invalid or expired OTP"})
 
 
+
+
+
+class LoginView(TokenObtainPairView):
+    serializer_class = LoginSerializer
+    permission_classes = ()
+    
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        
+        email = serializer.initial_data['email']
+        # phone_number = serializer.initial_data['phone_number']
+            
+        password = serializer.initial_data['password']
+
+        try:
+            user = User.objects.get(email=email)
+            if not user.check_password(password):
+                raise AuthenticationFailed("Invalid authentication credentials")
+            
+            if not user.is_active:
+                raise AuthenticationFailed("Your account is not active.")
+        
+        except User.DoesNotExist:
+            raise AuthenticationFailed("Invalid authentication credentials")
+        
+        if serializer.is_valid():
+            
+            if serializer.is_valid():
+                tokens = serializer.validated_data
+                custom_data = {
+                    'access': str(tokens['access']),
+                    'refresh': str(tokens['refresh']),
+                    'user_id': user.id,
+                }
+                return Response(custom_data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_401_UNAUTHORIZED)
+    
+
+class LogoutView(APIView):
+    """Logout functionality"""
+    permission_classes = (IsAuthenticated,)
+
+    def post(self, request):
+        serializer = LogoutSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        refresh_token = serializer.validated_data['refresh_token']
+        try:
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            return Response(status=status.HTTP_205_RESET_CONTENT)
+        except Exception as e:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+    
 @api_view(['GET'])
 def getRoutes(request):
     # It defines a list of API routes that can be accessed.
