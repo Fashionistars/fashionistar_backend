@@ -57,7 +57,7 @@ urlpatterns = [
     path('customer/setting/<int:pk>/', customer_views.CustomerUpdateView.as_view(), name='customer-settings'),
 
     # Vendor API Endpoints
-    path('vendor/stats/<vendor_id>/', vendor_views.DashboardStatsAPIView.as_view(), name='vendor-stats'),
+    path('vendor/stats/', vendor_views.DashboardStatsAPIView.as_view(), name='vendor-stats'),
     path('vendor/products/<vendor_id>/', vendor_views.ProductsAPIView.as_view(), name='vendor-prdoucts'),
     path('vendor/orders/<vendor_id>/', vendor_views.OrdersAPIView.as_view(), name='vendor-orders'),
     path('vendor/orders/<vendor_id>/<order_oid>/', vendor_views.OrderDetailAPIView.as_view(), name='vendor-order-detail'),

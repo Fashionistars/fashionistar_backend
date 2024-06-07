@@ -11,6 +11,7 @@ from django.urls import reverse
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db.models.functions import ExtractMonth
+from django.db.models import Avg, Min
 
 # Restframework Packages
 from rest_framework.decorators import api_view
@@ -39,26 +40,58 @@ from decimal import Decimal
 from datetime import datetime, timedelta
 
 
+User = get_user_model()
+
 class DashboardStatsAPIView(generics.ListAPIView):
     serializer_class = SummarySerializer
-
+    permission_classes = [IsAuthenticated,]
+    
+    
     def get_queryset(self):
+        user = self.request.user
+        # Fetch the user's role directly from the User table
+        try:
+            user_role = User.objects.values_list('role', flat=True).get(pk=user.pk)
+        except User.DoesNotExist:
+            raise PermissionDenied("User not found")
 
-        vendor_id = self.kwargs['vendor_id']
-        vendor = Vendor.objects.get(id=vendor_id)
+        if self.request.user.role != 'Vendor':
+            raise PermissionDenied("You do not have permission to perform this action.")
 
         # Calculate summary values
-        product_count = Product.objects.filter(vendor=vendor).count()
+        product_count = Product.objects.filter(vendor=user.id, in_stock=False).count()
         order_count = CartOrder.objects.filter(
-            vendor=vendor, payment_status="paid").count()
-        revenue = CartOrderItem.objects.filter(vendor=vendor, order__payment_status="paid").aggregate(
+            vendor=user.id, payment_status="paid").count()
+        
+        revenue = CartOrderItem.objects.filter(vendor=user.id, order__payment_status="paid").aggregate(
             total_revenue=models.Sum(models.F('sub_total') + models.F('shipping_amount')))['total_revenue'] or 0
+        
+        vendor_product = Product.objects.filter(vendor=user.id)
+        vendor_product_ids = vendor_product.values_list('id', flat=True)
+        
+        review_count = Review.objects.filter(product_id__in=vendor_product_ids).count()
 
+        """
+        Check if vendor_product_ids is not empty
+         Check if average_rating is None and set it to a default value if needed
+        """
+        average_rating = Review.objects.filter(product_id__in=vendor_product_ids).aggregate(average=Avg('rating'))['average']
+        
+        if vendor_product_ids:
+            average_rating = Review.objects.filter(product_id__in=vendor_product_ids).aggregate(average=Avg('rating'))['average']
+            if average_rating is None:
+                average_rating = 0
+
+
+        print(average_rating)
+        print('average rating', average_rating)
         # Return a dummy list as we only need one summary object
         return [{
             'products': product_count,
             'orders': order_count,
-            'revenue': revenue
+            'revenue': revenue,
+            'review': review_count,
+            'average_review': average_rating,
         }]
 
     def list(self, request, *args, **kwargs):
@@ -138,7 +171,6 @@ def MonthlyProductsChartAPIFBV(request, vendor_id):
     return Response(products_by_month)
 
 
-User = get_user_model()
 
 class ProductCreateView(generics.CreateAPIView):
     queryset = Product.objects.all()
