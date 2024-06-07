@@ -83,7 +83,7 @@ urlpatterns = [
     path('vendor/settings/<int:pk>/', vendor_views.VendorProfileUpdateView.as_view(), name='vendor-settings'),
     path('vendor/shop-settings/<int:pk>/', vendor_views.ShopUpdateView.as_view(), name='customer-settings'),
     path('shop/<vendor_slug>/', vendor_views.ShopAPIView.as_view(), name='shop'),
-    path('vendor-products/<vendor_slug>/', vendor_views.ShopProductsAPIView.as_view(), name='vendor-products'),
-    path('vendor-register/', vendor_views.VendorRegister.as_view(), name='vendor-register'),
+    path('vendor/products/<vendor_slug>/', vendor_views.ShopProductsAPIView.as_view(), name='vendor-products'),
+    path('vendor/register/', vendor_views.VendorRegister.as_view(), name='vendor-register'),
     
 ]
