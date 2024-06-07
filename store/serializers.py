@@ -337,6 +337,8 @@ class SummarySerializer(serializers.Serializer):
     products = serializers.IntegerField()
     orders = serializers.IntegerField()
     revenue = serializers.DecimalField(max_digits=10, decimal_places=2)
+    review = serializers.IntegerField()
+    average_review = serializers.DecimalField(max_digits=2, decimal_places=1)
 
 class EarningSummarySerializer(serializers.Serializer):
     monthly_revenue = serializers.DecimalField(max_digits=10, decimal_places=2)
