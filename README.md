@@ -52,6 +52,10 @@ pip install -r requirements.txt
 Apply the database migrations to set up the database schema: Default to sqlite
 
 ```bash
+python manage.py makemigrations
+```
+
+```bash
 python manage.py migrate
 ```
 
