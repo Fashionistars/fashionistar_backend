@@ -65,3 +65,5 @@ Start the development server:
 
 ```bash
 python manage.py runserver
+```
+ The project will be accessible at http://127.0.0.1:8000/ by default.
