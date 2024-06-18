@@ -6,6 +6,8 @@ from vendor import views as vendor_views
 
 from rest_framework_simplejwt.views import TokenRefreshView
 
+app_name = 'api'  # Add this line to specify the app namespace
+
 
 urlpatterns = [
     path('', userauths_views.getRoutes),

@@ -80,12 +80,6 @@ WIN_STATUS = (
     ("pending", "pending")
 )
 
-PRODUCT_TYPE = (
-    ("regular", "Regular"),
-    ("auction", "Auction"),
-    ("offer", "Offer")
-)
-
 OFFER_STATUS = (
     ("accepted", "Accepted"),
     ("rejected", "Rejected"),
@@ -214,7 +208,7 @@ class Brand(models.Model):
 class Product(models.Model):
     sku = ShortUUIDField(unique=True, length=5, max_length=50, prefix="SKU", alphabet="1234567890")
     vendor = models.ForeignKey(User, on_delete=models.CASCADE, null=False, blank=False, related_name="vendor_role")
-    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name="category")
+    category = models.ManyToManyField(Category, related_name="products",)    # In this categories column,  a product is meant to contain differnt categories    
     title = models.CharField(max_length=100)
     image = models.FileField(upload_to=user_directory_path, blank=True, null=True, default="product.jpg")
     description = models.TextField(null=True, blank=True)
@@ -223,14 +217,13 @@ class Product(models.Model):
     price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, null=True, blank=True)
     old_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, null=True, blank=True)
     shipping_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, null=True, blank=True)
     stock_qty = models.PositiveIntegerField(default=0)
     in_stock = models.BooleanField(default=True)
     status = models.CharField(choices=STATUS, max_length=50, default="published", null=True, blank=True)
-    type = models.CharField(choices=PRODUCT_TYPE, max_length=50, default="regular")
     featured = models.BooleanField(default=False)
     hot_deal = models.BooleanField(default=False)
     special_offer = models.BooleanField(default=False)
-    digital = models.BooleanField(default=False)
     views = models.PositiveIntegerField(default=0, null=True, blank=True)
     orders = models.PositiveIntegerField(default=0, null=True, blank=True)
     saved = models.PositiveIntegerField(default=0, null=True, blank=True)
@@ -278,9 +271,7 @@ class Product(models.Model):
         gallery = Gallery.objects.filter(product=self)
         return gallery
     
-    # def specification(self):
-    #     return Specification.objects.filter(product=self)
-
+    
     def specification(self):
         return Specification.objects.filter(product=self)
 
@@ -317,6 +308,9 @@ class Product(models.Model):
             
         super(Product, self).save(*args, **kwargs) 
 
+    def get_absolute_url(self):
+        return reverse("api:product-detail", kwargs={"slug": self.slug})
+
 
 # Model for Product Gallery
 class Gallery(models.Model):
@@ -336,19 +330,19 @@ class Gallery(models.Model):
 # Model for Product Specifications
 class Specification(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True)
-    title = models.CharField(max_length=100, blank=True, null=True)
-    content = models.CharField(max_length=1000, blank=True, null=True)
+    title = models.CharField(max_length=100, blank=True, null=True, help_text="Made In")
+    content = models.CharField(max_length=1000, blank=True, null=True, help_text="County/HandMade")
 
 # Model for Product Sizes
 class Size(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True)
-    name = models.CharField(max_length=100, blank=True, null=True)
-    price = models.DecimalField(default=0.00, decimal_places=2, max_digits=12)
+    name = models.CharField(max_length=100, blank=True, null=True, help_text="M   XL   XXL   XXXL")
+    price = models.DecimalField(default=0.00, decimal_places=2, max_digits=12, help_text="$21.99")
 
 # Model for Product Colors
 class Color(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True)
-    name = models.CharField(max_length=100, blank=True, null=True)
+    name = models.CharField(max_length=100, blank=True, null=True, help_text="Green Blue Red black White Grey Orange")
     color_code = models.CharField(max_length=100, blank=True, null=True)
     image = models.FileField(upload_to=user_directory_path, blank=True, null=True)
 
