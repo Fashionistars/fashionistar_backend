@@ -11,20 +11,6 @@ from django.core.exceptions import ValidationError
 from phonenumber_field.modelfields import PhoneNumberField
 
 
-GENDER = (
-    ("female", "Female"),
-    ("male", "Male"),
-)
-
-VENDOR = 'vendor'
-CLIENT = 'client'
-
-STATUS_CHOICES = [
-    (VENDOR, 'Vendor'),
-    (CLIENT, 'Client'),
-]
-
-
 
 
 def user_directory_path(instance, filename):
@@ -54,9 +40,11 @@ class User(AbstractUser):
     email = models.EmailField(unique=True, null=True)
     full_name = models.CharField(max_length=500, null=True, blank=True)
     phone = PhoneNumberField(null=True, blank=True, unique=True)
+    VENDOR = 'vendor'
+    CLIENT = 'client'
     STATUS_CHOICES = [
-    (VENDOR, 'Vendor'),
-    (CLIENT, 'Client'),
+        (VENDOR, 'Vendor'),
+        (CLIENT, 'Client'),
     ]
     role = models.CharField(max_length=20, choices=STATUS_CHOICES, default=CLIENT)
     status = models.BooleanField(default=True)
@@ -106,17 +94,20 @@ class User(AbstractUser):
 
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
-    image = models.ImageField(upload_to='accounts/users', default='default/default-user.jpg', null=True, blank=True)
+    image = models.ImageField(upload_to='Gallery/accounts/users', default='default/default-user.jpg', null=True, blank=True)
     full_name = models.CharField(max_length=1000, null=True, blank=True)
-    about = models.TextField( null=True, blank=True)
-    gender = models.CharField(max_length=500, choices=GENDER, null=True, blank=True)
+    about = models.TextField(null=True, blank=True)
+    GENDER_CHOICES = [
+        ('M', 'Male'),
+        ('F', 'Female'),
+        ('O', 'Other'),
+    ]
+    gender = models.CharField(max_length=1, choices=GENDER_CHOICES, null=True, blank=True)
     country = models.CharField(max_length=1000, null=True, blank=True)
     city = models.CharField(max_length=500, null=True, blank=True)
     state = models.CharField(max_length=500, null=True, blank=True)
     address = models.CharField(max_length=1000, null=True, blank=True)
     newsletter = models.BooleanField(default=False)
-    # wishlist = models.ManyToManyField("store.Product", blank=True)
-    type = models.CharField(max_length=500, choices=GENDER, null=True, blank=True)
     date = models.DateTimeField(auto_now_add=True, null=True, blank=True)
     pid = ShortUUIDField(unique=True, length=10, max_length=20, alphabet="abcdefghijklmnopqrstuvxyz")
 

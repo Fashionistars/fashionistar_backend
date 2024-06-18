@@ -207,17 +207,17 @@ class Brand(models.Model):
 # Model for Products
 class Product(models.Model):
     sku = ShortUUIDField(unique=True, length=5, max_length=50, prefix="SKU", alphabet="1234567890")
-    vendor = models.ForeignKey(User, on_delete=models.CASCADE, null=False, blank=False, related_name="vendor_role")
+    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, null=False, blank=False, related_name="vendor_role")
     category = models.ManyToManyField(Category, related_name="products",)    # In this categories column,  a product is meant to contain differnt categories    
     title = models.CharField(max_length=100)
     image = models.FileField(upload_to=user_directory_path, blank=True, null=True, default="product.jpg")
     description = models.TextField(null=True, blank=True)
     tags = models.CharField(max_length=1000, null=True, blank=True)
     brand = models.CharField(max_length=100, null=True, blank=True)
-    price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, null=True, blank=True)
     old_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, null=True, blank=True)
-    shipping_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
-    total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, null=True, blank=True)
+    price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, null=True, blank=True)
+    shipping_amount = models.DecimalField(max_digits=12, decimal_places=2,default=1000.00)
+    total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="'price' + #1,000 'for default shipping_amount' ", null=True, blank=True)
     stock_qty = models.PositiveIntegerField(default=0)
     in_stock = models.BooleanField(default=True)
     status = models.CharField(choices=STATUS, max_length=50, default="published", null=True, blank=True)
@@ -244,18 +244,20 @@ class Product(models.Model):
     
     # Returns the count of products in the same category as this product
     def category_count(self):
-        return Product.objects.filter(category__in=self.category).count()
-
+        return Product.objects.filter(category__in=self.category.all()).count() #####Changed to self.category.all() to ensure it works with ManyToManyField.
+    
     # Calculates the discount percentage between old and new prices
     def get_precentage(self):
-        new_price = ((self.old_price - self.price) / self.old_price) * 100
-        return round(new_price, 0)
+        if self.old_price and self.price:
+            new_price = ((self.old_price - self.price) / self.old_price) * 100
+            return round(new_price, 0)
+        return 0
     
     # Calculates the average rating of the product
     def product_rating(self):
         product_rating = Review.objects.filter(product=self).aggregate(avg_rating=models.Avg('rating'))
-        return product_rating['avg_rating']
-    
+        return product_rating['avg_rating'] or 0
+
     # Returns the count of ratings for the product
     def rating_count(self):
         rating_count = Review.objects.filter(product=self).count()
@@ -284,7 +286,9 @@ class Product(models.Model):
 
     # Returns a list of products frequently bought together with this product
     def frequently_bought_together(self):
-        frequently_bought_together_products = Product.objects.filter(order_item__order__in=CartOrder.objects.filter(orderitem__product=self)).exclude(id=self.id).annotate(count=models.Count('id')).order_by('-id')[:3]
+        frequently_bought_together_products = Product.objects.filter(
+            order_item__order__in=CartOrder.objects.filter(orderitem__product=self)
+        ).exclude(id=self.id).annotate(count=models.Count('id')).order_by('-count')[:3]
         return frequently_bought_together_products
     
     # Custom save method to generate a slug if it's empty, update in_stock, and calculate the product rating
@@ -305,6 +309,7 @@ class Product(models.Model):
             self.in_stock = False
         
         self.rating = self.product_rating()
+        self.total_price = self.price + self.shipping_amount  # Assuming price and shipping_amount are set
             
         super(Product, self).save(*args, **kwargs) 
 
@@ -315,7 +320,7 @@ class Product(models.Model):
 # Model for Product Gallery
 class Gallery(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True)
-    image = models.FileField(upload_to=user_directory_path, default="gallery.jpg")
+    image = models.FileField(upload_to=user_directory_path, null=True,blank=True, default="gallery.jpg")
     active = models.BooleanField(default=True)
     date = models.DateTimeField(auto_now_add=True)
     gid = ShortUUIDField(length=10, max_length=25, alphabet="abcdefghijklmnopqrstuvxyz")
@@ -331,7 +336,7 @@ class Gallery(models.Model):
 class Specification(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True)
     title = models.CharField(max_length=100, blank=True, null=True, help_text="Made In")
-    content = models.CharField(max_length=1000, blank=True, null=True, help_text="County/HandMade")
+    content = models.CharField(max_length=1000, blank=True, null=True, help_text="Country/HandMade")
 
 # Model for Product Sizes
 class Size(models.Model):
