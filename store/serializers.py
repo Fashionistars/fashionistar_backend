@@ -75,9 +75,9 @@ class ProductSerializer(serializers.ModelSerializer):
         model = Product
         fields = [
             "id", "title", "image", "description", "category", "tags", "brand", "price", "old_price", "shipping_amount", 
-            "stock_qty", "in_stock", "status", "featured", "hot_deal", "special_offer","views", "orders", 
-            "saved", "slug","sku", "date", "gallery", "specification", "size", "color", "product_rating", "rating_count",
-            'order_count', "get_precentage",
+            "total_price", "stock_qty", "in_stock", "status", "featured", "hot_deal", "special_offer","views", "orders", 
+            "saved", "slug","sku", "date", "gallery", "specification", "size", "color", "category_count", "get_precentage", "product_rating", "rating_count",
+            'order_count', "frequently_bought_together",
         ]
     
     def __init__(self, *args, **kwargs):

@@ -254,6 +254,15 @@ class ProfileView(generics.RetrieveAPIView):
         profile = Profile.objects.get(user=user)
         return profile
     
+#    ===============   OR USE THIS METHOD ================
+
+# class ProfileView(generics.RetrieveUpdateAPIView):
+#     permission_classes = (IsAuthenticated,)
+#     serializer_class = ProfileSerializer
+
+#     def get_object(self):
+#         return self.request.user.profile
+
 
 def generate_numeric_otp(length=7):
         # Generate a random 7-digit OTP

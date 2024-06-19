@@ -188,7 +188,7 @@ class Tag(models.Model):
         verbose_name_plural = "Tags"
         ordering = ('title',)
 
-# Model for Brands
+# Model for s
 class Brand(models.Model):
     title = models.CharField(max_length=100)
     image = models.ImageField(upload_to=user_directory_path, default="brand.jpg", null=True, blank=True)
