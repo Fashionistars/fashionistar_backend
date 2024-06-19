@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # DRF Project
 
 This is a Django REST Framework project.
@@ -71,3 +72,7 @@ Start the development server:
 python manage.py runserver
 ```
  The project will be accessible at http://127.0.0.1:8000/ by default.
+=======
+
+# fashionistar_backend
+>>>>>>> 0b0d902 (Update README.md)
