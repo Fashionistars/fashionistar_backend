@@ -46,7 +46,7 @@ urlpatterns = [
     # Admin URL
     path('admin/', admin.site.urls),
     path("auth/", include("userauths.urls")),
-    path("admin-backend/", include("admin_backend.urls"))
+    path("", include("admin_backend.urls"))
 ]
 
 

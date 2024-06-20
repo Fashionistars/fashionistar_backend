@@ -2,10 +2,11 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 
-from store.models import CancelledOrder, Cart, CartOrderItem, Notification, CouponUsers, Product, Tag ,Category, DeliveryCouriers, CartOrder, Gallery, Brand, ProductFaq, Review,  Specification, Coupon, Color, Size, Address, Wishlist, Vendor
+from store.models import CancelledOrder, Cart, CartOrderItem, Notification, CouponUsers, Product, Tag , DeliveryCouriers, CartOrder, Gallery, ProductFaq, Review,  Specification, Coupon, Color, Size, Address, Wishlist, Vendor
 from addon.models import ConfigSettings
 from store.models import Gallery
 from userauths.serializer import ProfileSerializer, UserSerializer
+from admin_backend.serializers import CategorySerializer
 
 class ConfigSettingsSerializer(serializers.ModelSerializer):
 
@@ -14,24 +15,11 @@ class ConfigSettingsSerializer(serializers.ModelSerializer):
             fields = '__all__'
 
 
-# Define a serializer for the Category model
-class CategorySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Category
-        fields = '__all__'
-
 # Define a serializer for the Tag model
 class TagSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tag
         fields = '__all__'
-
-# Define a serializer for the Brand model
-class BrandSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Brand
-        fields = '__all__'
-
 
         # Define a serializer for the Gallery model
 class GallerySerializer(serializers.ModelSerializer):
@@ -69,6 +57,7 @@ class ProductSerializer(serializers.ModelSerializer):
     color = ColorSerializer(many=True, read_only=True)
     size = SizeSerializer(many=True, read_only=True)
     specification = SpecificationSerializer(many=True, read_only=True)
+    category = CategorySerializer(many=True)  # If you want nested category representation
 
 
     class Meta:

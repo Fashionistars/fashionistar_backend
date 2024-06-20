@@ -22,13 +22,15 @@ from rest_framework import status
 
 # Serializers
 from userauths.serializer import MyTokenObtainPairSerializer, ProfileSerializer, RegisterSerializer
-from store.serializers import CancelledOrderSerializer, NotificationSerializer, CartSerializer, CartOrderItemSerializer, CouponUsersSerializer, ProductSerializer, TagSerializer ,CategorySerializer, DeliveryCouriersSerializer, CartOrderSerializer, GallerySerializer, BrandSerializer, ProductFaqSerializer, ReviewSerializer,  SpecificationSerializer, CouponSerializer, ColorSerializer, SizeSerializer, AddressSerializer, WishlistSerializer, ConfigSettingsSerializer
+from store.serializers import CancelledOrderSerializer, NotificationSerializer, CartSerializer, CartOrderItemSerializer, CouponUsersSerializer, ProductSerializer, TagSerializer , DeliveryCouriersSerializer, CartOrderSerializer, GallerySerializer, ProductFaqSerializer, ReviewSerializer,  SpecificationSerializer, CouponSerializer, ColorSerializer, SizeSerializer, AddressSerializer, WishlistSerializer, ConfigSettingsSerializer
+from admin_backend.serializers import BrandSerializer, CategorySerializer 
 
 # Models
 from userauths.models import Profile, User 
-from store.models import CancelledOrder, Notification, CartOrderItem, CouponUsers, Cart, Product, Tag ,Category, DeliveryCouriers, CartOrder, Gallery, Brand, ProductFaq, Review,  Specification, Coupon, Color, Size, Address, Wishlist
+from store.models import CancelledOrder, Notification, CartOrderItem, CouponUsers, Cart, Product, Tag , DeliveryCouriers, CartOrder, Gallery, ProductFaq, Review,  Specification, Coupon, Color, Size, Address, Wishlist
 from addon.models import ConfigSettings, Tax
 from vendor.models import Vendor
+from admin_backend.models import Brand, Category
 
 # Others Packages
 import json

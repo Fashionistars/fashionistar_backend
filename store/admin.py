@@ -1,5 +1,5 @@
 from django.contrib import admin
-from store.models import CartOrderItem, CouponUsers, Notification, Product, Tag ,Category, Cart, DeliveryCouriers, CartOrder, Gallery, Brand, ProductFaq, Review,  Specification, Coupon, Color, Size, Address, Wishlist
+from store.models import CartOrderItem, CouponUsers, Notification, Product, Tag, Cart, DeliveryCouriers, CartOrder, Gallery, ProductFaq, Review,  Specification, Coupon, Color, Size, Address, Wishlist
 from import_export.admin import ImportExportModelAdmin
 from django import forms
 from userauths.models import User
@@ -58,10 +58,7 @@ class ProductAdmin(ImportExportModelAdmin):
 class CartAdmin(ImportExportModelAdmin):
     list_display = ['product', 'cart_id', 'qty', 'price', 'sub_total' , 'shipping_amount', 'service_fee', 'tax_fee', 'total', 'country', 'size', 'color', 'date']
 
-    
-class CategoryAdmin(ImportExportModelAdmin):
-    list_editable = [ 'active']
-    list_display = ['title', 'thumbnail', 'active']
+
 
     
 class TagAdmin(ImportExportModelAdmin):
@@ -81,10 +78,6 @@ class CartOrderItemsAdmin(ImportExportModelAdmin):
     list_filter = ['delivery_couriers', 'applied_coupon']
     list_editable = ['date']
     list_display = ['order_id', 'vendor', 'product' ,'qty', 'price', 'sub_total', 'shipping_amount' , 'service_fee', 'tax_fee', 'total' , 'delivery_couriers', 'applied_coupon', 'date']
-
-class BrandAdmin(ImportExportModelAdmin):
-    list_editable = [ 'active']
-    list_display = ['title', 'brand_image', 'active']
 
 class ProductFaqAdmin(ImportExportModelAdmin):
     list_editable = [ 'active', 'answer']
@@ -122,12 +115,10 @@ class NotificationAdmin(ImportExportModelAdmin):
 
 admin.site.register(Review, ProductReviewAdmin)
 admin.site.register(Product, ProductAdmin)
-admin.site.register(Category, CategoryAdmin)
 admin.site.register(Tag, TagAdmin)
 admin.site.register(CartOrder, CartOrderAdmin)
 admin.site.register(Cart, CartAdmin)
 admin.site.register(CartOrderItem, CartOrderItemsAdmin)
-admin.site.register(Brand, BrandAdmin)
 admin.site.register(ProductFaq, ProductFaqAdmin)
 admin.site.register(Coupon, CouponAdmin)
 admin.site.register(Address, AddressAdmin)

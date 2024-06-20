@@ -10,6 +10,7 @@ from django.urls import reverse
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives, send_mail
 from django.template.loader import render_to_string
+from django.core.exceptions import ObjectDoesNotExist
 
 
 # Restframework Packages
@@ -24,11 +25,11 @@ from rest_framework import status
 
 # Serializers
 from userauths.serializer import MyTokenObtainPairSerializer, RegisterSerializer
-from store.serializers import CancelledOrderSerializer, CartSerializer, CartOrderItemSerializer, CouponUsersSerializer, ProductSerializer, TagSerializer ,CategorySerializer, DeliveryCouriersSerializer, CartOrderSerializer, GallerySerializer, BrandSerializer, ProductFaqSerializer, ReviewSerializer,  SpecificationSerializer, CouponSerializer, ColorSerializer, SizeSerializer, AddressSerializer, WishlistSerializer, ConfigSettingsSerializer
+from store.serializers import CancelledOrderSerializer, CartSerializer, CartOrderItemSerializer, CouponUsersSerializer, ProductSerializer, TagSerializer , DeliveryCouriersSerializer, CartOrderSerializer, GallerySerializer, ProductFaqSerializer, ReviewSerializer,  SpecificationSerializer, CouponSerializer, ColorSerializer, SizeSerializer, AddressSerializer, WishlistSerializer, ConfigSettingsSerializer
 
 # Models
 from userauths.models import User
-from store.models import CancelledOrder, CartOrderItem, CouponUsers, Cart, Notification, Product, Tag ,Category, DeliveryCouriers, CartOrder, Gallery, Brand, ProductFaq, Review,  Specification, Coupon, Color, Size, Address, Wishlist
+from store.models import CancelledOrder, CartOrderItem, CouponUsers, Cart, Notification, Product, Tag, DeliveryCouriers, CartOrder, Gallery, ProductFaq, Review,  Specification, Coupon, Color, Size, Address, Wishlist
 from addon.models import ConfigSettings, Tax
 from vendor.models import Vendor
 
@@ -60,22 +61,6 @@ class ConfigSettingsDetailView(generics.RetrieveAPIView):
 
     permission_classes = (AllowAny,)
 
-class CategoryListView(generics.ListAPIView):
-    serializer_class = CategorySerializer
-    queryset = Category.objects.filter(active=True)
-    permission_classes = (AllowAny,)
-
-
-class CategoryCreateView(generics.CreateAPIView):
-    queryset = Category.objects.all()
-    serializer_class = CategorySerializer
-    permission_classes = [AllowAny,]
-
-class BrandListView(generics.ListAPIView):
-    serializer_class = BrandSerializer
-    queryset = Brand.objects.filter(active=True)
-    permission_classes = (AllowAny,)
-
 class FeaturedProductListView(generics.ListAPIView):
     serializer_class = ProductSerializer
     queryset = Product.objects.filter(status="published", featured=True)[:3]
@@ -103,41 +88,42 @@ class ProductDetailView(generics.RetrieveAPIView):
         return Response(serializer.data, status=status.HTTP_200_OK)    
     
     
+
+
 class CartApiView(generics.ListCreateAPIView):
     serializer_class = CartSerializer
     queryset = Cart.objects.all()
     permission_classes = (AllowAny,)
 
     def create(self, request, *args, **kwargs):
-        payload = request.data
-        
-        product_id = payload['product']
-        user_id = payload['user']
-        qty = payload['qty']
-        price = payload['price']
-        shipping_amount = payload['shipping_amount']
-        country = payload['country']
-        size = payload['size']
-        color = payload['color']
-        cart_id = payload['cart_id']
-        
-        product = Product.objects.filter(status="published", id=product_id).first()
-        if user_id != "undefined":
-            user = User.objects.filter(id=user_id).first()
-        else:
+        try:
+            payload = request.data
+            product_id = payload.get('product')
+            user_id = payload.get('user')
+            qty = payload.get('qty')
+            price = payload.get('price')
+            shipping_amount = payload.get('shipping_amount')
+            country = payload.get('country')
+            size = payload.get('size')
+            color = payload.get('color')
+            cart_id = payload.get('cart_id')
+
+            # Fetch product
+            product = get_object_or_404(Product, id=product_id, status="published")
+
+            # Fetch user if user_id is provided
             user = None
-        
-        tax = Tax.objects.filter(country=country).first()
-        if tax:
-            tax_rate = tax.rate / 100
-            
-        else:
-            tax_rate = 0
+            if user_id and user_id != "undefined":
+                user = get_object_or_404(User, id=user_id)
 
-        cart = Cart.objects.filter(cart_id=cart_id, product=product).first()
+            # Fetch tax
+            tax = get_object_or_404(Tax, country=country)
+            tax_rate = tax.rate / 100 if tax else 0
 
-        if cart:
-            cart.product = product
+            # Fetch or create cart instance
+            cart, created = Cart.objects.get_or_create(cart_id=cart_id, product=product)
+
+            # Update cart attributes
             cart.user = user
             cart.qty = qty
             cart.price = price
@@ -152,7 +138,7 @@ class CartApiView(generics.ListCreateAPIView):
             config_settings = ConfigSettings.objects.first()
 
             if config_settings.service_fee_charge_type == "percentage":
-                service_fee_percentage = config_settings.service_fee_percentage / 100 
+                service_fee_percentage = config_settings.service_fee_percentage / 100
                 cart.service_fee = Decimal(service_fee_percentage) * cart.sub_total
             else:
                 cart.service_fee = config_settings.service_fee_flat_rate
@@ -160,34 +146,19 @@ class CartApiView(generics.ListCreateAPIView):
             cart.total = cart.sub_total + cart.shipping_amount + cart.service_fee + cart.tax_fee
             cart.save()
 
-            return Response({"message": "Cart updated successfully"}, status=status.HTTP_200_OK)
-        else:
-            cart = Cart()
-            cart.product = product
-            cart.user = user
-            cart.qty = qty
-            cart.price = price
-            cart.sub_total = Decimal(price) * int(qty)
-            cart.shipping_amount = Decimal(shipping_amount) * int(qty)
-            cart.size = size
-            cart.tax_fee = int(qty) * Decimal(tax_rate)
-            cart.color = color
-            cart.country = country
-            cart.cart_id = cart_id
-
-            config_settings = ConfigSettings.objects.first()
-
-            if config_settings.service_fee_charge_type == "percentage":
-                service_fee_percentage = config_settings.service_fee_percentage / 100 
-                cart.service_fee = Decimal(service_fee_percentage) * cart.sub_total
+            if created:
+                return Response({"message": "Cart created successfully"}, status=status.HTTP_201_CREATED)
             else:
-                cart.service_fee = config_settings.service_fee_flat_rate
+                return Response({"message": "Cart updated successfully"}, status=status.HTTP_200_OK)
 
-            cart.total = cart.sub_total + cart.shipping_amount + cart.service_fee + cart.tax_fee
-            cart.save()
+        except ObjectDoesNotExist as e:
+            return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
 
-            return Response( {"message": "Cart Created Successfully"}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
 
 class CartListView(generics.ListAPIView):
     serializer_class = CartSerializer
@@ -345,15 +316,15 @@ class CreateOrderView(generics.CreateAPIView):
         cart_id = payload['cart_id']
         user_id = payload['user_id']
 
-        print("user_id ===============", user_id)
+        # Fetch user if user_id is provided
+        user = None
+        if user_id:
+            user = get_object_or_404(User, id=user_id)
 
-        if user_id != 0:
-            user = User.objects.filter(id=user_id).first()
-        else:
-            user = None
-
+        # Retrieve cart items
         cart_items = Cart.objects.filter(cart_id=cart_id)
 
+        # Initialize totals
         total_shipping = Decimal(0.0)
         total_tax = Decimal(0.0)
         total_service_fee = Decimal(0.0)
@@ -362,12 +333,8 @@ class CreateOrderView(generics.CreateAPIView):
         total_total = Decimal(0.0)
 
         with transaction.atomic():
-
+            # Create CartOrder instance
             order = CartOrder.objects.create(
-                # sub_total=total_sub_total,
-                # shipping_amount=total_shipping,
-                # tax_fee=total_tax,
-                # service_fee=total_service_fee,
                 buyer=user,
                 payment_status="processing",
                 full_name=full_name,
@@ -376,51 +343,52 @@ class CreateOrderView(generics.CreateAPIView):
                 address=address,
                 city=city,
                 state=state,
-                country=country
+                country=country,
+                order_date=now()  # Assuming you have an 'order_date' field in CartOrder
             )
 
-            for c in cart_items:
+            # Create CartOrderItem instances
+            for cart_item in cart_items:
                 CartOrderItem.objects.create(
                     order=order,
-                    product=c.product,
-                    qty=c.qty,
-                    color=c.color,
-                    size=c.size,
-                    price=c.price,
-                    sub_total=c.sub_total,
-                    shipping_amount=c.shipping_amount,
-                    tax_fee=c.tax_fee,
-                    service_fee=c.service_fee,
-                    total=c.total,
-                    initial_total=c.total,
-                    vendor=c.product.vendor
+                    product=cart_item.product,
+                    qty=cart_item.qty,
+                    color=cart_item.color,
+                    size=cart_item.size,
+                    price=cart_item.price,
+                    sub_total=cart_item.sub_total,
+                    shipping_amount=cart_item.shipping_amount,
+                    tax_fee=cart_item.tax_fee,
+                    service_fee=cart_item.service_fee,
+                    total=cart_item.total,
+                    initial_total=cart_item.total,
+                    vendor=cart_item.product.vendor
                 )
 
-                total_shipping += Decimal(c.shipping_amount)
-                total_tax += Decimal(c.tax_fee)
-                total_service_fee += Decimal(c.service_fee)
-                total_sub_total += Decimal(c.sub_total)
-                total_initial_total += Decimal(c.total)
-                total_total += Decimal(c.total)
+                # Aggregate totals
+                total_shipping += cart_item.shipping_amount
+                total_tax += cart_item.tax_fee
+                total_service_fee += cart_item.service_fee
+                total_sub_total += cart_item.sub_total
+                total_initial_total += cart_item.total
+                total_total += cart_item.total
 
-                order.vendor.add(c.product.vendor)
+                # Add vendor to order
+                order.vendor.add(cart_item.product.vendor)
 
-                
+            # Update totals in CartOrder instance
+            order.sub_total = total_sub_total
+            order.shipping_amount = total_shipping
+            order.tax_fee = total_tax
+            order.service_fee = total_service_fee
+            order.initial_total = total_initial_total
+            order.total = total_total
 
-            order.sub_total=total_sub_total
-            order.shipping_amount=total_shipping
-            order.tax_fee=total_tax
-            order.service_fee=total_service_fee
-            order.initial_total=total_initial_total
-            order.total=total_total
-
-            
+            # Save CartOrder instance
             order.save()
 
-        return Response( {"message": "Order Created Successfully", 'order_oid':order.oid}, status=status.HTTP_201_CREATED)
-
-
-
+        # Return response indicating success
+        return Response({"message": "Order Created Successfully", 'order_oid': order.oid}, status=status.HTTP_201_CREATED)
 
 class CheckoutView(generics.RetrieveAPIView):
     serializer_class = CartOrderSerializer

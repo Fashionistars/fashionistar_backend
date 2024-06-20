@@ -134,48 +134,12 @@ RATING = (
 )
 
 
-# Model for Product Categories
-class Category(models.Model):
-    title = models.CharField(max_length=100)
-    image = models.ImageField(upload_to=user_directory_path, default="category.jpg", null=True, blank=True)
-    active = models.BooleanField(default=True)
-    slug = models.SlugField(null=True, blank=True)
-
-    class Meta:
-        verbose_name_plural = "Categories"
-
-    # Returns an HTML image tag for the category's image
-    def thumbnail(self):
-        return mark_safe('<img src="%s" width="50" height="50" style="object-fit:cover; border-radius: 6px;" />' % (self.image.url))
-
-    def __str__(self):
-        return self.title
-    
-    # Returns the count of products in this category
-    def product_count(self):
-        product_count = Product.objects.filter(category=self).count()
-        return product_count
-    
-    # Returns the products in this category
-    def cat_products(self):
-        cat_products = Product.objects.filter(category=self)
-        return cat_products
-
-    # Custom save method to generate a slug if it's empty
-    def save(self, *args, **kwargs):
-        if self.slug == "" or self.slug is None:
-            uuid_key = shortuuid.uuid()
-            uniqueid = uuid_key[:4]
-            self.slug = slugify(self.title) + "-" + str(uniqueid.lower())
-        super(Category, self).save(*args, **kwargs) 
-
-
 # Model for Tags
 class Tag(models.Model):
     # Tag title
     title = models.CharField(max_length=30)
     # Category associated with the tag
-    category = models.ForeignKey(Category, default="", verbose_name="Category", on_delete=models.PROTECT)
+    category = models.ForeignKey('admin_backend.Category', default="", verbose_name="Category", on_delete=models.PROTECT)
     # Is the tag active?
     active = models.BooleanField(default=True)
     # Unique slug for SEO-friendly URLs
@@ -188,27 +152,12 @@ class Tag(models.Model):
         verbose_name_plural = "Tags"
         ordering = ('title',)
 
-# Model for s
-class Brand(models.Model):
-    title = models.CharField(max_length=100)
-    image = models.ImageField(upload_to=user_directory_path, default="brand.jpg", null=True, blank=True)
-    active = models.BooleanField(default=True)
-    
-    class Meta:
-        verbose_name_plural = "Brands"
-
-    # Returns an HTML image tag for the brand's image
-    def brand_image(self):
-        return mark_safe('<img src="%s" width="50" height="50" style="object-fit:cover; border-radius: 6px;" />' % (self.image.url))
-
-    def __str__(self):
-        return self.title
 
 # Model for Products
 class Product(models.Model):
     sku = ShortUUIDField(unique=True, length=5, max_length=50, prefix="SKU", alphabet="1234567890")
     vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, null=False, blank=False, related_name="vendor_role")
-    category = models.ManyToManyField(Category, related_name="products",)    # In this categories column,  a product is meant to contain differnt categories    
+    category = models.ManyToManyField('admin_backend.Category', related_name="products",)    # In this categories column,  a product is meant to contain differnt categories    
     title = models.CharField(max_length=100)
     image = models.FileField(upload_to=user_directory_path, blank=True, null=True, default="product.jpg")
     description = models.TextField(null=True, blank=True)
