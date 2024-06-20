@@ -344,7 +344,6 @@ class CreateOrderView(generics.CreateAPIView):
                 city=city,
                 state=state,
                 country=country,
-                order_date=now()  # Assuming you have an 'order_date' field in CartOrder
             )
 
             # Create CartOrderItem instances
