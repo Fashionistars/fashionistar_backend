@@ -46,7 +46,6 @@ class User(AbstractUser):
         (VENDOR, 'Vendor'),
         (CLIENT, 'Client'),
     ]
-    wallet_balance = models.DecimalField(decimal_places=2, default=0.00, max_digits=1000)
     role = models.CharField(max_length=20, choices=STATUS_CHOICES, default=CLIENT)
     status = models.BooleanField(default=True)
     verified = models.BooleanField(default=False)
@@ -103,6 +102,7 @@ class Profile(models.Model):
         ('F', 'Female'),
         ('O', 'Other'),
     ]
+    wallet_balance = models.DecimalField(decimal_places=2, default=0.00, max_digits=1000)
     gender = models.CharField(max_length=1, choices=GENDER_CHOICES, null=True, blank=True)
     country = models.CharField(max_length=1000, null=True, blank=True)
     city = models.CharField(max_length=500, null=True, blank=True)
