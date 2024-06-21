@@ -46,6 +46,7 @@ class User(AbstractUser):
         (VENDOR, 'Vendor'),
         (CLIENT, 'Client'),
     ]
+    wallet_balance = models.DecimalField(decimal_places=2, default=0.00, max_digits=1000)
     role = models.CharField(max_length=20, choices=STATUS_CHOICES, default=CLIENT)
     status = models.BooleanField(default=True)
     verified = models.BooleanField(default=False)
