@@ -395,6 +395,21 @@ class CheckoutView(generics.RetrieveAPIView):
     lookup_field = 'order_oid'
 
     def get_object(self):
+        """
+        Retrieve the CartOrder object for the specified order ID and check if the user's
+        wallet balance is sufficient to complete the order.
+
+        Steps:
+        1. Retrieve the order ID from URL kwargs.
+        2. Fetch the CartOrder object based on the order ID.
+        3. Retrieve the user's profile using the authenticated user.
+        4. Check if the user's wallet balance is enough for the cart's total amount.
+        5. If balance is sufficient, return the CartOrder object.
+        6. If balance is insufficient, raise a PermissionDenied exception.
+
+        Raises:
+            PermissionDenied: If the user's wallet balance is not sufficient to complete the order.
+        """
         order_oid = self.kwargs['order_oid']
         cart = get_object_or_404(CartOrder, oid=order_oid)
         
