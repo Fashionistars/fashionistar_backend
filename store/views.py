@@ -21,6 +21,7 @@ from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.views import APIView
+from rest_framework.exceptions import PermissionDenied
 from rest_framework import status
 
 # Serializers
@@ -28,7 +29,7 @@ from userauths.serializer import MyTokenObtainPairSerializer, RegisterSerializer
 from store.serializers import CancelledOrderSerializer, CartSerializer, CartOrderItemSerializer, CouponUsersSerializer, ProductSerializer, TagSerializer , DeliveryCouriersSerializer, CartOrderSerializer, GallerySerializer, ProductFaqSerializer, ReviewSerializer,  SpecificationSerializer, CouponSerializer, ColorSerializer, SizeSerializer, AddressSerializer, WishlistSerializer, ConfigSettingsSerializer
 
 # Models
-from userauths.models import User
+from userauths.models import User, Profile
 from store.models import CancelledOrder, CartOrderItem, CouponUsers, Cart, Notification, Product, Tag, DeliveryCouriers, CartOrder, Gallery, ProductFaq, Review,  Specification, Coupon, Color, Size, Address, Wishlist
 from addon.models import ConfigSettings, Tax
 from vendor.models import Vendor
@@ -391,12 +392,18 @@ class CreateOrderView(generics.CreateAPIView):
 
 class CheckoutView(generics.RetrieveAPIView):
     serializer_class = CartOrderSerializer
-    lookup_field = 'order_oid'  
+    lookup_field = 'order_oid'
 
     def get_object(self):
         order_oid = self.kwargs['order_oid']
         cart = get_object_or_404(CartOrder, oid=order_oid)
-        return cart
+        
+        user_profile = Profile.objects.get(user=self.request.user)
+        
+        if user_profile.wallet_balance >= cart.total:
+            return cart
+        else:
+            raise PermissionDenied("Insufficient balance to complete the order.")
     
 
 class CouponApiView(generics.CreateAPIView):
