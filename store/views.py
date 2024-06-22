@@ -21,6 +21,7 @@ from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.views import APIView
+from rest_framework.exceptions import PermissionDenied
 from rest_framework import status
 
 # Serializers
@@ -28,7 +29,7 @@ from userauths.serializer import MyTokenObtainPairSerializer, RegisterSerializer
 from store.serializers import CancelledOrderSerializer, CartSerializer, CartOrderItemSerializer, CouponUsersSerializer, ProductSerializer, TagSerializer , DeliveryCouriersSerializer, CartOrderSerializer, GallerySerializer, ProductFaqSerializer, ReviewSerializer,  SpecificationSerializer, CouponSerializer, ColorSerializer, SizeSerializer, AddressSerializer, WishlistSerializer, ConfigSettingsSerializer
 
 # Models
-from userauths.models import User
+from userauths.models import User, Profile
 from store.models import CancelledOrder, CartOrderItem, CouponUsers, Cart, Notification, Product, Tag, DeliveryCouriers, CartOrder, Gallery, ProductFaq, Review,  Specification, Coupon, Color, Size, Address, Wishlist
 from addon.models import ConfigSettings, Tax
 from vendor.models import Vendor
@@ -391,12 +392,33 @@ class CreateOrderView(generics.CreateAPIView):
 
 class CheckoutView(generics.RetrieveAPIView):
     serializer_class = CartOrderSerializer
-    lookup_field = 'order_oid'  
+    lookup_field = 'order_oid'
 
     def get_object(self):
+        """
+        Retrieve the CartOrder object for the specified order ID and check if the user's
+        wallet balance is sufficient to complete the order.
+
+        Steps:
+        1. Retrieve the order ID from URL kwargs.
+        2. Fetch the CartOrder object based on the order ID.
+        3. Retrieve the user's profile using the authenticated user.
+        4. Check if the user's wallet balance is enough for the cart's total amount.
+        5. If balance is sufficient, return the CartOrder object.
+        6. If balance is insufficient, raise a PermissionDenied exception.
+
+        Raises:
+            PermissionDenied: If the user's wallet balance is not sufficient to complete the order.
+        """
         order_oid = self.kwargs['order_oid']
         cart = get_object_or_404(CartOrder, oid=order_oid)
-        return cart
+        
+        user_profile = Profile.objects.get(user=self.request.user)
+        
+        if user_profile.wallet_balance >= cart.total:
+            return cart
+        else:
+            raise PermissionDenied("Insufficient balance to complete the order.")
     
 
 class CouponApiView(generics.CreateAPIView):
