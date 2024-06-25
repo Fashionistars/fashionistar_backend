@@ -39,9 +39,9 @@ def validate_image_cover_extension(value):
 
 
 class Collections(models.Model):
-    background_image = models.ImageField(upload_to='bg_img/',
+    background_image = models.ImageField(upload_to='Gallery/bg_img/',
                                          validators=[validate_image_cover_extension])
-    image = models.ImageField(upload_to='product_img/', validators=[validate_image_cover_extension])
+    image = models.ImageField(upload_to='Gallery/product_img/', validators=[validate_image_cover_extension])
     
     
 

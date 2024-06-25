@@ -99,58 +99,54 @@ class CartApiView(generics.ListCreateAPIView):
     def create(self, request, *args, **kwargs):
         try:
             payload = request.data
-            product_id = payload.get('product')
-            user_id = payload.get('user')
-            qty = payload.get('qty')
-            price = payload.get('price')
-            shipping_amount = payload.get('shipping_amount')
-            country = payload.get('country')
-            size = payload.get('size')
-            color = payload.get('color')
+            products = payload.get('products', [])
             cart_id = payload.get('cart_id')
-
-            # Fetch product
-            product = get_object_or_404(Product, id=product_id, status="published")
+            user_id = payload.get('user_id')
 
             # Fetch user if user_id is provided
             user = None
             if user_id and user_id != "undefined":
                 user = get_object_or_404(User, id=user_id)
 
-            # Fetch tax
-            tax = get_object_or_404(Tax, country=country)
-            tax_rate = tax.rate / 100 if tax else 0
+            total_sub_total = Decimal(0.0)
+            total_total = Decimal(0.0)
 
-            # Fetch or create cart instance
-            cart, created = Cart.objects.get_or_create(cart_id=cart_id, product=product)
+            for product_data in products:
+                product_id = product_data.get('product')
+                qty = product_data.get('qty')
+                price = product_data.get('price')
+                size = product_data.get('size')
+                color = product_data.get('color')
 
-            # Update cart attributes
-            cart.user = user
-            cart.qty = qty
-            cart.price = price
-            cart.sub_total = Decimal(price) * int(qty)
-            cart.shipping_amount = Decimal(shipping_amount) * int(qty)
-            cart.size = size
-            cart.tax_fee = int(qty) * Decimal(tax_rate)
-            cart.color = color
-            cart.country = country
-            cart.cart_id = cart_id
+                # Fetch product
+                product = get_object_or_404(Product, id=product_id, status="published")
 
-            config_settings = ConfigSettings.objects.first()
+                # Fetch or create cart instance for the specific product
+                cart, created = Cart.objects.get_or_create(cart_id=cart_id, product=product, defaults={'user': user})
 
-            if config_settings.service_fee_charge_type == "percentage":
-                service_fee_percentage = config_settings.service_fee_percentage / 100
-                cart.service_fee = Decimal(service_fee_percentage) * cart.sub_total
-            else:
-                cart.service_fee = config_settings.service_fee_flat_rate
+                if not created:
+                    # If the cart item already exists, update the quantity and price
+                    cart.qty += int(qty)
+                    cart.price = Decimal(price)  # Assuming price remains the same for simplicity
+                else:
+                    # If new cart item, set the quantity and price
+                    cart.qty = int(qty)
+                    cart.price = Decimal(price)
 
-            cart.total = cart.sub_total + cart.shipping_amount + cart.service_fee + cart.tax_fee
-            cart.save()
+                # Update cart attributes
+                cart.sub_total = cart.price * cart.qty
+                cart.size = size
+                cart.color = color
+                cart.cart_id = cart_id
+                cart.user = user
 
-            if created:
-                return Response({"message": "Cart created successfully"}, status=status.HTTP_201_CREATED)
-            else:
-                return Response({"message": "Cart updated successfully"}, status=status.HTTP_200_OK)
+                # Update the total amounts
+                total_sub_total += cart.sub_total
+                total_total += cart.sub_total  # Assuming no additional charges
+
+                cart.save()
+
+            return Response({"message": "Cart updated successfully", "sub_total": total_sub_total, "total": total_total}, status=status.HTTP_200_OK)
 
         except ObjectDoesNotExist as e:
             return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
@@ -160,7 +156,9 @@ class CartApiView(generics.ListCreateAPIView):
 
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
+    
 
+    
 class CartListView(generics.ListAPIView):
     serializer_class = CartSerializer
     permission_classes = (AllowAny,)
@@ -298,6 +296,26 @@ class CartItemDeleteView(generics.DestroyAPIView):
 
         return cart
     
+
+
+class CartDeleteApiView(generics.DestroyAPIView):
+    queryset = Cart.objects.all()
+    permission_classes = (AllowAny,)
+
+    def delete(self, request, *args, **kwargs):
+        try:
+            cart_item_id = kwargs.get('pk')
+            cart_item = get_object_or_404(Cart, id=cart_item_id)
+            cart_item.delete()
+            return Response({"message": "Cart item deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+        except ObjectDoesNotExist as e:
+            return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+
 
 class CreateOrderView(generics.CreateAPIView):
     serializer_class = CartOrderSerializer
