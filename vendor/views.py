@@ -1,43 +1,29 @@
 # Django Packages
-from django.shortcuts import get_object_or_404, redirect, render
-from django.http import JsonResponse, HttpResponseNotFound, HttpResponse
-from django.views import View
-from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
-from django.db.models import Q
 from django.db import models
 from django.db import transaction
-from django.urls import reverse
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db.models.functions import ExtractMonth
-from django.db.models import Avg, Min
-
+from django.db.models import Avg
 # Restframework Packages
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.views import APIView
+from rest_framework.decorators import api_view
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.exceptions import PermissionDenied
 
 # Serializers
-from userauths.serializer import MyTokenObtainPairSerializer, ProfileSerializer, RegisterSerializer
-from store.serializers import CancelledOrderSerializer, CouponSummarySerializer, EarningSummarySerializer, NotificationSerializer, CartSerializer, NotificationSummarySerializer, SummarySerializer, CartOrderItemSerializer, CouponUsersSerializer,  ProductSerializer, TagSerializer, DeliveryCouriersSerializer, CartOrderSerializer, GallerySerializer, ProductFaqSerializer, ReviewSerializer,  SpecificationSerializer, CouponSerializer, ColorSerializer, SizeSerializer, AddressSerializer, WishlistSerializer, ConfigSettingsSerializer, VendorSerializer
-from admin_backend.serializers import BrandSerializer, CategorySerializer
+from userauths.serializer import  ProfileSerializer
+from store.serializers import  CouponSummarySerializer, EarningSummarySerializer, NotificationSerializer,  NotificationSummarySerializer, SummarySerializer, CartOrderItemSerializer, ProductSerializer, CartOrderSerializer, GallerySerializer, ReviewSerializer,  SpecificationSerializer, CouponSerializer, ColorSerializer, SizeSerializer, VendorSerializer
+
 # Models
 from userauths.models import Profile
-from store.models import Notification, CartOrderItem, CouponUsers, Cart, Product, Tag, DeliveryCouriers, CartOrder, Gallery, ProductFaq, Review,  Specification, Coupon, Color, Size, Address, Wishlist
+from store.models import Notification, CartOrderItem,  Product,  CartOrder,  Review, Coupon
 from vendor.models import Vendor
-from admin_backend.models import Brand, Category
 
 # Others Packages
-from decimal import Decimal
-
 from datetime import datetime, timedelta
 
 

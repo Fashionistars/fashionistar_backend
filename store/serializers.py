@@ -2,7 +2,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 
-from store.models import CancelledOrder, Cart, CartOrderItem, Notification, CouponUsers, Product, Tag , DeliveryCouriers, CartOrder, Gallery, ProductFaq, Review,  Specification, Coupon, Color, Size, Address, Wishlist, Vendor
+from store.models import CancelledOrder, CartOrderItem, Notification, CouponUsers, Product, Tag , DeliveryCouriers, CartOrder, Gallery, ProductFaq, Review,  Specification, Coupon, Color, Size, Address, Wishlist, Vendor
 from addon.models import ConfigSettings
 from store.models import Gallery
 from userauths.serializer import ProfileSerializer, UserSerializer
@@ -101,25 +101,6 @@ class ProductFaqSerializer(serializers.ModelSerializer):
             # For other methods, set serialization depth to 3.
             self.Meta.depth = 3
 
-# Define a serializer for the CartOrderItem model
-class CartSerializer(serializers.ModelSerializer):
-    # Serialize the related Product model
-    product = ProductSerializer()  
-
-    class Meta:
-        model = Cart
-        fields = '__all__'
-    
-    def __init__(self, *args, **kwargs):
-        super(CartSerializer, self).__init__(*args, **kwargs)
-        # Customize serialization depth based on the request method.
-        request = self.context.get('request')
-        if request and request.method == 'POST':
-            # When creating a new cart order item, set serialization depth to 0.
-            self.Meta.depth = 0
-        else:
-            # For other methods, set serialization depth to 3.
-            self.Meta.depth = 3
 
 # Define a serializer for the CartOrderItem model
 class CartOrderItemSerializer(serializers.ModelSerializer):

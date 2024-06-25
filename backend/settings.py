@@ -63,6 +63,7 @@ INSTALLED_APPS = [
     'addon',
     'api',
     'admin_backend',
+    'ShopCart',
 
     # Third Party Apps
     'rest_framework',

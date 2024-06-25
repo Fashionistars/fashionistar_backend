@@ -1,8 +1,7 @@
 from django.contrib import admin
-from store.models import CartOrderItem, CouponUsers, Notification, Product, Tag, Cart, DeliveryCouriers, CartOrder, Gallery, ProductFaq, Review,  Specification, Coupon, Color, Size, Address, Wishlist
+from store.models import CartOrderItem, CouponUsers, Notification, Product, Tag,  DeliveryCouriers, CartOrder, Gallery, ProductFaq, Review,  Specification, Coupon, Color, Size, Address, Wishlist
 from import_export.admin import ImportExportModelAdmin
 from django import forms
-from userauths.models import User
 from store.models import Vendor
 
 
@@ -54,10 +53,6 @@ class ProductAdmin(ImportExportModelAdmin):
     list_per_page = 100
     prepopulated_fields = {"slug": ("title", )}
     form = ProductAdminForm
-
-class CartAdmin(ImportExportModelAdmin):
-    list_display = ['product', 'cart_id', 'qty', 'price', 'sub_total' , 'total',  'size', 'color', 'date']
-
 
 
     
@@ -117,7 +112,6 @@ admin.site.register(Review, ProductReviewAdmin)
 admin.site.register(Product, ProductAdmin)
 admin.site.register(Tag, TagAdmin)
 admin.site.register(CartOrder, CartOrderAdmin)
-admin.site.register(Cart, CartAdmin)
 admin.site.register(CartOrderItem, CartOrderItemsAdmin)
 admin.site.register(ProductFaq, ProductFaqAdmin)
 admin.site.register(Coupon, CouponAdmin)
