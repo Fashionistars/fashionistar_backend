@@ -12,7 +12,6 @@ from django.core.mail import EmailMultiAlternatives, send_mail
 from django.template.loader import render_to_string
 from django.core.exceptions import ObjectDoesNotExist
 
-
 # Restframework Packages
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -21,7 +20,7 @@ from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.views import APIView
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework import status
 
 # Serializers
@@ -194,94 +193,140 @@ class CartTotalView(generics.ListAPIView):
         
         return queryset
     
+    
 
 class CartDetailView(generics.RetrieveAPIView):
-    # Define the serializer class for the view
+        # Define the serializer class for the view
+        serializer_class = CartSerializer
+        # Specify the lookup field for retrieving objects using 'cart_id'
+        lookup_field = 'cart_id'
+
+        # Add a permission class for the view
+        permission_classes = (AllowAny,)
+
+
+        def get_queryset(self):
+            # Get 'cart_id' and 'user_id' from the URL kwargs
+            cart_id = self.kwargs['cart_id']
+            user_id = self.kwargs.get('user_id')  # Use get() to handle cases where 'user_id' is not present
+
+            if user_id is not None:
+                # If 'user_id' is provided, filter the queryset by both 'cart_id' and 'user_id'
+                user = User.objects.get(id=user_id)
+                queryset = Cart.objects.filter(cart_id=cart_id, user=user)
+            else:
+                # If 'user_id' is not provided, filter the queryset by 'cart_id' only
+                queryset = Cart.objects.filter(cart_id=cart_id)
+
+            return queryset
+
+        def get(self, request, *args, **kwargs):
+            # Get the queryset of cart items based on 'cart_id' and 'user_id' (if provided)
+            queryset = self.get_queryset()
+
+            # Initialize sums for various cart item attributes
+            total_sub_total = 0.0
+            total_total = 0.0
+
+            # Iterate over the queryset of cart items to calculate cumulative sums
+            for cart_item in queryset:
+                # Calculate the cumulative shipping, tax, service_fee, and total values
+                
+                total_sub_total += float(self.calculate_sub_total(cart_item))
+                total_total += round(float(self.calculate_total(cart_item)), 2)
+
+            # Create a data dictionary to store the cumulative values
+            data = {
+                
+                'sub_total': total_sub_total,
+                'total': total_total,
+            }
+
+            # Return the data in the response
+            return Response(data)
+
+       
+        def calculate_sub_total(self, cart_item):
+            # Implement your service fee calculation logic here for a single cart item
+            # Example: Calculate based on service type, cart total, etc.
+            return cart_item.sub_total
+
+        def calculate_total(self, cart_item):
+            # Implement your total calculation logic here for a single cart item
+            # Example: Sum of sub_total, shipping, tax, and service_fee
+            return cart_item.total    
+
+
+
+
+class CartUpdateApiView(generics.UpdateAPIView):
     serializer_class = CartSerializer
-    # Specify the lookup field for retrieving objects using 'cart_id'
-    lookup_field = 'cart_id'
-
-    # Add a permission class for the view
+    queryset = Cart.objects.all()
     permission_classes = (AllowAny,)
+    lookup_field = 'item_id'  # Including lookup_field
 
-
-    def get_queryset(self):
-        # Get 'cart_id' and 'user_id' from the URL kwargs
-        cart_id = self.kwargs['cart_id']
-        user_id = self.kwargs.get('user_id')  # Use get() to handle cases where 'user_id' is not present
-
+    def get_object(self, cart_id, item_id, user_id=None):
+        # Check if user_id is provided
         if user_id is not None:
-            # If 'user_id' is provided, filter the queryset by both 'cart_id' and 'user_id'
-            user = User.objects.get(id=user_id)
-            queryset = Cart.objects.filter(cart_id=cart_id, user=user)
+            # Fetch the User object
+            user = get_object_or_404(User, id=user_id)
+            # Fetch the Cart item associated with cart_id, item_id, and user
+            cart_item = get_object_or_404(Cart, cart_id=cart_id, id=item_id, user=user)
         else:
-            # If 'user_id' is not provided, filter the queryset by 'cart_id' only
-            queryset = Cart.objects.filter(cart_id=cart_id)
+            # Fetch the Cart item associated with cart_id and item_id only
+            cart_item = get_object_or_404(Cart, cart_id=cart_id, id=item_id)
+        return cart_item
 
-        return queryset
+    def update(self, request, *args, **kwargs):
+        try:
+            cart_id = kwargs.get('cart_id')
+            user_id = request.data.get('user_id')
+            items = request.data.get('items', [])
 
-    def get(self, request, *args, **kwargs):
-        # Get the queryset of cart items based on 'cart_id' and 'user_id' (if provided)
-        queryset = self.get_queryset()
+            updated_items = []
 
-        # Initialize sums for various cart item attributes
-        total_shipping = 0.0
-        total_tax = 0.0
-        total_service_fee = 0.0
-        total_sub_total = 0.0
-        total_total = 0.0
+            for item in items:
+                item_id = item.get('item_id')
+                # Fetch the cart item using the get_object method
+                cart_item = self.get_object(cart_id, item_id, user_id)
 
-        # Iterate over the queryset of cart items to calculate cumulative sums
-        for cart_item in queryset:
-            # Calculate the cumulative shipping, tax, service_fee, and total values
-            total_shipping += float(self.calculate_shipping(cart_item))
-            total_tax += float(self.calculate_tax(cart_item))
-            total_service_fee += float(self.calculate_service_fee(cart_item))
-            total_sub_total += float(self.calculate_sub_total(cart_item))
-            total_total += round(float(self.calculate_total(cart_item)), 2)
+                # Update the cart item attributes
+                qty = item.get('qty', cart_item.qty)
+                price = Decimal(item.get('price', cart_item.price))
+                size = item.get('size', cart_item.size)
+                color = item.get('color', cart_item.color)
 
-        # Create a data dictionary to store the cumulative values
-        data = {
-            'shipping': round(total_shipping, 2),
-            'tax': total_tax,
-            'service_fee': total_service_fee,
-            'sub_total': total_sub_total,
-            'total': total_total,
-        }
+                cart_item.qty = int(qty)
+                cart_item.price = price
+                cart_item.size = size
+                cart_item.color = color
+                cart_item.sub_total = cart_item.price * cart_item.qty
 
-        # Return the data in the response
-        return Response(data)
+                # Save the updated cart item
+                cart_item.save()
+                updated_items.append(cart_item)
 
-    def calculate_shipping(self, cart_item):
-        # Implement your shipping calculation logic here for a single cart item
-        # Example: Calculate based on weight, destination, etc.
-        return cart_item.shipping_amount
+            # Return the response with updated cart items
+            return Response(
+                {"message": "Cart items updated successfully", "items": CartSerializer(updated_items, many=True).data},
+                status=status.HTTP_200_OK
+            )
+        except ObjectDoesNotExist as e:
+            return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
+        except ValidationError as e:
+            return Response({"error": e.detail}, status=status.HTTP_400_BAD_REQUEST)
+        except PermissionDenied as e:
+            return Response({"error": str(e)}, status=status.HTTP_403_FORBIDDEN)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-    def calculate_tax(self, cart_item):
-        # Implement your tax calculation logic here for a single cart item
-        # Example: Calculate based on tax rate, product type, etc.
-        return cart_item.tax_fee
-
-    def calculate_service_fee(self, cart_item):
-        # Implement your service fee calculation logic here for a single cart item
-        # Example: Calculate based on service type, cart total, etc.
-        return cart_item.service_fee
-
-    def calculate_sub_total(self, cart_item):
-        # Implement your service fee calculation logic here for a single cart item
-        # Example: Calculate based on service type, cart total, etc.
-        return cart_item.sub_total
-
-    def calculate_total(self, cart_item):
-        # Implement your total calculation logic here for a single cart item
-        # Example: Sum of sub_total, shipping, tax, and service_fee
-        return cart_item.total
-    
 
 
 class CartItemDeleteView(generics.DestroyAPIView):
+    queryset = Cart.objects.all()
+    permission_classes = (AllowAny,)
     serializer_class = CartSerializer
-    lookup_field = 'cart_id'  
+    lookup_field = 'item_id'  
 
     def get_object(self):
         cart_id = self.kwargs['cart_id']
@@ -290,29 +335,25 @@ class CartItemDeleteView(generics.DestroyAPIView):
 
         if user_id is not None:
             user = get_object_or_404(User, id=user_id)
-            cart = get_object_or_404(Cart, cart_id=cart_id, id=item_id, user=user)
+            cart_item = get_object_or_404(Cart, cart_id=cart_id, id=item_id, user=user)
         else:
-            cart = get_object_or_404(Cart, cart_id=cart_id, id=item_id)
+            cart_item = get_object_or_404(Cart, cart_id=cart_id, id=item_id)
 
-        return cart
-    
-
-
-class CartDeleteApiView(generics.DestroyAPIView):
-    queryset = Cart.objects.all()
-    permission_classes = (AllowAny,)
+        return cart_item
 
     def delete(self, request, *args, **kwargs):
         try:
-            cart_item_id = kwargs.get('pk')
-            cart_item = get_object_or_404(Cart, id=cart_item_id)
+            cart_item = self.get_object()
             cart_item.delete()
             return Response({"message": "Cart item deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
         except ObjectDoesNotExist as e:
             return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
+        except ValidationError as e:
+            return Response({"error": e.detail}, status=status.HTTP_400_BAD_REQUEST)
+        except PermissionDenied as e:
+            return Response({"error": str(e)}, status=status.HTTP_403_FORBIDDEN)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
 
 
 

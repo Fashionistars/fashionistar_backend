@@ -56,7 +56,7 @@ class ProductAdmin(ImportExportModelAdmin):
     form = ProductAdminForm
 
 class CartAdmin(ImportExportModelAdmin):
-    list_display = ['product', 'cart_id', 'qty', 'price', 'sub_total' , 'shipping_amount', 'service_fee', 'tax_fee', 'total', 'country', 'size', 'color', 'date']
+    list_display = ['product', 'cart_id', 'qty', 'price', 'sub_total' , 'total',  'size', 'color', 'date']
 
 
 
