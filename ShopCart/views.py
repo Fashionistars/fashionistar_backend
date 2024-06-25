@@ -24,6 +24,16 @@ from decimal import Decimal
 
 
 class CartApiView(generics.ListCreateAPIView):
+    
+    '''
+    =============================   Explanation for the Frontend Developer          =================================
+            
+            cart/view/: Use this endpoint to view or create a new cart. It handles both viewing existing carts and adding new products to the cart.
+
+            These comments should help the frontend developer understand the purpose and usage of each endpoint, ensuring they can correctly implement the necessary API calls.
+                
+    '''
+    
     serializer_class = CartSerializer
     queryset = Cart.objects.all()
     permission_classes = (AllowAny,)
@@ -92,6 +102,16 @@ class CartApiView(generics.ListCreateAPIView):
 
     
 class CartListView(generics.ListAPIView):
+
+    '''
+    =============================   Explanation for the Frontend Developer          =================================
+            
+            cart/list/<str:cart_id>/: Use this endpoint to list all items in a specific cart identified by cart_id.
+            cart/list/<str:cart_id>/<int:user_id>/: Similar to the previous endpoint, but additionally filters the cart items for a specific user identified by user_id.
+
+            These comments should help the frontend developer understand the purpose and usage of each endpoint, ensuring they can correctly implement the necessary API calls.
+                
+    '''
     serializer_class = CartSerializer
     permission_classes = (AllowAny,)
 
@@ -140,6 +160,15 @@ class CartListView(generics.ListAPIView):
     
 
 class CartTotalView(generics.ListAPIView):
+    '''
+    =============================   Explanation for the Frontend Developer          =================================
+            
+            cart/total/<str:cart_id>/: Use this endpoint to get the total values (e.g., subtotal, total) for a specific cart identified by cart_id.
+            cart/total/<str:cart_id>/<int:user_id>/: Similar to the previous endpoint, but additionally filters the total values for a specific user identified by user_id.
+
+            These comments should help the frontend developer understand the purpose and usage of each endpoint, ensuring they can correctly implement the necessary API calls.
+                
+    '''
     serializer_class = CartSerializer
     permission_classes = (AllowAny,)
 
@@ -187,6 +216,16 @@ class CartTotalView(generics.ListAPIView):
     
 
 class CartDetailView(generics.RetrieveAPIView):
+        '''
+    =============================   Explanation for the Frontend Developer          =================================
+ 
+            cart/detail/<str:cart_id>/: Use this endpoint to get detailed information about a specific cart identified by cart_id.
+            cart/detail/<str:cart_id>/<int:user_id>/: Similar to the previous endpoint, but additionally filters the cart details for a specific user identified by user_id.
+
+            These comments should help the frontend developer understand the purpose and usage of each endpoint, ensuring they can correctly implement the necessary API calls.
+                
+    '''
+    
         # Define the serializer class for the view
         serializer_class = CartSerializer
         # Specify the lookup field for retrieving objects using 'cart_id'
@@ -251,6 +290,17 @@ class CartDetailView(generics.RetrieveAPIView):
 
 
 class CartUpdateApiView(generics.UpdateAPIView):
+
+
+    '''
+       =============================   Explanation for the Frontend Developer          =================================
+
+            cart/update/<str:cart_id>/<int:item_id>/: Use this endpoint to update the details of a specific item in the cart identified by item_id.
+            cart/update/<str:cart_id>/<int:item_id>/<int:user_id>/: Similar to the previous endpoint, but additionally checks if the item belongs to a specific user identified by user_id.
+
+            These comments should help the frontend developer understand the purpose and usage of each endpoint, ensuring they can correctly implement the necessary API calls.
+                
+    '''
     serializer_class = CartSerializer
     queryset = Cart.objects.all()
     permission_classes = (AllowAny,)
@@ -314,6 +364,15 @@ class CartUpdateApiView(generics.UpdateAPIView):
 
 
 class CartItemDeleteView(generics.DestroyAPIView):
+
+    '''
+    =============================   Explanation for the Frontend Developer          =================================
+        
+            cart/delete/<str:cart_id>/<int:item_id>/: Use this endpoint to delete a specific item identified by item_id from a specific cart identified by cart_id.
+            cart/delete/<str:cart_id>/<int:item_id>/<int:user_id>/: Similar to the previous endpoint, but additionally checks if the item belongs to a specific user identified by user_id.
+
+            These comments should help the frontend developer understand the purpose and usage of each endpoint, ensuring they can correctly implement the necessary API calls.
+    '''
     queryset = Cart.objects.all()
     permission_classes = (AllowAny,)
     serializer_class = CartSerializer
