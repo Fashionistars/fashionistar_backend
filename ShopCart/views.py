@@ -97,16 +97,46 @@ class CartListView(generics.ListAPIView):
 
     def get_queryset(self):
         cart_id = self.kwargs['cart_id']
-        user_id = self.kwargs.get('user_id')  # Use get() method to handle the case where user_id is not present
+        user_id = self.kwargs.get('user_id')
 
-        
         if user_id is not None:
-            user = User.objects.get(id=user_id)
+            user = get_object_or_404(User, id=user_id)
             queryset = Cart.objects.filter(Q(user=user, cart_id=cart_id) | Q(user=user))
         else:
             queryset = Cart.objects.filter(cart_id=cart_id)
         
         return queryset
+
+    def list(self, request, *args, **kwargs):
+        try:
+            queryset = self.get_queryset()
+            serializer = CartSerializer(queryset, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except ObjectDoesNotExist as e:
+            return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def get_cart_total(self, cart_items):
+        total_qty = sum(item.qty for item in cart_items)
+        total_price = sum(item.sub_total for item in cart_items)
+        return total_qty, total_price
+
+    def get(self, request, *args, **kwargs):
+        try:
+            cart_items = self.get_queryset()
+            total_qty, total_price = self.get_cart_total(cart_items)
+            data = {
+                "total_quantity": total_qty,
+                "total_price": total_price,
+                "cart_items": CartSerializer(cart_items, many=True).data
+            }
+            return Response(data, status=status.HTTP_200_OK)
+        except ObjectDoesNotExist as e:
+            return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
     
 
 class CartTotalView(generics.ListAPIView):
@@ -115,17 +145,45 @@ class CartTotalView(generics.ListAPIView):
 
     def get_queryset(self):
         cart_id = self.kwargs['cart_id']
-        user_id = self.kwargs.get('user_id')  # Use get() method to handle the case where user_id is not present
+        user_id = self.kwargs.get('user_id')
 
-        
         if user_id is not None:
-            user = User.objects.get(id=user_id)
+            user = get_object_or_404(User, id=user_id)
             queryset = Cart.objects.filter(cart_id=cart_id, user=user)
         else:
             queryset = Cart.objects.filter(cart_id=cart_id)
         
         return queryset
-    
+
+    def list(self, request, *args, **kwargs):
+        try:
+            queryset = self.get_queryset()
+            serializer = CartSerializer(queryset, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except ObjectDoesNotExist as e:
+            return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def get_total_values(self, cart_items):
+        total_sub_total = sum(item.sub_total for item in cart_items)
+        total_total = sum(item.total for item in cart_items)
+        return total_sub_total, total_total
+
+    def get(self, request, *args, **kwargs):
+        try:
+            cart_items = self.get_queryset()
+            total_sub_total, total_total = self.get_total_values(cart_items)
+            data = {
+                "sub_total": total_sub_total,
+                "total": total_total
+            }
+            return Response(data, status=status.HTTP_200_OK)
+        except ObjectDoesNotExist as e:
+            return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
     
 
 class CartDetailView(generics.RetrieveAPIView):
