@@ -1,11 +1,9 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
-from django.utils import timezone
 from django.db.models.signals import post_save
 from django.utils.html import mark_safe
 from django.utils.translation import gettext_lazy as _
 from shortuuid.django_fields import ShortUUIDField
-from addon.models import Tax
 from .managers import CustomUserManager
 from django.core.exceptions import ValidationError
 from phonenumber_field.modelfields import PhoneNumberField
@@ -103,6 +101,8 @@ class Profile(models.Model):
         ('O', 'Other'),
     ]
     wallet_balance = models.DecimalField(decimal_places=2, default=0.00, max_digits=1000)
+    deliveryContact = models.ForeignKey("customer.DeliveryContact", on_delete=models.SET_NULL, null=True, blank=True )
+    shippingAddress = models.ForeignKey("customer.ShippingAddress", on_delete=models.SET_NULL, null=True, blank=True)
     gender = models.CharField(max_length=1, choices=GENDER_CHOICES, null=True, blank=True)
     country = models.CharField(max_length=1000, null=True, blank=True)
     city = models.CharField(max_length=500, null=True, blank=True)
@@ -120,7 +120,7 @@ class Profile(models.Model):
         if self.full_name:
             return str(self.full_name)
         else:
-            return str(self.user.full_name)
+            return str(self.user.full_name)         
     
     def save(self, *args, **kwargs):
         if self.full_name == "" or self.full_name == None:

@@ -1,12 +1,9 @@
-from django.shortcuts import render
-from django.http import JsonResponse
 from django.core.mail import EmailMultiAlternatives
+from django.shortcuts import get_object_or_404
+from django.core.exceptions import ObjectDoesNotExist
+from rest_framework.exceptions import NotFound, APIException
 from django.template.loader import render_to_string
 from django.conf import settings
-from django.contrib.auth.tokens import default_token_generator
-from django.utils.http import urlsafe_base64_encode
-from django.utils.encoding import force_bytes
-from django.core.exceptions import ValidationError
 from django.db.models import Q
 
 # Restframework
@@ -20,19 +17,20 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.exceptions import AuthenticationFailed
+
 # Others
 import json
 import random
 import time
 import datetime
+# Models
+from userauths.models import Profile, User, Tokens
 
 # Serializers
 from userauths.serializer import *
 
 # utils
 from userauths.utils import EmailManager, generate_token
-# Models
-from userauths.models import Profile, User, Tokens
 
 # Hashing
 from django.conf import settings
@@ -243,26 +241,21 @@ def testEndPoint(request):
     return Response("Invalid JSON data", status=status.HTTP_400_BAD_REQUEST)
 
 
-class ProfileView(generics.RetrieveAPIView):
+
+class ProfileView(generics.RetrieveUpdateAPIView):
     permission_classes = (AllowAny,)
     serializer_class = ProfileSerializer
 
     def get_object(self):
-        user_id = self.kwargs['user_id']
-
-        user = User.objects.get(id=user_id)
-        profile = Profile.objects.get(user=user)
-        return profile
-    
-#    ===============   OR USE THIS METHOD ================
-
-# class ProfileView(generics.RetrieveUpdateAPIView):
-#     permission_classes = (IsAuthenticated,)
-#     serializer_class = ProfileSerializer
-
-#     def get_object(self):
-#         return self.request.user.profile
-
+        pid = self.kwargs['pid']
+        try:
+            user = get_object_or_404(User, profile__pid=pid)
+            profile = get_object_or_404(Profile, user=user)
+            return profile
+        except ObjectDoesNotExist as e:
+            raise NotFound(f"Profile not found: {str(e)}")
+        except Exception as e:
+            raise APIException(f"An error occurred: {str(e)}")
 
 def generate_numeric_otp(length=7):
         # Generate a random 7-digit OTP

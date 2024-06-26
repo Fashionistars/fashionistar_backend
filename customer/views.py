@@ -1,42 +1,91 @@
 # Django Packages
-from django.shortcuts import get_object_or_404, redirect, render
-from django.http import JsonResponse, HttpResponseNotFound, HttpResponse
-from django.views import View
-from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
-from django.db.models import Q
-from django.db import transaction
-from django.urls import reverse
-from django.conf import settings
-
+from rest_framework import generics, status
+from django.shortcuts import get_object_or_404
+from rest_framework.exceptions import NotFound, APIException
+from django.core.exceptions import ObjectDoesNotExist
 
 # Restframework Packages
-from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from rest_framework_simplejwt.views import TokenObtainPairView
-from rest_framework import generics
-from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.views import APIView
+from rest_framework.permissions import AllowAny
 from rest_framework import status
 
 # Serializers
-from userauths.serializer import MyTokenObtainPairSerializer, ProfileSerializer, RegisterSerializer
-from store.serializers import CancelledOrderSerializer, NotificationSerializer, CartOrderItemSerializer, CouponUsersSerializer, ProductSerializer, TagSerializer , DeliveryCouriersSerializer, CartOrderSerializer, GallerySerializer, ProductFaqSerializer, ReviewSerializer,  SpecificationSerializer, CouponSerializer, ColorSerializer, SizeSerializer, AddressSerializer, WishlistSerializer, ConfigSettingsSerializer
-from admin_backend.serializers import BrandSerializer, CategorySerializer 
+from userauths.serializer import ProfileSerializer
+from store.serializers import NotificationSerializer,  CartOrderSerializer, WishlistSerializer
+from .serializers import DeliveryContactSerializer, ShippingAddressSerializer
 
 # Models
 from userauths.models import Profile, User 
-from store.models import CancelledOrder, Notification, CartOrderItem, CouponUsers,  Product, Tag , DeliveryCouriers, CartOrder, Gallery, ProductFaq, Review,  Specification, Coupon, Color, Size, Address, Wishlist
-from addon.models import ConfigSettings, Tax
-from vendor.models import Vendor
-from admin_backend.models import Brand, Category
+from store.models import Notification,   Product, CartOrder, Wishlist
+from customer.models import DeliveryContact, ShippingAddress
 
 # Others Packages
-import json
-from decimal import Decimal
-import stripe
-import requests
+
+
+
+
+
+
+
+# DeliveryContact Views
+class DeliveryContactListCreateView(generics.ListCreateAPIView):
+    queryset = DeliveryContact.objects.all()
+    serializer_class = DeliveryContactSerializer
+    permission_classes = [AllowAny]
+
+    def create(self, request, *args, **kwargs):
+        try:
+            return super().create(request, *args, **kwargs)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+
+class DeliveryContactDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = DeliveryContact.objects.all()
+    serializer_class = DeliveryContactSerializer
+    permission_classes = [AllowAny]
+
+    def get_object(self):
+        pk = self.kwargs['pk']
+        try:
+            return get_object_or_404(DeliveryContact, pk=pk)
+        except ObjectDoesNotExist as e:
+            raise NotFound(f"Delivery contact not found: {str(e)}")
+        except Exception as e:
+            raise APIException(f"An error occurred: {str(e)}")
+
+
+
+# ShippingAddress Views
+class ShippingAddressListCreateView(generics.ListCreateAPIView):
+    queryset = ShippingAddress.objects.all()
+    serializer_class = ShippingAddressSerializer
+    permission_classes = [AllowAny]
+
+    def create(self, request, *args, **kwargs):
+        try:
+            return super().create(request, *args, **kwargs)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+class ShippingAddressDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = ShippingAddress.objects.all()
+    serializer_class = ShippingAddressSerializer
+    permission_classes = [AllowAny]
+
+    def get_object(self):
+        pk = self.kwargs['pk']
+        try:
+            return get_object_or_404(ShippingAddress, pk=pk)
+        except ObjectDoesNotExist as e:
+            raise NotFound(f"Shipping address not found: {str(e)}")
+        except Exception as e:
+            raise APIException(f"An error occurred: {str(e)}")
+        
+
+
 
 class OrdersAPIView(generics.ListAPIView):
     serializer_class = CartOrderSerializer
@@ -50,6 +99,8 @@ class OrdersAPIView(generics.ListAPIView):
         return orders
     
 
+
+
 class OrdersDetailAPIView(generics.RetrieveAPIView):
     serializer_class = CartOrderSerializer
     permission_classes = (AllowAny,)
@@ -62,6 +113,8 @@ class OrdersDetailAPIView(generics.RetrieveAPIView):
 
         order = CartOrder.objects.get(buyer=user, payment_status="paid", oid=order_oid)
         return order
+    
+
     
 class WishlistCreateAPIView(generics.CreateAPIView):
     serializer_class = WishlistSerializer

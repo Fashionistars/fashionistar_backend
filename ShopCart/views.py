@@ -30,6 +30,22 @@ class CartApiView(generics.ListCreateAPIView):
             
             cart/view/: Use this endpoint to view or create a new cart. It handles both viewing existing carts and adding new products to the cart.
 
+            To create a new cart or add items to an existing cart, send a POST request to this endpoint with the following payload:
+            {
+                "cart_id": "string",  # Unique identifier for the cart
+                "user_id": "integer or null",  # Optional, if the cart is associated with a user
+                "products": [
+                    {
+                        "product": "integer",  # ID of the product to add
+                        "qty": "integer",  # Quantity of the product
+                        "price": "decimal",  # Price of the product
+                        "size": "string",  # Optional, size of the product
+                        "color": "string"  # Optional, color of the product
+                    },
+                    ...
+                ]
+            }
+
             These comments should help the frontend developer understand the purpose and usage of each endpoint, ensuring they can correctly implement the necessary API calls.
                 
     '''

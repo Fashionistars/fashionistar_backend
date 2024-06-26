@@ -121,7 +121,6 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class ProfileSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = Profile
         fields = '__all__'
@@ -129,6 +128,8 @@ class ProfileSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         response = super().to_representation(instance)
         response['user'] = UserSerializer(instance.user).data
+        response['deliveryContact'] = DeliveryContactSerializer(instance.deliveryContact).data if instance.deliveryContact else None
+        response['shippingAddress'] = ShippingAddressSerializer(instance.shippingAddress).data if instance.shippingAddress else None
         return response
 
 

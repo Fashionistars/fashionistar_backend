@@ -83,13 +83,7 @@ class Category(models.Model):
             self.slug = slugify(self.title) + "-" + str(uniqueid.lower())
         super(Category, self).save(*args, **kwargs) 
 
-    def product_count(self):
-        from store.models import Product  # Import here to avoid circular import
-        return Product.objects.filter(category=self).count()
 
-    def cat_products(self):
-        from store.models import Product  # Import here to avoid circular import
-        return Product.objects.filter(category=self)
 
 # Model for Brands
 class Brand(models.Model):
