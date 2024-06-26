@@ -7,6 +7,9 @@ from django.contrib.auth.password_validation import validate_password
 from rest_framework.decorators import parser_classes
 from rest_framework.parsers import JSONParser
 
+# ShippingAddress URLs and DeliveryContact URLs
+from customer.serializers import DeliveryContactSerializer, ShippingAddressSerializer
+
 User = get_user_model()
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     '''
