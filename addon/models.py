@@ -3,11 +3,11 @@ from django.db import models
 from django.utils.html import mark_safe
 from django.utils.text import slugify
 
-from shortuuid.django_fields import ShortUUIDField
 
-import shortuuid
-import datetime
+# ======================   tax columns from cartorder and cartorderitems models    =======================
 
+    # tax_fee = models.DecimalField(default=0.00, max_digits=12, decimal_places=2, help_text="Estimated Vat based on delivery country = tax_rate * (total + shipping)")
+    # tax_fee = models.DecimalField(default=0.00, max_digits=12, decimal_places=2)
 
 
 

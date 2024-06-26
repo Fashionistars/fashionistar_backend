@@ -66,13 +66,13 @@ class CartOrderAdmin(ImportExportModelAdmin):
     search_fields = ['oid', 'full_name', 'email', 'mobile']
     list_editable = ['order_status', 'payment_status']
     list_filter = ['payment_status', 'order_status']
-    list_display = ['oid', 'payment_status', 'order_status', 'sub_total', 'shipping_amount', 'tax_fee', 'service_fee' ,'total', 'saved' ,'date']
+    list_display = ['oid', 'payment_status', 'order_status', 'sub_total', 'shipping_amount', 'service_fee' ,'total', 'saved' ,'date']
 
 
 class CartOrderItemsAdmin(ImportExportModelAdmin):
     list_filter = ['delivery_couriers', 'applied_coupon']
     list_editable = ['date']
-    list_display = ['order_id', 'vendor', 'product' ,'qty', 'price', 'sub_total', 'shipping_amount' , 'service_fee', 'tax_fee', 'total' , 'delivery_couriers', 'applied_coupon', 'date']
+    list_display = ['order_id', 'vendor', 'product' ,'qty', 'price', 'sub_total', 'shipping_amount' , 'service_fee', 'total' , 'delivery_couriers', 'applied_coupon', 'date']
 
 class ProductFaqAdmin(ImportExportModelAdmin):
     list_editable = [ 'active', 'answer']

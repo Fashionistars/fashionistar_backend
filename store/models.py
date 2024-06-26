@@ -325,7 +325,6 @@ class CartOrder(models.Model):
     buyer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="buyer", blank=True)
     sub_total = models.DecimalField(default=0.00, max_digits=12, decimal_places=2)
     shipping_amount = models.DecimalField(default=0.00, max_digits=12, decimal_places=2)
-    tax_fee = models.DecimalField(default=0.00, max_digits=12, decimal_places=2)
     service_fee = models.DecimalField(default=0.00, max_digits=12, decimal_places=2)
     total = models.DecimalField(default=0.00, max_digits=12, decimal_places=2)
 
@@ -368,7 +367,6 @@ class CartOrderItem(models.Model):
     price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     sub_total = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="Total of Product price * Product Qty")
     shipping_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="Estimated Shipping Fee = shipping_fee * total")
-    tax_fee = models.DecimalField(default=0.00, max_digits=12, decimal_places=2, help_text="Estimated Vat based on delivery country = tax_rate * (total + shipping)")
     service_fee = models.DecimalField(default=0.00, max_digits=12, decimal_places=2, help_text="Estimated Service Fee = service_fee * total (paid by buyer to platform)")
     total = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="Grand Total of all amount listed above")
     

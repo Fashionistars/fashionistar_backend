@@ -115,7 +115,6 @@ class CreateOrderView(generics.CreateAPIView):
 
         # Initialize totals
         total_shipping = Decimal(0.0)
-        total_tax = Decimal(0.0)
         total_service_fee = Decimal(0.0)
         total_sub_total = Decimal(0.0)
         total_initial_total = Decimal(0.0)
@@ -146,7 +145,6 @@ class CreateOrderView(generics.CreateAPIView):
                     price=cart_item.price,
                     sub_total=cart_item.sub_total,
                     shipping_amount=cart_item.shipping_amount,
-                    tax_fee=cart_item.tax_fee,
                     service_fee=cart_item.service_fee,
                     total=cart_item.total,
                     initial_total=cart_item.total,
@@ -155,7 +153,6 @@ class CreateOrderView(generics.CreateAPIView):
 
                 # Aggregate totals
                 total_shipping += cart_item.shipping_amount
-                total_tax += cart_item.tax_fee
                 total_service_fee += cart_item.service_fee
                 total_sub_total += cart_item.sub_total
                 total_initial_total += cart_item.total
@@ -167,7 +164,6 @@ class CreateOrderView(generics.CreateAPIView):
             # Update totals in CartOrder instance
             order.sub_total = total_sub_total
             order.shipping_amount = total_shipping
-            order.tax_fee = total_tax
             order.service_fee = total_service_fee
             order.initial_total = total_initial_total
             order.total = total_total
