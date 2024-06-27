@@ -6,13 +6,14 @@ from django.core.exceptions import ObjectDoesNotExist
 
 # Restframework Packages
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework import status
 
 # Serializers
 from userauths.serializer import ProfileSerializer
 from store.serializers import NotificationSerializer,  CartOrderSerializer, WishlistSerializer
-from .serializers import DeliveryContactSerializer, ShippingAddressSerializer
+from customer.serializers import SetTransactionPasswordSerializer, ValidateTransactionPasswordSerializer
+from customer.serializers import DeliveryContactSerializer, ShippingAddressSerializer
 
 # Models
 from userauths.models import Profile, User 
@@ -24,6 +25,30 @@ from customer.models import DeliveryContact, ShippingAddress
 
 
 
+
+class SetTransactionPasswordView(generics.GenericAPIView):
+    serializer_class = SetTransactionPasswordSerializer
+    permission_classes = (IsAuthenticated,)
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(user=request.user)
+        return Response({"message": "Transaction password set successfully."}, status=status.HTTP_200_OK)
+
+
+
+class ValidateTransactionPasswordView(generics.GenericAPIView):
+    serializer_class = ValidateTransactionPasswordSerializer
+    permission_classes = (IsAuthenticated,)
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        profile = Profile.objects.get(user=request.user)
+        if profile.check_transaction_password(serializer.validated_data['password']):
+            return Response({"message": "Password validated successfully."}, status=status.HTTP_200_OK)
+        return Response({"message": "Invalid transaction password."}, status=status.HTTP_400_BAD_REQUEST)
 
 
 

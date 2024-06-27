@@ -99,6 +99,7 @@ class Profile(models.Model):
         ('O', 'Other'),
     ]
     wallet_balance = models.DecimalField(decimal_places=2, default=0.00, max_digits=1000)
+    transaction_password = models.CharField(max_length=4, blank=True, null=True)
     deliveryContact = models.ForeignKey("customer.DeliveryContact", on_delete=models.SET_NULL, null=True, blank=True)
     shippingAddress = models.ForeignKey("customer.ShippingAddress", on_delete=models.SET_NULL, null=True, blank=True)
     gender = models.CharField(max_length=1, choices=GENDER_CHOICES, null=True, blank=True)
@@ -118,6 +119,15 @@ class Profile(models.Model):
             return str(self.full_name)
         else:
             return str(self.user.full_name)
+
+    
+    def set_transaction_password(self, password):
+        self.transaction_password = password
+        self.save()
+
+    def check_transaction_password(self, password):
+        return self.transaction_password == password
+
 
     def save(self, *args, **kwargs):
         if self.full_name == "" or self.full_name is None:
