@@ -28,6 +28,7 @@ import requests
 
 
 
+# views.py
 
 class CreateOrderView(generics.CreateAPIView):
     serializer_class = CartOrderSerializer
@@ -37,7 +38,6 @@ class CreateOrderView(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         """
         Frontend Workflow for Creating an Order:
-
         1. User clicks on the 'Create Order' button.
         2. The frontend sends a POST request to the `/create-order/` endpoint with the following payload:
             {
@@ -139,10 +139,14 @@ class CreateOrderView(generics.CreateAPIView):
             a. Deduct the total cost of the order from the user's wallet balance.
             b. Save the updated user profile.
         
-        10. Delete cart items:
+        10. Update vendor balances:
+            a. Calculate 90% of the product prices.
+            b. Add the calculated amount to the respective vendor's balance.
+        
+        11. Delete cart items:
             a. Delete the cart items after the order is created.
         
-        11. Return success response:
+        12. Return success response:
             a. Return a response indicating the order was created successfully, along with the order ID.
         """
 
@@ -262,6 +266,18 @@ class CreateOrderView(generics.CreateAPIView):
                 user_profile.wallet_balance -= total_total
                 user_profile.save()
 
+                # Update vendor balances
+                vendor_amounts = {}
+                for cart_item in cart_items:
+                    vendor = cart_item.product.vendor
+                    if vendor not in vendor_amounts:
+                        vendor_amounts[vendor] = Decimal(0.0)
+                    vendor_amounts[vendor] += cart_item.total * Decimal(0.9)  # 90% of the item price
+
+                for vendor, amount in vendor_amounts.items():
+                    vendor.balance += amount
+                    vendor.save()
+
                 # Delete cart items
                 cart_items.delete()
 
@@ -270,8 +286,3 @@ class CreateOrderView(generics.CreateAPIView):
 
         # Return response indicating success
         return Response({"message": "Order Created Successfully", 'order_oid': order.oid}, status=status.HTTP_201_CREATED)
-
-
-
-
-

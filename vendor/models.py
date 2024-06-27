@@ -71,6 +71,8 @@ DISCOUNT_TYPE = (
 
 # Create your models here.
 
+# models.py
+
 class Vendor(models.Model):
     user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, related_name="vendor_profile")
     image = models.ImageField(upload_to=user_directory_path, default="shop-image.jpg", blank=True)
@@ -80,6 +82,7 @@ class Vendor(models.Model):
     mobile = models.CharField(max_length = 150, null=True, blank=True)
     verified = models.BooleanField(default=True)
     active = models.BooleanField(default=True)
+    balance = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)  # Added balance field
     vid = ShortUUIDField(unique=True, length=10, max_length=20, alphabet="abcdefghijklmnopqrstuvxyz")
     date = models.DateTimeField(auto_now_add=True)
     slug = models.SlugField(blank=True, null=True)
@@ -92,7 +95,6 @@ class Vendor(models.Model):
 
     def __str__(self):
         return str(self.name)
-        
 
     def save(self, *args, **kwargs):
         if self.slug == "" or self.slug == None:

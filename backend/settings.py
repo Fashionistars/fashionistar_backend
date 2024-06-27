@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     'api',
     'admin_backend',
     'ShopCart',
+    'checkout',
 
     # Third Party Apps
     'rest_framework',
@@ -73,7 +74,6 @@ INSTALLED_APPS = [
     'anymail',
     'storages',
     'phone_verify',
-
 ]
 
 MIDDLEWARE = [
