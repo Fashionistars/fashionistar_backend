@@ -25,29 +25,11 @@ urlpatterns = [
     path('addon/', store_views.ConfigSettingsDetailView.as_view(), name='addon'),
 
 
-    # Store API Endpoints
-    path('products/', store_views.ProductListView.as_view(), name='products'),
-    path('featured-products/', store_views.FeaturedProductListView.as_view(), name='featured-products'),
-    path('products/<slug:slug>/', store_views.ProductDetailView.as_view(), name='product-details'),
-    path('create-order/', store_views.CreateOrderView.as_view(), name='cart-delete'),
-    path('checkout/<order_oid>/', store_views.CheckoutView.as_view(), name='checkout'),
-    path('coupon/', store_views.CouponApiView.as_view(), name='coupon'),
-    path('create-review/', store_views.ReviewRatingAPIView.as_view(), name='create-review'),
-    path('reviews/<product_id>/', store_views.ReviewListView.as_view(), name='create-review'),
-    path('search/', store_views.SearchProductsAPIView.as_view(), name='search'),
-
     # Payment
     path('stripe-checkout/<order_oid>/', store_views.StripeCheckoutView.as_view(), name='stripe-checkout'),
     path('payment-success/', store_views.PaymentSuccessView.as_view(), name='payment-success'),
 
-    # Client API Endpoints
-    path('client/orders/<user_id>/', customer_views.OrdersAPIView.as_view(), name='customer-orders'),
-    path('client/order/detail/<user_id>/<order_oid>/', customer_views.OrdersDetailAPIView.as_view(), name='customer-order-detail'),
-    path('client/wishlist/create/', customer_views.WishlistCreateAPIView.as_view(), name='customer-wishlist-create'),
-    path('client/wishlist/<user_id>/', customer_views.WishlistAPIView.as_view(), name='customer-wishlist'),
-    path('client/notification/<user_id>/', customer_views.CustomerNotificationView.as_view(), name='customer-notification'),
-    path('client/setting/<int:pk>/', customer_views.CustomerUpdateView.as_view(), name='customer-settings'),
-
+   
     # Vendor API Endpoints
     path('vendor/stats/', vendor_views.DashboardStatsAPIView.as_view(), name='vendor-stats'),
     path('vendor/products/<vendor_id>/', vendor_views.ProductsAPIView.as_view(), name='vendor-prdoucts'),

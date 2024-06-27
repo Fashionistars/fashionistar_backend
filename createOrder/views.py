@@ -1,14 +1,8 @@
 # Django Packages
 from django.shortcuts import get_object_or_404, redirect
 from django.db import transaction
-from django.conf import settings
-from django.core.mail import EmailMultiAlternatives
-from django.template.loader import render_to_string
-from django.core.exceptions import ObjectDoesNotExist
-from django.shortcuts import get_object_or_404
 
 # Restframework Packages
-from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.exceptions import PermissionDenied
@@ -16,10 +10,8 @@ from rest_framework.exceptions import ValidationError, NotFound, APIException
 from rest_framework import generics, status
 
 # Serializers
-from store.serializers import  ProductSerializer,  CartOrderSerializer, ReviewSerializer, ConfigSettingsSerializer
-from customer.serializers import DeliveryContactSerializer, ShippingAddressSerializer
-from ShopCart.serializers import CartSerializer
-from .utils import calculate_shipping_amount, calculate_service_fee
+from store.serializers import  CartOrderSerializer
+from ..checkout.utils import calculate_shipping_amount, calculate_service_fee
 from decimal import Decimal
 
 # Models
