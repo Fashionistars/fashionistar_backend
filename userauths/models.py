@@ -35,6 +35,9 @@ def user_directory_path(instance, filename):
 
 
 class User(AbstractUser):
+    """
+    Custom user model that uses email or phone number as the unique identifier.
+    """
     email = models.EmailField(unique=True, null=True)
     full_name = models.CharField(max_length=500, null=True, blank=True)
     phone = PhoneNumberField(null=True, blank=True, unique=True)
@@ -49,16 +52,15 @@ class User(AbstractUser):
     verified = models.BooleanField(default=False)
     is_active = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
-    
-    # Default USERNAME_FIELD to email
-    USERNAME_FIELD = 'email' or "phone"
-    REQUIRED_FIELDS = [] 
-    
+
+    USERNAME_FIELD = 'email' or 'phone'
+    REQUIRED_FIELDS = []
+
     objects = CustomUserManager()
-    
+
     def __str__(self):
         return self.email
-    
+
     def clean(self):
         super().clean()
         if self.role not in dict(self.STATUS_CHOICES).keys():
@@ -67,30 +69,26 @@ class User(AbstractUser):
     def save(self, *args, **kwargs):
         if not self.email and not self.phone:
             raise ValueError(_("Either email or phone must be provided."))
-
         super().save(*args, **kwargs)
 
     @property
     def username(self):
-        # Use email if available, otherwise use phone
         return self.email or self.phone
 
     @staticmethod
     def get_username_field():
-        # Get the current USERNAME_FIELD value
         return User.USERNAME_FIELD
 
     @staticmethod
     def set_username_field(field):
-        # Set the USERNAME_FIELD dynamically
         if field not in ['email', 'phone']:
             raise ValueError(_("Invalid field for USERNAME_FIELD."))
-
         User.USERNAME_FIELD = field
 
-
-
 class Profile(models.Model):
+    """
+    Profile model associated with the user, containing additional user information.
+    """
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     image = models.ImageField(upload_to='Gallery/accounts/users', default='default/default-user.jpg', null=True, blank=True)
     full_name = models.CharField(max_length=1000, null=True, blank=True)
@@ -101,7 +99,7 @@ class Profile(models.Model):
         ('O', 'Other'),
     ]
     wallet_balance = models.DecimalField(decimal_places=2, default=0.00, max_digits=1000)
-    deliveryContact = models.ForeignKey("customer.DeliveryContact", on_delete=models.SET_NULL, null=True, blank=True )
+    deliveryContact = models.ForeignKey("customer.DeliveryContact", on_delete=models.SET_NULL, null=True, blank=True)
     shippingAddress = models.ForeignKey("customer.ShippingAddress", on_delete=models.SET_NULL, null=True, blank=True)
     gender = models.CharField(max_length=1, choices=GENDER_CHOICES, null=True, blank=True)
     country = models.CharField(max_length=1000, null=True, blank=True)
@@ -112,7 +110,6 @@ class Profile(models.Model):
     date = models.DateTimeField(auto_now_add=True, null=True, blank=True)
     pid = ShortUUIDField(unique=True, length=10, max_length=20, alphabet="abcdefghijklmnopqrstuvxyz")
 
-
     class Meta:
         ordering = ["-date"]
 
@@ -120,20 +117,21 @@ class Profile(models.Model):
         if self.full_name:
             return str(self.full_name)
         else:
-            return str(self.user.full_name)         
-    
+            return str(self.user.full_name)
+
     def save(self, *args, **kwargs):
-        if self.full_name == "" or self.full_name == None:
-             self.full_name = self.user.full_name
-        
+        if self.full_name == "" or self.full_name is None:
+            self.full_name = self.user.full_name
         super(Profile, self).save(*args, **kwargs)
 
-
     def thumbnail(self):
+        """
+        Generate a thumbnail image for the profile.
+        """
         return mark_safe('<img src="/media/%s" width="50" height="50" object-fit:"cover" style="border-radius: 30px; object-fit: cover;" />' % (self.image))
-    
 
-   
+
+
 def create_user_profile(sender, instance, created, **kwargs):
 	if created:
 		Profile.objects.create(user=instance)

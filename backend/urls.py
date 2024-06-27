@@ -44,6 +44,7 @@ urlpatterns = [
     # API V1 Urls
     path("", include("api.urls")),
     path("", include("ShopCart.urls")),
+    path("", include("store.urls")),
     # Admin URL
     path('admin/', admin.site.urls),
     path("auth/", include("userauths.urls")),
