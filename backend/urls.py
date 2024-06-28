@@ -43,6 +43,7 @@ urlpatterns = [
     
     # API V1 Urls
     path("", include("api.urls")),
+<<<<<<< HEAD
     path("", include("checkout.urls")),
     path("", include("createOrder.urls")),
     path("", include("customer.urls")),
@@ -51,6 +52,9 @@ urlpatterns = [
     path("", include("vendor.urls")),
 
 
+=======
+    path('payment-gateway', include('transaction.urls')),
+>>>>>>> 44c6635 (update transanctions app)
     # Admin URL
     path('admin/', admin.site.urls),
     path("auth/", include("userauths.urls")),

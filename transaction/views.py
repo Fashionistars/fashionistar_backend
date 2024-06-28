@@ -12,7 +12,7 @@ from rest_framework import status
 import requests
 from rest_framework.permissions import IsAuthenticated
 import uuid
-from models import Payment
+from transaction.models import Payment
 from django.conf import settings
 
 from store.models import *
@@ -82,14 +82,14 @@ class PaymentCallback(APIView):
                 payment.items.set(cart_items.values_list('items', flat=True))
 
                 # Create an order with payment information
-                order = Order.objects.create(
-                    user=payment.user,
-                    total_cost=payment.amount,
-                    payment=payment
-                )
+                # order = Order.objects.create(
+                #     user=payment.user,
+                #     total_cost=payment.amount,
+                #     payment=payment
+                # )
 
                 # Add the items related to the payment to the order
-                order.items.set(cart_items.values_list('items', flat=True))
+                # order.items.set(cart_items.values_list('items', flat=True))
                 cart_items.update(payment=payment)
 
                 return Response({'message': 'Payment was successful'})
