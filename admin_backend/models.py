@@ -3,10 +3,10 @@ from django.utils.html import mark_safe
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils.text import slugify
+
 from userauths.models import user_directory_path
+from shortuuid.django_fields import ShortUUIDField
 
-
-import shortuuid
 import os 
 
 
@@ -102,9 +102,9 @@ class Brand(models.Model):
         return self.title
     
 
-
-
-
-
-
-
+class Transaction(models.Model):
+    oid = ShortUUIDField(length=10, max_length=25, alphabet="abcdefghijklmnopqrstuvxyz")
+    paid = models.DecimalField(decimal_places=2, max_digits=1000)
+    methods = models.CharField(max_length=50)
+    created_at = models.DateTimeField(auto_created=True)
+    
