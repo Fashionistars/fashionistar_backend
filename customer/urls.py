@@ -3,6 +3,7 @@ from customer import views as trans_password
 from customer import views as customer_views
 
 
+app_name = 'customer'  # Add this line to specify the app namespace
 
 
 
@@ -21,6 +22,10 @@ urlpatterns = [
     path('client/notification/<user_id>/', customer_views.CustomerNotificationView.as_view(), name='customer-notification'),
     path('client/setting/<int:pk>/', customer_views.CustomerUpdateView.as_view(), name='customer-settings'),
 
+    
+    # delivery and order tracking to be paid attention to later
+    path('client/order/tracking/<int:order_id>/', customer_views.OrderTrackingView.as_view(), name='order-tracking'),
+
 
     # DeliveryContact URLs
     path('client/delivery-contact/', customer_views.DeliveryContactListCreateView.as_view(), name='delivery-contact-list-create'),
@@ -30,5 +35,4 @@ urlpatterns = [
     path('client/shipping-address/', customer_views.ShippingAddressListCreateView.as_view(), name='shipping-address-list-create'),
     path('client/shipping-address/<int:pk>/', customer_views.ShippingAddressDetailView.as_view(), name='shipping-address-detail'),
 ]
-# urls.py
 

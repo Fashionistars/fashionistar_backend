@@ -1,5 +1,8 @@
 # Django Packages
 from django.shortcuts import get_object_or_404, redirect
+from django.conf import settings
+from django.template.loader import render_to_string
+from django.core.mail import send_mail
 from django.db import transaction
 
 # Restframework Packages
@@ -23,12 +26,96 @@ from customer.models import DeliveryContact, ShippingAddress
 
 # Others Packages
 from decimal import Decimal
-import stripe
-import requests
+
+# Utils
+from createOrder.utils import send_notification
 
 
 
-# views.py
+
+
+
+
+class OrderSuccessView(generics.CreateAPIView):
+    serializer_class = CartOrderSerializer
+    queryset = CartOrder.objects.all()
+
+    def create(self, request, *args, **kwargs):
+        payload = request.data
+        order_oid = payload['order_oid']
+
+        try:
+            # Retrieve the order and associated items
+            order = CartOrder.objects.get(oid=order_oid)
+            order_items = CartOrderItem.objects.filter(order=order)
+        except CartOrder.DoesNotExist:
+            return Response({"message": "Order not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if order.payment_status == "processing":
+            order.payment_status = "paid"
+            order.save()
+
+            try:
+                self.send_notifications(order, order_items)
+            except Exception as e:
+                return Response({"message": f"Error sending notifications: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            return Response({"message": "Order successfully placed"}, status=status.HTTP_201_CREATED)
+        else:
+            return Response({"message": "Order already processed"}, status=status.HTTP_200_OK)
+        
+
+    def send_notifications(self, order, order_items):
+        # Notify Buyer
+        try:
+            send_notification(user=order.buyer, order=order)
+            self.send_buyer_email(order)
+        except Exception as e:
+            print(f"Error notifying buyer: {str(e)}")
+
+        # Notify Vendors
+        for item in order_items:
+            try:
+                send_notification(vendor=item.vendor, order=order, order_item=item)
+                self.send_vendor_email(item.vendor, order, item)
+            except Exception as e:
+                print(f"Error notifying vendor {item.vendor}: {str(e)}")
+
+
+    def send_buyer_email(self, order):
+        """
+        Send an email to the buyer confirming their order.
+
+        Args:
+            order: The CartOrder object for which the email is being sent.
+        """
+        subject = "Order Confirmation"
+        message = render_to_string('email/buyer_order_confirmation.html', {'order': order})
+
+        try:
+            send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [order.buyer.email])
+        except Exception as e:
+            print(f"Error sending email to buyer {order.buyer.email}: {str(e)}")
+
+
+    def send_vendor_email(self, vendor, order, order_item):
+        """
+        Send an email to the vendor notifying them of a new order.
+
+        Args:
+            vendor: The Vendor object to whom the email is being sent.
+            order: The CartOrder object associated with the order.
+            order_item: The CartOrderItem object associated with the order item.
+        """
+        subject = "New Order Placed"
+        message = render_to_string('email/vendor_order_notification.html', {'order': order, 'order_item': order_item})
+
+        try:
+            send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [vendor.email])
+        except Exception as e:
+            print(f"Error sending email to vendor {vendor.email}: {str(e)}")
+
+
 
 class CreateOrderView(generics.CreateAPIView):
     serializer_class = CartOrderSerializer

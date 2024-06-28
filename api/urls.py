@@ -25,11 +25,6 @@ urlpatterns = [
     path('addon/', store_views.ConfigSettingsDetailView.as_view(), name='addon'),
 
 
-    # Payment
-    path('stripe-checkout/<order_oid>/', store_views.StripeCheckoutView.as_view(), name='stripe-checkout'),
-    path('payment-success/', store_views.PaymentSuccessView.as_view(), name='payment-success'),
-
-   
     # Vendor API Endpoints
     path('vendor/stats/', vendor_views.DashboardStatsAPIView.as_view(), name='vendor-stats'),
     path('vendor/products/<vendor_id>/', vendor_views.ProductsAPIView.as_view(), name='vendor-prdoucts'),

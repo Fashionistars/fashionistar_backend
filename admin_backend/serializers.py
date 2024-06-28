@@ -24,4 +24,7 @@ class BrandSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class AdminProfitSerializer(serializers.Serializer):
+    profit = serializers.DecimalField(max_digits=10, decimal_places=2)
+
 

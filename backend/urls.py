@@ -48,6 +48,7 @@ urlpatterns = [
     path("", include("customer.urls")),
     path("", include("ShopCart.urls")),
     path("", include("store.urls")),
+    path("", include("vendor.urls")),
 
 
     # Admin URL

@@ -7,6 +7,7 @@ from django.core.exceptions import ObjectDoesNotExist
 # Restframework Packages
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.views import APIView
 from rest_framework import status
 
 # Serializers
@@ -192,3 +193,21 @@ class CustomerUpdateView(generics.RetrieveUpdateAPIView):
     queryset = Profile.objects.all()
     serializer_class = ProfileSerializer
     permission_classes = (AllowAny, )
+
+
+
+
+
+
+class OrderTrackingView(APIView):
+    def get(self, request, order_id, *args, **kwargs):
+        order = get_object_or_404(CartOrder, id=order_id)
+        serializer = CartOrderSerializer(order)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+
+
+
+
+

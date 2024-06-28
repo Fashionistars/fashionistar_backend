@@ -19,22 +19,8 @@ from userauths.models import User, user_directory_path, Profile
 from vendor.models import Vendor
 
 import shortuuid
-import datetime
-import os 
 
 
-
-
-DISCOUNT_TYPE = (
-    ("Percentage", "Percentage"),
-    ("Flat Rate", "Flat Rate"),
-)
-
-STATUS_CHOICE = (
-    ("processing", "Processing"),
-    ("shipped", "Shipped"),
-    ("delivered", "Delivered"),
-)
 
 
 STATUS = (
@@ -68,17 +54,6 @@ ORDER_STATUS = (
     
 )
 
-AUCTION_STATUS = (
-    ("on_going", "On Going"),
-    ("finished", "finished"),
-    ("cancelled", "cancelled")
-)
-
-WIN_STATUS = (
-    ("won", "Won"),
-    ("lost", "Lost"),
-    ("pending", "pending")
-)
 
 OFFER_STATUS = (
     ("accepted", "Accepted"),
@@ -86,11 +61,6 @@ OFFER_STATUS = (
     ("pending", "Pending"),
 )
 
-PRODUCT_CONDITION = (
-    ("new", "New"),
-    ("old_2nd_hand", "“Used or 2nd Hand"),
-    ("custom", "Custom"),
-)
 
 PRODUCT_CONDITION_RATING = (
     (1, "1/10"),
@@ -111,16 +81,11 @@ DELIVERY_STATUS = (
     ("Shipping Processing", "Shipping Processing"),
     ("Shipped", "Shipped"),
     ("Arrived", "Arrived"),
-    ("Delivered", "Delivered"),
     ("Returning", 'Returning'),
     ("Returned", 'Returned'),
-)
-
-PAYMENT_METHOD = (
-    ("Paypal", "Paypal"),
-    ("Credit/Debit Card", "Credit/Debit Card"),
-    ("Wallet Points", "Wallet Points"),
-    
+    ("Awaiting Pickup", "Awaiting Pickup"),
+    ("In Transit", "In Transit"),
+    ("Delivered", "Delivered"),
 )
 
 
@@ -321,31 +286,39 @@ class ProductFaq(models.Model):
 
 # Model for Cart Orders
 class CartOrder(models.Model):
-    vendor = models.ManyToManyField(Vendor, blank=True)
-    buyer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="buyer", blank=True)
-    sub_total = models.DecimalField(default=0.00, max_digits=12, decimal_places=2)
-    shipping_amount = models.DecimalField(default=0.00, max_digits=12, decimal_places=2)
-    service_fee = models.DecimalField(default=0.00, max_digits=12, decimal_places=2)
-    total = models.DecimalField(default=0.00, max_digits=12, decimal_places=2)
+    vendor = models.ManyToManyField(Vendor, blank=True, help_text="Vendors associated with the cart order")
+    buyer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="buyer", blank=True, help_text="Buyer associated with the cart order")
+    sub_total = models.DecimalField(default=0.00, max_digits=12, decimal_places=2, help_text="Subtotal of the cart order")
+    shipping_amount = models.DecimalField(default=0.00, max_digits=12, decimal_places=2, help_text="Shipping amount for the cart order")
+    service_fee = models.DecimalField(default=0.00, max_digits=12, decimal_places=2, help_text="Service fee charged for the cart order")
+    total = models.DecimalField(default=0.00, max_digits=12, decimal_places=2, help_text="Total amount for the cart order")
+   
+    payment_status = models.CharField(max_length=100, choices=PAYMENT_STATUS, default="initiated", help_text="Payment status of the cart order")
 
-    payment_status = models.CharField(max_length=100, choices=PAYMENT_STATUS, default="initiated")
-    order_status = models.CharField(max_length=100, choices=ORDER_STATUS, default="Pending")
-    initial_total = models.DecimalField(default=0.00, max_digits=12, decimal_places=2, help_text="The original total before discounts")
+    order_status = models.CharField(max_length=100, choices=ORDER_STATUS, default="Pending", help_text="Order status of the cart order")
+
+    initial_total = models.DecimalField(default=0.00, max_digits=12, decimal_places=2, help_text="Original total before discounts")
     saved = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, null=True, blank=True, help_text="Amount saved by customer")
-    full_name = models.CharField(max_length=1000)
-    email = models.CharField(max_length=1000)
-    mobile = models.CharField(max_length=1000)
-    address = models.CharField(max_length=1000, null=True, blank=True)
-    city = models.CharField(max_length=1000, null=True, blank=True)
-    state = models.CharField(max_length=1000, null=True, blank=True)
-    country = models.CharField(max_length=1000, null=True, blank=True)
+    full_name = models.CharField(max_length=1000, help_text="Full name of the customer")
+    email = models.CharField(max_length=1000, help_text="Email address of the customer")
+    mobile = models.CharField(max_length=1000, help_text="Mobile number of the customer")
+    address = models.CharField(max_length=1000, null=True, blank=True, help_text="Address of the customer")
+    city = models.CharField(max_length=1000, null=True, blank=True, help_text="City of the customer")
+    state = models.CharField(max_length=1000, null=True, blank=True, help_text="State of the customer")
+    country = models.CharField(max_length=1000, null=True, blank=True, help_text="Country of the customer")
+   
+    coupons = models.ManyToManyField('store.Coupon', blank=True, help_text="Coupons applied to the cart order")
+   
+    stripe_session_id = models.CharField(max_length=200, null=True, blank=True, help_text="Stripe session ID for payment")
+   
+    oid = ShortUUIDField(length=10, max_length=25, alphabet="abcdefghijklmnopqrstuvxyz", help_text="Short UUID for the cart order")
+    date = models.DateTimeField(default=timezone.now, help_text="Date and time when the cart order was created")
+   
+    delivery_status = models.CharField(max_length=100, choices=DELIVERY_STATUS, default='On Hold', help_text="Delivery status of the cart order")
+    tracking_id = models.CharField(max_length=100, null=True, blank=True, help_text="Tracking ID for shipment")
+    expected_delivery_date_from = models.DateField(null=True, blank=True, help_text="Expected delivery date from")
+    expected_delivery_date_to = models.DateField(null=True, blank=True, help_text="Expected delivery date to")
 
-    coupons = models.ManyToManyField('store.Coupon', blank=True)
-    
-    stripe_session_id = models.CharField(max_length=200,null=True, blank=True)
-    oid = ShortUUIDField(length=10, max_length=25, alphabet="abcdefghijklmnopqrstuvxyz")
-    date = models.DateTimeField(default=timezone.now)
-    
     class Meta:
         ordering = ["-date"]
         verbose_name_plural = "Cart Order"
@@ -359,40 +332,42 @@ class CartOrder(models.Model):
 
 # Define a model for Cart Order Item
 class CartOrderItem(models.Model):
-    order = models.ForeignKey(CartOrder, on_delete=models.CASCADE, related_name="orderitem")
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="order_item")
-    qty = models.IntegerField(default=0)
-    color = models.CharField(max_length=100, null=True, blank=True)
-    size = models.CharField(max_length=100, null=True, blank=True)
-    price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    order = models.ForeignKey(CartOrder, on_delete=models.CASCADE, related_name="orderitem", help_text="Cart order associated with the order item")
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="order_item", help_text="Product associated with the order item")
+    qty = models.IntegerField(default=0, help_text="Quantity of the product in the order item")
+    color = models.CharField(max_length=100, null=True, blank=True, help_text="Color of the product in the order item")
+    size = models.CharField(max_length=100, null=True, blank=True, help_text="Size of the product in the order item")
+    price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="Price of the product in the order item")
     sub_total = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="Total of Product price * Product Qty")
     shipping_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="Estimated Shipping Fee = shipping_fee * total")
     service_fee = models.DecimalField(default=0.00, max_digits=12, decimal_places=2, help_text="Estimated Service Fee = service_fee * total (paid by buyer to platform)")
-    total = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="Grand Total of all amount listed above")
+    total = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="Grand Total of all amounts listed above")
     
-    expected_delivery_date_from = models.DateField(auto_now_add=False, null=True, blank=True)
-    expected_delivery_date_to = models.DateField(auto_now_add=False, null=True, blank=True)
-
-
-    initial_total = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="Grand Total of all amount listed above before discount")
+    expected_delivery_date_from = models.DateField(auto_now_add=False, null=True, blank=True, help_text="Expected delivery date from")
+    expected_delivery_date_to = models.DateField(auto_now_add=False, null=True, blank=True, help_text="Expected delivery date to")
+    
+    initial_total = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="Grand Total of all amounts listed above before discount")
     saved = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, null=True, blank=True, help_text="Amount saved by customer")
     
-    order_placed = models.BooleanField(default=False)
-    processing_order = models.BooleanField(default=False)
-    quality_check = models.BooleanField(default=False)
-    product_shipped = models.BooleanField(default=False)
-    product_arrived = models.BooleanField(default=False)
-    product_delivered = models.BooleanField(default=False)
-
-    delivery_status = models.CharField(max_length=100, choices=DELIVERY_STATUS, default="On Hold")
-    delivery_couriers = models.ForeignKey("store.DeliveryCouriers", on_delete=models.SET_NULL, null=True, blank=True)
-    tracking_id = models.CharField(max_length=100000, null=True, blank=True)
+    order_placed = models.BooleanField(default=False, help_text="Whether the order has been placed")
+    processing_order = models.BooleanField(default=False, help_text="Whether the order is being processed")
+    quality_check = models.BooleanField(default=False, help_text="Whether the product is under quality check")
+    product_shipped = models.BooleanField(default=False, help_text="Whether the product has been shipped")
+    product_arrived = models.BooleanField(default=False, help_text="Whether the product has arrived at the destination")
     
-    coupon = models.ManyToManyField("store.Coupon", blank=True)
-    applied_coupon = models.BooleanField(default=False)
-    oid = ShortUUIDField(length=10, max_length=25, alphabet="abcdefghijklmnopqrstuvxyz")
-    vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True)
-    date = models.DateTimeField(default=timezone.now)
+    product_delivered = models.BooleanField(default=False, help_text="Whether the product has been delivered")
+    delivery_status = models.CharField(max_length=100, choices=DELIVERY_STATUS, default="On Hold", help_text="Delivery status of the order item")
+    delivery_couriers = models.ForeignKey('store.DeliveryCouriers', on_delete=models.SET_NULL, null=True, blank=True, help_text="Courier service used for delivery")
+    tracking_id = models.CharField(max_length=100000, null=True, blank=True, help_text="Tracking ID for shipment")
+    
+    coupon = models.ManyToManyField('store.Coupon', blank=True, help_text="Coupons applied to the order item")
+    applied_coupon = models.BooleanField(default=False, help_text="Whether a coupon has been applied to the order item")
+    oid = ShortUUIDField(length=10, max_length=25, alphabet="abcdefghijklmnopqrstuvxyz", help_text="Short UUID for the order item")
+    vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, help_text="Vendor associated with the order item")
+    date = models.DateTimeField(default=timezone.now, help_text="Date and time when the order item was created")
+    production_status = models.CharField(max_length=100, choices=[('Pending', 'Pending'), ('Accepted', 'Accepted'), ('Processing', 'Processing'), ('Completed', 'Completed')], default='Pending', help_text="Production status of the order item")
+    due_date = models.DateField(null=True, blank=True, help_text="Due date for completion of production")
+
     
     class Meta:
         verbose_name_plural = "Cart Order Item"

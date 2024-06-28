@@ -3,16 +3,17 @@ from django.db import models
 from django.db import transaction
 from django.contrib.auth import get_user_model
 from django.db.models.functions import ExtractMonth
+from django.shortcuts import get_object_or_404, redirect
 from django.db.models import Avg
 # Restframework Packages
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.decorators import api_view
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.views import APIView
 
 # Serializers
 from userauths.serializer import  ProfileSerializer
@@ -28,6 +29,35 @@ from datetime import datetime, timedelta
 
 
 User = get_user_model()
+
+
+
+
+class VendorAcceptOrderView(APIView):
+    def post(self, request, order_item_id, *args, **kwargs):
+        order_item = get_object_or_404(CartOrderItem, id=order_item_id)
+        if order_item.production_status == 'Pending':
+            order_item.production_status = 'Accepted'
+            order_item.save()
+            return Response({"message": "Order accepted"}, status=status.HTTP_200_OK)
+        return Response({"message": "Order already accepted"}, status=status.HTTP_400_BAD_REQUEST)
+
+class VendorCompleteOrderView(APIView):
+    def post(self, request, order_item_id, *args, **kwargs):
+        order_item = get_object_or_404(CartOrderItem, id=order_item_id)
+        if order_item.production_status == 'Accepted':
+            order_item.production_status = 'Completed'
+            order_item.save()
+            return Response({"message": "Order completed"}, status=status.HTTP_200_OK)
+        return Response({"message": "Order not accepted or already completed"}, status=status.HTTP_400_BAD_REQUEST)
+
+class VendorOrderNotificationView(APIView):
+    def get(self, request, vendor_id, *args, **kwargs):
+        notifications = Notification.objects.filter(vendor_id=vendor_id)
+        serializer = NotificationSerializer(notifications, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
 
 class DashboardStatsAPIView(generics.ListAPIView):
     serializer_class = SummarySerializer
