@@ -44,7 +44,7 @@ urlpatterns = [
     # API V1 Urls
     path("", include("api.urls")),
     path("", include("checkout.urls")),
-    # path("", include("createOrder.urls")),
+    path("", include("createOrder.urls")),
     path("", include("customer.urls")),
     path("", include("ShopCart.urls")),
     path("", include("store.urls")),

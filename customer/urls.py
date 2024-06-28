@@ -36,3 +36,8 @@ urlpatterns = [
     path('client/shipping-address/<int:pk>/', customer_views.ShippingAddressDetailView.as_view(), name='shipping-address-detail'),
 ]
 
+
+
+
+
+

@@ -14,7 +14,7 @@ from rest_framework import generics, status
 
 # Serializers
 from store.serializers import  CartOrderSerializer
-from ..checkout.utils import calculate_shipping_amount, calculate_service_fee
+from checkout.utils import calculate_shipping_amount, calculate_service_fee
 from decimal import Decimal
 
 # Models

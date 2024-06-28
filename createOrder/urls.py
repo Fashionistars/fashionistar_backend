@@ -1,6 +1,6 @@
 from django.urls import path
 
-from createOrder import views as create_order
+from createOrder import order as create_order
 
 
 
