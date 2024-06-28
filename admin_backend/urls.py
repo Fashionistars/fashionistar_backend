@@ -5,7 +5,7 @@ from admin_backend import views as admin_backend
 
 
 # Oders Profit
-from admin_backend import orders as arder_profits
+from admin_backend import order_view as order_profits
 
 # Delivery Status
 from admin_backend import delivery as deliverystatus
@@ -25,8 +25,8 @@ urlpatterns = [
     path('', include(router.urls)),
 
     
-    path('admin/orders/', arder_profits.AdminOrderListView.as_view(), name='admin-orders'),
-    path('admin/profit/', arder_profits.AdminProfitView.as_view(), name='admin-profit'),
+    path('admin/orders/', order_profits.AdminOrderListView.as_view(), name='admin-orders'),
+    path('admin/profit/', order_profits.AdminProfitView.as_view(), name='admin-profit'),
 
     
     # delivery and order tracking to be paid attention to later
