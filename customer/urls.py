@@ -19,10 +19,16 @@ urlpatterns = [
     path('client/order/detail/<user_id>/<order_oid>/', customer_views.OrdersDetailAPIView.as_view(), name='customer-order-detail'),
     path('client/wishlist/create/', customer_views.WishlistCreateAPIView.as_view(), name='customer-wishlist-create'),
     path('client/wishlist/<user_id>/', customer_views.WishlistAPIView.as_view(), name='customer-wishlist'),
-    path('client/notification/<user_id>/', customer_views.CustomerNotificationView.as_view(), name='customer-notification'),
     path('client/setting/<int:pk>/', customer_views.CustomerUpdateView.as_view(), name='customer-settings'),
 
     
+    # Client Notifications API Endpoints
+    path('client/notifications-unseen/<user_id>/', customer_views.ClientNotificationUnSeenListAPIView.as_view(), name='client-notifications-unseen'),
+    path('client/notifications-seen/<user_id>/', customer_views.ClientNotificationSeenListAPIView.as_view(), name='client-notifications-seen'),
+    path('client/notifications-summary/<user_id>/', customer_views.ClientNotificationSummaryAPIView.as_view(), name='client-notifications-summary'),
+    path('client/notifications-mark-as-seen/<user_id>/<noti_id>/', customer_views.ClientNotificationMarkAsSeen.as_view(), name='client-notifications-mark-as-seen'),
+
+
     # delivery and order tracking to be paid attention to later
     path('client/order/tracking/<int:order_id>/', customer_views.OrderTrackingView.as_view(), name='order-tracking'),
 

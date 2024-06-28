@@ -1,28 +1,16 @@
 # Django Packages
-from django.shortcuts import get_object_or_404, redirect
-from django.db import transaction
-from django.conf import settings
-from django.core.mail import EmailMultiAlternatives
-from django.template.loader import render_to_string
-from django.core.exceptions import ObjectDoesNotExist
 
 # Restframework Packages
-from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.exceptions import PermissionDenied
-from rest_framework.exceptions import ValidationError, NotFound, APIException
+from rest_framework.permissions import AllowAny
 from rest_framework import generics, status
 
 # Serializers
 from store.serializers import  ProductSerializer,  CartOrderSerializer, ReviewSerializer, ConfigSettingsSerializer
-from customer.serializers import DeliveryContactSerializer, ShippingAddressSerializer
-from ShopCart.serializers import CartSerializer
-from decimal import Decimal
 
 # Models
-from userauths.models import User, Profile
-from store.models import CartOrderItem,  Notification, Product, CartOrder,  Review, Coupon
+from userauths.models import User
+from store.models import CartOrderItem, Product, CartOrder,  Review, Coupon
 from addon.models import ConfigSettings
 
 # Others Packages
@@ -47,7 +35,7 @@ class SearchProductsAPIView(generics.ListAPIView):
 
 
 
-       
+
 
 class ConfigSettingsDetailView(generics.RetrieveAPIView):
     serializer_class = ConfigSettingsSerializer

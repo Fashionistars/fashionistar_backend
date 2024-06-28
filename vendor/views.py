@@ -17,11 +17,11 @@ from rest_framework.views import APIView
 
 # Serializers
 from userauths.serializer import  ProfileSerializer
-from store.serializers import  CouponSummarySerializer, EarningSummarySerializer, NotificationSerializer,  NotificationSummarySerializer, SummarySerializer, CartOrderItemSerializer, ProductSerializer, CartOrderSerializer, GallerySerializer, ReviewSerializer,  SpecificationSerializer, CouponSerializer, ColorSerializer, SizeSerializer, VendorSerializer
+from store.serializers import  CouponSummarySerializer, EarningSummarySerializer,SummarySerializer, CartOrderItemSerializer, ProductSerializer, CartOrderSerializer, GallerySerializer, ReviewSerializer,  SpecificationSerializer, CouponSerializer, ColorSerializer, SizeSerializer, VendorSerializer
 
 # Models
 from userauths.models import Profile
-from store.models import Notification, CartOrderItem,  Product,  CartOrder,  Review, Coupon
+from store.models import CartOrderItem,  Product,  CartOrder,  Review, Coupon
 from vendor.models import Vendor
 
 # Others Packages
@@ -32,30 +32,6 @@ User = get_user_model()
 
 
 
-
-class VendorAcceptOrderView(APIView):
-    def post(self, request, order_item_id, *args, **kwargs):
-        order_item = get_object_or_404(CartOrderItem, id=order_item_id)
-        if order_item.production_status == 'Pending':
-            order_item.production_status = 'Accepted'
-            order_item.save()
-            return Response({"message": "Order accepted"}, status=status.HTTP_200_OK)
-        return Response({"message": "Order already accepted"}, status=status.HTTP_400_BAD_REQUEST)
-
-class VendorCompleteOrderView(APIView):
-    def post(self, request, order_item_id, *args, **kwargs):
-        order_item = get_object_or_404(CartOrderItem, id=order_item_id)
-        if order_item.production_status == 'Accepted':
-            order_item.production_status = 'Completed'
-            order_item.save()
-            return Response({"message": "Order completed"}, status=status.HTTP_200_OK)
-        return Response({"message": "Order not accepted or already completed"}, status=status.HTTP_400_BAD_REQUEST)
-
-class VendorOrderNotificationView(APIView):
-    def get(self, request, vendor_id, *args, **kwargs):
-        notifications = Notification.objects.filter(vendor_id=vendor_id)
-        serializer = NotificationSerializer(notifications, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 
@@ -561,64 +537,6 @@ class CouponStats(generics.ListAPIView):
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
-
-class NotificationUnSeenListAPIView(generics.ListAPIView):
-    serializer_class = NotificationSerializer
-    queryset = Notification.objects.all()
-    permission_classes = (AllowAny, )
-
-    def get_queryset(self):
-        vendor_id = self.kwargs['vendor_id']
-        vendor = Vendor.objects.get(id=vendor_id)
-        notifications = Notification.objects.filter(vendor=vendor, seen=False).order_by('seen')
-        return notifications
-    
-class NotificationSeenListAPIView(generics.ListAPIView):
-    serializer_class = NotificationSerializer
-    queryset = Notification.objects.all()
-    permission_classes = (AllowAny, )
-
-    def get_queryset(self):
-        vendor_id = self.kwargs['vendor_id']
-        vendor = Vendor.objects.get(id=vendor_id)
-        notifications = Notification.objects.filter(vendor=vendor, seen=True).order_by('seen')
-        return notifications
-    
-class NotificationSummaryAPIView(generics.ListAPIView):
-    serializer_class = NotificationSummarySerializer
-
-    def get_queryset(self):
-        vendor_id = self.kwargs['vendor_id']
-        vendor = Vendor.objects.get(id=vendor_id)
-
-        un_read_noti = Notification.objects.filter(vendor=vendor, seen=False).count()
-        read_noti = Notification.objects.filter(vendor=vendor, seen=True).count()
-        all_noti = Notification.objects.filter(vendor=vendor).count()
-
-        return [{
-            'un_read_noti': un_read_noti,
-            'read_noti': read_noti,
-            'all_noti': all_noti,
-        }]
-
-    def list(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
-
-    
-class NotificationMarkAsSeen(generics.RetrieveUpdateAPIView):
-    serializer_class = NotificationSerializer
-    permission_classes = (AllowAny, )
-
-    def get_object(self):
-        vendor_id = self.kwargs['vendor_id']
-        noti_id = self.kwargs['noti_id']
-        vendor = Vendor.objects.get(id=vendor_id)
-        notification = Notification.objects.get(vendor=vendor, id=noti_id)
-        notification.seen = True
-        notification.save()
-        return notification
 
 
 class VendorProfileUpdateView(generics.RetrieveUpdateAPIView):

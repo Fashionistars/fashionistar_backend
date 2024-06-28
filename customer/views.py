@@ -11,14 +11,16 @@ from rest_framework.views import APIView
 from rest_framework import status
 
 # Serializers
+from notification.models import Notification
+from notification.serializer import NotificationSerializer, NotificationSummarySerializer
 from userauths.serializer import ProfileSerializer
-from store.serializers import NotificationSerializer,  CartOrderSerializer, WishlistSerializer
+from store.serializers import  CartOrderSerializer, WishlistSerializer
 from customer.serializers import SetTransactionPasswordSerializer, ValidateTransactionPasswordSerializer
 from customer.serializers import DeliveryContactSerializer, ShippingAddressSerializer
 
 # Models
 from userauths.models import Profile, User 
-from store.models import Notification,   Product, CartOrder, Wishlist
+from store.models import  Product, CartOrder, Wishlist
 from customer.models import DeliveryContact, ShippingAddress
 
 # Others Packages
@@ -179,15 +181,6 @@ class WishlistAPIView(generics.ListAPIView):
         return wishlist
     
 
-class CustomerNotificationView(generics.ListAPIView):
-    serializer_class = NotificationSerializer
-    permission_classes = (AllowAny, )
-
-    def get_queryset(self):
-        user_id = self.kwargs['user_id']
-        user = User.objects.get(id=user_id)
-        return Notification.objects.filter(user=user)
-
 
 class CustomerUpdateView(generics.RetrieveUpdateAPIView):
     queryset = Profile.objects.all()
@@ -204,6 +197,114 @@ class OrderTrackingView(APIView):
         order = get_object_or_404(CartOrder, id=order_id)
         serializer = CartOrderSerializer(order)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+
+
+
+class ClientNotificationUnSeenListAPIView(generics.ListAPIView):
+    """
+    Retrieve a list of unseen notifications for a specific user.
+
+    Args:
+        user_id (int): The ID of the user whose unseen notifications are to be retrieved.
+
+    Returns:
+        Response: A list of unseen notifications serialized in JSON format.
+
+    Raises:
+        404: If the user does not exist.
+    """
+    serializer_class = NotificationSerializer
+    permission_classes = (AllowAny, )
+
+    def get_queryset(self):
+        user_id = self.kwargs['user_id']
+        user = User.objects.get(id=user_id)
+        notifications = Notification.objects.filter(user=user, seen=False).order_by('date')
+        return notifications
+
+class ClientNotificationSeenListAPIView(generics.ListAPIView):
+    """
+    Retrieve a list of seen notifications for a specific user.
+
+    Args:
+        user_id (int): The ID of the user whose seen notifications are to be retrieved.
+
+    Returns:
+        Response: A list of seen notifications serialized in JSON format.
+
+    Raises:
+        404: If the user does not exist.
+    """
+    serializer_class = NotificationSerializer
+    permission_classes = (AllowAny, )
+
+    def get_queryset(self):
+        user_id = self.kwargs['user_id']
+        user = User.objects.get(id=user_id)
+        notifications = Notification.objects.filter(user=user, seen=True).order_by('date')
+        return notifications
+
+class ClientNotificationSummaryAPIView(generics.ListAPIView):
+    """
+    Retrieve a summary of notifications for a specific user, including counts of unseen, seen, and all notifications.
+
+    Args:
+        user_id (int): The ID of the user whose notification summary is to be retrieved.
+
+    Returns:
+        Response: A summary of notifications serialized in JSON format.
+
+    Raises:
+        404: If the user does not exist.
+    """
+    serializer_class = NotificationSummarySerializer
+
+    def get_queryset(self):
+        user_id = self.kwargs['user_id']
+        user = User.objects.get(id=user_id)
+        
+        un_read_noti = Notification.objects.filter(user=user, seen=False).count()
+        read_noti = Notification.objects.filter(user=user, seen=True).count()
+        all_noti = Notification.objects.filter(user=user).count()
+
+        return [{
+            'un_read_noti': un_read_noti,
+            'read_noti': read_noti,
+            'all_noti': all_noti,
+        }]
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+class ClientNotificationMarkAsSeen(generics.RetrieveUpdateAPIView):
+    """
+    Mark a specific notification as seen for a specific user.
+
+    Args:
+        user_id (int): The ID of the user.
+        noti_id (int): The ID of the notification to be marked as seen.
+
+    Returns:
+        Response: The updated notification serialized in JSON format.
+
+    Raises:
+        404: If the user or notification does not exist.
+    """
+    serializer_class = NotificationSerializer
+    permission_classes = (AllowAny, )
+
+    def get_object(self):
+        user_id = self.kwargs['user_id']
+        noti_id = self.kwargs['noti_id']
+        user = User.objects.get(id=user_id)
+        notification = Notification.objects.get(user=user, id=noti_id)
+        notification.seen = True
+        notification.save()
+        return notification
 
 
 

@@ -1,8 +1,6 @@
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework import serializers
-from rest_framework.validators import UniqueValidator
 
-from store.models import CancelledOrder, CartOrderItem, Notification, CouponUsers, Product, Tag , DeliveryCouriers, CartOrder, Gallery, ProductFaq, Review,  Specification, Coupon, Color, Size, Address, Wishlist, Vendor
+from store.models import CartOrderItem, CouponUsers, Product, Tag , DeliveryCouriers, CartOrder, Gallery, ProductFaq, Review,  Specification, Coupon, Color, Size,  Wishlist, Vendor
 from addon.models import ConfigSettings
 from store.models import Gallery
 from userauths.serializer import ProfileSerializer, UserSerializer
@@ -203,41 +201,7 @@ class WishlistSerializer(serializers.ModelSerializer):
             # For other methods, set serialization depth to 3.
             self.Meta.depth = 3
 
-# Define a serializer for the Address model
-class AddressSerializer(serializers.ModelSerializer):
 
-    class Meta:
-        model = Address
-        fields = '__all__'
-
-    def __init__(self, *args, **kwargs):
-        super(AddressSerializer, self).__init__(*args, **kwargs)
-        # Customize serialization depth based on the request method.
-        request = self.context.get('request')
-        if request and request.method == 'POST':
-            # When creating a new address, set serialization depth to 0.
-            self.Meta.depth = 0
-        else:
-            # For other methods, set serialization depth to 3.
-            self.Meta.depth = 3
-
-# Define a serializer for the CancelledOrder model
-class CancelledOrderSerializer(serializers.ModelSerializer):
-
-    class Meta:
-        model = CancelledOrder
-        fields = '__all__'
-
-    def __init__(self, *args, **kwargs):
-        super(CancelledOrderSerializer, self).__init__(*args, **kwargs)
-        # Customize serialization depth based on the request method.
-        request = self.context.get('request')
-        if request and request.method == 'POST':
-            # When creating a new cancelled order, set serialization depth to 0.
-            self.Meta.depth = 0
-        else:
-            # For other methods, set serialization depth to 3.
-            self.Meta.depth = 3
 
 # Define a serializer for the Coupon model
 class CouponSerializer(serializers.ModelSerializer):
@@ -285,23 +249,6 @@ class DeliveryCouriersSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class NotificationSerializer(serializers.ModelSerializer):
-
-    class Meta:
-        model = Notification
-        fields = '__all__'
-
-    def __init__(self, *args, **kwargs):
-        super(NotificationSerializer, self).__init__(*args, **kwargs)
-        # Customize serialization depth based on the request method.
-        request = self.context.get('request')
-        if request and request.method == 'POST':
-            # When creating a new coupon user, set serialization depth to 0.
-            self.Meta.depth = 0
-        else:
-            # For other methods, set serialization depth to 3.
-            self.Meta.depth = 3
-
 
 class SummarySerializer(serializers.Serializer):
     products = serializers.IntegerField()
@@ -318,9 +265,3 @@ class EarningSummarySerializer(serializers.Serializer):
 class CouponSummarySerializer(serializers.Serializer):
     total_coupons = serializers.IntegerField(default=0)
     active_coupons = serializers.IntegerField(default=0)
-
-
-class NotificationSummarySerializer(serializers.Serializer):
-    un_read_noti = serializers.IntegerField(default=0)
-    read_noti = serializers.IntegerField(default=0)
-    all_noti = serializers.IntegerField(default=0)

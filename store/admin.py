@@ -1,5 +1,5 @@
 from django.contrib import admin
-from store.models import CartOrderItem, CouponUsers, Notification, Product, Tag,  DeliveryCouriers, CartOrder, Gallery, ProductFaq, Review,  Specification, Coupon, Color, Size, Address, Wishlist
+from store.models import CartOrderItem, CouponUsers, Product, Tag,  DeliveryCouriers, CartOrder, Gallery, ProductFaq, Review,  Specification, Coupon, Color, Size, Wishlist
 from import_export.admin import ImportExportModelAdmin
 from django import forms
 from store.models import Vendor
@@ -95,18 +95,9 @@ class ProductReviewAdmin(ImportExportModelAdmin):
     list_display = ['user', 'product', 'review', 'reply' ,'rating', 'active']
 
 
-class AddressAdmin(ImportExportModelAdmin):
-    list_editable = ['status']
-    list_display = ['user', 'full_name', 'status']
-
 class DeliveryCouriersAdmin(ImportExportModelAdmin):
     list_editable = ['couriers_tracking_website_address', 'url_parameter']
     list_display = ['couriers_name', 'couriers_tracking_website_address', 'url_parameter']
-
-class NotificationAdmin(ImportExportModelAdmin):
-    list_editable = ['seen']
-    list_display = ['order', 'seen', 'user', 'vendor', 'date']
-
 
 admin.site.register(Review, ProductReviewAdmin)
 admin.site.register(Product, ProductAdmin)
@@ -115,9 +106,7 @@ admin.site.register(CartOrder, CartOrderAdmin)
 admin.site.register(CartOrderItem, CartOrderItemsAdmin)
 admin.site.register(ProductFaq, ProductFaqAdmin)
 admin.site.register(Coupon, CouponAdmin)
-admin.site.register(Address, AddressAdmin)
 admin.site.register(Wishlist)
-admin.site.register(Notification, NotificationAdmin)
 admin.site.register(DeliveryCouriers, DeliveryCouriersAdmin)
 # admin.site.register(Size )
 # admin.site.register(Color )

@@ -1,0 +1,37 @@
+"""
+Frontend Workflow for Cancelling an Order:
+1. User clicks on the 'Cancel Order' button.
+2. The frontend sends a POST request to the `/cancel-order/` endpoint with the following payload:
+    {
+        "order_oid": "Order OID",
+        "reason": "Reason for cancellation"
+    }
+3. The backend checks if the request is from the user or vendor:
+    a. If from the user, it validates the 24-hour window.
+    b. If from the vendor, it processes the cancellation directly.
+4. The backend cancels the order and order items, refunds the buyer, and notifies the vendor.
+5. The backend sends cancellation emails to both the buyer and the vendor.
+
+Example of handling the response in JavaScript:
+
+fetch('/cancel-order/', {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+    },
+    body: JSON.stringify({
+        order_oid: 'Order OID',
+        reason: 'Reason for cancellation'
+    })
+})
+.then(response => response.json())
+.then(data => {
+    if (data.message) {
+        alert(data.message);
+    }
+})
+.catch(error => {
+    console.error('Error:', error);
+});
+"""

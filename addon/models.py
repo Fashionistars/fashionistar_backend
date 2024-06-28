@@ -4,6 +4,26 @@ from django.utils.html import mark_safe
 from django.utils.text import slugify
 
 
+
+IDENTITY_TYPE = (
+    ("national_id_card", "National ID Card"),
+    ("drivers_licence", "Drives Licence"),
+    ("international_passport", "International Passport")
+)
+
+GENDER = (
+    ("male", "Male"),
+    ("female", "Female"),
+)
+
+CURRENCY = (
+    ("USD", "USD"),
+    ("EUR", "EUR"),
+    ("GBP", "GBP"),
+)
+
+
+
 # ======================   tax columns from cartorder and cartorderitems models    =======================
 
     # tax_fee = models.DecimalField(default=0.00, max_digits=12, decimal_places=2, help_text="Estimated Vat based on delivery country = tax_rate * (total + shipping)")

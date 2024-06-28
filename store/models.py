@@ -436,64 +436,7 @@ class Wishlist(models.Model):
             return self.product.title
         else:
             return "Wishlist"
-        
-class Notification(models.Model):
-    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
-    vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, blank=True)
-    order = models.ForeignKey(CartOrder, on_delete=models.SET_NULL, null=True, blank=True)
-    order_item = models.ForeignKey(CartOrderItem, on_delete=models.SET_NULL, null=True, blank=True)
-    seen = models.BooleanField(default=False)
-    date = models.DateTimeField(auto_now_add=True)
-    
-    class Meta:
-        verbose_name_plural = "Notification"
-    
-    # Method to return a string representation of the object
-    def __str__(self):
-        if self.order:
-            return self.order.oid
-        else:
-            return "Notification"
-
-# Define a model for Address
-class Address(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
-    full_name = models.CharField(max_length=200)
-    mobile = models.CharField(max_length=50)
-    email = models.CharField(max_length=100)
-    country = models.ForeignKey("addon.Tax", on_delete=models.SET_NULL, null=True, related_name="address_country", blank=True)
-    state = models.CharField(max_length=100)
-    town_city = models.CharField(max_length=100)
-    address = models.CharField(max_length=100)
-    zip = models.CharField(max_length=100)
-    status = models.BooleanField(default=False)
-    same_as_billing_address = models.BooleanField(default=False)
-    
-    class Meta:
-        verbose_name_plural = "Address"
-    
-    # Method to return a string representation of the object
-    def __str__(self):
-        if self.user:
-            return self.user.username
-        else:
-            return "Address"
-
-# Define a model for Cancelled Order
-class CancelledOrder(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
-    orderitem = models.ForeignKey("store.CartOrderItem", on_delete=models.SET_NULL, null=True)
-    email = models.CharField(max_length=100)
-    refunded = models.BooleanField(default=False)
-    
-    class Meta:
-        verbose_name_plural = "Cancelled Order"
-    
-    def __str__(self):
-        if self.user:
-            return str(self.user.username)
-        else:
-            return "Cancelled Order"
+ 
 
 class Coupon(models.Model):
     vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, related_name="coupon_vendor")

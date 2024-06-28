@@ -19,7 +19,7 @@ from decimal import Decimal
 
 # Models
 from userauths.models import User, Profile
-from store.models import CartOrderItem,  Notification, Product, CartOrder,  Review, Coupon
+from store.models import CartOrderItem, Product, CartOrder,  Review, Coupon
 from addon.models import ConfigSettings
 from ShopCart.models import Cart
 from customer.models import DeliveryContact, ShippingAddress
@@ -28,7 +28,7 @@ from customer.models import DeliveryContact, ShippingAddress
 from decimal import Decimal
 
 # Utils
-from createOrder.utils import send_notification
+from notification.utils import send_notification
 
 
 

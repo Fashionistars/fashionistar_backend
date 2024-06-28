@@ -65,7 +65,8 @@ INSTALLED_APPS = [
     'admin_backend',
     'ShopCart',
     'checkout',
-    # 'createOrder',
+    'notification',
+    'createOrder',
 
 
     # Third Party Apps
