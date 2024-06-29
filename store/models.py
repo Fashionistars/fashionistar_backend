@@ -101,13 +101,9 @@ RATING = (
 
 # Model for Tags
 class Tag(models.Model):
-    # Tag title
     title = models.CharField(max_length=30)
-    # Category associated with the tag
     category = models.ForeignKey('admin_backend.Category', default="", verbose_name="Category", on_delete=models.PROTECT)
-    # Is the tag active?
     active = models.BooleanField(default=True)
-    # Unique slug for SEO-friendly URLs
     slug = models.SlugField("Tag slug", max_length=30, null=False, blank=False, unique=True)
 
     def __str__(self):
