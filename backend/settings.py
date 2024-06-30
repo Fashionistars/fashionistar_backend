@@ -67,6 +67,7 @@ INSTALLED_APPS = [
     'checkout',
     'notification',
     'createOrder',
+    'transaction',
 
 
     # Third Party Apps
@@ -77,6 +78,7 @@ INSTALLED_APPS = [
     'anymail',
     'storages',
     'phone_verify',
+    
 ]
 
 MIDDLEWARE = [
