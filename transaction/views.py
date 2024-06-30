@@ -4,6 +4,8 @@ import os
 from rave_python import Rave
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+
+from ShopCart.models import Cart
 from .serializers import PaymentSerializer
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -16,6 +18,13 @@ from transaction.models import Payment
 from django.conf import settings
 
 from store.models import *
+
+from environs import Env
+import os
+
+
+env = Env()
+env.read_env()
 
 
 class InitiatePayment(APIView):
@@ -34,7 +43,7 @@ class InitiatePayment(APIView):
 
         # Replace these with your actual Flutterwave details
         flutterwave_url = "https://api.flutterwave.com/v3/payments"
-        secret_key = "FLUTTERWAVE_SECRET_KEY"  #"your_flutterwave_secret_key_here"
+        secret_key = env("FLUTTERWAVE_SECRET_KEY")  #"your_flutterwave_secret_key_here"
 
         payload = {
             "tx_ref": reference,

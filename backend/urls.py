@@ -43,7 +43,7 @@ urlpatterns = [
     
     # API V1 Urls
     path("", include("api.urls")),
-    path('payment-gateway', include('transaction.urls')),
+    path('transaction/', include('transaction.urls')),
     # Admin URL
     path('admin/', admin.site.urls),
     path("auth/", include("userauths.urls")),
