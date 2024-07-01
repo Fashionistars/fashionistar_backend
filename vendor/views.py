@@ -582,7 +582,11 @@ class VendorRegister(generics.CreateAPIView):
 
     def create(self, request, *args, **kwargs):
         payload = request.data
-
+        image = payload.get('image')
+        
+        if image is None:
+            return Response({'error': 'Image is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
         image = payload['image']
         name = payload['name']
         email = payload['email']

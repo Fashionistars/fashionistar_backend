@@ -10,6 +10,7 @@ from rest_framework import generics, status
 
 from store.models import *
 from store.serializers import *
+from admin_backend.serializers import *
  
 
 from decimal import Decimal
@@ -37,6 +38,8 @@ class AdminOrderListView(generics.ListAPIView):
 
 class AdminProfitView(generics.RetrieveAPIView):
     permission_classes = [IsAuthenticated]
+    serializer_class = AdminProfitSerializer
+
 
     def get(self, request, *args, **kwargs):
         """
