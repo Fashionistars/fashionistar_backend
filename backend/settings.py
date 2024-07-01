@@ -63,15 +63,12 @@ INSTALLED_APPS = [
     'addon',
     'api',
     'admin_backend',
-<<<<<<< HEAD
     'ShopCart',
     'checkout',
     'notification',
     'createOrder',
-
-=======
     'transaction',
->>>>>>> 44c6635 (update transanctions app)
+
 
     # Third Party Apps
     'rest_framework',
@@ -81,6 +78,7 @@ INSTALLED_APPS = [
     'anymail',
     'storages',
     'phone_verify',
+    
 ]
 
 MIDDLEWARE = [
