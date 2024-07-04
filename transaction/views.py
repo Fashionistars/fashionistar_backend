@@ -21,13 +21,19 @@ from store.models import *
 
 from environs import Env
 import os
+import logging
+from django.conf import settings
+from rave_python import Rave, RaveExceptions, Misc
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 from rave_python import Rave
 
 env = Env()
 env.read_env()
 
-rave = Rave(publicKey="FLWPUBK_TEST-c842b7e99eac75a0c758a4f48fd772e3-X", secretKey="FLWSECK_TEST-4ae0af268a7e86d4014333e7e6a72d78-X", usingEnv=False)
+rave = Rave(publicKey="", usingEnv=False)
 
 
 # class InitiatePayment(APIView):
@@ -132,7 +138,7 @@ class InitiateNewPayment(APIView):
 
         # Replace these with your actual Flutterwave details
         flutterwave_url = "https://api.flutterwave.com/v3/payments"
-        secret_key = "FLWSECK_TEST-4ae0af268a7e86d4014333e7e6a72d78-X"  #"your_flutterwave_secret_key_here"
+        secret_key = ""  #"your_flutterwave_secret_key_here"
 
         payload = {
             "tx_ref": reference,
@@ -144,7 +150,11 @@ class InitiateNewPayment(APIView):
             "expiryyear": expiry_year,
             "redirect_url": "http://127.0.0.1:8000/payment/callback",#(Note this url must be hosted)  # Replace with your callback URL
             "payment_type": "card",
-            "email": email
+            "email": email,
+            "authorization": {
+                "mode": "pin", 
+                "pin": "3310"
+                }
             }
 
         headers = {
@@ -156,21 +166,32 @@ class InitiateNewPayment(APIView):
             payment = Payment(user=user, total_amount=amount, reference=reference, status="pending")
             payment.save()
             
+            logger.debug("Payload: %s", payload)
+            logger.debug("Headers: %s", headers)
+            
+            rave = Rave( publicKey="", usingEnv=False,production=False)
             
             response = rave.Card.charge(payload)
-            print(response)
-            response = requests.post(flutterwave_url, json=payload, headers=headers)
-            response_data = response.json()
-            return Response(response_data, status=status.HTTP_200_OK)
+            logger.debug("Response: %s", response)
+            
+            # Handle response and update payment status accordingly
+            if response["error"]:
+                payment.status = "failed"
+                payment.save()
+                logger.error("Payment failed: %s", response)
+                return Response({"error": "Payment failed"}, status=400)
 
-        except requests.exceptions.RequestException as err:
-            # Handle request exceptions
-            return Response({'error': 'Payment initiation failed'}, status=500)
-        except ValueError as err:
-            # Handle JSON decoding error
-            return Response({'error': 'Payment initiation failed'}, status=500)
+            payment.status = "successful"
+            payment.save()
+            return Response({"success": "Payment successful"}, status=200)
 
-# Install with: pip install rave_python
+        except RaveExceptions.CardChargeError as e:
+            logger.exception("Card charge error: %s", e)
+            return Response({"error": f"Card charge error {e}"}, status=500)
+        except Exception as e:
+            logger.exception("An error occurred: %s", e)
+            return Response({"error": f"An error occurred {e}"}, status=500)
+    # Install with: pip install rave_python
 
 
 
