@@ -27,7 +27,7 @@ from rave_python import Rave
 env = Env()
 env.read_env()
 
-rave = Rave(os.getenv("FLW_PUBLIC_KEY"), os.getenv("FLW_SECRET_KEY"))
+rave = Rave(publicKey="FLWPUBK_TEST-c842b7e99eac75a0c758a4f48fd772e3-X", secretKey="FLWSECK_TEST-4ae0af268a7e86d4014333e7e6a72d78-X", usingEnv=False)
 
 
 # class InitiatePayment(APIView):
@@ -120,6 +120,7 @@ class InitiateNewPayment(APIView):
         card_number = request.data.get("card_number")
         cvv = request.data.get('cvv')
         expiry_month = request.data.get('expiry_month')
+        expiry_year = request.data.get("expiry_year")
         amount = request.data.get('amount')
         email = request.data.get('email')
         reference = str(uuid.uuid4())
@@ -131,20 +132,19 @@ class InitiateNewPayment(APIView):
 
         # Replace these with your actual Flutterwave details
         flutterwave_url = "https://api.flutterwave.com/v3/payments"
-        secret_key = env("FLUTTERWAVE_SECRET_KEY")  #"your_flutterwave_secret_key_here"
+        secret_key = "FLWSECK_TEST-4ae0af268a7e86d4014333e7e6a72d78-X"  #"your_flutterwave_secret_key_here"
 
         payload = {
             "tx_ref": reference,
             "amount": amount,
             "currency": "NGN",
-            "card_number": card_number,
+            "cardno": card_number,
             "cvv": cvv,
-            "expiry_month": expiry_month,
+            "expirymonth": expiry_month,
+            "expiryyear": expiry_year,
             "redirect_url": "http://127.0.0.1:8000/payment/callback",#(Note this url must be hosted)  # Replace with your callback URL
             "payment_type": "card",
-            "customer": {
-                "email": email
-                }
+            "email": email
             }
 
         headers = {
@@ -153,7 +153,7 @@ class InitiateNewPayment(APIView):
         }
 
         try:
-            payment = Payment(user=user, amount=amount, reference=reference, status="pending")
+            payment = Payment(user=user, total_amount=amount, reference=reference, status="pending")
             payment.save()
             
             
