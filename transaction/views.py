@@ -78,6 +78,10 @@ class InitiateNewPayment(APIView):
         expiry_year = request.data.get("expiry_year")
         amount = request.data.get('amount')
         email = request.data.get('email')
+        phone_number = request.data.get('phonenumber')
+        first_name = request.data.get('firstname')
+        last_name = request.data.get("lastname")
+        
         reference = str(uuid.uuid4())
 
         user = request.user
@@ -90,20 +94,20 @@ class InitiateNewPayment(APIView):
         secret_key = ""  #"your_flutterwave_secret_key_here"
 
         payload = {
-            "cardno": "5438898014560229",
-            "cvv": "890",
-            "expirymonth": "09",
-            "expiryyear": "25",
-            "amount": "10",
-            "email": "user@gmail.com",
-            "phonenumber": "07037054588",
-            "firstname": "temi",
-            "lastname": "desola",
+            "cardno": card_number,
+            "cvv": cvv,
+            "expirymonth": expiry_month,
+            "expiryyear": expiry_year,
+            "amount": amount,
+            "email": email,
+            "phonenumber": phone_number,
+            "firstname": first_name,
+            "lastname": last_name,
             "IP": "355426087298442",
-            "authorization": {
-            "mode": "pin", 
-            "pin": "3310"
-            }
+            # "authorization": {
+            # "mode": "pin", 
+            # "pin": "3310"
+            # }
 
             }
 
@@ -120,7 +124,7 @@ class InitiateNewPayment(APIView):
                 arg = Misc.getTypeOfArgsRequired(res["suggestedAuth"])
 
                 if arg == "pin":
-                    Misc.updatePayload(res["suggestedAuth"], payload, pin="3310")
+                    Misc.updatePayload(res["suggestedAuth"], payload, pin="")
                 if arg == "address":
                     Misc.updatePayload(res["suggestedAuth"], payload, address= {"billingzip": "07205", "billingcity": "Hillside", "billingaddress": "470 Mundet PI", "billingstate": "NJ", "billingcountry": "US"})
                 
