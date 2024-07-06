@@ -131,7 +131,7 @@ class InitiateNewPayment(APIView):
                 res = rave.Card.charge(payload)
 
             if res["validationRequired"]:
-                rave.Card.validate(res["flwRef"], "3310")
+                rave.Card.validate(res["flwRef"], "")
 
             res = rave.Card.verify(res["txRef"])
             print(res["transactionComplete"])
