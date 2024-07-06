@@ -96,10 +96,15 @@ class InitiateNewPayment(APIView):
             "expiryyear": "25",
             "amount": "10",
             "email": "user@gmail.com",
-            "phonenumber": "0902620185",
+            "phonenumber": "07037054588",
             "firstname": "temi",
             "lastname": "desola",
             "IP": "355426087298442",
+            "authorization": {
+            "mode": "pin", 
+            "pin": "3310"
+            }
+
             }
 
         headers = {
@@ -110,7 +115,7 @@ class InitiateNewPayment(APIView):
 
         try:
             res = rave.Card.charge(payload)
-
+            print(res)
             if res["suggestedAuth"]:
                 arg = Misc.getTypeOfArgsRequired(res["suggestedAuth"])
 
@@ -122,7 +127,7 @@ class InitiateNewPayment(APIView):
                 res = rave.Card.charge(payload)
 
             if res["validationRequired"]:
-                rave.Card.validate(res["flwRef"], "")
+                rave.Card.validate(res["flwRef"], "3310")
 
             res = rave.Card.verify(res["txRef"])
             print(res["transactionComplete"])
