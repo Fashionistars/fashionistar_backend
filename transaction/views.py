@@ -33,8 +33,6 @@ from rave_python import Rave
 env = Env()
 env.read_env()
 
-rave = Rave(publicKey="", usingEnv=False)
-
 
 class PaymentCallback(APIView):
     def get(self, request):
@@ -92,55 +90,55 @@ class InitiateNewPayment(APIView):
         secret_key = ""  #"your_flutterwave_secret_key_here"
 
         payload = {
-            "tx_ref": reference,
-            "amount": amount,
-            "currency": "NGN",
-            "cardno": card_number,
-            "cvv": cvv,
-            "expirymonth": expiry_month,
-            "expiryyear": expiry_year,
-            "redirect_url": "http://127.0.0.1:8000/payment/callback",#(Note this url must be hosted)  # Replace with your callback URL
-            "payment_type": "card",
-            "email": email,
-            "authorization": {
-                "mode": "pin", 
-                "pin": "3310"
-                }
+            "cardno": "5438898014560229",
+            "cvv": "890",
+            "expirymonth": "09",
+            "expiryyear": "25",
+            "amount": "10",
+            "email": "user@gmail.com",
+            "phonenumber": "0902620185",
+            "firstname": "temi",
+            "lastname": "desola",
+            "IP": "355426087298442",
             }
 
         headers = {
             "Authorization": f"Bearer {settings.SECRET_KEY}",
             "Content-Type": "application/json"
         }
+        rave = Rave(secretKey="FLWSECK_TEST-4ae0af268a7e86d4014333e7e6a72d78-X", publicKey="FLWPUBK_TEST-c842b7e99eac75a0c758a4f48fd772e3-X", usingEnv=False,production=False)
 
         try:
-            payment = Payment(user=user, total_amount=amount, reference=reference, status="pending")
-            payment.save()
-            
-            logger.debug("Payload: %s", payload)
-            logger.debug("Headers: %s", headers)
-            
-            rave = Rave( publicKey="", usingEnv=False,production=False)
-            
-            response = rave.Card.charge(payload)
-            logger.debug("Response: %s", response)
-            
-            # Handle response and update payment status accordingly
-            if response["error"]:
-                payment.status = "failed"
-                payment.save()
-                logger.error("Payment failed: %s", response)
-                return Response({"error": "Payment failed"}, status=400)
+            res = rave.Card.charge(payload)
 
-            payment.status = "successful"
-            payment.save()
-            return Response({"success": "Payment successful"}, status=200)
+            if res["suggestedAuth"]:
+                arg = Misc.getTypeOfArgsRequired(res["suggestedAuth"])
+
+                if arg == "pin":
+                    Misc.updatePayload(res["suggestedAuth"], payload, pin="3310")
+                if arg == "address":
+                    Misc.updatePayload(res["suggestedAuth"], payload, address= {"billingzip": "07205", "billingcity": "Hillside", "billingaddress": "470 Mundet PI", "billingstate": "NJ", "billingcountry": "US"})
+                
+                res = rave.Card.charge(payload)
+
+            if res["validationRequired"]:
+                rave.Card.validate(res["flwRef"], "")
+
+            res = rave.Card.verify(res["txRef"])
+            print(res["transactionComplete"])
+            return Response(res, status=status.HTTP_201_CREATED)
 
         except RaveExceptions.CardChargeError as e:
-            logger.exception("Card charge error: %s", e)
-            return Response({"error": f"Card charge error {e}"}, status=500)
-        except Exception as e:
-            logger.exception("An error occurred: %s", e)
-            return Response({"error": f"An error occurred {e}"}, status=500)
+            print(e.err["errMsg"])
+            print(e.err["flwRef"])
+            return Response(f"This {e.err}", status=status.HTTP_402_PAYMENT_REQUIRED)
 
+        except RaveExceptions.TransactionValidationError as e:
+            print(e.err)
+            print(e.err["flwRef"])
+            return Response(f"Or that? {e.err}", status=status.HTTP_401_UNAUTHORIZED)
 
+        except RaveExceptions.TransactionVerificationError as e:
+            print(e.err["errMsg"])
+            print(e.err["txRef"])
+            return Response(f"Maybe {e.err}", status=status.HTTP_400_BAD_REQUEST)
