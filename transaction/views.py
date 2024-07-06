@@ -89,10 +89,7 @@ class InitiateNewPayment(APIView):
         if user.is_anonymous:
             return Response({'error': 'User is not authenticated'}, status=400)
 
-        # Replace these with your actual Flutterwave details
         flutterwave_url = "https://api.flutterwave.com/v3/payments"
-        secret_key = ""  #"your_flutterwave_secret_key_here"
-
         payload = {
             "cardno": card_number,
             "cvv": cvv,
