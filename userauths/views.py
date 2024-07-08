@@ -260,7 +260,8 @@ class LogoutView(APIView):
             return Response(status=status.HTTP_205_RESET_CONTENT)
         except Exception as e:
             return Response(status=status.HTTP_400_BAD_REQUEST)
-    
+
+
 @api_view(['GET'])
 def getRoutes(request):
     # It defines a list of API routes that can be accessed.
