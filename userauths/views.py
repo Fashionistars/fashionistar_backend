@@ -171,15 +171,15 @@ class ResendTokenView(generics.GenericAPIView):
     """
     queryset = User.objects.all()
     permission_classes = (AllowAny,)
-    # serializer_class = ResendTokenSerializer
+    serializer_class = ResendTokenSerializer
 
     def post(self, request, *args, **kwargs):
         """Resend the token for OTP verification"""
-        email = request.data.get('email')
-
-        if not email:
-            return Response({"message": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
         
+        email = serializer.validated_data['email']
+
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
