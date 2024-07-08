@@ -201,7 +201,7 @@ class ResendTokenView(generics.GenericAPIView):
 
         new_token = Tokens()
         new_token.email = user.email
-        new_token.action = 'resend'
+        new_token.action = 'register'
         new_token.token = encrypted_token
         new_token.exp_date = time.time() + 300
         new_token.save()
@@ -241,6 +241,7 @@ class LoginView(TokenObtainPairView):
                     'access': str(tokens['access']),
                     'refresh': str(tokens['refresh']),
                     'user_id': user.id,
+                    'role': user.role
                 }
                 return Response(custom_data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_401_UNAUTHORIZED)
