@@ -77,11 +77,12 @@ class InitiateNewPayment(APIView):
         expiry_month = request.data.get('expiry_month')
         expiry_year = request.data.get("expiry_year")
         amount = request.data.get('amount')
+        currency = request.data.get('currency')
         email = request.data.get('email')
         phone_number = request.data.get('phonenumber')
         first_name = request.data.get('firstname')
         last_name = request.data.get("lastname")
-        
+        ip = request.data.get("ip")
         reference = str(uuid.uuid4())
 
         user = request.user
@@ -96,23 +97,32 @@ class InitiateNewPayment(APIView):
             "expirymonth": expiry_month,
             "expiryyear": expiry_year,
             "amount": amount,
+            "currency": currency,
             "email": email,
             "phonenumber": phone_number,
             "firstname": first_name,
             "lastname": last_name,
-            "IP": "355426087298442",
+            "IP": ip,
+            "redirect_url": 'https://example_company.com/success',
             # "authorization": {
-            # "mode": "pin", 
-            # "pin": "3310"
-            # }
+            # "mode": "redirect",
+        #     "city":  "San Francisco",
+        #     "address":  "69 Fremont Street",
+        #     "state":  "CA",
+        #     "country":  "US",
+        #     "zipcode":  "94105"
+        #   }
+            "authorization": {
+        "mode": "pin",
+        "pin": "3310"
+    }
 
             }
-
         headers = {
-            "Authorization": f"Bearer {settings.SECRET_KEY}",
+            "Authorization": "Bearer FLWSECK_TEST-7ec46444d9ede5c450740457bf804f77-X",
             "Content-Type": "application/json"
         }
-        rave = Rave(secretKey="FLWSECK_TEST-4ae0af268a7e86d4014333e7e6a72d78-X", publicKey="FLWPUBK_TEST-c842b7e99eac75a0c758a4f48fd772e3-X", usingEnv=False,production=False)
+        rave = Rave(secretKey="FLWSECK_TEST-7ec46444d9ede5c450740457bf804f77-X", publicKey="FLWPUBK_TEST-3001e7f2f30b9a015ac6c1ff857c913c-X", usingEnv=False,production=False)
 
         try:
             res = rave.Card.charge(payload)
@@ -121,30 +131,31 @@ class InitiateNewPayment(APIView):
                 arg = Misc.getTypeOfArgsRequired(res["suggestedAuth"])
 
                 if arg == "pin":
-                    Misc.updatePayload(res["suggestedAuth"], payload, pin="")
+                    Misc.updatePayload(res["suggestedAuth"], payload, pin="3310")
                 if arg == "address":
                     Misc.updatePayload(res["suggestedAuth"], payload, address= {"billingzip": "07205", "billingcity": "Hillside", "billingaddress": "470 Mundet PI", "billingstate": "NJ", "billingcountry": "US"})
                 
                 res = rave.Card.charge(payload)
 
             if res["validationRequired"]:
-                rave.Card.validate(res["flwRef"], "")
+                new_res = rave.Card.validate(res["flwRef"], "")
 
             res = rave.Card.verify(res["txRef"])
-            print(res["transactionComplete"])
+            # print(res)
+            # print("Print verify",res["transactionComplete"])
             return Response(res, status=status.HTTP_201_CREATED)
 
         except RaveExceptions.CardChargeError as e:
-            print(e.err["errMsg"])
-            print(e.err["flwRef"])
+            print("Hmmmm",e.err["errMsg"])
+            print("Lolalo",e.err["flwRef"])
             return Response(f"This {e.err}", status=status.HTTP_402_PAYMENT_REQUIRED)
 
         except RaveExceptions.TransactionValidationError as e:
-            print(e.err)
-            print(e.err["flwRef"])
+            print("Possibly this",e.err)
+            print("Or this could be",e.err["flwRef"])
             return Response(f"Or that? {e.err}", status=status.HTTP_401_UNAUTHORIZED)
 
         except RaveExceptions.TransactionVerificationError as e:
-            print(e.err["errMsg"])
-            print(e.err["txRef"])
+            print("Could it be this?",e.err["errMsg"])
+            print("Or maybe it Could it be this?",e.err["txRef"])
             return Response(f"Maybe {e.err}", status=status.HTTP_400_BAD_REQUEST)

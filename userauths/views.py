@@ -111,7 +111,16 @@ class RegisterView(generics.CreateAPIView):
                 return Response(res, status=status.HTTP_200_OK)
                 
         except serializers.ValidationError as error:
-            return Response({"mesage": "Still error " + str(error)}, status=status.HTTP_400_BAD_REQUEST)
+            error_dict = error.detail
+            error_messages = []
+
+            for field, messages in error_dict.items():
+                error_messages.extend(messages)
+
+            # Join all error messages into a single string if needed
+            error_message = " ".join(str(msg) for msg in error_messages)
+
+            return Response({"message": error_message}, status=status.HTTP_400_BAD_REQUEST)
             
 
 
