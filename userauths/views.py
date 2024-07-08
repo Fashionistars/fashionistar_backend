@@ -117,7 +117,6 @@ class RegisterView(generics.CreateAPIView):
             for field, messages in error_dict.items():
                 error_messages.extend(messages)
 
-            # Join all error messages into a single string if needed
             error_message = " ".join(str(msg) for msg in error_messages)
 
             return Response({"message": error_message}, status=status.HTTP_400_BAD_REQUEST)
@@ -163,6 +162,51 @@ class VerifyUserViewSet(viewsets.ViewSet):
             return Response({"error": "Invalid or expired OTP"})
 
 
+
+class ResendTokenView(generics.GenericAPIView):
+    """
+    Resend the registration token to the user via email.
+        Args:
+        email: Email of the user to resend the token to.
+    """
+    queryset = User.objects.all()
+    permission_classes = (AllowAny,)
+    # serializer_class = ResendTokenSerializer
+
+    def post(self, request, *args, **kwargs):
+        """Resend the token for OTP verification"""
+        email = request.data.get('email')
+
+        if not email:
+            return Response({"message": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({"message": "User does not exist."}, status=status.HTTP_404_NOT_FOUND)
+        
+        token = generate_token()
+        timestamp = time.time() + 300
+        dt_object = datetime.datetime.fromtimestamp(timestamp)
+        dt_object += datetime.timedelta()
+
+        EmailManager.send_mail(
+            subject="Fashionistar - Resend OTP",
+            recipients=[user.email],
+            template_name="otp.html",
+            context={"user": user.id, "token": token, "time": dt_object}
+        )
+
+        encrypted_token = cipher_suite.encrypt(token.encode()).decode()
+
+        new_token = Tokens()
+        new_token.email = user.email
+        new_token.action = 'resend'
+        new_token.token = encrypted_token
+        new_token.exp_date = time.time() + 300
+        new_token.save()
+
+        return Response({"message": "Token resent!", "code": 200}, status=status.HTTP_200_OK)
 
 
 
