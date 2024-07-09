@@ -188,6 +188,32 @@ class OrdersAPIView(generics.ListAPIView):
         return orders
 
 
+class OrderDetailAPIView(generics.RetrieveAPIView):
+    serializer_class = CartOrderSerializer
+    permission_classes = (IsAuthenticated,)
+
+    def get_object(self):
+        """
+        Override the default get_object method to retrieve a specific order for the authenticated vendor.
+        """
+        user = self.request.user
+        try:
+            user_role = User.objects.values_list('role', flat=True).get(pk=user.pk)
+        except User.DoesNotExist:
+            raise PermissionDenied("Permission Denied!")
+
+        if user.role != 'Vendor':
+            raise PermissionDenied("You do not have permission to perform this action.")
+        
+        order_oid = self.kwargs['order_oid']
+        try:
+            order = CartOrder.objects.get(vendor=user.id, oid=order_oid)
+        except CartOrder.DoesNotExist:
+            raise PermissionDenied("Order not found")
+
+        return order
+
+
 class RevenueAPIView(generics.ListAPIView):
     serializer_class = CartOrderItemSerializer
     permission_classes = (AllowAny,)
@@ -447,20 +473,6 @@ class FilterProductsAPIView(generics.ListAPIView):
         else:
             products = Product.objects.filter(vendor=vendor)
         return products
-
-
-class OrderDetailAPIView(generics.RetrieveAPIView):
-    serializer_class = CartOrderSerializer
-    permission_classes = (AllowAny,)
-
-    def get_object(self):
-        vendor_id = self.kwargs['vendor_id']
-        order_oid = self.kwargs['order_oid']
-
-        vendor = Vendor.objects.get(id=vendor_id)
-        order = CartOrder.objects.get(
-            vendor=vendor, payment_status="paid", oid=order_oid)
-        return order
 
 
 class Earning(generics.ListAPIView):
