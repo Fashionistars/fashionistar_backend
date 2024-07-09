@@ -162,13 +162,29 @@ class ProductsAPIView(generics.ListAPIView):
 
 
 class OrdersAPIView(generics.ListAPIView):
+    """
+    API view to retrieve a list of paid orders for the authenticated vendor.
+    """
     serializer_class = CartOrderSerializer
-    permission_classes = (AllowAny,)
+    permission_classes = (IsAuthenticated,)  # Ensure the user is authenticated
 
     def get_queryset(self):
-        vendor_id = self.kwargs['vendor_id']
-        vendor = Vendor.objects.get(id=vendor_id)
-        orders = CartOrder.objects.filter(vendor=vendor, payment_status="paid")
+        """
+        Override the default get_queryset method to filter orders by the authenticated vendor.
+        Retrieves the vendor associated with the authenticated user and returns their orders.
+        
+        Check if the user has permission to access the dashboard stats.
+        """
+        user = self.request.user
+        try:
+            user_role = User.objects.values_list('role', flat=True).get(pk=user.pk)
+        except User.DoesNotExist:
+            raise PermissionDenied("Permission Denied!")
+
+        if user.role != 'Vendor':
+            raise PermissionDenied("You do not have permission to perform this action.")
+        
+        orders = CartOrder.objects.filter(vendor=user.id,)
         return orders
 
 

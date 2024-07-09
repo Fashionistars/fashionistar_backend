@@ -10,7 +10,7 @@ import shortuuid
 
 
 class Vendor(models.Model):
-    user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, related_name="vendor_profile")
+    user = models.OneToOneField(User, on_delete=models.CASCADE, null=True, related_name="vendor_profile")
     image = models.ImageField(upload_to=user_directory_path, default="shop-image.jpg", blank=True)
     name = models.CharField(max_length=100, help_text="Shop Name", null=True, blank=True)
     email = models.EmailField(max_length=100, help_text="Shop Email", null=True, blank=True)
