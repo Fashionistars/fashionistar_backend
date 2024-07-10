@@ -129,6 +129,8 @@ class VendorRejectOrderView(APIView):
 
 
 class VendorAcceptOrderView(APIView):
+    permission_classes = (IsAuthenticated, )
+    
     def post(self, request, order_item_id, *args, **kwargs):
         """
         Vendor accepts an order item.
@@ -140,21 +142,27 @@ class VendorAcceptOrderView(APIView):
         Payload: None
         """
         try:
-            order_item = get_object_or_404(CartOrderItem, id=order_item_id)
-            if order_item.production_status == 'Pending':
-                order_item.production_status = 'Accepted'
-                order_item.save()
-                send_notification(
-                    user=order_item.user,
-                    vendor=order_item.vendor,
-                    order=order_item.order,
-                    order_item=order_item,
-                    notification_type="order_accepted"
-                )
-                return Response({"message": "Order accepted"}, status=status.HTTP_200_OK)
-            return Response({"message": "Order already accepted"}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            user = self.request.user
+            user_role = User.objects.values_list('role', flat=True).get(pk=user.pk)
+        except User.DoesNotExist:
+            raise PermissionDenied("Permission Denied!")
+
+        if user.role != 'Vendor':
+            raise PermissionDenied("You do not have permission to perform this action.")
+        
+        order_item = get_object_or_404(CartOrderItem, id=order_item_id)
+        if order_item.production_status == 'Pending':
+            order_item.production_status = 'Accepted'
+            order_item.save()
+            send_notification(
+                user=order_item.user,
+                vendor=order_item.vendor,
+                order=order_item.order,
+                order_item=order_item,
+                notification_type="order_accepted"
+            )
+            return Response({"message": "Order accepted"}, status=status.HTTP_200_OK)
+        return Response({"message": "Order already accepted"}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class VendorCompleteOrderView(APIView):
