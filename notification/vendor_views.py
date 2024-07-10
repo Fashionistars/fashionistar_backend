@@ -151,6 +151,9 @@ class VendorAcceptOrderView(APIView):
             raise PermissionDenied("You do not have permission to perform this action.")
         
         order_item = get_object_or_404(CartOrderItem, id=order_item_id)
+        if order_item.vendor.user != user:
+            raise PermissionDenied("You do not have permission to accept this order.")
+        
         if order_item.production_status == 'Pending':
             order_item.production_status = 'Accepted'
             order_item.save()
