@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     'notification',
     'createOrder',
     'transaction',
+    'chat',
 
 
     # Third Party Apps
@@ -78,6 +79,8 @@ INSTALLED_APPS = [
     'anymail',
     'storages',
     'phone_verify',
+    'channels',
+    
     
 ]
 
@@ -129,19 +132,24 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'backend.wsgi.application'
 
+ASGI_APPLICATION = 'backend.asgi.application'
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            'hosts': [('127.0.0.1', 6379)],
+        },
+    },
+}
+
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.sqlite3',
-#         'NAME': BASE_DIR / 'db.sqlite3',
-#     }
-# }
-
-
-# settings.py
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -195,7 +203,6 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-
 # AWS Configs
 AWS_ACCESS_KEY_ID = env("AWS_ACCESS_KEY_ID")
 
@@ -220,6 +227,14 @@ AWS_LOCATION = 'static'
 STATIC_LOCATION = 'static'
 
 STATIC_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/{STATIC_LOCATION}/'
+
+# Newly added settings to debug encripted chat message files
+AWS_S3_REGION_NAME = 'us-east-1' 
+AWS_S3_VERIFY = True
+AWS_QUERYSTRING_AUTH = False
+# MEDIA_URL = f'https://{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com/media/'
+
+
 
 
 # Default primary key field type
@@ -317,6 +332,8 @@ SIMPLE_JWT = {
 
 
 JAZZMIN_SETTINGS = {
+     
+    "user_avatar": "profile.image",  # Ensure this field exists in your Profile model
     "site_title": "Fashionistar",
     "site_header": "Fashionistar",
     "site_brand": "Modern Marketplace ",
