@@ -251,11 +251,14 @@ class DeliveryCouriersSerializer(serializers.ModelSerializer):
 
 
 class SummarySerializer(serializers.Serializer):
-    products = serializers.IntegerField()
+    out_of_stock = serializers.IntegerField()
     orders = serializers.IntegerField()
     revenue = serializers.DecimalField(max_digits=10, decimal_places=2)
     review = serializers.IntegerField()
     average_review = serializers.DecimalField(max_digits=2, decimal_places=1)
+    average_order_value = serializers.DecimalField(max_digits=100, decimal_places=2)
+    total_sales = serializers.DecimalField(max_digits=100, decimal_places=2)
+    user_image = serializers.URLField()
 
 class EarningSummarySerializer(serializers.Serializer):
     monthly_revenue = serializers.DecimalField(max_digits=10, decimal_places=2)

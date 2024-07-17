@@ -111,7 +111,15 @@ class RegisterView(generics.CreateAPIView):
                 return Response(res, status=status.HTTP_200_OK)
                 
         except serializers.ValidationError as error:
-            return Response({"mesage": "Still error " + str(error)}, status=status.HTTP_400_BAD_REQUEST)
+            error_dict = error.detail
+            error_messages = []
+
+            for field, messages in error_dict.items():
+                error_messages.extend(messages)
+
+            error_message = " ".join(str(msg) for msg in error_messages)
+
+            return Response({"message": error_message}, status=status.HTTP_400_BAD_REQUEST)
             
 
 
@@ -155,6 +163,51 @@ class VerifyUserViewSet(viewsets.ViewSet):
 
 
 
+class ResendTokenView(generics.GenericAPIView):
+    """
+    Resend the registration token to the user via email.
+        Args:
+        email: Email of the user to resend the token to.
+    """
+    queryset = User.objects.all()
+    permission_classes = (AllowAny,)
+    serializer_class = ResendTokenSerializer
+
+    def post(self, request, *args, **kwargs):
+        """Resend the token for OTP verification"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        email = serializer.validated_data['email']
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({"message": "User does not exist."}, status=status.HTTP_404_NOT_FOUND)
+        
+        token = generate_token()
+        timestamp = time.time() + 300
+        dt_object = datetime.datetime.fromtimestamp(timestamp)
+        dt_object += datetime.timedelta()
+
+        EmailManager.send_mail(
+            subject="Fashionistar - Resend OTP",
+            recipients=[user.email],
+            template_name="otp.html",
+            context={"user": user.id, "token": token, "time": dt_object}
+        )
+
+        encrypted_token = cipher_suite.encrypt(token.encode()).decode()
+
+        new_token = Tokens()
+        new_token.email = user.email
+        new_token.action = 'register'
+        new_token.token = encrypted_token
+        new_token.exp_date = time.time() + 300
+        new_token.save()
+
+        return Response({"message": "Token resent!", "code": 200}, status=status.HTTP_200_OK)
+
 
 
 class LoginView(TokenObtainPairView):
@@ -188,6 +241,7 @@ class LoginView(TokenObtainPairView):
                     'access': str(tokens['access']),
                     'refresh': str(tokens['refresh']),
                     'user_id': user.id,
+                    'role': user.role
                 }
                 return Response(custom_data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_401_UNAUTHORIZED)
@@ -207,7 +261,8 @@ class LogoutView(APIView):
             return Response(status=status.HTTP_205_RESET_CONTENT)
         except Exception as e:
             return Response(status=status.HTTP_400_BAD_REQUEST)
-    
+
+
 @api_view(['GET'])
 def getRoutes(request):
     # It defines a list of API routes that can be accessed.

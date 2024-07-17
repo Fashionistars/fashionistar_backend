@@ -92,7 +92,11 @@ class RegisterSerializer(serializers.ModelSerializer):
             "phone": instance.phone,
             'role': instance.role
         }
-        
+
+
+class ResendTokenSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
         
 class VerifyUserSerializer(serializers.ModelSerializer):
     otp = serializers.CharField(write_only=True)

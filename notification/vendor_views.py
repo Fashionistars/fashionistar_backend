@@ -128,33 +128,56 @@ class VendorRejectOrderView(APIView):
 
 
 
-class VendorAcceptOrderView(APIView):
+class VendorUpdateOrderStatusView(APIView):
+    permission_classes = (IsAuthenticated, )
+    
     def post(self, request, order_item_id, *args, **kwargs):
         """
-        Vendor accepts an order item.
+        Vendor updates the order item status.
         Steps:
         1. Retrieve the order item.
-        2. Check if the production status is 'Pending'.
-        3. If yes, change status to 'Accepted' and save.
-        4. Create a notification for the accepted order.
-        Payload: None
+        2. Verify the vendor.
+        3. Check if the action is 'accept' or 'reject'.
+        4. If 'accept' and production status is 'Pending', change status to 'Accepted' and save.
+        5. If 'reject' and production status is 'Pending', change status to 'Rejected' and save.
+        6. Create a notification for the updated order status.
+        Payload: {"action": "accept" or "reject"}
         """
         try:
-            order_item = get_object_or_404(CartOrderItem, id=order_item_id)
-            if order_item.production_status == 'Pending':
+            user = self.request.user
+            user_role = User.objects.values_list('role', flat=True).get(pk=user.pk)
+        except User.DoesNotExist:
+            raise PermissionDenied("Permission Denied!")
+
+        if user_role != 'Vendor':
+            raise PermissionDenied("You do not have permission to perform this action.")
+        
+        order_item = get_object_or_404(CartOrderItem, id=order_item_id)
+        
+        if order_item.vendor.user != user:
+            raise PermissionDenied("You do not have permission to update this order.")
+
+        action = request.data.get("action")
+        if action not in ["accept", "reject"]:
+            return Response({"message": "Invalid action. Please specify 'accept' or 'reject'."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        
+        if order_item.production_status == 'Pending':
+            if action == "accept":
                 order_item.production_status = 'Accepted'
-                order_item.save()
-                send_notification(
-                    user=order_item.user,
-                    vendor=order_item.vendor,
-                    order=order_item.order,
-                    order_item=order_item,
-                    notification_type="order_accepted"
-                )
-                return Response({"message": "Order accepted"}, status=status.HTTP_200_OK)
-            return Response({"message": "Order already accepted"}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            elif action == "reject":
+                order_item.production_status = 'Rejected'
+            order_item.save()
+            send_notification(
+                user=order_item.order.user,
+                vendor=order_item.vendor,
+                order=order_item.order,
+                order_item=order_item,
+                notification_type=f"order_{action}ed"
+            )
+            return Response({"message": f"Order {action}ed"}, status=status.HTTP_200_OK)
+        
+        return Response({"message": "Order status cannot be updated from its current state."}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class VendorCompleteOrderView(APIView):
