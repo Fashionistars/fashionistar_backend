@@ -50,7 +50,8 @@ class ColorSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-
+from cloudinary.uploader import upload
+from cloudinary.utils import cloudinary_url
 
 
 # Define a serializer for the Product model
@@ -60,6 +61,7 @@ class ProductSerializer(serializers.ModelSerializer):
     size = SizeSerializer(many=True, read_only=True)
     specification = SpecificationSerializer(many=True, read_only=True)
     category = CategorySerializer(many=True)  # If you want nested category representation
+    image = serializers.ImageField(required=False)  # Optional image field
 
 
     class Meta:
@@ -79,9 +81,18 @@ class ProductSerializer(serializers.ModelSerializer):
         else:
             # For other methods, set serialization depth to 3.
             self.Meta.depth = 3
-    
+
+    def get_image_url(self, obj):
+        return obj.image.url if obj.image else None
+
     def create(self, validated_data):
         categories_data = validated_data.pop('category')
+        image_data = validated_data.pop('image', None)
+
+        if image_data:
+            upload_data = upload(image_data)
+            validated_data['image'] = upload_data.get('url')
+
         product = Product.objects.create(**validated_data)
         
         # Associate categories with the product

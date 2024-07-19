@@ -466,6 +466,19 @@ SWAGGER_SETTINGS = {
     },
 }
 
+import cloudinary
+import cloudinary.uploader
+from cloudinary.utils import cloudinary_url
+
+# Configuration       
+CLOUDINARY_STORAGE = { 
+    "CLOUD_NAME": "dgpdlknc1", 
+    "API_KEY" : "494687484522475", 
+    "API_SECRET" : "ngdVN3NFn7L_3KiP75zZJl8DUno", # Click 'View Credentials' below to copy your API secret
+    # "secure":True
+}
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+
 
 
 # settings.py
