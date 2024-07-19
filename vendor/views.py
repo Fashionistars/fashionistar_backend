@@ -263,57 +263,69 @@ def MonthlyProductsChartAPIFBV(request, vendor_id):
     return Response(products_by_month)
 
 
+
 class ProductCreateView(generics.CreateAPIView):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
-    permission_classes = [AllowAny,]
 
     @transaction.atomic
     def perform_create(self, serializer):
+        # Ensure the request user is a vendor
         user = self.request.user
-        try:
-            user_role = User.objects.values_list('role', flat=True).get(pk=user.pk)
-        except User.DoesNotExist:
-            raise PermissionDenied("User not found")
+        if user.role != 'Vendor':
+            raise PermissionDenied('Only vendors can create products.')
 
-        if user_role != 'vendor':
-            raise PermissionDenied("You do not have permission to perform this action.")
-        
+        # Retrieve the Vendor instance associated with the user
+        try:
+            vendor = user.vendor_profile
+            print(vendor)
+        except Vendor.DoesNotExist:
+            raise PermissionDenied('Vendor profile not found for the user.')
+
         serializer.is_valid(raise_exception=True)
-        serializer.validated_data['vendor'] = user
-        serializer.save()
-        
+        serializer.save(vendor=vendor)
         product_instance = serializer.instance
+
         specifications_data = []
         colors_data = []
         sizes_data = []
         gallery_data = []
-
+        # Loop through the keys of self.request.data
         for key, value in self.request.data.items():
+            # Example key: specifications[0][title]
             if key.startswith('specifications') and '[title]' in key:
+                # Extract index from key
                 index = key.split('[')[1].split(']')[0]
                 title = value
                 content_key = f'specifications[{index}][content]'
                 content = self.request.data.get(content_key)
-                specifications_data.append({'title': title, 'content': content})
+                specifications_data.append(
+                    {'title': title, 'content': content})
 
+            # Example key: colors[0][name]
             elif key.startswith('colors') and '[name]' in key:
+                # Extract index from key
                 index = key.split('[')[1].split(']')[0]
                 name = value
                 color_code_key = f'colors[{index}][color_code]'
                 color_code = self.request.data.get(color_code_key)
                 image_key = f'colors[{index}][image]'
                 image = self.request.data.get(image_key)
-                colors_data.append({'name': name, 'color_code': color_code, 'image': image})
+                colors_data.append(
+                    {'name': name, 'color_code': color_code, 'image': image})
 
+            # Example key: sizes[0][name]
             elif key.startswith('sizes') and '[name]' in key:
+                # Extract index from key
                 index = key.split('[')[1].split(']')[0]
                 name = value
                 price_key = f'sizes[{index}][price]'
                 price = self.request.data.get(price_key)
                 sizes_data.append({'name': name, 'price': price})
 
+            # Example key: gallery[0][image]
             elif key.startswith('gallery') and '[image]' in key:
+                # Extract index from key
                 index = key.split('[')[1].split(']')[0]
                 image = value
                 gallery_data.append({'image': image})
@@ -329,10 +341,12 @@ class ProductCreateView(generics.CreateAPIView):
             product_instance, SpecificationSerializer, specifications_data)
         self.save_nested_data(product_instance, ColorSerializer, colors_data)
         self.save_nested_data(product_instance, SizeSerializer, sizes_data)
-        self.save_nested_data(product_instance, GallerySerializer, gallery_data)
+        self.save_nested_data(
+            product_instance, GallerySerializer, gallery_data)
 
     def save_nested_data(self, product_instance, serializer_class, data):
-        serializer = serializer_class(data=data, many=True, context={'product_instance': product_instance})
+        serializer = serializer_class(data=data, many=True, context={
+                                      'product_instance': product_instance})
         serializer.is_valid(raise_exception=True)
         serializer.save(product=product_instance)
 

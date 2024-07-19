@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from admin_backend.models import Category
 from store.models import CartOrderItem, CouponUsers, Product, Tag , DeliveryCouriers, CartOrder, Gallery, ProductFaq, Review,  Specification, Coupon, Color, Size,  Wishlist, Vendor
 from addon.models import ConfigSettings
 from store.models import Gallery
@@ -49,6 +50,9 @@ class ColorSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+
+
+
 # Define a serializer for the Product model
 class ProductSerializer(serializers.ModelSerializer):
     gallery = GallerySerializer(many=True, read_only=True)
@@ -75,6 +79,19 @@ class ProductSerializer(serializers.ModelSerializer):
         else:
             # For other methods, set serialization depth to 3.
             self.Meta.depth = 3
+    
+    def create(self, validated_data):
+        categories_data = validated_data.pop('category')
+        product = Product.objects.create(**validated_data)
+        
+        # Associate categories with the product
+        for category_data in categories_data:
+            category, created = Category.objects.get_or_create(**category_data)
+            product.category.add(category)
+        
+        return product
+
+
 
 
 

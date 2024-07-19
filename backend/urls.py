@@ -27,24 +27,7 @@ urlpatterns = [
     
     # API V1 Urls
     path("", include("api.urls")),
-<<<<<<< HEAD
     path('payment-gateway', include('transaction.urls')),
-=======
-    path('transaction/', include('transaction.urls')),
-
-    # OTHER APPS
-    path("", include("checkout.urls")),
-    path("", include("store.urls")),
-    path("", include("ShopCart.urls")),
-    path("", include("createOrder.urls")),
-    path("", include("customer.urls")),
-    path("", include("notification.urls")),
-    path('chat/', include('chat.urls')),
-
-
-
-
->>>>>>> f5accdabbaf3a0e858f702fa78c2fdf10cea47bc
     # Admin URL
     path('admin/', admin.site.urls),
     path("auth/", include("userauths.urls")),

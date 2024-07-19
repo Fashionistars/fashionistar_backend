@@ -67,14 +67,9 @@ INSTALLED_APPS = [
     'checkout',
     'notification',
     'createOrder',
-<<<<<<< HEAD
-
-    'transaction',
-=======
-    'transaction',
     'chat',
 
->>>>>>> f5accdabbaf3a0e858f702fa78c2fdf10cea47bc
+    'transaction',
 
     # Third Party Apps
     'rest_framework',
