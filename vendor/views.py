@@ -270,12 +270,15 @@ class ProductCreateView(generics.CreateAPIView):
 
     @transaction.atomic
     def perform_create(self, serializer):
-        # Ensure the request user is a vendor
+        """
+        Handle the creation of a Product instance, ensuring the request is made by a Vendor.
+        The function checks the user's role and vendor profile, processes nested data, 
+        and associates the product with the vendor.
+        """
         user = self.request.user
         if user.role != 'Vendor':
             raise PermissionDenied('Only vendors can create products.')
 
-        # Retrieve the Vendor instance associated with the user
         try:
             vendor = user.vendor_profile
             print(vendor)
@@ -290,11 +293,8 @@ class ProductCreateView(generics.CreateAPIView):
         colors_data = []
         sizes_data = []
         gallery_data = []
-        # Loop through the keys of self.request.data
         for key, value in self.request.data.items():
-            # Example key: specifications[0][title]
             if key.startswith('specifications') and '[title]' in key:
-                # Extract index from key
                 index = key.split('[')[1].split(']')[0]
                 title = value
                 content_key = f'specifications[{index}][content]'
@@ -302,9 +302,7 @@ class ProductCreateView(generics.CreateAPIView):
                 specifications_data.append(
                     {'title': title, 'content': content})
 
-            # Example key: colors[0][name]
             elif key.startswith('colors') and '[name]' in key:
-                # Extract index from key
                 index = key.split('[')[1].split(']')[0]
                 name = value
                 color_code_key = f'colors[{index}][color_code]'
@@ -314,18 +312,14 @@ class ProductCreateView(generics.CreateAPIView):
                 colors_data.append(
                     {'name': name, 'color_code': color_code, 'image': image})
 
-            # Example key: sizes[0][name]
             elif key.startswith('sizes') and '[name]' in key:
-                # Extract index from key
                 index = key.split('[')[1].split(']')[0]
                 name = value
                 price_key = f'sizes[{index}][price]'
                 price = self.request.data.get(price_key)
                 sizes_data.append({'name': name, 'price': price})
 
-            # Example key: gallery[0][image]
             elif key.startswith('gallery') and '[image]' in key:
-                # Extract index from key
                 index = key.split('[')[1].split(']')[0]
                 image = value
                 gallery_data.append({'image': image})
@@ -336,7 +330,6 @@ class ProductCreateView(generics.CreateAPIView):
         print('sizes_data:', sizes_data)
         print('gallery_data:', gallery_data)
 
-        # Save nested serializers with the product instance
         self.save_nested_data(
             product_instance, SpecificationSerializer, specifications_data)
         self.save_nested_data(product_instance, ColorSerializer, colors_data)
