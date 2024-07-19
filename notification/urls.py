@@ -12,7 +12,7 @@ app_name = 'notification'  # Add this line to specify the app namespace
 urlpatterns = [
 
     # Vendor Order Acceptance and Complete API Endpoints
-    path('vendor/order-accept/<int:order_item_id>/', vendor_order_views.VendorAcceptOrderView.as_view(), name='vendor-accept-order'),
+    path('vendor/order-accept/<int:order_item_id>/', vendor_order_views.VendorUpdateOrderStatusView.as_view(), name='vendor-accept-order'),
     path('vendor/order-complete/<int:order_item_id>/', vendor_order_views.VendorCompleteOrderView.as_view(), name='vendor-complete-order'),
     path('vendor/order-notification/<int:vendor_id>/', vendor_order_views.VendorOrderNotificationView.as_view(), name='vendor-order-notification'),
 

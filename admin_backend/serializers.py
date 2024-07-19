@@ -1,6 +1,16 @@
 from rest_framework import serializers
 from .models import Collections
 from .models import Category, Brand
+from chat.models import Message
+
+
+
+class MessageViewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Message
+        fields = '__all__'
+        read_only_fields = ['sender', 'recipient', 'message', 'files', 'timestamp']
+
 
 class CollectionsSerializer(serializers.ModelSerializer):
     

@@ -14,10 +14,6 @@ urlpatterns = [
 
     # Userauths API Endpoints
     path('user/profile/<str:pid>/', userauths_views.ProfileView.as_view(), name='user_profile'),
-    path('user/token/', userauths_views.MyTokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('user/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('user/register/', userauths_views.RegisterView.as_view(), name='auth_register'),
-    path('user/test/', userauths_views.testEndPoint, name='auth_register'),
     path('user/password-reset/<email>/', userauths_views.PasswordEmailVerify.as_view(), name='password_reset'),
     path('user/password-change/', userauths_views.PasswordChangeView.as_view(), name='password_reset'),
 
@@ -26,10 +22,11 @@ urlpatterns = [
 
 
     # Vendor API Endpoints
-    path('vendor/stats/', vendor_views.DashboardStatsAPIView.as_view(), name='vendor-stats'),
+    path('vendor/dashboard', vendor_views.DashboardStatsAPIView.as_view(), name='vendor-stats'),
+    path('vendor/orders/', vendor_views.OrdersAPIView.as_view(), name='vendor-orders'),
+    path('vendor/orders/<str:order_oid>/', vendor_views.OrderDetailAPIView.as_view(), name='vendor-order-detail'),
+    
     path('vendor/products/<vendor_id>/', vendor_views.ProductsAPIView.as_view(), name='vendor-prdoucts'),
-    path('vendor/orders/<vendor_id>/', vendor_views.OrdersAPIView.as_view(), name='vendor-orders'),
-    path('vendor/orders/<vendor_id>/<order_oid>/', vendor_views.OrderDetailAPIView.as_view(), name='vendor-order-detail'),
     path('vendor/yearly-report/<vendor_id>/', vendor_views.YearlyOrderReportChartAPIView.as_view(), name='vendor-yearly-report'),
     path('vendor/orders-report-chart/<vendor_id>/', vendor_views.MonthlyOrderChartAPIFBV, name='vendor-orders-report-chart'),
     path('vendor/products-report-chart/<vendor_id>/', vendor_views.MonthlyProductsChartAPIFBV, name='vendor-product-report-chart'),

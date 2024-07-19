@@ -10,6 +10,10 @@ from admin_backend import order_view as order_profits
 # Delivery Status
 from admin_backend import delivery as deliverystatus
 
+# chat list and details
+from admin_backend.chat_view import AdminMessageListView, AdminMessageDetailView
+
+
 
 
 app_name = 'admin_backend'  # Add this line to specify the app namespace
@@ -19,6 +23,7 @@ router = DefaultRouter()
 router.register(r'collections', admin_backend.CollectionsViewSet, basename='collections')
 router.register(r'categories', admin_backend.CategoryViewSet, basename='categories')
 router.register(r'brand', admin_backend.BrandViewSet, basename='brand')
+
 
 
 urlpatterns = [
@@ -32,5 +37,10 @@ urlpatterns = [
     # delivery and order tracking to be paid attention to later
     
     path('admin/order/delivery-status-update/<int:order_id>/', deliverystatus.DeliveryStatusUpdateView.as_view(), name='delivery-status-update'),
+
+    # chat mesages list and details
+    path('admin/list-messages/', AdminMessageListView.as_view(), name='admin-message-list'),
+    path('admin/message-details/<int:pk>/', AdminMessageDetailView.as_view(), name='admin-message-detail'),
+
 ]
 
