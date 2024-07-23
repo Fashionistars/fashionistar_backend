@@ -15,6 +15,12 @@ from datetime import timedelta
 from environs import Env
 import os
 import dj_database_url
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
+
+env = Env()
+env.read_env()
 
 env = Env()
 env.read_env()
@@ -67,9 +73,10 @@ INSTALLED_APPS = [
     'checkout',
     'notification',
     'createOrder',
-    'chat',
-
     'transaction',
+    'chat',
+    'measurements',
+
 
     # Third Party Apps
     'rest_framework',
@@ -81,6 +88,9 @@ INSTALLED_APPS = [
     'phone_verify',
     'channels',
     
+    # Cloudinary
+    'cloudinary_storage',
+    'cloudinary',
     
 ]
 
@@ -97,7 +107,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'backend.urls'
+ROOT_URLCONF = 'backend.urls'   
 
 PHONE_VERIFICATION = {
     'BACKEND': 'phone_verify.backends.twilio.TwilioBackend',
@@ -143,9 +153,6 @@ CHANNEL_LAYERS = {
     },
 }
 
-
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
