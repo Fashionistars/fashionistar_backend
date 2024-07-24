@@ -39,9 +39,11 @@ SECRET_KEY = 'django-insecure-b*tuoe%^o+=^35$0fufrm=oamh^(o0tabn39(7ni12(i-oup+4
 DEBUG = True
 
 # ALLOWED_HOSTS = ["fashionistar-backend.onrender.com", "127.0.0.1"]
+DJANGO_SECRET_ADMIN_URL="<your_secret_admin_url>"
 
 
-ALLOWED_HOSTS = ["fashionistar-backend.onrender.com", "127.0.0.1", "localhost:3000", "localhost3001"]
+# ALLOWED_HOSTS = ["fashionistar-backend.onrender.com", "127.0.0.1"]
+ALLOWED_HOSTS = ["fashionistar-backend.onrender.com", "127.0.0.1", "localhost:8000", "localhost3001"]
 CSRF_TRUSTED_ORIGINS = ['https://fashionistar-backend.onrender.com', 'https://127.0.0.1']
 SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
 
