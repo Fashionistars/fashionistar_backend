@@ -1,11 +1,16 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.shortcuts import get_object_or_404
 from .models import  Measurement
 from userauths.models import Profile
+from .models import MeasurementVideo
+from .serializers import MeasurementVideoSerializer
 import requests
+
+
+
 
 # API credentials
 MIRRORSIZE_API_KEY = 'J0fTMvAKJPJuubNjNN0ShN33WSqAFmDtxpYG7RztM0hFOH41uorrk4BJyXWLK9Pz'
@@ -84,3 +89,57 @@ class FetchMeasurementView(APIView):
                 return Response({"error": response_data.get('message', 'Failed to fetch measurement data.')}, status=status.HTTP_400_BAD_REQUEST)
         except requests.exceptions.RequestException as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+
+
+# ========================   FOR CREATING AND VIEWING THE MEASUREMENT VIDEOS   ======================
+
+
+class MeasurementVideoView(APIView):
+    """
+    View to handle POST, GET, and PUT requests for MeasurementVideo.
+    """
+    
+    def post(self, request):
+        """
+        Create a new measurement video.
+        """
+        permission_classes = (IsAuthenticated,)
+        serializer = MeasurementVideoSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(user=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def get(self, request, pk=None):
+        """
+        Retrieve the measurement video. If pk is provided, get a specific video, else get all.
+        """
+        permission_classes = (AllowAny,)
+        if pk:
+            measurement_video = get_object_or_404(MeasurementVideo, pk=pk)
+            serializer = MeasurementVideoSerializer(measurement_video)
+        else:
+            measurement_videos = MeasurementVideo.objects.all()
+            serializer = MeasurementVideoSerializer(measurement_videos, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request, pk):
+        """
+        Update an existing measurement video.
+        """
+        permission_classes = (IsAuthenticated,)
+        measurement_video = get_object_or_404(MeasurementVideo, pk=pk, user=request.user)
+        serializer = MeasurementVideoSerializer(measurement_video, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+
+
+

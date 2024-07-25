@@ -14,3 +14,20 @@ class Measurement(models.Model):
 
     def __str__(self):
         return f"{self.user.email} - {self.created_at}"
+    
+
+
+
+class MeasurementVideo(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    video_url = models.URLField(max_length=200)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.username}'s Measurement Video"
+
+
+
+
+
+
