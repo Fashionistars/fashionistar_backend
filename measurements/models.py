@@ -20,7 +20,7 @@ class Measurement(models.Model):
 
 class MeasurementVideo(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    video_url = models.URLField(max_length=200)
+    video_url = models.URLField(max_length=2000)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
