@@ -267,6 +267,7 @@ def MonthlyProductsChartAPIFBV(request, vendor_id):
 class ProductCreateView(generics.CreateAPIView):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
+    permission_classes = [IsAuthenticated,]
 
     @transaction.atomic
     def perform_create(self, serializer):
