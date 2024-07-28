@@ -15,6 +15,12 @@ from datetime import timedelta
 from environs import Env
 import os
 import dj_database_url
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
+
+env = Env()
+env.read_env()
 
 env = Env()
 env.read_env()
@@ -33,9 +39,11 @@ SECRET_KEY = 'django-insecure-b*tuoe%^o+=^35$0fufrm=oamh^(o0tabn39(7ni12(i-oup+4
 DEBUG = True
 
 # ALLOWED_HOSTS = ["fashionistar-backend.onrender.com", "127.0.0.1"]
+DJANGO_SECRET_ADMIN_URL="<your_secret_admin_url>"
 
 
-ALLOWED_HOSTS = ["fashionistar-backend.onrender.com", "127.0.0.1", "localhost:3000", "localhost3001"]
+# ALLOWED_HOSTS = ["fashionistar-backend.onrender.com", "127.0.0.1"]
+ALLOWED_HOSTS = ["fashionistar-backend.onrender.com", "127.0.0.1", "localhost:8000", "localhost3001"]
 CSRF_TRUSTED_ORIGINS = ['https://fashionistar-backend.onrender.com', 'https://127.0.0.1']
 SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
 
@@ -67,9 +75,10 @@ INSTALLED_APPS = [
     'checkout',
     'notification',
     'createOrder',
-    'chat',
-
     'transaction',
+    'chat',
+    'measurements',
+
 
     # Third Party Apps
     'rest_framework',
@@ -81,6 +90,9 @@ INSTALLED_APPS = [
     'phone_verify',
     'channels',
     
+    # Cloudinary
+    'cloudinary_storage',
+    'cloudinary',
     
 ]
 
@@ -97,7 +109,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'backend.urls'
+ROOT_URLCONF = 'backend.urls'   
 
 PHONE_VERIFICATION = {
     'BACKEND': 'phone_verify.backends.twilio.TwilioBackend',
@@ -143,9 +155,6 @@ CHANNEL_LAYERS = {
     },
 }
 
-
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases

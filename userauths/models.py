@@ -121,6 +121,9 @@ class Profile(models.Model):
     newsletter = models.BooleanField(default=False)
     date = models.DateTimeField(auto_now_add=True, null=True, blank=True)
     pid = ShortUUIDField(unique=True, length=10, max_length=20, alphabet="abcdefghijklmnopqrstuvxyz")
+    qr_code = models.TextField(null=True, blank=True)
+    mirrorsize_access_token = models.CharField(max_length=255, null=True, blank=True)
+    measurement = models.ForeignKey("measurements.Measurement", on_delete=models.SET_NULL, null=True, blank=True)
 
     class Meta:
         ordering = ["-date"]
