@@ -21,20 +21,22 @@ schema_view = get_schema_view(
 )
 
 urlpatterns = [
-    path('swagger<format>/', schema_view.without_ui(cache_timeout=0), name='schema-json'),
-    path('', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
-    path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
+   path('swagger<format>/', schema_view.without_ui(cache_timeout=0), name='schema-json'),
+   path('', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
+   path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
     
-    # API V1 Urls
-    path("", include("api.urls")),
-    path('payment-gateway', include('transaction.urls')),
-    # Admin URL
-    path('admin/', admin.site.urls),
-    path("auth/", include("userauths.urls")),
-    path("", include("admin_backend.urls")),
+   # API V1 Urls
+   path("", include("api.urls")),
+   path('payment-gateway', include('transaction.urls')),
+
+   # Admin URL
+   path('admin/', admin.site.urls),
+   path("auth/", include("userauths.urls")),
+   path("", include("admin_backend.urls")),
 
     
-    path("", include("measurements.urls"))
+   path("", include("measurements.urls")),
+   path("", include("Blog.urls"))
 ]
 
 

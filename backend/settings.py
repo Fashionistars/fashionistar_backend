@@ -78,6 +78,7 @@ INSTALLED_APPS = [
     'transaction',
     'chat',
     'measurements',
+    'Blog',
 
 
     # Third Party Apps
