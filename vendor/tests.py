@@ -11,7 +11,7 @@ class VendorStoreViewTest(TestCase):
         # Create a user and a vendor
         self.user = User.objects.create_user(
             email='vendoruser@example.com',
-            phone='1234567890',
+            phone='+2347082190857',
             password='password123',
             role=User.VENDOR
         )
