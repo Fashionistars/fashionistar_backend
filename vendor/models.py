@@ -6,7 +6,8 @@ from store import models as store_model
 from django.db.models import Max
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils.text import slugify
-import shortuuid
+from django.db.models import Avg
+
 
 
 class Vendor(models.Model):
@@ -36,3 +37,6 @@ class Vendor(models.Model):
         if self.slug == "" or self.slug == None:
             self.slug = slugify(self.name)
         super(Vendor, self).save(*args, **kwargs) 
+        
+    def get_average_rating(self):
+        return self.vendor_role.aggregate(average_rating=Avg('rating')).get('average_rating', 0)

@@ -2,14 +2,19 @@ from rest_framework import serializers
 from .models import Vendor
 from store.models import Product
 
-class VendorSerializer(serializers.ModelSerializer):
-    phone_number = serializers.CharField(source='user.phone')
-    address = serializers.CharField(source='user.profile.address')  # Adjust this field according to your Profile model
+class AllVendorSerializer(serializers.ModelSerializer):
+    phone = serializers.CharField(source='user.phone')
+    address = serializers.CharField(source='user.profile.address')
+    average_rating = serializers.SerializerMethodField()
 
     class Meta:
         model = Vendor
-        fields = ['phone_number', 'address']
+        fields = ['name', 'image', 'average_rating', 'phone', 'address', 'slug']
 
+    def get_average_rating(self, obj):
+        return obj.get_average_rating()
+    
+    
 class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
