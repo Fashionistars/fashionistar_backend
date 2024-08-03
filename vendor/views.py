@@ -754,3 +754,4 @@ class VendorStoreView(generics.ListAPIView):
 class AllVendorsProductsList(generics.ListAPIView):
     queryset = Vendor.objects.all()
     serializer_class = VendorSerializer
+    permission_classes = [AllowAny]

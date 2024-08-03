@@ -21,7 +21,7 @@ urlpatterns = [
     path('addon/', store_views.ConfigSettingsDetailView.as_view(), name='addon'),
 
     path('vendor/<int:vendor_id>/store/', vendor_views.VendorStoreView.as_view(), name='vendor-store-products'),
-    path('vendors/products/', vendor_views.AllVendorsProductsList.as_view(), name='all-vendors-products'),
+    path('vendors/', vendor_views.AllVendorsProductsList.as_view(), name='all-vendors-products'),
 
     # Vendor API Endpoints
     path('vendor/dashboard', vendor_views.DashboardStatsAPIView.as_view(), name='vendor-stats'),
