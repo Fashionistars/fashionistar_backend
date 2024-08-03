@@ -12,7 +12,7 @@ from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, NotFound
 from rest_framework.views import APIView
 
 # Serializers
@@ -697,3 +697,60 @@ class VendorRegister(generics.CreateAPIView):
         )
 
         return Response({"message":"Created vendor account"})
+    
+    
+class VendorStoreView(generics.ListAPIView):
+    """
+    API view to retrieve all products for a specific vendor along with vendor details.
+
+    This view provides a list of products associated with a particular vendor identified by
+    `vendor_id` in the URL. It also includes vendor-specific details such as store name,
+    phone number, and address. 
+
+    Permissions:
+        - AllowAny: This view is accessible by any user without authentication.
+
+    URL Parameters:
+        - vendor_id (int): The ID of the vendor whose store information is to be retrieved.
+
+    Response:
+        - A JSON object containing:
+            - store_name: The name of the vendor's store.
+            - phone_number: The contact phone number of the vendor.
+            - address: The address associated with the vendor.
+            - products: A list of products available in the vendor's store, each serialized with
+              their respective details.
+    """
+    serializer_class = ProductSerializer
+    permission_classes = [AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        """
+        Handles GET requests to retrieve vendor's store information and associated products.
+
+        Args:
+            request (Request): The HTTP request object.
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments including `vendor_id`.
+
+        Returns:
+            Response: A Response object containing vendor details and serialized product data.
+        """
+        vendor_id = self.kwargs['vendor_id']
+        vendor = get_object_or_404(Vendor, id=vendor_id)
+        products = Product.objects.filter(vendor=vendor).order_by('title')
+        
+        product_serializer = self.get_serializer(products, many=True)
+
+        vendor_data = {
+            'store_name': vendor.name,  
+            'phone_number': vendor.user.phone,
+            'address': vendor.user.profile.address,
+            'products': product_serializer.data
+        }
+        
+        return Response(vendor_data, status=status.HTTP_200_OK)
+
+class AllVendorsProductsList(generics.ListAPIView):
+    queryset = Vendor.objects.all()
+    serializer_class = VendorSerializer
