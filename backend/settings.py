@@ -79,6 +79,7 @@ INSTALLED_APPS = [
     'chat',
     'measurements',
     'Blog',
+    'Homepage',
 
 
     # Third Party Apps

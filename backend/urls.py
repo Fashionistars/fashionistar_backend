@@ -36,7 +36,8 @@ urlpatterns = [
 
     
    path("", include("measurements.urls")),
-   path("", include("Blog.urls"))
+   path("", include("Blog.urls")),
+   path("", include("Homepage.urls"))
 ]
 
 

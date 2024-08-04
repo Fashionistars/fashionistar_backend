@@ -15,6 +15,7 @@ class Vendor(models.Model):
     name = models.CharField(max_length=100, help_text="Shop Name", null=True, blank=True)
     email = models.EmailField(max_length=100, help_text="Shop Email", null=True, blank=True)
     description = models.TextField(null=True, blank=True)
+    collections = models.ManyToManyField('Homepage.Category', related_name="products",)    # In this collections column,  a vendor is meant to contain one or more differnt collections
     mobile = models.CharField(max_length = 150, null=True, blank=True)
     verified = models.BooleanField(default=True)
     active = models.BooleanField(default=True)

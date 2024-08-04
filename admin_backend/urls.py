@@ -1,8 +1,8 @@
-# urls.py
 from django.urls import path, include
-from rest_framework.routers import DefaultRouter
-from admin_backend import views as admin_backend
 
+from Homepage.collections import *
+from Homepage.category import *
+from Homepage.brand import *
 
 # Oders Profit
 from admin_backend import order_view as order_profits
@@ -19,16 +19,29 @@ from admin_backend.chat_view import AdminMessageListView, AdminMessageDetailView
 app_name = 'admin_backend'  # Add this line to specify the app namespace
 
 
-router = DefaultRouter()
-router.register(r'collections', admin_backend.CollectionsViewSet, basename='collections')
-router.register(r'categories', admin_backend.CategoryViewSet, basename='categories')
-router.register(r'brand', admin_backend.BrandViewSet, basename='brand')
+# # Protected routes endpoints
+admin_urlpatterns = [
+    # Category endpoints
+    path('admin/categories/create/', CategoryCreateView.as_view(), name='category-create'),
+    path('admin/categories/<slug:slug>/update/', CategoryUpdateView.as_view(), name='category-update'),
+    path('admin/categories/<slug:slug>/delete/', CategoryDeleteView.as_view(), name='category-delete'),
 
 
+    # Brand endpoints
+    path('admin/brands/create/', BrandCreateView.as_view(), name='brand-create'),
+    path('admin/brands/<slug:slug>/update/', BrandUpdateView.as_view(), name='brand-update'),
+    path('admin/brands/<slug:slug>/delete/', BrandDeleteView.as_view(), name='brand-delete'),
 
+    # Collections endpoints
+    path('admin/collections/create/', CollectionsCreateView.as_view(), name='collection-create'),
+    path('admin/collections/<slug:slug>/update/', CollectionsUpdateView.as_view(), name='collection-update'),
+    path('admin/collections/<slug:slug>/delete/', CollectionsDeleteView.as_view(), name='collection-delete'),
+]
+    
+   
+
+   
 urlpatterns = [
-    path('', include(router.urls)),
-
     
     path('admin/orders/', order_profits.AdminOrderListView.as_view(), name='admin-orders'),
     path('admin/profit/', order_profits.AdminProfitView.as_view(), name='admin-profit'),
@@ -43,4 +56,10 @@ urlpatterns = [
     path('admin/message-details/<int:pk>/', AdminMessageDetailView.as_view(), name='admin-message-detail'),
 
 ]
+
+
+# Combine both sets of urlpatterns
+urlpatterns += admin_urlpatterns
+
+
 
