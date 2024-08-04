@@ -18,6 +18,7 @@ from rest_framework.views import APIView
 # Serializers
 from userauths.serializer import  ProfileSerializer
 from store.serializers import  CouponSummarySerializer, EarningSummarySerializer,SummarySerializer, CartOrderItemSerializer, ProductSerializer, CartOrderSerializer, GallerySerializer, ReviewSerializer,  SpecificationSerializer, CouponSerializer, ColorSerializer, SizeSerializer, VendorSerializer
+from .serializers import *
 
 # Models
 from userauths.models import Profile
@@ -29,8 +30,6 @@ from datetime import datetime, timedelta
 
 
 User = get_user_model()
-
-
 
 
 
@@ -721,7 +720,7 @@ class VendorStoreView(generics.ListAPIView):
             - products: A list of products available in the vendor's store, each serialized with
               their respective details.
     """
-    serializer_class = ProductSerializer
+    serializer_class = AllProductSerializer
     permission_classes = [AllowAny]
 
     def get(self, request, *args, **kwargs):
@@ -752,7 +751,6 @@ class VendorStoreView(generics.ListAPIView):
         return Response(vendor_data, status=status.HTTP_200_OK)
 
 
-from .serializers import *
 class AllVendorsProductsList(generics.ListAPIView):
     serializer_class = AllVendorSerializer
     permission_classes = [AllowAny]
