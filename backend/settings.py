@@ -533,3 +533,10 @@ DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 #         },
 #     },
 # }
+
+
+CELERY_BROKER_URL = 'redis://default:HNkTuvjOvzDJEDszLhPoFLMsWIhdjBmA@redis.railway.internal:6379'
+
+CELERY_ACCEPT_CONTENT = ['json']
+
+CELERY_TASK_SERIALIZER = 'json'
