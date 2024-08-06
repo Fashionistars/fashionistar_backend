@@ -1,12 +1,7 @@
-from django.shortcuts import render
-from rest_framework import serializers
-import os
 from rave_python import Rave
-from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 from ShopCart.models import Cart
-from .serializers import PaymentSerializer
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -15,14 +10,11 @@ import requests
 from rest_framework.permissions import IsAuthenticated
 import uuid
 from transaction.models import Payment
-from django.conf import settings
 
 from store.models import *
 
 from environs import Env
-import os
 import logging
-from django.conf import settings
 from rave_python import Rave, RaveExceptions, Misc
 
 # Initialize logger
