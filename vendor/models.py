@@ -1,10 +1,7 @@
 from django.db import models
 from shortuuid.django_fields import ShortUUIDField
 from django.utils.html import mark_safe
-from userauths.models import User, user_directory_path, Profile
-from store import models as store_model
-from django.db.models import Max
-from django.core.validators import MinValueValidator, MaxValueValidator
+from userauths.models import User, user_directory_path
 from django.utils.text import slugify
 from django.db.models import Avg
 import shortuuid
