@@ -18,6 +18,7 @@ from rest_framework.views import APIView
 # Serializers
 from userauths.serializer import  ProfileSerializer
 from store.serializers import  CouponSummarySerializer, EarningSummarySerializer,SummarySerializer, CartOrderItemSerializer, ProductSerializer, CartOrderSerializer, GallerySerializer, ReviewSerializer,  SpecificationSerializer, CouponSerializer, ColorSerializer, SizeSerializer, VendorSerializer
+from .serializers import *
 
 # Models
 from userauths.models import Profile
@@ -29,8 +30,6 @@ from datetime import datetime, timedelta
 
 
 User = get_user_model()
-
-
 
 
 
@@ -721,7 +720,7 @@ class VendorStoreView(generics.ListAPIView):
             - products: A list of products available in the vendor's store, each serialized with
               their respective details.
     """
-    serializer_class = ProductSerializer
+    serializer_class = AllProductSerializer
     permission_classes = [AllowAny]
 
     def get(self, request, *args, **kwargs):
@@ -751,7 +750,19 @@ class VendorStoreView(generics.ListAPIView):
         
         return Response(vendor_data, status=status.HTTP_200_OK)
 
+
 class AllVendorsProductsList(generics.ListAPIView):
-    queryset = Vendor.objects.all()
-    serializer_class = VendorSerializer
+    serializer_class = AllVendorSerializer
     permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        return Vendor.objects.filter(verified=True).select_related('user', 'user__profile')
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        total_verified_vendors = queryset.count()
+        return Response({
+            'total_verified_vendors': total_verified_vendors,
+            'vendors': serializer.data
+        })
