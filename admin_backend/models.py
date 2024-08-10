@@ -47,7 +47,7 @@ class Collections(models.Model):
 
 # Model for Product Categories
 class Category(models.Model):
-    title = models.CharField(max_length=100)
+    title = models.CharField(max_length=100, unique=True)
     image = models.ImageField(upload_to=user_directory_path, default="category.jpg", null=True, blank=True)
     active = models.BooleanField(default=True)
     slug = models.SlugField(null=True, blank=True)

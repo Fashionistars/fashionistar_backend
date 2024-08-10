@@ -3,7 +3,7 @@ from django.db import models
 from django.db import transaction
 from django.contrib.auth import get_user_model
 from django.db.models.functions import ExtractMonth
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404
 from django.db.models import Avg
 # Restframework Packages
 from rest_framework.decorators import api_view
@@ -12,8 +12,7 @@ from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.exceptions import PermissionDenied, NotFound
-from rest_framework.views import APIView
+from rest_framework.exceptions import PermissionDenied
 
 # Serializers
 from userauths.serializer import  ProfileSerializer
