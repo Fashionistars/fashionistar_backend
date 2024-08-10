@@ -24,7 +24,7 @@ class CollectionsSerializer(serializers.ModelSerializer):
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
-        fields = '__all__'
+        fields = ['title', 'image' ]
 
 
 # Define a serializer for the Brand model

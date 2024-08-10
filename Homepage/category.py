@@ -39,7 +39,7 @@ class CategoryCreateView(APIView):
     """
     View to create a new category.
     """
-    permission_classes = (IsAdminUser,)
+    permission_classes = (AllowAny,)
 
     def post(self, request):
         try:
@@ -55,7 +55,7 @@ class CategoryUpdateView(APIView):
     """
     View to update an existing category.
     """
-    permission_classes = (IsAdminUser,)
+    permission_classes = (AllowAny,)
 
     def put(self, request, slug):
         try:
@@ -72,7 +72,7 @@ class CategoryDeleteView(APIView):
     """
     View to delete an existing category.
     """
-    permission_classes = (IsAdminUser,)
+    permission_classes = (AllowAny,)
 
     def delete(self, request, slug):
         try:

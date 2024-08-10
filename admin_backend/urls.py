@@ -10,9 +10,14 @@ from admin_backend import order_view as order_profits
 # Delivery Status
 from admin_backend import delivery as deliverystatus
 
+from rest_framework.routers import DefaultRouter
+
 # chat list and details
 from admin_backend.chat_view import AdminMessageListView, AdminMessageDetailView
+from .views import CategoryViewSet
 
+router = DefaultRouter()
+router.register(r'categories', CategoryViewSet, basename='category')
 
 
 
@@ -22,9 +27,13 @@ app_name = 'admin_backend'  # Add this line to specify the app namespace
 # # Protected routes endpoints
 admin_urlpatterns = [
     # Category endpoints
-    path('admin/categories/create/', CategoryCreateView.as_view(), name='category-create'),
-    path('admin/categories/<slug:slug>/update/', CategoryUpdateView.as_view(), name='category-update'),
-    path('admin/categories/<slug:slug>/delete/', CategoryDeleteView.as_view(), name='category-delete'),
+    path('admin/category/create/', CategoryViewSet.as_view({'post': 'create'}), name='category-create'),
+    path('admin/category/all/', CategoryViewSet.as_view({'get': 'list'}), name='category-list'),
+    path('admin/category/<slug:slug>/', CategoryViewSet.as_view({'get': 'retrieve'}), name='category-detail'),
+    path('admin/category/<slug:slug>/update/', CategoryViewSet.as_view({'put': 'update'}), name='category-update'),
+    path('admin/category/<slug:slug>/delete/', CategoryViewSet.as_view({'delete': 'destroy'}), name='category-delete'),    # path('admin/categories/create/', CategoryCreateView.as_view(), name='category-create'),
+    # path('admin/categories/<slug:slug>/update/', CategoryUpdateView.as_view(), name='category-update'),
+    # path('admin/categories/<slug:slug>/delete/', CategoryDeleteView.as_view(), name='category-delete'),
 
 
     # Brand endpoints

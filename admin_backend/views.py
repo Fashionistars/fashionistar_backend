@@ -5,6 +5,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 
 from .models import Collections, Category, Brand
 from .serializers import CollectionsSerializer, CategorySerializer, BrandSerializer
+from django.http import Http404
 
 
 
@@ -91,12 +92,22 @@ class CollectionsViewSet(viewsets.ModelViewSet):
 
 class CategoryViewSet(viewsets.ModelViewSet):
     """
-    A viewset for viewing and editing CATEGORIES instances.
+    A viewset for viewing and editing CATEGORY instances.
     """
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
     permission_classes = [AllowAny]
     parser_classes = (parsers.MultiPartParser, parsers.FormParser)
+
+    def get_object(self):
+        """
+        Override get_object to return the CATEGORY instance based on slug.
+        """
+        slug = self.kwargs.get('slug')
+        try:
+            return Category.objects.get(slug=slug)
+        except Category.DoesNotExist:
+            raise Http404
 
     def create(self, request, *args, **kwargs):
         """
@@ -111,8 +122,24 @@ class CategoryViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
-        headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        created_instance = Category.objects.get(title=serializer.validated_data['title'])
+    
+        # Serialize the full instance
+        full_serializer = self.get_serializer(created_instance)
+        data = {
+        'id': created_instance.id,
+        'title': created_instance.title,
+        'image': created_instance.image.url if created_instance.image else None,
+        'slug': created_instance.slug,
+        # 'createdAt': created_instance.createdAt,
+        # 'updatedAt': created_instance.updatedAt,
+        }
+        # Create the response
+        headers = self.get_success_headers(full_serializer.data)
+        return Response(data, status=status.HTTP_201_CREATED, headers=headers)
+
+        # headers = self.get_success_headers(serializer.data)
+        # return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     def update(self, request, *args, **kwargs):
         """
@@ -143,7 +170,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
         """
         instance = self.get_object()
         self.perform_destroy(instance)
-        return Response({"message": "Image deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+        return Response({"message": "Category deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
 
 
 class BrandViewSet(viewsets.ModelViewSet):

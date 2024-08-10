@@ -51,11 +51,15 @@ class Category(models.Model):
     image = models.ImageField(upload_to=user_directory_path, default="category.jpg", null=True, blank=True)
     active = models.BooleanField(default=True)
     slug = models.SlugField(null=True, blank=True)
+    
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.title)
+        super().save(*args, **kwargs)
 
     class Meta:
         verbose_name_plural = "Categories"
 
-    # Returns an HTML image tag for the category's image
     def thumbnail(self):
         return mark_safe('<img src="%s" width="50" height="50" style="object-fit:cover; border-radius: 6px;" />' % (self.image.url))
 

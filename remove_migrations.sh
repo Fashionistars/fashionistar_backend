@@ -8,6 +8,5 @@ if ! grep -q "*/migrations/" .gitignore; then
     echo "*/migrations/" >> .gitignore
 fi
 
-# Commit the changes
 git add .gitignore
 git commit -m "Add migration directories to .gitignore and remove from version control"
