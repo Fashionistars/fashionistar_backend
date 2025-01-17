@@ -27,10 +27,11 @@ urlpatterns = [
     
    # API V1 Urls
    path("", include("api.urls")),
-   path('payment-gateway', include('transaction.urls')),
+   # path("", include('transaction.urls')),
+   path("", include('Paystack_Webhoook_Prod.urls')),
 
    # Admin URL
-   # path('admin/', admin.site.urls),
+   path('admin/', admin.site.urls),
    path("auth/", include("userauths.urls")),
    path("", include("admin_backend.urls")),
 

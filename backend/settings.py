@@ -75,11 +75,12 @@ INSTALLED_APPS = [
     'checkout',
     'notification',
     'createOrder',
-    'transaction',
+    # 'transaction',
     'chat',
     'measurements',
     'Blog',
     'Homepage',
+    'Paystack_Webhoook_Prod',
 
 
     # Third Party Apps
@@ -214,36 +215,36 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-# AWS Configs
-AWS_ACCESS_KEY_ID = env("AWS_ACCESS_KEY_ID")
+# # AWS Configs
+# AWS_ACCESS_KEY_ID = env("AWS_ACCESS_KEY_ID")
 
-AWS_SECRET_ACCESS_KEY = env("AWS_SECRET_ACCESS_KEY")
+# AWS_SECRET_ACCESS_KEY = env("AWS_SECRET_ACCESS_KEY")
 
-AWS_STORAGE_BUCKET_NAME = env("AWS_STORAGE_BUCKET_NAME")
+# AWS_STORAGE_BUCKET_NAME = env("AWS_STORAGE_BUCKET_NAME")
 
-AWS_S3_FILE_OVERWRITE = False
+# AWS_S3_FILE_OVERWRITE = False
 
-AWS_DEFAULT_ACL = 'public-read'
+# AWS_DEFAULT_ACL = 'public-read'
 
-DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+# DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
 
-STATICFILES_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+# STATICFILES_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
 
-AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
+# AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
 
-AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+# AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
 
-AWS_LOCATION = 'static'
+# AWS_LOCATION = 'static'
 
-STATIC_LOCATION = 'static'
+# STATIC_LOCATION = 'static'
 
-STATIC_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/{STATIC_LOCATION}/'
+# STATIC_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/{STATIC_LOCATION}/'
 
-# Newly added settings to debug encripted chat message files
-AWS_S3_REGION_NAME = 'us-east-1' 
-AWS_S3_VERIFY = True
-AWS_QUERYSTRING_AUTH = False
-# MEDIA_URL = f'https://{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com/media/'
+# # Newly added settings to debug encripted chat message files
+# AWS_S3_REGION_NAME = 'us-east-1' 
+# AWS_S3_VERIFY = True
+# AWS_QUERYSTRING_AUTH = False
+# # MEDIA_URL = f'https://{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com/media/'
 
 
 
@@ -256,15 +257,18 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'userauths.User'
 
 # Site URL
-SITE_URL = env("SITE_URL")
+# SITE_URL = env("SITE_URL")
 
-# Stripe API Keys
-STRIPE_PUBLIC_KEY = env("STRIPE_PUBLIC_KEY")
-STRIPE_SECRET_KEY = env("STRIPE_SECRET_KEY")
+# # Stripe API Keys
+# STRIPE_PUBLIC_KEY = env("STRIPE_PUBLIC_KEY")
+# STRIPE_SECRET_KEY = env("STRIPE_SECRET_KEY")
 
-# Paypal API Keys
-PAYPAL_CLIENT_ID = env('PAYPAL_CLIENT_ID')
-PAYPAL_SECRET_ID = env('PAYPAL_SECRET_ID')
+# # Paypal API Keys
+# PAYPAL_CLIENT_ID = env('PAYPAL_CLIENT_ID')
+# PAYPAL_SECRET_ID = env('PAYPAL_SECRET_ID')
+
+
+PAYSTACK_TEST_KEY = "sk_test_f5995ad3b929498e963ca52a9a065dd5c3190e31"
 
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
@@ -540,3 +544,82 @@ CELERY_BROKER_URL = 'redis://default:HNkTuvjOvzDJEDszLhPoFLMsWIhdjBmA@redis.rail
 CELERY_ACCEPT_CONTENT = ['json']
 
 CELERY_TASK_SERIALIZER = 'json'
+
+
+
+
+
+
+
+
+################  LOGGER SETTINGS FOR PRODUCTION ENVIRONMENT INCLUDING PAYSTACK WEBHOOOK URL RPE PRODUCTION   #####################
+
+
+
+# settings.py
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple'
+        },
+        'file': {
+            'level': 'DEBUG',  # Log everything from debug and above. Change to 'INFO' in production
+            'class': 'logging.FileHandler',
+            'filename': 'application.log', # location of the log file
+            'formatter': 'verbose'
+        },
+       'webhook_file': {
+            'level': 'DEBUG',  # Log everything from debug and above. Change to 'INFO' in production
+            'class': 'logging.FileHandler',
+            'filename': 'webhook.log',  # Location for webhook logs
+            'formatter': 'verbose'
+        },
+        'mail_admins': {
+          'level': 'ERROR',
+            'class': 'django.utils.log.AdminEmailHandler',
+            'formatter': 'verbose',
+            'filters': ['require_debug_false']
+        }
+    },
+    'filters':{
+        'require_debug_false':{
+             '()': 'django.utils.log.RequireDebugFalse',
+        }
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console', 'file', 'mail_admins'],
+            'level': 'INFO',  # Default log level for Django
+            'propagate': True,
+        },
+         'webhook':{
+           'handlers': ['console', 'webhook_file', 'mail_admins'], # Specific logger for webhook
+           'level': 'DEBUG',  # Set webhook log level
+            'propagate': False, # Prevent log messages from being sent to other handlers
+        },
+        'paystack':{
+           'handlers': ['console', 'file', 'mail_admins'], # specific logger for paystack
+           'level': 'DEBUG',  # Set webhook log level
+           'propagate': False,
+         },
+       'application':{
+           'handlers': ['console', 'file', 'mail_admins'],
+           'level': 'DEBUG',
+           'propagate': False,
+       }
+    },
+}

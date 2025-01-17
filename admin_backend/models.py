@@ -106,10 +106,10 @@ class Brand(models.Model):
         return self.title
     
 
-class Transaction(models.Model):
-    user_id = models.ForeignKey(User, on_delete=models.CASCADE, null=False)
-    oid = ShortUUIDField(length=10, max_length=25, alphabet="abcdefghijklmnopqrstuvxyz")
-    paid = models.DecimalField(decimal_places=2, max_digits=1000)
-    methods = models.CharField(max_length=50)
-    created_at = models.DateTimeField(auto_created=True)
+# class Transaction(models.Model):
+#     user_id = models.ForeignKey(User, on_delete=models.CASCADE, null=False)
+#     oid = ShortUUIDField(length=10, max_length=25, alphabet="abcdefghijklmnopqrstuvxyz")
+#     paid = models.DecimalField(decimal_places=2, max_digits=1000)
+#     methods = models.CharField(max_length=50)
+#     created_at = models.DateTimeField(auto_created=True)
     
