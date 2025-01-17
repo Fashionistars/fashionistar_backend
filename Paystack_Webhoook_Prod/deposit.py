@@ -4,7 +4,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.conf import settings
 from userauths.models import User, Profile
-from transaction.paystack import Transaction as PaystackTransaction, verify_payment
+from Paystack_Webhoook_Prod.paystack import Transaction as PaystackTransaction, verify_payment
 from decimal import Decimal
 from django.db import transaction
 from Paystack_Webhoook_Prod.models import Transaction
