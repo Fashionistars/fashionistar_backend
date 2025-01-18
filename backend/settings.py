@@ -269,6 +269,8 @@ AUTH_USER_MODEL = 'userauths.User'
 
 
 PAYSTACK_TEST_KEY = "sk_test_f5995ad3b929498e963ca52a9a065dd5c3190e31"
+PAYSTACK_SECRET_KEY = "sk_test_f5995ad3b929498e963ca52a9a065dd5c3190e31"
+
 
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
@@ -496,49 +498,6 @@ DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 
 
 
-# settings.py
-
-# LOGGING = {
-#     'version': 1,
-#     'disable_existing_loggers': False,
-#     'formatters': {
-#         'verbose': {
-#             'format': '{levelname} {asctime} {module} {message}',
-#             'style': '{',
-#         },
-#         'simple': {
-#             'format': '{levelname} {message}',
-#             'style': '{',
-#         },
-#     },
-#     'handlers': {
-#         'console': {
-#             'level': 'DEBUG',
-#             'class': 'logging.StreamHandler',
-#             'formatter': 'simple',
-#         },
-#         'file': {
-#             'level': 'DEBUG',
-#             'class': 'logging.FileHandler',
-#             'filename': 'debug.log',
-#             'formatter': 'verbose',
-#         },
-#     },
-#     'loggers': {
-#         'django': {
-#             'handlers': ['console', 'file'],
-#             'level': 'DEBUG',
-#             'propagate': True,
-#         },
-#         'myapp': {
-#             'handlers': ['console', 'file'],
-#             'level': 'DEBUG',
-#             'propagate': False,
-#         },
-#     },
-# }
-
-
 CELERY_BROKER_URL = 'redis://default:HNkTuvjOvzDJEDszLhPoFLMsWIhdjBmA@redis.railway.internal:6379'
 
 CELERY_ACCEPT_CONTENT = ['json']
@@ -552,74 +511,74 @@ CELERY_TASK_SERIALIZER = 'json'
 
 
 
-# ################  LOGGER SETTINGS FOR PRODUCTION ENVIRONMENT INCLUDING PAYSTACK WEBHOOOK URL RPE PRODUCTION   #####################
+################  LOGGER SETTINGS FOR PRODUCTION ENVIRONMENT INCLUDING PAYSTACK WEBHOOOK URL RPE PRODUCTION   #####################
 
 
 
-# # settings.py
+# settings.py
 
-# LOGGING = {
-#     'version': 1,
-#     'disable_existing_loggers': False,
-#     'formatters': {
-#         'verbose': {
-#             'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
-#             'style': '{',
-#         },
-#         'simple': {
-#             'format': '{levelname} {message}',
-#             'style': '{',
-#         },
-#     },
-#     'handlers': {
-#         'console': {
-#             'class': 'logging.StreamHandler',
-#             'formatter': 'simple'
-#         },
-#         'file': {
-#             'level': 'DEBUG',  # Log everything from debug and above. Change to 'INFO' in production
-#             'class': 'logging.FileHandler',
-#             'filename': 'application.log', # location of the log file
-#             'formatter': 'verbose'
-#         },
-#        'webhook_file': {
-#             'level': 'DEBUG',  # Log everything from debug and above. Change to 'INFO' in production
-#             'class': 'logging.FileHandler',
-#             'filename': 'webhook.log',  # Location for webhook logs
-#             'formatter': 'verbose'
-#         },
-#         'mail_admins': {
-#           'level': 'ERROR',
-#             'class': 'django.utils.log.AdminEmailHandler',
-#             'formatter': 'verbose',
-#             'filters': ['require_debug_false']
-#         }
-#     },
-#     'filters':{
-#         'require_debug_false':{
-#              '()': 'django.utils.log.RequireDebugFalse',
-#         }
-#     },
-#     'loggers': {
-#         'django': {
-#             'handlers': ['console', 'file', 'mail_admins'],
-#             'level': 'INFO',  # Default log level for Django
-#             'propagate': True,
-#         },
-#          'webhook':{
-#            'handlers': ['console', 'webhook_file', 'mail_admins'], # Specific logger for webhook
-#            'level': 'DEBUG',  # Set webhook log level
-#             'propagate': False, # Prevent log messages from being sent to other handlers
-#         },
-#         'paystack':{
-#            'handlers': ['console', 'file', 'mail_admins'], # specific logger for paystack
-#            'level': 'DEBUG',  # Set webhook log level
-#            'propagate': False,
-#          },
-#        'application':{
-#            'handlers': ['console', 'file', 'mail_admins'],
-#            'level': 'DEBUG',
-#            'propagate': False,
-#        }
-#     },
-# }
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple'
+        },
+        'file': {
+            'level': 'DEBUG',  # Log everything from debug and above. Change to 'INFO' in production
+            'class': 'logging.FileHandler',
+            'filename': 'application.log', # location of the log file
+            'formatter': 'verbose'
+        },
+       'webhook_file': {
+            'level': 'DEBUG',  # Log everything from debug and above. Change to 'INFO' in production
+            'class': 'logging.FileHandler',
+            'filename': 'webhook.log',  # Location for webhook logs
+            'formatter': 'verbose'
+        },
+        'mail_admins': {
+          'level': 'ERROR',
+            'class': 'django.utils.log.AdminEmailHandler',
+            'formatter': 'verbose',
+            'filters': ['require_debug_false']
+        }
+    },
+    'filters':{
+        'require_debug_false':{
+             '()': 'django.utils.log.RequireDebugFalse',
+        }
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console', 'file', 'mail_admins'],
+            'level': 'INFO',  # Default log level for Django
+            'propagate': True,
+        },
+         'webhook':{
+           'handlers': ['console', 'webhook_file', 'mail_admins'], # Specific logger for webhook
+           'level': 'DEBUG',  # Set webhook log level
+            'propagate': False, # Prevent log messages from being sent to other handlers
+        },
+        'paystack':{
+           'handlers': ['console', 'file', 'mail_admins'], # specific logger for paystack
+           'level': 'DEBUG',  # Set webhook log level
+           'propagate': False,
+         },
+       'application':{
+           'handlers': ['console', 'file', 'mail_admins'],
+           'level': 'DEBUG',
+           'propagate': False,
+       }
+    },
+}

@@ -27,18 +27,26 @@ urlpatterns = [
     
    # API V1 Urls
    path("", include("api.urls")),
-   # path("", include('transaction.urls')),
-   path("", include('Paystack_Webhoook_Prod.urls')),
-
+   
    # Admin URL
    path('admin/', admin.site.urls),
    path("auth/", include("userauths.urls")),
    path("", include("admin_backend.urls")),
 
-    
+
+   #  CLIENTS   /  CUSTOMER   /  USER 
+   path("", include("customer.urls")),
+
+
+
    path("", include("measurements.urls")),
    path("", include("Blog.urls")),
-   path("", include("Homepage.urls"))
+   path("", include("Homepage.urls")),
+
+
+   # path("", include('transaction.urls')),
+   path("", include('Paystack_Webhoook_Prod.urls')),
+
 ]
 
 
