@@ -9,6 +9,9 @@ from decimal import Decimal
 import json
 import hashlib
 import hmac
+
+from Paystack_Webhoook_Prod.models import Transaction
+
 from django.db import transaction
 import logging
 
