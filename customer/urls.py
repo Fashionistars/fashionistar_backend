@@ -1,6 +1,7 @@
 from django.urls import path
 from customer import views as trans_password 
 from customer import views as customer_views
+from customer.wallet_balance import UserTransferView, UserWalletBalanceView
 
 
 app_name = 'customer'  # Add this line to specify the app namespace
@@ -12,6 +13,10 @@ urlpatterns = [
     # Transaction Password
     path('client/set-transaction-password/', trans_password.SetTransactionPasswordView.as_view(), name='set-transaction-password'),
     path('client/validate-transaction-password/', trans_password.ValidateTransactionPasswordView.as_view(), name='validate-transaction-password'),
+
+    #  RETRIEVING USER'S WALLET BALANCE AND TRNASFERING MONEY  FROM USER'S WALLET BALANCE INTO ANOTHER USER'S ACCOUNT
+    path('client/transfer/', UserTransferView.as_view()),
+    path('client/wallet-balance/', UserWalletBalanceView.as_view()),
 
 
     # Client API Endpoints

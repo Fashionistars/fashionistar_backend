@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.db.models.functions import ExtractMonth
 from django.shortcuts import get_object_or_404
 from django.db.models import Avg
+
 # Restframework Packages
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -17,18 +18,15 @@ from rest_framework.exceptions import PermissionDenied
 # Serializers
 from userauths.serializer import  ProfileSerializer
 from store.serializers import  CouponSummarySerializer, EarningSummarySerializer,SummarySerializer, CartOrderItemSerializer, ProductSerializer, CartOrderSerializer, GallerySerializer, ReviewSerializer,  SpecificationSerializer, CouponSerializer, ColorSerializer, SizeSerializer, VendorSerializer
-from .serializers import *
+from vendor.serializers import *
 
 # Models
-from userauths.models import Profile
+from userauths.models import Profile, User
 from store.models import CartOrderItem,  Product,  CartOrder,  Review, Coupon
 from vendor.models import Vendor
 
 # Others Packages
 from datetime import datetime, timedelta
-
-
-User = get_user_model()
 
 
 
@@ -665,37 +663,110 @@ class ShopProductsAPIView(generics.ListAPIView):
         vendor = Vendor.objects.get(slug=vendor_slug)
         products = Product.objects.filter(vendor=vendor)
         return products
-    
+
+
+
+
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated  # Ensure the user is authenticated
+from rest_framework import generics
+from .serializers import VendorSerializer
+
 class VendorRegister(generics.CreateAPIView):
     serializer_class = VendorSerializer
     queryset = Vendor.objects.all()
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]  # Ensure the user is logged in
 
     def create(self, request, *args, **kwargs):
-        payload = request.data
-        image = payload.get('image')
+        # Ensure the user is attached
+        user = request.user  # The logged-in user
         
-        if image is None:
-            return Response({'error': 'Image is required'}, status=status.HTTP_400_BAD_REQUEST)
+        if not user:
+            return Response({'error': 'User is not authenticated'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Create a new dictionary that includes user ID
+        payload = request.data.copy()  # Make a mutable copy of request.data
+        payload['user'] = user.id  # Attach the authenticated user to the request data
+
+        # Now, call the serializer to create the vendor
+        serializer = self.get_serializer(data=payload)
         
-        image = payload['image']
-        name = payload['name']
-        email = payload['email']
-        description = payload['description']
-        mobile = payload['mobile']
-        user_id = payload['user_id']
+        if serializer.is_valid():
+            vendor = serializer.save()
+            vendor_data = {
+                'store_name': vendor.name,
+                'email': vendor.email,
+                'phone_number': vendor.mobile,
+                'description': vendor.description,
+            }
+            return Response({"message": "Created vendor account", "vendor": vendor_data}, status=status.HTTP_201_CREATED)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        Vendor.objects.create(
-            image=image,
-            name=name,
-            email=email,
-            description=description,
-            mobile=mobile,
-            user_id=user_id,
-        )
 
-        return Response({"message":"Created vendor account"})
-    
+
+
+
+
+
+# class VendorRegister(generics.CreateAPIView):
+#     serializer_class = VendorSerializer
+#     queryset = Vendor.objects.all()
+#     permission_classes = [IsAuthenticated]
+
+#     def create(self, request, *args, **kwargs):
+#         payload = request.data
+        
+#         # Ensure all necessary fields are in the payload
+#         image = payload.get('image', None)
+#         name = payload.get('name')
+#         email = payload.get('email')
+#         description = payload.get('description')
+#         mobile = payload.get('mobile')
+        
+#         user = request.user
+
+#         # Validation for required fields (image can be optional, depending on your needs)
+#         if not name or not email or not mobile:
+#             return Response({"error": "Name, email, and mobile are required fields."}, status=status.HTTP_400_BAD_REQUEST)
+
+#         if not user:
+#             return Response({'error': 'User is not authenticated'}, status=status.HTTP_400_BAD_REQUEST)
+
+#         # Serialize and validate the data
+#         vendor_data = {
+#             'image': image,
+#             'name': name,
+#             'email': email,
+#             'description': description,
+#             'mobile': mobile,
+#             'user': user.id,  # Attach the user ID to the vendor (OneToOne relationship)
+#         }
+
+#         # Create a new Vendor instance via the serializer
+#         serializer = self.get_serializer(data=vendor_data)
+        
+#         if serializer.is_valid():
+#             # Save the vendor object to the database
+#             vendor = serializer.save(user=user)
+            
+#             # Prepare the response data (could be expanded if necessary)
+#             vendor_data = {
+#                 'store_name': vendor.name,
+#                 'email': vendor.email,
+#                 'phone_number': vendor.mobile,
+#                 'description': vendor.description,
+#             }
+
+#             print(vendor)
+#             return Response({"message": "Created vendor account", "vendor": vendor_data}, status=status.HTTP_201_CREATED)
+        
+#         # If validation fails, return the errors
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+
     
 class VendorStoreView(generics.ListAPIView):
     """

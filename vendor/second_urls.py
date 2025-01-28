@@ -5,33 +5,14 @@ from vendor import views as vendor_views
 from django.urls import path
 from userauths import views as userauths_views
 from store import views as store_views
-from vendor.withdrawal import wallet_balance as wallet_balance
-
-
-from Paystack_Webhoook_Prod import BankAccountDetails as bank_details_views
-
+from vendor import views as vendor_views
 
 app_name = 'vendor'  # Add this line to specify the app namespace
 
-
 urlpatterns = [
-    path('vendor/bank-details/', bank_details_views.VendorBankDetailsCreateView.as_view()),
-    path('vendor/bank-details/update/<str:pk>/', bank_details_views.VendorBankDetailsUpdateView.as_view()),
-    path('vendor/bank-details/delete/<str:pk>/', bank_details_views.VendorBankDetailsDeleteView.as_view()),
-   
-
-
-    # path('paystack/transfer-webhook/', vendor_views.paystack_transfer_webhook_view, name='paystack-transfer-webhook'),
-
-   
-    path('vendor/withdraw/', wallet_balance.VendorWithdrawView.as_view(), name='vendor-withdraw'),
-    
-    path('vendor/wallet-balance/', wallet_balance.VendorWalletBalanceView.as_view()),
-    
-    
-    
-
-
+    path('vendor/withdraw/', vendor_views.VendorWithdrawView.as_view(), name='vendor-withdraw'),
+      path('paystack/transfer-webhook/', vendor_views.paystack_transfer_webhook_view, name='paystack-transfer-webhook'),
+    path('vendor/wallet-balance/', vendor_views.VendorWalletBalanceView.as_view()),
     path('vendor/<int:vendor_id>/store/', vendor_views.VendorStoreView.as_view(), name='vendor-store-products'),
     path('vendors/', vendor_views.AllVendorsProductsList.as_view(), name='all-vendors-products'),
 

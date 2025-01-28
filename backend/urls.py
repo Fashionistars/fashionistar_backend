@@ -34,6 +34,9 @@ urlpatterns = [
    path("", include("admin_backend.urls")),
 
 
+   #  VENDORS   /  SHOP   /  SELLER 
+   path("", include("vendor.urls")),
+
    #  CLIENTS   /  CUSTOMER   /  USER 
    path("", include("customer.urls")),
 

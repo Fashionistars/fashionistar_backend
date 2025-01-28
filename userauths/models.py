@@ -124,6 +124,7 @@ class Profile(models.Model):
     qr_code = models.TextField(null=True, blank=True)
     mirrorsize_access_token = models.CharField(max_length=255, null=True, blank=True)
     measurement = models.ForeignKey("measurements.Measurement", on_delete=models.SET_NULL, null=True, blank=True)
+    paystack_recipient_code = models.CharField(max_length=255, null=True, blank=True) # New Field
 
     class Meta:
         ordering = ["-date"]

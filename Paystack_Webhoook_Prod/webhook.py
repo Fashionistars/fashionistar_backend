@@ -83,6 +83,10 @@ def handle_paystack_event(payload):
       handle_successful_charge(payload)
     elif event == 'charge.failed':
       handle_failed_charge(payload)
+    elif event == "transfer.success":
+          handle_successful_transfer(payload)
+    elif event == "transfer.failed":
+          handle_failed_transfer(payload)
     else:
        webhook_logger.warning(f"Unhandled webhook event: {event}, payload is {payload}")
 
@@ -96,8 +100,8 @@ def handle_successful_charge(payload):
      try:
           paystack_transaction = Transaction.objects.get(paystack_payment_reference=reference)
      except Transaction.DoesNotExist:
-          webhook_logger.error(f"Transaction record does not exist for reference {reference}")
-          return
+        webhook_logger.error(f"Transaction record does not exist for reference {reference}")
+        return
 
      with transaction.atomic():
            # If successful update the status and balance
@@ -139,3 +143,41 @@ def handle_failed_charge(payload):
       else:
            webhook_logger.info(f"Status is already updated to: {status}, reference {reference}")
            print("Status is already updated")
+
+def handle_successful_transfer(payload):
+    '''
+        This function is used to handle successful transfers
+    '''
+    transfer_code = payload['data']['transfer_code']
+    try:
+          paystack_transaction = Transaction.objects.get(paystack_payment_reference=transfer_code)
+    except Transaction.DoesNotExist:
+          webhook_logger.error(f"Transaction record does not exist for transfer code: {transfer_code}")
+          return
+    # If successful update the status
+    if paystack_transaction.status != 'success':
+            paystack_transaction.status = 'success'
+            paystack_transaction.save()
+            webhook_logger.info(f"Updated transfer status to success, transfer code: {transfer_code}")
+    else:
+        webhook_logger.info(f"Transfer already verified, transfer code: {transfer_code}")
+
+def handle_failed_transfer(payload):
+    '''
+        This function is used to handle failed transfers
+    '''
+    transfer_code = payload['data']['transfer_code']
+    status = payload['data']['status']
+    reason = payload['data']['reason']
+    try:
+        paystack_transaction = Transaction.objects.get(paystack_payment_reference=transfer_code)
+    except Transaction.DoesNotExist:
+        webhook_logger.error(f"Transaction record does not exist for transfer code: {transfer_code}")
+        return
+    # If not successful, update the status
+    if paystack_transaction.status != status:
+            paystack_transaction.status = status
+            paystack_transaction.save()
+            webhook_logger.info(f"Updated transfer status to: {status}, reason: {reason}, transfer code: {transfer_code}")
+    else:
+        webhook_logger.info(f"Status is already updated to: {status}, reason: {reason}, transfer code: {transfer_code}")
