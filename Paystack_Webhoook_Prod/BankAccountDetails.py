@@ -256,7 +256,11 @@ class VendorBankDetailsUpdateView(generics.RetrieveUpdateAPIView):
                return Response({'error': error_response}, status=status.HTTP_404_NOT_FOUND)
           
           if user_obj.role == 'vendor':
-            bank_details = self.get_object()
+            try:
+                bank_details = self.get_object()
+            except BankAccountDetails.DoesNotExist:
+                return Response({'error': 'Bank details not found'}, status=status.HTTP_404_NOT_FOUND)
+            
             if bank_details.paystack_Recipient_Code:
                 recipient_data = {
                     "name": serializer.validated_data.get('account_full_name'),
