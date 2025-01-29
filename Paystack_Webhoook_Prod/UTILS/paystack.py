@@ -52,12 +52,13 @@ class Transfer:
         '''
         The Transactions API allows you create and manage payments on your integration
         '''
-        def __init__(self, amount=None, currency="NGN", recipient_code=None,):
+        def __init__(self, amount=None, currency="NGN", recipient_code=None,reason=None):
             self.reference = str(set_ref())
             if amount:
               self.amount = str(int(amount) * 100)
             self.currency = str(currency)
             self.recipient_code = recipient_code
+            self.reason = reason
         
 
 
@@ -68,7 +69,7 @@ class Transfer:
             url = "https://api.paystack.co/transfer"
             transfer_data = {
                "source": "balance",
-                "reason": "Withdrawal",
+                "reason": self.reason,
                 "amount": self.amount,
                 "recipient": self.recipient_code,
              }
@@ -107,130 +108,6 @@ class Transfer:
                         "type": 'api_error',
                         "code": 'unknown',
                     }
-
-
-
-
-
-
-
-
-
-
-
-class TransferRecipient:
-    '''
-     Used to handle transfer recipient functionality
-    '''
-    def __init__(self,  recipient_account_number=None, recipient_name=None, bank_code=None):
-        self.recipient_account_number = recipient_account_number
-        self.recipient_name = recipient_name
-        self.bank_code = bank_code
-
-
-    def create_transfer_recipient(self):
-         '''
-         Create a transfer recipient
-         '''
-         url = "https://api.paystack.co/transferrecipient"
-         transfer_recipient_data = {
-             "type": "nuban",
-             "name": self.recipient_name,
-             "account_number": self.recipient_account_number,
-             "bank_code": self.bank_code,
-             "currency": "NGN"
-         }
-         try:
-            res = requests.post(url, headers=HEADERS, json=transfer_recipient_data)
-            res.raise_for_status()
-            return res.json()
-         except requests.exceptions.RequestException as e:
-            if 'res' in locals():
-                print(f"Error creating transfer recipient: {e}, response: {res.text}")
-                return {
-                    "status": False,
-                    "message": f"Error creating transfer recipient: {e}, response: {res.text}",
-                    "meta": {'nextStep': 'Try again later'},
-                    "type": 'api_error',
-                    "code": 'unknown',
-                }
-            else:
-                 print(f"Error from paystack API: {e}")
-                 return {
-                    "status": False,
-                    "message": f"Failed to create transfer recipient: {e}",
-                    "meta": {'nextStep': 'Try again later'},
-                    "type": 'api_error',
-                     "code": 'unknown',
-                    }
-
-
-
-
-
-    def update_transfer_recipient(self, recipient_code, recipient_data):
-        '''
-        This function is used to update a paystack transfer recipient.
-        '''
-        url = f"https://api.paystack.co/transferrecipient/{recipient_code}"
-        headers = {
-                "Authorization": "Bearer "+ settings.PAYSTACK_SECRET_KEY,
-                'Content-Type': 'application/json'
-            }
-        try:
-            res = requests.put(url, data=json.dumps(recipient_data), headers=headers)
-            res.raise_for_status()
-            return res.json()
-        except requests.exceptions.RequestException as e:
-            paystack_logger.error(f"Failed to update transfer recipient, paystack error: {e}")
-            return {"status": False, "message": f"Failed to update transfer recipient: {e}"}
-
-
-
-
-
-    def delete_transfer_recipient(self, recipient_code):
-        '''
-        This function is used to delete a paystack transfer recipient.
-        '''
-        url = f"https://api.paystack.co/transferrecipient/{recipient_code}"
-        headers = {
-                "Authorization": "Bearer "+ settings.PAYSTACK_SECRET_KEY,
-            }
-        try:
-            res = requests.delete(url, headers=headers)
-            res.raise_for_status()
-            return res.json()
-        except requests.exceptions.RequestException as e:
-            paystack_logger.error(f"Failed to delete transfer recipient, paystack error: {e}")
-            return {"status": False, "message": f"Failed to delete transfer recipient: {e}"}
-
-
-
-    def fetch_transfer_recipient(self, recipient_code):
-        """
-        Fetch details for a transfer recipient.
-        """
-        url = f"https://api.paystack.co/transferrecipient/{recipient_code}"
-        try:
-            res = requests.get(url, headers=HEADERS)
-            res.raise_for_status()
-            return res.json()
-        except requests.exceptions.RequestException as e:
-            print(f"Error fetching transfer recipient: {e}, response: {res.text if 'res' in locals() else None}")
-            return {
-                "status": False,
-                "message": f"Error fetching transfer recipient: {e}, response: {res.text if 'res' in locals() else None}",
-                "meta": {'nextStep': 'Try again later'},
-                "type": 'api_error',
-                "code": 'unknown',
-            }
-    
-
-
-
-
-
 
 
 
