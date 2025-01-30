@@ -12,7 +12,6 @@ from Paystack_Webhoook_Prod import BankAccountDetails as bank_details_views
 from Paystack_Webhoook_Prod.TRANSFER_WITHDRAWAL import VendorWithdrawView
 
 
-# from Paystack_Webhoook_Prod import TRANSFER_WITHDRAWAL as transfer_withdrawal_views
 
 
 app_name = 'vendor'  # Add this line to specify the app namespace
