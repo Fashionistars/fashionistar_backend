@@ -9,7 +9,10 @@ from vendor.withdrawal import wallet_balance as wallet_balance
 
 
 from Paystack_Webhoook_Prod import BankAccountDetails as bank_details_views
-from Paystack_Webhoook_Prod import TRANSFER_WITHDRAWAL as transfer_withdrawal_views
+from Paystack_Webhoook_Prod.TRANSFER_WITHDRAWAL import VendorWithdrawView
+
+
+# from Paystack_Webhoook_Prod import TRANSFER_WITHDRAWAL as transfer_withdrawal_views
 
 
 app_name = 'vendor'  # Add this line to specify the app namespace
@@ -21,18 +24,13 @@ urlpatterns = [
     path('vendor/bank-details/update/<str:pk>/', bank_details_views.VendorBankDetailsUpdateView.as_view()),
     path('vendor/bank-details/delete/<str:pk>/', bank_details_views.VendorBankDetailsDeleteView.as_view()),
     path('vendor/bank-details/<str:pk>/', bank_details_views.VendorBankDetailsDetailView.as_view()),
-   
 
 
 
     # --------------------        WITHDRAWAL               -----------------------------
+    path('vendor/withdraw/transfer/', VendorWithdrawView.as_view(), name='vendor-withdraw-transfer'),
 
-    path('vendor/withdraw/transfer/', transfer_withdrawal_views.VendorWithdrawView.as_view(), name='vendor-withdraw-transfer'),
 
-
-    # path('paystack/transfer-webhook/', vendor_views.paystack_transfer_webhook_view, name='paystack-transfer-webhook'),
-
-   
     
     path('vendor/wallet-balance/', wallet_balance.VendorWalletBalanceView.as_view()),
     
