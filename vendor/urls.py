@@ -9,7 +9,7 @@ from vendor.withdrawal import wallet_balance as wallet_balance
 
 
 from Paystack_Webhoook_Prod import BankAccountDetails as bank_details_views
-from Paystack_Webhoook_Prod.TRANSFER_WITHDRAWAL import VendorWithdrawView
+from Paystack_Webhoook_Prod import VendorWithdrawView as vendor_withrawal_views
 
 
 
@@ -27,7 +27,7 @@ urlpatterns = [
 
 
     # --------------------        WITHDRAWAL               -----------------------------
-    path('vendor/withdraw/transfer/', VendorWithdrawView.as_view(), name='vendor-withdraw-transfer'),
+    path('vendor/withdraw/transfer/', vendor_withrawal_views.VendorWithdrawView.as_view(), name='vendor-withdraw-transfer'),
 
 
     
