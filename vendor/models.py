@@ -4,6 +4,7 @@ from django.utils.html import mark_safe
 from userauths.models import User, user_directory_path
 from django.utils.text import slugify
 import shortuuid
+from django.db.models import Avg
 import uuid
 
 class Vendor(models.Model):
@@ -35,8 +36,8 @@ class Vendor(models.Model):
         if self.slug == "" or self.slug is None:
             uuid_key = shortuuid.uuid()
             uniqueid = uuid_key[:4]
-            self.slug = slugify(self.name) + "-" + str(uniqueid.lower())
-        
+            self.slug = slugify(self.name.lower()) + "-" + str(uniqueid.lower())
+
         # Ensure the instance is saved to the database after modifying fields like 'slug'
         super().save(*args, **kwargs)
 

@@ -1,6 +1,5 @@
 from django.urls import path
 
-from vendor import views as vendor_order
 from vendor import views as vendor_views
 from django.urls import path
 from userauths import views as userauths_views
@@ -45,7 +44,7 @@ urlpatterns = [
     path('vendor/orders/', vendor_views.OrdersAPIView.as_view(), name='vendor-orders'),
     path('vendor/orders/<str:order_oid>/', vendor_views.OrderDetailAPIView.as_view(), name='vendor-order-detail'),
     
-    path('vendor/products/<vendor_id>/', vendor_views.ProductsAPIView.as_view(), name='vendor-prdoucts'),
+    path('vendor/product/<vendor_id>/', vendor_views.ProductsAPIView.as_view(), name='vendor-prdoucts'),
     path('vendor/yearly-report/<vendor_id>/', vendor_views.YearlyOrderReportChartAPIView.as_view(), name='vendor-yearly-report'),
     path('vendor/orders-report-chart/<vendor_id>/', vendor_views.MonthlyOrderChartAPIFBV, name='vendor-orders-report-chart'),
     path('vendor/products-report-chart/<vendor_id>/', vendor_views.MonthlyProductsChartAPIFBV, name='vendor-product-report-chart'),

@@ -8,7 +8,8 @@ from userauths.serializer import ProfileSerializer, UserSerializer
 from admin_backend.serializers import CategorySerializer
 
 class ConfigSettingsSerializer(serializers.ModelSerializer):
-
+    """ Serializer for config setting model
+    """
     class Meta:
             model = ConfigSettings
             fields = '__all__'
@@ -16,12 +17,16 @@ class ConfigSettingsSerializer(serializers.ModelSerializer):
 
 # Define a serializer for the Tag model
 class TagSerializer(serializers.ModelSerializer):
+    """Serializer for the Tag model.
+    """
     class Meta:
         model = Tag
         fields = '__all__'
 
         # Define a serializer for the Gallery model
 class GallerySerializer(serializers.ModelSerializer):
+    """Serializer for the Gallery model.
+     """
     # Serialize the related Product model
 
     class Meta:
@@ -30,6 +35,8 @@ class GallerySerializer(serializers.ModelSerializer):
 
 # Define a serializer for the Specification model
 class SpecificationSerializer(serializers.ModelSerializer):
+    """Serializer for the Specification model.
+    """
 
     class Meta:
         model = Specification
@@ -37,6 +44,8 @@ class SpecificationSerializer(serializers.ModelSerializer):
 
 # Define a serializer for the Size model
 class SizeSerializer(serializers.ModelSerializer):
+    """Serializer for the Size model.
+    """
 
     class Meta:
         model = Size
@@ -44,6 +53,8 @@ class SizeSerializer(serializers.ModelSerializer):
 
 # Define a serializer for the Color model
 class ColorSerializer(serializers.ModelSerializer):
+    """Serializer for the Color model.
+    """
 
     class Meta:
         model = Color
@@ -56,12 +67,14 @@ from cloudinary.utils import cloudinary_url
 
 # Define a serializer for the Product model
 class ProductSerializer(serializers.ModelSerializer):
-    gallery = GallerySerializer(many=True, read_only=True)
-    color = ColorSerializer(many=True, read_only=True)
-    size = SizeSerializer(many=True, read_only=True)
-    specification = SpecificationSerializer(many=True, read_only=True)
-    category = CategorySerializer(many=True)  # If you want nested category representation
-    image = serializers.ImageField(required=False)  # Optional image field
+    """Serializer for the Product model.
+    """
+    gallery = GallerySerializer(many=True, read_only=True, help_text="A list of gallery images associated with the product.")
+    color = ColorSerializer(many=True, read_only=True, help_text="A list of colors associated with the product.")
+    size = SizeSerializer(many=True, read_only=True, help_text="A list of sizes associated with the product.")
+    specification = SpecificationSerializer(many=True, read_only=True, help_text="A list of specifications associated with the product.")
+    category = CategorySerializer(many=True, help_text="Categories that the product belongs to")  # If you want nested category representation
+    image = serializers.ImageField(required=False, help_text="Image of the product.")  # Optional image field
 
 
     class Meta:
@@ -109,8 +122,10 @@ class ProductSerializer(serializers.ModelSerializer):
 
 # Define a serializer for the ProductFaq model
 class ProductFaqSerializer(serializers.ModelSerializer):
+    """Serializer for the ProductFaq model.
+    """
     # Serialize the related Product model
-    product = ProductSerializer()
+    product = ProductSerializer(help_text="Product associated with the FAQ")
 
     class Meta:
         model = ProductFaq
@@ -130,6 +145,8 @@ class ProductFaqSerializer(serializers.ModelSerializer):
 
 # Define a serializer for the CartOrderItem model
 class CartOrderItemSerializer(serializers.ModelSerializer):
+    """Serializer for the CartOrderItem model.
+    """
     # Serialize the related Product model
     # product = ProductSerializer()  
 
@@ -150,8 +167,10 @@ class CartOrderItemSerializer(serializers.ModelSerializer):
 
 # Define a serializer for the CartOrder model
 class CartOrderSerializer(serializers.ModelSerializer):
+    """Serializer for the CartOrder model.
+    """
     # Serialize related CartOrderItem models
-    orderitem = CartOrderItemSerializer(many=True, read_only=True)
+    orderitem = CartOrderItemSerializer(many=True, read_only=True, help_text="A list of items included in this cart order.")
 
     class Meta:
         model = CartOrder
@@ -170,8 +189,10 @@ class CartOrderSerializer(serializers.ModelSerializer):
 
 
 class VendorSerializer(serializers.ModelSerializer):
+    """Serializer for the Vendor model.
+     """
     # Serialize related CartOrderItem models
-    user = UserSerializer(read_only=True)
+    user = UserSerializer(read_only=True, help_text="User associated with the vendor")
 
     class Meta:
         model = Vendor
@@ -190,9 +211,11 @@ class VendorSerializer(serializers.ModelSerializer):
 
 # Define a serializer for the Review model
 class ReviewSerializer(serializers.ModelSerializer):
+    """Serializer for the Review model.
+    """
     # Serialize the related Product model
-    product = ProductSerializer()
-    profile = ProfileSerializer()
+    product = ProductSerializer(help_text="Product associated with the review")
+    profile = ProfileSerializer(help_text="Profile associated with the review")
     
     class Meta:
         model = Review
@@ -211,8 +234,10 @@ class ReviewSerializer(serializers.ModelSerializer):
 
 # Define a serializer for the Wishlist model
 class WishlistSerializer(serializers.ModelSerializer):
+    """Serializer for the Wishlist model.
+    """
     # Serialize the related Product model
-    product = ProductSerializer()
+    product = ProductSerializer(help_text="Product that is saved in the wishlist")
 
     class Meta:
         model = Wishlist
@@ -233,6 +258,8 @@ class WishlistSerializer(serializers.ModelSerializer):
 
 # Define a serializer for the Coupon model
 class CouponSerializer(serializers.ModelSerializer):
+    """Serializer for the Coupon model.
+     """
 
     class Meta:
         model = Coupon
@@ -251,8 +278,10 @@ class CouponSerializer(serializers.ModelSerializer):
 
 # Define a serializer for the CouponUsers model
 class CouponUsersSerializer(serializers.ModelSerializer):
+    """Serializer for the CouponUsers model.
+     """
     # Serialize the related Coupon model
-    coupon =  CouponSerializer()
+    coupon =  CouponSerializer(help_text="Coupon associated with the coupon user.")
 
     class Meta:
         model = CouponUsers
@@ -271,7 +300,8 @@ class CouponUsersSerializer(serializers.ModelSerializer):
 
 # Define a serializer for the DeliveryCouriers model
 class DeliveryCouriersSerializer(serializers.ModelSerializer):
-
+    """Serializer for the DeliveryCouriers model.
+     """
     class Meta:
         model = DeliveryCouriers
         fields = '__all__'
@@ -279,20 +309,26 @@ class DeliveryCouriersSerializer(serializers.ModelSerializer):
 
 
 class SummarySerializer(serializers.Serializer):
-    out_of_stock = serializers.IntegerField()
-    orders = serializers.IntegerField()
-    revenue = serializers.DecimalField(max_digits=10, decimal_places=2)
-    review = serializers.IntegerField()
-    average_review = serializers.DecimalField(max_digits=2, decimal_places=1)
-    average_order_value = serializers.DecimalField(max_digits=100, decimal_places=2)
-    total_sales = serializers.DecimalField(max_digits=100, decimal_places=2)
-    user_image = serializers.URLField()
+    """Serializer for the Dashboard Summary model.
+     """
+    out_of_stock = serializers.IntegerField(help_text="Number of products that are out of stock")
+    orders = serializers.IntegerField(help_text="Total number of orders")
+    revenue = serializers.DecimalField(max_digits=10, decimal_places=2, help_text="Total revenue generated")
+    review = serializers.IntegerField(help_text="Total number of reviews")
+    average_review = serializers.DecimalField(max_digits=2, decimal_places=1, help_text="Average rating of all products")
+    average_order_value = serializers.DecimalField(max_digits=100, decimal_places=2, help_text="Average amount per order")
+    total_sales = serializers.DecimalField(max_digits=100, decimal_places=2, help_text="Total sales amount")
+    user_image = serializers.URLField(help_text="URL of the vendor's profile image")
 
 class EarningSummarySerializer(serializers.Serializer):
-    monthly_revenue = serializers.DecimalField(max_digits=10, decimal_places=2)
-    total_revenue = serializers.DecimalField(max_digits=10, decimal_places=2)
+    """Serializer for the Earning summary model.
+    """
+    monthly_revenue = serializers.DecimalField(max_digits=10, decimal_places=2, help_text="Total monthly revenue generated")
+    total_revenue = serializers.DecimalField(max_digits=10, decimal_places=2, help_text="Total all time revenue generated")
 
 
 class CouponSummarySerializer(serializers.Serializer):
-    total_coupons = serializers.IntegerField(default=0)
-    active_coupons = serializers.IntegerField(default=0)
+    """Serializer for the Coupon summary model.
+     """
+    total_coupons = serializers.IntegerField(default=0, help_text="Total number of coupons for this vendor")
+    active_coupons = serializers.IntegerField(default=0, help_text="Total number of active coupons for this vendor")

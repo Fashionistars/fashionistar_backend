@@ -206,7 +206,7 @@ class Product(models.Model):
         if self.slug == "" or self.slug is None:
             uuid_key = shortuuid.uuid()
             uniqueid = uuid_key[:4]
-            self.slug = slugify(self.title) + "-" + str(uniqueid.lower())
+            self.slug = slugify(self.title, lowercase=True) + "-" + str(uniqueid.lower())
         
         if self.stock_qty is not None:
             if self.stock_qty == 0:
@@ -314,7 +314,7 @@ class CartOrder(models.Model):
     tracking_id = models.CharField(max_length=100, null=True, blank=True, help_text="Tracking ID for shipment")
     expected_delivery_date_from = models.DateField(null=True, blank=True, help_text="Expected delivery date from")
     expected_delivery_date_to = models.DateField(null=True, blank=True, help_text="Expected delivery date to")
-
+    frequently_bought_together = models.ManyToManyField('store.Product', blank=True, help_text="Products frequently bought together with the order", related_name='order_item_orderin')
     class Meta:
         ordering = ["-date"]
         verbose_name_plural = "Cart Order"
@@ -379,7 +379,7 @@ class CartOrderItem(models.Model):
     
     # Method to return a string representation of the object
     def __str__(self):
-        return self.oid
+        return self.product.title
 
 # Define a model for Reviews
 class Review(models.Model):
