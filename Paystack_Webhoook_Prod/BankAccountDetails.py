@@ -130,128 +130,131 @@ class VendorBankDetailsCreateView(generics.CreateAPIView):
             if error_response:
                 return Response({'error': error_response}, status=status.HTTP_404_NOT_FOUND)
             
-            if user_obj.role == 'vendor':
-                # Use Paystack API to create recipient
-                bank_code = serializer.validated_data.get('bank_code')
-                recipient_data = {
-                "type": "nuban",
-                "name": account_full_name,
-                "account_number": account_number,
-                    "bank_code": bank_code,
-                }
-                paystack_logger.info(f"Payload for creating transfer recipient: {recipient_data}")
-                try:
-                    recipient_response = create_transfer_recipient(recipient_data)
-                    if recipient_response['status'] is False:
-                        paystack_logger.error(f"Failed to create transfer recipient for vendor {user.email}, REASON: The account number you provided is not valid for the bank you selected. Please re-check the account number and try again.")
-                        
-                        message = recipient_response.get('message', 'An unexpected error occurred with Paystack.')
-                        #check if the message is a json
-                        try:
-                                message_json = json.loads(message)
-                                if isinstance(message_json, dict) and message_json.get('message'):
-                                    message = message_json['message']
-                                
-                        except json.JSONDecodeError:
-                            pass  # do nothing, just use the normal message
-                        
-                        if "Invalid bank account number" in message:
-                            message = "The account number you provided is not valid for the bank you selected. Please re-check the account number and try again."
-                        elif "Invalid account name" in message:
-                            message = "The account name does not match the account number you provided. Please re-check the account name and try again."
-                        elif "The bank is currently unavailable" in message:
-                            message = "The selected bank is currently unavailable, please try again later."
-                        else:
-                                message = f"Failed to create transfer recipient. {message}"
-                        
-                        return Response(
-                            {'error': "The account number you provided is not valid for the bank you selected. Please re-check the account number and try again."},
-                            status=status.HTTP_400_BAD_REQUEST
-                            )
-                    recipient_code = recipient_response['data']['recipient_code']
-                        
-                    # Check if recipient code already exists
-                    bank_details = BankAccountDetails.objects.filter(paystack_Recipient_Code=recipient_code).first()
+
+            with transaction.atomic():
+                if user_obj.role == 'vendor':
+                    # Use Paystack API to create recipient
+                    bank_code = serializer.validated_data.get('bank_code')
+                    recipient_data = {
+                    "type": "nuban",
+                    "name": account_full_name,
+                    "account_number": account_number,
+                        "bank_code": bank_code,
+                    }
+                    paystack_logger.info(f"Payload for creating transfer recipient: {recipient_data}")
                     
-
-                    if bank_details and bank_details.vendor != vendor_obj:
-                        application_logger.error(
-                            f"Bank details creation failed!!! ANOTHER VENDOR ALREADY HAS THIS SAME BANK DETAILS {bank_details.account_number} - {bank_details.bank_name} WITH NAME AS {bank_details.account_full_name}"
-                        )
-                        return Response(
-                            {
-                                'error': f"ANOTHER VENDOR ALREADY SAVED THIS SAME BANK DETAILS {bank_details.account_number} - {bank_details.bank_name} WITH NAME AS {bank_details.account_full_name}."
-                            }, 
-                            status=status.HTTP_400_BAD_REQUEST
-                        )
-
-
-                    
-                    if bank_details and bank_details.vendor == vendor_obj:
-                        paystack_logger.info(f"Transfer recipient Retrieved for vendor {user.email}, recipient code is {recipient_code}")
-
-                        bank_details.account_number = recipient_response['data']['details'].get('account_number')
-                        bank_details.account_full_name = recipient_response['data'].get('name')
-                        bank_details.bank_name = recipient_response['data']['details'].get('bank_name')
-                        bank_details.bank_code = recipient_response['data']['details'].get('bank_code')
-                        bank_details.updated = datetime.fromisoformat(recipient_response['data']['updatedAt'].replace("Z", "+00:00"))
-                        bank_details.save()
-                        
-                        application_logger.info(f"Updated bank details for vendor profile {user.email}, with id {bank_details.id}")
-                        return Response(
-                                    {
-                                    'message': 'Bank details updated successfully',
-                                    'data': {
-                                        "Account Number"  : bank_details.account_number,
-                                        "Account Name"  : bank_details.account_full_name,
-                                        "Bank Name"  : bank_details.bank_name,
-                                        },
-                                    },
-                                    status=status.HTTP_200_OK
+                    try:
+                        recipient_response = create_transfer_recipient(recipient_data)
+                        if recipient_response['status'] is False:
+                            paystack_logger.error(f"Failed to create transfer recipient for vendor {user.email}, REASON: The account number you provided is not valid for the bank you selected. Please re-check the account number and try again.")
+                            
+                            message = recipient_response.get('message', 'An unexpected error occurred with Paystack.')
+                            #check if the message is a json
+                            try:
+                                    message_json = json.loads(message)
+                                    if isinstance(message_json, dict) and message_json.get('message'):
+                                        message = message_json['message']
+                                    
+                            except json.JSONDecodeError:
+                                pass  # do nothing, just use the normal message
+                            
+                            if "Invalid bank account number" in message:
+                                message = "The account number you provided is not valid for the bank you selected. Please re-check the account number and try again."
+                            elif "Invalid account name" in message:
+                                message = "The account name does not match the account number you provided. Please re-check the account name and try again."
+                            elif "The bank is currently unavailable" in message:
+                                message = "The selected bank is currently unavailable, please try again later."
+                            else:
+                                    message = f"Failed to create transfer recipient. {message}"
+                            
+                            return Response(
+                                {'error': "The account number you provided is not valid for the bank you selected. Please re-check the account number and try again."},
+                                status=status.HTTP_400_BAD_REQUEST
                                 )
+                        recipient_code = recipient_response['data']['recipient_code']
+                            
+                        # Check if recipient code already exists
+                        bank_details = BankAccountDetails.objects.filter(paystack_Recipient_Code=recipient_code).first()
+                        
+
+                        if bank_details and bank_details.vendor != vendor_obj:
+                            application_logger.error(
+                                f"Bank details creation failed!!! ANOTHER VENDOR ALREADY HAS THIS SAME BANK DETAILS {bank_details.account_number} - {bank_details.bank_name} WITH NAME AS {bank_details.account_full_name}"
+                            )
+                            return Response(
+                                {
+                                    'error': f"ANOTHER VENDOR ALREADY SAVED THIS SAME BANK DETAILS {bank_details.account_number} - {bank_details.bank_name} WITH NAME AS {bank_details.account_full_name}."
+                                }, 
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
 
 
-                    paystack_logger.info(f"Transfer recipient created for vendor {user.email}, recipient code is {recipient_code}")
-                    # Save the details if it does not exist.
-                    serializer.save(
-                        vendor=vendor_obj, 
-                        paystack_Recipient_Code=recipient_code,
-                        bank_code = recipient_response['data']['details'].get('bank_code'),
-                        account_number=recipient_response['data']['details'].get('account_number'),
-                        account_full_name=recipient_response['data'].get('name'),
-                        bank_name=recipient_response['data']['details'].get('bank_name'),
-                        updated = datetime.fromisoformat(recipient_response['data']['updatedAt'].replace("Z", "+00:00"))
-                    )
-                    
-                    application_logger.info(f"Successfully saved bank details to vendor profile {user.email}")
-                    return Response(
-                        {'message': 'Bank details created successfully',
-                        'data': {
-                            "Account Number"  : serializer.data.get('account_number'),
-                            "Account Name"  : serializer.data.get('account_full_name'),
-                            "Bank Name"  : serializer.data.get('bank_name'),
-                            },
-                        },
-                        status=status.HTTP_201_CREATED
-                    )
-                except (ConnectionError, Timeout, RequestException) as e:
-                        paystack_logger.error(f"Failed to create transfer recipient for vendor {user.email}, paystack error response: {e}")
-                        return Response(
-                        {'error': f"Failed to create transfer recipient. Please check your internet connection or try again."},
-                        status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        
+                        if bank_details and bank_details.vendor == vendor_obj:
+                            paystack_logger.info(f"Transfer recipient Retrieved for vendor {user.email}, recipient code is {recipient_code}")
+
+                            bank_details.account_number = recipient_response['data']['details'].get('account_number')
+                            bank_details.account_full_name = recipient_response['data'].get('name')
+                            bank_details.bank_name = recipient_response['data']['details'].get('bank_name')
+                            bank_details.bank_code = recipient_response['data']['details'].get('bank_code')
+                            bank_details.updated = datetime.fromisoformat(recipient_response['data']['updatedAt'].replace("Z", "+00:00"))
+                            bank_details.save()
+                            
+                            application_logger.info(f"Updated bank details for vendor profile {user.email}, with id {bank_details.id}")
+                            return Response(
+                                        {
+                                        'message': 'Bank details updated successfully',
+                                        'data': {
+                                            "Account Number"  : bank_details.account_number,
+                                            "Account Name"  : bank_details.account_full_name,
+                                            "Bank Name"  : bank_details.bank_name,
+                                            },
+                                        },
+                                        status=status.HTTP_200_OK
+                                    )
+
+
+                        paystack_logger.info(f"Transfer recipient created for vendor {user.email}, recipient code is {recipient_code}")
+                        # Save the details if it does not exist.
+                        serializer.save(
+                            vendor=vendor_obj, 
+                            paystack_Recipient_Code=recipient_code,
+                            bank_code = recipient_response['data']['details'].get('bank_code'),
+                            account_number=recipient_response['data']['details'].get('account_number'),
+                            account_full_name=recipient_response['data'].get('name'),
+                            bank_name=recipient_response['data']['details'].get('bank_name'),
+                            updated = datetime.fromisoformat(recipient_response['data']['updatedAt'].replace("Z", "+00:00"))
                         )
-            elif user_obj.role == 'client':
-                serializer.save(user=user_obj)
-                application_logger.info(f"Successfully saved bank details to client profile {user.email}")
-                return Response(
-                        {'message': 'Bank details created successfully',
-                        'data': serializer.data
-                        },
-                        status=status.HTTP_201_CREATED
-                    )
-            else:
-                application_logger.error(f"Invalid user role: {user_obj.role}, expected client or vendor")
-                return Response({'error': 'Invalid user role'}, status=status.HTTP_400_BAD_REQUEST)
+                        
+                        application_logger.info(f"Successfully saved bank details to vendor profile {user.email}")
+                        return Response(
+                            {'message': 'Bank details created successfully',
+                            'data': {
+                                "Account Number"  : serializer.data.get('account_number'),
+                                "Account Name"  : serializer.data.get('account_full_name'),
+                                "Bank Name"  : serializer.data.get('bank_name'),
+                                },
+                            },
+                            status=status.HTTP_201_CREATED
+                        )
+                    except (ConnectionError, Timeout, RequestException) as e:
+                            paystack_logger.error(f"Failed to create transfer recipient for vendor {user.email}, paystack error response: {e}")
+                            return Response(
+                            {'error': f"Failed to create transfer recipient. Please check your internet connection or try again."},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            )
+                elif user_obj.role == 'client':
+                    serializer.save(user=user_obj)
+                    application_logger.info(f"Successfully saved bank details to client profile {user.email}")
+                    return Response(
+                            {'message': 'Bank details created successfully',
+                            'data': serializer.data
+                            },
+                            status=status.HTTP_201_CREATED
+                        )
+                else:
+                    application_logger.error(f"Invalid user role: {user_obj.role}, expected client or vendor")
+                    return Response({'error': 'Invalid user role'}, status=status.HTTP_400_BAD_REQUEST)
 
         except Exception as e:
             application_logger.error(f"An error occurred: {e} for user {user.email}")
@@ -329,14 +332,6 @@ class VendorBankDetailsUpdateView(generics.RetrieveUpdateAPIView):
 
 
         try:
-            obj = self.get_object()
-        except BankAccountDetails.DoesNotExist:
-            application_logger.error(f"Bank details with id {self.kwargs['pk']} not found for vendor {user.email}")
-            return Response({'error': 'Bank details not found'}, status=status.HTTP_404_NOT_FOUND)
-
-
-
-        try:
             user_obj, vendor_obj, error_response = fetch_user_and_vendor(user)
 
             if error_response:
@@ -345,7 +340,7 @@ class VendorBankDetailsUpdateView(generics.RetrieveUpdateAPIView):
 
             if user_obj.role == 'vendor':
                 try:
-                    bank_details = obj
+                    bank_details = self.get_object()
                     vendor_is_owner(vendor_obj, obj=bank_details)
                 except BankAccountDetails.DoesNotExist:
                     application_logger.error(f"Bank details with id: {self.kwargs['pk']} not found")
@@ -416,14 +411,14 @@ class VendorBankDetailsUpdateView(generics.RetrieveUpdateAPIView):
                 application_logger.error(f"Invalid user role: {user_obj.role}, expected client or vendor")
                 return Response({'error': 'Invalid user role'}, status=status.HTTP_400_BAD_REQUEST)
         except PermissionDenied as e:
-               application_logger.error(f"Permission denied: {e}, for vendor {user.email} with the id {self.kwargs['pk']}")
-               return Response(
+            application_logger.error(f"Permission denied: {e} for vendor {user.email}")
+            return Response(
                 {'error': f'You do not have permission to perform this action.',
-                'Permission denied' : f'VENDOR {vendor_obj.name} is not the owner of object {obj}'
+                'Reason' : f'{vendor_obj.name} is not the owner of This Object  ~  {bank_details}'
                 }, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-              application_logger.error(f"An unexpected error occurred while updating bank details with id {self.kwargs['pk']}, {e}")
-              return Response({'error': f"An error occurred, please check your input or contact support. {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            application_logger.error(f"An error occurred: {e} for user {user.email}")
+            return Response({'error': f"An error occurred, please check your input or contact support. {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 
@@ -495,8 +490,7 @@ class VendorBankDetailsListView(generics.ListAPIView):
             return queryset
         except Exception as e:
              application_logger.error(f"Error while fetching bank details for user {user.email}: {e}")
-             return BankAccountDetails.objects.none()   # Return empty queryset
-             #return Response({'error': f'An error occurred while fetching bank details: {e}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+             return Response({'error': f'An error occurred while fetching bank details: {e}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 
@@ -553,13 +547,7 @@ class VendorBankDetailsDeleteView(generics.DestroyAPIView):
         Handles the delete request for the bank details
         """
         user = self.request.user
-        try:
-            obj = self.get_object()
-        except BankAccountDetails.DoesNotExist:
-            application_logger.error(f"Bank details with id {self.kwargs['pk']} not found for vendor {user.email}")
-            return Response({'error': 'Bank details not found'}, status=status.HTTP_404_NOT_FOUND)
-
-        
+       
         try:
            user_obj, vendor_obj, error_response = fetch_user_and_vendor(user)
            if error_response:
@@ -568,7 +556,7 @@ class VendorBankDetailsDeleteView(generics.DestroyAPIView):
            
            if user_obj.role == 'vendor':
                try:
-                    instance = obj
+                    instance =self.get_object()
                     vendor_is_owner(vendor_obj, obj=instance)
                except BankAccountDetails.DoesNotExist:
                    application_logger.error(f"Bank details with id {self.kwargs['pk']} not found for vendor {user.email}")
@@ -598,14 +586,14 @@ class VendorBankDetailsDeleteView(generics.DestroyAPIView):
                self.perform_destroy(instance)
                return Response(status=status.HTTP_204_NO_CONTENT)
         except PermissionDenied as e:
-            application_logger.error(f"Permission denied: {e}, for vendor {user.email} with the id: {self.kwargs['pk']}")
+            application_logger.error(f"Permission denied: {e} for vendor {user.email}")
             return Response(
                 {'error': f'You do not have permission to perform this action.',
-                'Permission denied' : f'VENDOR {vendor_obj.name} is not the owner of object {obj}'
+                'Reason' : f'{vendor_obj.name} is not the owner of This Object  ~  {instance}'
                 }, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-              application_logger.error(f"An unexpected error occurred while deleting bank details for vendor {user.email} with id: {self.kwargs['pk']}: {e}")
-              return Response({'error': f'An error occurred: {e}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            application_logger.error(f"An error occurred: {e} for user {user.email}")
+            return Response({'error': f"An error occurred, please check your input or contact support. {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 

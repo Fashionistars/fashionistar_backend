@@ -61,7 +61,10 @@ class User(AbstractUser):
     objects = CustomUserManager()
 
     def __str__(self):
-        return self.email
+        if self.email:
+            return str(self.email)
+        else:
+            return str(self.phone)
 
     def clean(self):
         super().clean()
@@ -133,7 +136,7 @@ class Profile(models.Model):
         if self.full_name:
             return str(self.full_name)
         else:
-            return str(self.user.full_name)
+            return str(self.user.email)
     
     def set_transaction_password(self, password):
         self.transaction_password = password
@@ -144,7 +147,7 @@ class Profile(models.Model):
 
     def save(self, *args, **kwargs):
         if self.full_name == "" or self.full_name is None:
-            self.full_name = self.user.full_name
+            self.full_name = self.user.email
         super(Profile, self).save(*args, **kwargs)
 
     def thumbnail(self):

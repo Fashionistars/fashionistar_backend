@@ -108,7 +108,7 @@ class VerifyUserSerializer(serializers.ModelSerializer):
 
 @parser_classes([JSONParser])
 class LoginSerializer(TokenObtainPairSerializer):
-    email = serializers.EmailField(write_only=False)
+    email = serializers.EmailField(write_only=False, required=False)
     phone_number = serializers.CharField(required=False)
     password = serializers.CharField(required=True)
     default_error_messages = {

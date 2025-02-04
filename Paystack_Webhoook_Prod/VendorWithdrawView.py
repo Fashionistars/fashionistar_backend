@@ -16,6 +16,8 @@ from requests.exceptions import ConnectionError, Timeout, RequestException
 from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
 from Paystack_Webhoook_Prod.serializers_WITHDRAWAL import  VendorWithdrawSerializer
 from Paystack_Webhoook_Prod.UTILS.paystack import Transfer as PaystackTransfer
+from rest_framework.exceptions import PermissionDenied
+from vendor.utils import fetch_user_and_vendor, vendor_is_owner
 # Get logger for application
 application_logger = logging.getLogger('application')
 # Get logger for paystack
@@ -24,56 +26,59 @@ paystack_logger = logging.getLogger('paystack')
 class VendorWithdrawView(generics.CreateAPIView):
     """
      API endpoint for vendors to initiate a withdrawal from their wallet.
-    *   **URL:** `/api/vendor/withdraw/`
-    *   **Method:** `POST`
-    *   **Authentication:** Requires a valid authentication token in the `Authorization` header.
-        *    **Request Body (JSON):**
-            ```json
+    *   *URL:* /api/vendor/withdraw/
+    *   *Method:* POST
+    *   *Authentication:* Requires a valid authentication token in the Authorization header.
+        *    *Request Body (JSON):*
+            json
                 {
                 "amount": 50, // The amount to withdraw (positive decimal)
                 "transaction_password": "1234", // Vendor's transaction password for security
                 "bank_details_id": "12345", // The id of the bank details
                 "reason": "For my Expenses" // Optional reason for withdrawal
                 }
-                 ```
-                 *  `amount`: (Decimal, required) The amount the vendor wants to withdraw from their wallet. Must be a positive value.
-                 *  `transaction_password`: (string, required) The transaction password for the vendor.
-                 *  `bank_details_id` (string, required): The id of the bank details from the `VendorBankDetailsListView` to use for the transfer.
-                 *    `reason` (string, optional): The vendors reason for withdrawal.
-          *   **Response (JSON):**
+                 
+                 *  amount: (Decimal, required) The amount the vendor wants to withdraw from their wallet. Must be a positive value.
+                 *  transaction_password: (string, required) The transaction password for the vendor.
+                 *  bank_details_id (string, required): The id of the bank details from the VendorBankDetailsListView to use for the transfer.
+                 *    reason (string, optional): The vendors reason for withdrawal.
+          *   *Response (JSON):*
               *  On success (HTTP 200 OK):
-                      ```json
+                      json
                          {
                            "message": "Withdrawal initiated",
                            "new_balance": 120.00,
                             "transfer_code": "TRF_xxx", // The transfer code from paystack
                             "data": {...}
                          }
-                      ```
+                      
                *  On failure (HTTP 400, 404 or 500):
-                      ```json
+                      json
                          {
                             "error": "Error message" // The error message detailing the failure.
                          }
-                        ```
+                        
                       Possible error messages:
-                        *    `"All fields are required: 'amount', 'transaction_password' and 'bank_details_id'."`: if any required field is missing from the request body.
-                        *    `"Amount must be positive"`: If amount is not a positive number.
-                        *    `"Invalid amount format"`: If the amount entered is not a number.
-                         *   `"Vendor not found"`: If the vendor is not found.
-                         *   `"Transaction password not set. Please set it first."`: If the transaction password has not been set for the vendor.
-                        *   `"Invalid transaction password"`: If an incorrect transaction password was provided.
-                        *  `"Insufficient balance"`: If the vendor's balance is lower than the withdrawal amount.
-                        *  `"Bank details not found"`: If no bank details is found with that ID.
-                        *  `"Failed to initiate transfer on paystack {paystack_error_message}"`: If the paystack transfer request fails, includes the paystack error message
-                        *   `"Failed to initiate transfer. Please check your internet connection or try again."`: If there is any connection error to the paystack servers.
-                         *  `"Invalid user role"`: If the user role is not vendor.
+                        *    "All fields are required: 'amount', 'transaction_password' and 'bank_details_id'.": if any required field is missing from the request body.
+                        *    "Amount must be positive": If amount is not a positive number.
+                        *    "Invalid amount format": If the amount entered is not a number.
+                         *   "Vendor not found": If the vendor is not found.
+                         *   "Transaction password not set. Please set it first.": If the transaction password has not been set for the vendor.
+                        *   "Invalid transaction password": If an incorrect transaction password was provided.
+                        *  "Insufficient balance": If the vendor's balance is lower than the withdrawal amount.
+                        *  "Bank details not found": If no bank details is found with that ID.
+                        *  "Failed to initiate transfer on paystack {paystack_error_message}": If the paystack transfer request fails, includes the paystack error message
+                        *   "Failed to initiate transfer. Please check your internet connection or try again.": If there is any connection error to the paystack servers.
+                         *  "Invalid user role": If the user role is not vendor.
     """
     serializer_class = VendorWithdrawSerializer
     permission_classes = (IsAuthenticated,)
   
     @transaction.atomic
     def create(self, request, *args, **kwargs):
+        """
+        Handles the creation of a withdrawal request
+        """
         serializer = self.get_serializer(data=request.data)
         if not serializer.is_valid():
             application_logger.error(f"Invalid input data for withdrawal: {serializer.errors}")
@@ -95,6 +100,16 @@ class VendorWithdrawView(generics.CreateAPIView):
                  application_logger.error(f"User: {user.email} is not a vendor")
                  return Response({'error': "You are not a vendor"}, status=status.HTTP_400_BAD_REQUEST)
             
+
+
+            try:
+                bank_details = BankAccountDetails.objects.get(id=bank_details_id)
+                vendor_is_owner(vendor_obj, obj=bank_details)
+            except BankAccountDetails.DoesNotExist:
+                application_logger.error(f"Bank details with id: {bank_details_id} not found for user {user.email}")
+                return Response({'error': 'Bank details not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+
             if not vendor_obj.transaction_password:
                application_logger.error(f"Transaction password not set for vendor: {user.email}")
                return Response(
@@ -113,13 +128,6 @@ class VendorWithdrawView(generics.CreateAPIView):
             if vendor_obj.wallet_balance < amount:
                  application_logger.error(f"Insufficient balance for withdrawal for vendor {user.email}")
                  return Response({'error': 'Insufficient balance'}, status=status.HTTP_400_BAD_REQUEST)
-
-            try:
-                bank_details = BankAccountDetails.objects.get(id=bank_details_id, vendor=vendor_obj)
-            except BankAccountDetails.DoesNotExist:
-                application_logger.error(f"Bank details with id: {bank_details_id} not found for user {user.email}")
-                return Response({'error': 'Bank details not found'}, status=status.HTTP_404_NOT_FOUND)
-            
 
 
             with transaction.atomic():
@@ -174,206 +182,18 @@ class VendorWithdrawView(generics.CreateAPIView):
                     'message': 'Withdrawal initiated',
                     'new_balance': vendor_obj.wallet_balance,
                     'transfer_code':transfer_response['data'].get('transfer_code', None),
+                    'data': serializer.data
                     }, status=status.HTTP_200_OK)
 
+        except PermissionDenied as e:
+            application_logger.error(f"Permission denied: {e} for vendor {user.email}")
+            return Response(
+                {'error': f'You do not have permission to perform this action.',
+                'Reason' : f'{vendor_obj.name} is not the owner of This Object  ~  {bank_details}'
+                }, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             application_logger.error(f"An error occurred: {e} for user {user.email}")
             return Response({'error': f"An error occurred, please check your input or contact support. {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

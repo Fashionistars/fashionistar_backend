@@ -1,15 +1,20 @@
 from django.urls import path
 from customer import views as trans_password 
 from customer import views as customer_views
+from customer import profile as customer_profile
 from customer.wallet_balance import UserTransferView, UserWalletBalanceView
 
 
 app_name = 'customer'  # Add this line to specify the app namespace
 
 
-
-
 urlpatterns = [
+
+    
+    # Customer ProfileView API Endpoints
+    path('client/settings/<str:pid>/', customer_profile.CustomerProfileView.as_view(), name='client-profile'),
+    path('client/settings/update/<str:pid>/', customer_profile.CustomerProfileUpdateView.as_view(), name='client-profile-update'),
+
     # Transaction Password
     path('client/set-transaction-password/', trans_password.SetTransactionPasswordView.as_view(), name='set-transaction-password'),
     path('client/validate-transaction-password/', trans_password.ValidateTransactionPasswordView.as_view(), name='validate-transaction-password'),
@@ -24,7 +29,7 @@ urlpatterns = [
     path('client/order/detail/<user_id>/<order_oid>/', customer_views.OrdersDetailAPIView.as_view(), name='customer-order-detail'),
     path('client/wishlist/create/', customer_views.WishlistCreateAPIView.as_view(), name='customer-wishlist-create'),
     path('client/wishlist/<user_id>/', customer_views.WishlistAPIView.as_view(), name='customer-wishlist'),
-    path('client/setting/<int:pk>/', customer_views.CustomerUpdateView.as_view(), name='customer-settings'),
+
 
     
     # Client Notifications API Endpoints
@@ -46,9 +51,3 @@ urlpatterns = [
     path('client/shipping-address/', customer_views.ShippingAddressListCreateView.as_view(), name='shipping-address-list-create'),
     path('client/shipping-address/<int:pk>/', customer_views.ShippingAddressDetailView.as_view(), name='shipping-address-detail'),
 ]
-
-
-
-
-
-
