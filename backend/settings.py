@@ -92,6 +92,7 @@ INSTALLED_APPS = [
     'storages',
     'phone_verify',
     'channels',
+    'django_filters',
     
     # Cloudinary
     'cloudinary_storage',

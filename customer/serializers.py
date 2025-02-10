@@ -51,6 +51,7 @@ class UserSerializer(serializers.ModelSerializer):
     """
     class Meta:
         model = User
+        ref_name = "CustomerUser"  # Add a unique ref_name
         fields = ['id','email', 'full_name', 'phone', 'role']
         help_texts = {
             'id': 'The unique ID of the user.',
@@ -60,7 +61,7 @@ class UserSerializer(serializers.ModelSerializer):
         }
 
 
-class ProfileSerializer(serializers.ModelSerializer):
+class ProfileSerializers(serializers.ModelSerializer):
     """
     Serializer for the Profile model.
     """

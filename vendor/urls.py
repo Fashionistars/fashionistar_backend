@@ -38,6 +38,7 @@ urlpatterns = [
 
     path('vendor/<int:vendor_id>/store/', vendor_views.VendorStoreView.as_view(), name='vendor-store-products'),
     path('vendors/', vendor_views.AllVendorsProductsList.as_view(), name='all-vendors-products'),
+    path('vendors/all', vendor_views.VENDORListView.as_view(), name='all-AllVENDORSerializer-products'),
 
     # Vendor API Endpoints
     path('vendor/dashboard', vendor_views.DashboardStatsAPIView.as_view(), name='vendor-stats'),

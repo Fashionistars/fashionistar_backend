@@ -138,17 +138,22 @@ class Profile(models.Model):
         else:
             return str(self.user.email)
     
+
+    from django.contrib.auth.hashers import make_password, check_password
+
     def set_transaction_password(self, password):
-        self.transaction_password = password
+        self.transaction_password = make_password(password)
         self.save()
 
     def check_transaction_password(self, password):
-        return self.transaction_password == password
+        return check_password(password, self.transaction_password)
+
 
     def save(self, *args, **kwargs):
         if self.full_name == "" or self.full_name is None:
             self.full_name = self.user.email
         super(Profile, self).save(*args, **kwargs)
+
 
     def thumbnail(self):
         """

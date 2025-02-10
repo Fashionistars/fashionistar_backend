@@ -2,16 +2,24 @@ from django.urls import path
 
 from store import views as store_views
 
-from django.urls import path
+
+from Homepage.product import *
 from Homepage.collections import *
 from Homepage.category import *
 from Homepage.brand import *
 
-app_name = 'store'  # Add this line to specify the app namespace
+app_name = 'home'  # Add this line to specify the app namespace
 
 
 urlpatterns = [
     ###########   # Unprotected endpoints     ##########
+    
+
+    # PRODUCTS ENDPOINTS 
+    path('home/products/', ProductListView.as_view(), name='product-list'),
+    path('home/product/<slug:slug>/', ProductDetailView.as_view(), name='product-detail'),   
+    
+
 
     # Category endpoints
     path('home/categories/', CategoryListView.as_view(), name='categories-list'),
@@ -41,5 +49,4 @@ urlpatterns = [
     path('search/', store_views.SearchProductsAPIView.as_view(), name='search'),
 
 ]
-
 

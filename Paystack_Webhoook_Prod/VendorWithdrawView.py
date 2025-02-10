@@ -131,6 +131,23 @@ class VendorWithdrawView(generics.CreateAPIView):
 
 
             with transaction.atomic():
+
+                # ================== MOST IMPORTANT CODE TO WORK WITH  FOR LOCKING THE VENDOR'S RELATED DATABASE INSTANCE WHILE PERFORMING A TRANSACTION BUSINESS ON THE VENDOR'S DATABASE COLUMNS ================
+
+                # Update vendor Balance
+                vendor_obj = Vendor.objects.select_for_update().get(pk=vendor_obj.pk)
+                vendor_obj.wallet_balance -= amount
+                vendor_obj.save()
+
+                application_logger.info(f"Withdrawal of {amount} initiated by vendor: {user.email}")
+
+                # ================== MOST IMPORTANT CODE TO WORK WITH  FOR LOCKING THE VENDOR'S RELATED DATABASE INSTANCE WHILE PERFORMING A TRANSACTION BUSINESS ON THE VENDOR'S DATABASE COLUMNS ================
+
+
+
+
+                
+
                 # Create a new debit transaction
                 transaction_obj = Transaction.objects.create(
                     vendor=vendor_obj,
@@ -140,12 +157,6 @@ class VendorWithdrawView(generics.CreateAPIView):
                     description=reason if reason else None,
                    
                 )
-
-                 # Update vendor Balance
-                vendor_obj.wallet_balance -= amount
-                vendor_obj.save()
-                application_logger.info(f"Withdrawal of {amount} initiated by vendor: {user.email}")
-
 
                 #initialize transfer
                 paystack_transfer = PaystackTransfer(amount=amount, recipient_code=bank_details.paystack_Recipient_Code)

@@ -2,7 +2,12 @@ from django.urls import path
 from customer import views as trans_password 
 from customer import views as customer_views
 from customer import profile as customer_profile
+from customer import wishlist as client_wishlist
+from customer import reviews as client_reviews
+from customer import orders as client_orders
 from customer.wallet_balance import UserTransferView, UserWalletBalanceView
+
+
 
 
 app_name = 'customer'  # Add this line to specify the app namespace
@@ -10,7 +15,21 @@ app_name = 'customer'  # Add this line to specify the app namespace
 
 urlpatterns = [
 
+    # ORDERS API ENDPOINTS                          
+    path('client/orders/', client_orders.OrdersAPIView.as_view(), name='client-orders'),
+    path('client/order/detail/<str:order_oid>/', client_orders.OrdersDetailAPIView.as_view(), name='client-order-detail'),
     
+    
+    
+    # WISH-LIST API ENDPOINTS                          
+    path('client/wishlist/create/', client_wishlist.WishlistCreateAPIView.as_view(), name='customer-wishlist-create'),
+    path('client/wishlist/', client_wishlist.WishlistAPIView.as_view(), name='customer-wishlist'),
+
+    #  REVIEW API ENDPOINTS
+    path('home/reviews/<product_id>/', client_reviews.ReviewListView.as_view(), name='product-reviews'),
+    path('client/reviews/create/', client_reviews.ReviewCreateAPIView.as_view(), name='customer-review-create'),
+
+
     # Customer ProfileView API Endpoints
     path('client/settings/<str:pid>/', customer_profile.CustomerProfileView.as_view(), name='client-profile'),
     path('client/settings/update/<str:pid>/', customer_profile.CustomerProfileUpdateView.as_view(), name='client-profile-update'),

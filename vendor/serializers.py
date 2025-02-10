@@ -29,8 +29,10 @@ class VendorStoreSerializer(serializers.Serializer):
     products = AllProductSerializer(many=True, help_text="Products available in the vendor's store")
 
 
-
-
+class AllVENDORSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Vendor  # <-- Change this from User to Vendor
+        fields = '__all__'
 
 
 

@@ -19,6 +19,7 @@ from userauths.models import User, user_directory_path, Profile
 from vendor.models import Vendor
 
 import shortuuid
+import  uuid
 
 
 
@@ -116,30 +117,37 @@ class Tag(models.Model):
 
 # Model for Products
 class Product(models.Model):
-    sku = ShortUUIDField(unique=True, length=5, max_length=50, prefix="SKU", alphabet="1234567890")
-    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, null=False, blank=False, related_name="vendor_role")
-    category = models.ManyToManyField('admin_backend.Category', related_name="products",)    # In this categories column,  a product is meant to contain differnt categories    
-    title = models.CharField(max_length=100)
-    image = models.FileField(upload_to=user_directory_path, blank=True, null=True, default="product.jpg")
-    description = models.TextField(null=True, blank=True)
-    tags = models.CharField(max_length=1000, null=True, blank=True)
-    brand = models.CharField(max_length=100, null=True, blank=True)
-    old_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, null=True, blank=True)
-    price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, null=True, blank=True)
-    shipping_amount = models.DecimalField(max_digits=12, decimal_places=2,default=1000.00)
+    """
+    Model for Products.
+
+    A model that handles the title, images, product details, etc.
+    """
+    # id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, help_text="Unique ID for the product (UUID)")
+    pid = ShortUUIDField(unique=True, length=10, max_length=20, alphabet="abcdefghijklmnopqrstuvxyz", help_text="Short product ID (unique)") #The Short Id for the product
+    sku = ShortUUIDField(unique=True, length=5, max_length=50, prefix="SKU", alphabet="1234567890", help_text="Stock Keeping Unit")
+    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, null=False, blank=False, related_name="vendor_role", help_text="Vendor of the product")
+    category = models.ManyToManyField('admin_backend.Category', related_name="products", help_text="Categories to which the product belongs")
+    title = models.CharField(max_length=100, help_text="Product title")
+    image = models.FileField(upload_to=user_directory_path, blank=True, null=True, default="product.jpg", help_text="Product image")
+    description = models.TextField(null=True, blank=True, help_text="Product description")
+    tags = models.CharField(max_length=1000, null=True, blank=True, help_text="Product tags (comma-separated)")
+    brand = models.CharField(max_length=100, null=True, blank=True, help_text="Product brand")
+    old_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, null=True, blank=True, help_text="Original price of the product")
+    price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, null=True, blank=True, help_text="Selling price of the product")
+    shipping_amount = models.DecimalField(max_digits=12, decimal_places=2,default=1000.00, help_text="Default shipping amount")
     total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="'price' + #1,000 'for default shipping_amount' ", null=True, blank=True)
-    stock_qty = models.PositiveIntegerField(default=0)
-    in_stock = models.BooleanField(default=True)
-    status = models.CharField(choices=STATUS, max_length=50, default="published", null=True, blank=True)
-    featured = models.BooleanField(default=False)
-    hot_deal = models.BooleanField(default=False)
-    special_offer = models.BooleanField(default=False)
-    views = models.PositiveIntegerField(default=0, null=True, blank=True)
-    orders = models.PositiveIntegerField(default=0, null=True, blank=True)
-    saved = models.PositiveIntegerField(default=0, null=True, blank=True)
-    rating = models.IntegerField(default=0, null=True, blank=True)
-    slug = models.SlugField(null=True, blank=True)
-    date = models.DateTimeField(default=timezone.now)
+    stock_qty = models.PositiveIntegerField(default=0, help_text="Available stock quantity")
+    in_stock = models.BooleanField(default=True, help_text="Is the product in stock?")
+    status = models.CharField(choices=STATUS, max_length=50, default="published", null=True, blank=True, help_text="Product status")
+    featured = models.BooleanField(default=False, help_text="Is the product featured?")
+    hot_deal = models.BooleanField(default=False, help_text="Is the product a hot deal?")
+    special_offer = models.BooleanField(default=False, help_text="Is the product on special offer?")
+    views = models.PositiveIntegerField(default=0, null=True, blank=True, help_text="Number of views")
+    orders = models.PositiveIntegerField(default=0, null=True, blank=True, help_text="Number of orders")
+    saved = models.PositiveIntegerField(default=0, null=True, blank=True, help_text="Number of times saved to wishlist")
+    rating = models.IntegerField(default=0, null=True, blank=True, help_text="Average rating of the product")
+    slug = models.SlugField(null=True, blank=True, help_text="Product URL slug")
+    date = models.DateTimeField(default=timezone.now, help_text="Date and time when the product was created")
 
     class Meta:
         ordering = ['-id']

@@ -4,9 +4,15 @@ from store import views as store_views
 
 
 
+
 app_name = 'store'  # Add this line to specify the app namespace
 
 urlpatterns = [
+
+    #     NEW TESTABLE ENDPOINTS
+
+
+
    
     # Store API Endpoints
     path('products/', store_views.ProductListView.as_view(), name='products'),

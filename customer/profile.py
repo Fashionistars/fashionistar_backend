@@ -7,7 +7,7 @@ import logging
 
 
 from userauths.models import Profile
-from customer.serializers import ProfileSerializer
+from customer.serializers import ProfileSerializers
 from customer.utils import fetch_user_and_vendor, client_is_owner
 # Get logger for application
 application_logger = logging.getLogger('application')
@@ -52,7 +52,7 @@ class CustomerProfileView(generics.RetrieveAPIView):
                    * "An error occurred, please check your input or contact support. {e}": if any error occurs during the request process.
     """
     queryset =  Profile.objects.all()
-    serializer_class =  ProfileSerializer
+    serializer_class =  ProfileSerializers
     permission_classes = (IsAuthenticated, )
     lookup_field = 'pid'
 
@@ -148,7 +148,7 @@ class CustomerProfileUpdateView(generics.RetrieveUpdateAPIView):
                    * "An error occurred, please check your input or contact support. {e}": if any error occurs during the request process.
     """
     queryset =  Profile.objects.all()
-    serializer_class =  ProfileSerializer
+    serializer_class =  ProfileSerializers
     permission_classes = (IsAuthenticated, )
     lookup_field = 'pid'
 

@@ -39,6 +39,7 @@ urlpatterns = [
 
    #  CLIENTS   /  CUSTOMER   /  USER 
    path("", include("customer.urls")),
+   path("", include("store.urls")),
 
 
 
