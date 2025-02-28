@@ -3,8 +3,8 @@ from rest_framework.response import Response
 from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
-from .models import Collections, Category, Brand
-from .serializers import CollectionsSerializer, CategorySerializer, BrandSerializer
+from admin_backend.models import Collections, Category, Brand
+from admin_backend.serializers import CollectionsSerializer, CategorySerializer, BrandSerializer
 from django.http import Http404
 
 

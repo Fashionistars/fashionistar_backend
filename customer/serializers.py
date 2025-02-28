@@ -52,12 +52,13 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         ref_name = "CustomerUser"  # Add a unique ref_name
-        fields = ['id','email', 'full_name', 'phone', 'role']
+        fields = ['identifying_info', 'role', 'is_active', 'verified']
         help_texts = {
             'id': 'The unique ID of the user.',
-            'email': "The user's unique email address",
-            'phone': "The user's phone number",
+            'identifying_info': "The user's unique identifying_info  either 'email address' or 'phone number'",
             'role': 'The role of this user, either "client" or "vendor"',
+            'is_active': "The user is 'Active' or Not ",
+            'verified': "The user is 'Verified' or Not ",
         }
 
 

@@ -9,7 +9,6 @@ from rest_framework import filters
 
 from store.models import Product
 from store.serializers import ProductSerializer
-from vendor.utils import fetch_user_and_vendor, client_is_owner
 
 # Get logger for application
 application_logger = logging.getLogger('application')
@@ -57,7 +56,7 @@ class ProductListView(generics.ListAPIView):
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
 
     #The filter of all results of the API
-    filterset_fields = ['category__title', 'tags'] # Enables the filtering for the API with Category, Tags, Title and Status as well
+    filterset_fields = ['category__name', 'tags'] # Enables the filtering for the API with Category, Tags, Title and Status as well
     search_fields = ['title', 'description']  # Enable Search filter for the API ( description and the tilte)
     ordering_fields = ['title', 'price', 'date'] # Can order it by title, price or date if required
 

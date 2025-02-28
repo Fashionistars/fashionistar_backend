@@ -1,6 +1,6 @@
 from rest_framework import serializers
-from .models import Collections
-from .models import Category, Brand
+from admin_backend.models import Collections
+from admin_backend.models import Category, Brand
 from chat.models import Message
 
 
@@ -12,26 +12,24 @@ class MessageViewSerializer(serializers.ModelSerializer):
         read_only_fields = ['sender', 'recipient', 'message', 'files', 'timestamp']
 
 
+
 class CollectionsSerializer(serializers.ModelSerializer):
-    
     class Meta:
         model = Collections
-        fields = ['id', 'background_image', 'image']
-        
+        fields = '__all__'
+        read_only_fields = ['slug', 'created_at', 'updated_at']
 
-
-# Define a serializer for the Category model
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
-        fields = ['title', 'image' ]
+        fields = '__all__'
+        read_only_fields = ['slug', 'created_at', 'updated_at']
 
-
-# Define a serializer for the Brand model
 class BrandSerializer(serializers.ModelSerializer):
     class Meta:
         model = Brand
         fields = '__all__'
+        read_only_fields = ['slug', 'created_at', 'updated_at']
 
 
 class AdminProfitSerializer(serializers.Serializer):

@@ -552,6 +552,9 @@ class VendorBankDetailsDetailView(generics.RetrieveAPIView):
    
     serializer_class = BankAccountDetailsSerializer
     permission_classes = [IsAuthenticated]
+    queryset = BankAccountDetails.objects.all()  # Add this line
+    lookup_field = 'pk' # ADDED
+
     
 
     def retrieve(self, request, *args, **kwargs):
@@ -604,7 +607,9 @@ class VendorBankDetailsDeleteView(generics.DestroyAPIView):
     """
     serializer_class = BankAccountDetailsSerializer
     permission_classes = [IsAuthenticated]
-  
+    queryset = BankAccountDetails.objects.all() # ADD THIS LINE
+    lookup_field = 'pk'  # This is important for identifying the object to delete
+
 
     def destroy(self, request, *args, **kwargs):
         """
@@ -621,8 +626,7 @@ class VendorBankDetailsDeleteView(generics.DestroyAPIView):
 
             if user_obj.role == 'vendor':
                 try:
-                    pk = self.kwargs['pk']
-                    instance = BankAccountDetails.objects.get(pk=pk) # Remove the "get_object()"
+                    instance = BankAccountDetails.objects.get(pk=self.kwargs['pk']) 
                     vendor_is_owner(vendor_obj, obj=instance)
                 except BankAccountDetails.DoesNotExist:
                     application_logger.error(f"Bank details with id {self.kwargs['pk']} not found for vendor {user.email}")
@@ -651,4 +655,6 @@ class VendorBankDetailsDeleteView(generics.DestroyAPIView):
                 application_logger.info(f"Successfully deleted bank details for vendor {user.email}, with id: {self.kwargs['pk']}")
                 instance.delete()
                 return Response(status=status.HTTP_204_NO_CONTENT)
-        except PermissionDenied as e:
+        except Exception as e:
+            application_logger.error(f"An error occurred: {e} for user {user.email}")
+            return Response({'error': f"An error occurred, please check your input or contact support. {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

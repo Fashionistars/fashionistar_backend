@@ -103,7 +103,7 @@ RATING = (
 # Model for Tags
 class Tag(models.Model):
     title = models.CharField(max_length=30)
-    category = models.ForeignKey('admin_backend.Category', default="", verbose_name="Category", on_delete=models.PROTECT)
+    category = models.ForeignKey('admin_backend.Category', default="", verbose_name="Category", on_delete=models.PROTECT, related_name="tag_category") # Added related_name
     active = models.BooleanField(default=True)
     slug = models.SlugField("Tag slug", max_length=30, null=False, blank=False, unique=True)
 
@@ -124,34 +124,50 @@ class Product(models.Model):
     """
     # id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, help_text="Unique ID for the product (UUID)")
     pid = ShortUUIDField(unique=True, length=10, max_length=20, alphabet="abcdefghijklmnopqrstuvxyz", help_text="Short product ID (unique)") #The Short Id for the product
-    sku = ShortUUIDField(unique=True, length=5, max_length=50, prefix="SKU", alphabet="1234567890", help_text="Stock Keeping Unit")
-    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, null=False, blank=False, related_name="vendor_role", help_text="Vendor of the product")
-    category = models.ManyToManyField('admin_backend.Category', related_name="products", help_text="Categories to which the product belongs")
-    title = models.CharField(max_length=100, help_text="Product title")
+    sku = ShortUUIDField(unique=True, length=6, max_length=50, prefix="SKU", alphabet="1234567890", help_text="Stock Keeping Unit")
+    vendor = models.ForeignKey("vendor.Vendor", on_delete=models.CASCADE, null=False, blank=False, related_name="vendor_product_set", help_text="Vendor of the product", db_index=True)  # Index vendor
+    category = models.ManyToManyField('admin_backend.Category', related_name="product_category", help_text="Categories to which the product belongs")
+    title = models.CharField(max_length=100, help_text="Product title", verbose_name="Product Name", db_index=True)  # Index title
     image = models.FileField(upload_to=user_directory_path, blank=True, null=True, default="product.jpg", help_text="Product image")
     description = models.TextField(null=True, blank=True, help_text="Product description")
     tags = models.CharField(max_length=1000, null=True, blank=True, help_text="Product tags (comma-separated)")
     brand = models.CharField(max_length=100, null=True, blank=True, help_text="Product brand")
     old_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, null=True, blank=True, help_text="Original price of the product")
-    price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, null=True, blank=True, help_text="Selling price of the product")
+    price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, null=True, blank=True, db_index=True, help_text="Selling price of the product")    # Index price
     shipping_amount = models.DecimalField(max_digits=12, decimal_places=2,default=1000.00, help_text="Default shipping amount")
     total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="'price' + #1,000 'for default shipping_amount' ", null=True, blank=True)
     stock_qty = models.PositiveIntegerField(default=0, help_text="Available stock quantity")
     in_stock = models.BooleanField(default=True, help_text="Is the product in stock?")
-    status = models.CharField(choices=STATUS, max_length=50, default="published", null=True, blank=True, help_text="Product status")
-    featured = models.BooleanField(default=False, help_text="Is the product featured?")
+    status = models.CharField(choices=STATUS, max_length=50, default="published", null=True, blank=True, help_text="Product status", db_index=True)  # Index status
+    featured = models.BooleanField(default=False, db_index=True, help_text="Is the product featured?")  # Index featured
     hot_deal = models.BooleanField(default=False, help_text="Is the product a hot deal?")
     special_offer = models.BooleanField(default=False, help_text="Is the product on special offer?")
     views = models.PositiveIntegerField(default=0, null=True, blank=True, help_text="Number of views")
     orders = models.PositiveIntegerField(default=0, null=True, blank=True, help_text="Number of orders")
     saved = models.PositiveIntegerField(default=0, null=True, blank=True, help_text="Number of times saved to wishlist")
     rating = models.IntegerField(default=0, null=True, blank=True, help_text="Average rating of the product")
-    slug = models.SlugField(null=True, blank=True, help_text="Product URL slug")
-    date = models.DateTimeField(default=timezone.now, help_text="Date and time when the product was created")
+    slug = models.SlugField(null=True, blank=True, help_text="Product URL slug", db_index=True)  # Index slug
+    date = models.DateTimeField(default=timezone.now, help_text="Date and time when the product was created", db_index=True)  # Index date
+    updated = models.DateTimeField(null=True, blank=True, help_text="Date and time when the Updated was created")
+
 
     class Meta:
         ordering = ['-id']
         verbose_name_plural = "Products"
+        indexes = [
+            models.Index(fields=['vendor', 'status'], name='product_vendor_status_idx'),
+            models.Index(fields=['price'], name='product_price_idx'),
+            models.Index(fields=['slug'], name='product_slug_idx'),
+            models.Index(fields=['title'], name='product_title_idx'),
+            models.Index(fields=['date'], name='product_date_idx'),  # Add index for date
+        
+            models.Index(fields=['featured'], name='product_featured_idx'),
+            models.Index(fields=['status'], name='product_status_idx'),
+        ]
+
+
+
+
 
     # Returns an HTML image tag for the product's image
     def product_image(self):
@@ -237,7 +253,7 @@ class Product(models.Model):
 
 # Model for Product Gallery
 class Gallery(models.Model):
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True, db_index=True)  # Index product
     image = models.FileField(upload_to=user_directory_path, null=True,blank=True, default="gallery.jpg")
     active = models.BooleanField(default=True)
     date = models.DateTimeField(auto_now_add=True)
@@ -246,34 +262,52 @@ class Gallery(models.Model):
     class Meta:
         ordering = ["date"]
         verbose_name_plural = "Product Images"
+        indexes = [
+            models.Index(fields=['product'], name='gallery_product_idx'),
+        ]
 
     def __str__(self):
         return "Image"
 
 # Model for Product Specifications
 class Specification(models.Model):
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True, db_index=True)  # Index product
     title = models.CharField(max_length=100, blank=True, null=True, help_text="Made In")
     content = models.CharField(max_length=1000, blank=True, null=True, help_text="Country/HandMade")
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['product'], name='specification_product_idx'),
+        ]
+
 # Model for Product Sizes
 class Size(models.Model):
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True, db_index=True)  # Index product
     name = models.CharField(max_length=100, blank=True, null=True, help_text="M   XL   XXL   XXXL")
     price = models.DecimalField(default=0.00, decimal_places=2, max_digits=12, help_text="$21.99")
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['product'], name='size_product_idx'),
+        ]
+
 # Model for Product Colors
 class Color(models.Model):
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True, db_index=True)  # Index product
     name = models.CharField(max_length=100, blank=True, null=True, help_text="Green Blue Red black White Grey Orange")
     color_code = models.CharField(max_length=100, blank=True, null=True)
     image = models.FileField(upload_to=user_directory_path, blank=True, null=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['product'], name='color_product_idx'),
+        ]
 
 # Model for Product FAQs
 class ProductFaq(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
     pid = ShortUUIDField(unique=True, length=10, max_length=20, alphabet="abcdefghijklmnopqrstuvxyz")
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True, related_name="product_faq")
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True, related_name="product_faq", db_index=True)  # Index product
     email = models.EmailField()
     question = models.CharField(max_length=1000)
     answer = models.CharField(max_length=10000, null=True, blank=True)
@@ -283,6 +317,9 @@ class ProductFaq(models.Model):
     class Meta:
         verbose_name_plural = "Product Faqs"
         ordering = ["-date"]
+        indexes = [
+            models.Index(fields=['product'], name='productfaq_product_idx'),
+        ]
         
     def __str__(self):
         return self.question
@@ -290,14 +327,15 @@ class ProductFaq(models.Model):
 
 # Model for Cart Orders
 class CartOrder(models.Model):
-    vendor = models.ManyToManyField(Vendor, blank=True, help_text="Vendors associated with the cart order")
-    buyer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="buyer", blank=True, help_text="Buyer associated with the cart order")
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    vendor = models.ManyToManyField("vendor.Vendor", related_name="cartorder_vendor", help_text="Vendors associated with the cart order")
+    buyer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="buyer", blank=True, help_text="Buyer associated with the cart order", db_index=True)  # Index buyer
     sub_total = models.DecimalField(default=0.00, max_digits=12, decimal_places=2, help_text="Subtotal of the cart order")
     shipping_amount = models.DecimalField(default=0.00, max_digits=12, decimal_places=2, help_text="Shipping amount for the cart order")
     service_fee = models.DecimalField(default=0.00, max_digits=12, decimal_places=2, help_text="Service fee charged for the cart order")
     total = models.DecimalField(default=0.00, max_digits=12, decimal_places=2, help_text="Total amount for the cart order")
    
-    payment_status = models.CharField(max_length=100, choices=PAYMENT_STATUS, default="initiated", help_text="Payment status of the cart order")
+    payment_status = models.CharField(max_length=100, choices=PAYMENT_STATUS, default="initiated", help_text="Payment status of the cart order", db_index=True)  # Index payment_status
 
     order_status = models.CharField(max_length=100, choices=ORDER_STATUS, default="Pending", help_text="Order status of the cart order")
 
@@ -315,8 +353,8 @@ class CartOrder(models.Model):
    
     stripe_session_id = models.CharField(max_length=200, null=True, blank=True, help_text="Stripe session ID for payment")
    
-    oid = ShortUUIDField(length=10, max_length=25, alphabet="abcdefghijklmnopqrstuvxyz", help_text="Short UUID for the cart order")
-    date = models.DateTimeField(default=timezone.now, help_text="Date and time when the cart order was created")
+    oid = ShortUUIDField(length=10, max_length=25, prefix="CO", alphabet="12345abcdefghijklmnopqrstuvxyz", help_text="Short UUID for the cart order")
+    date = models.DateTimeField(default=timezone.now, help_text="Date and time when the cart order was created", db_index=True)  # Index date
    
     delivery_status = models.CharField(max_length=100, choices=DELIVERY_STATUS, default='On Hold', help_text="Delivery status of the cart order")
     tracking_id = models.CharField(max_length=100, null=True, blank=True, help_text="Tracking ID for shipment")
@@ -325,10 +363,19 @@ class CartOrder(models.Model):
     frequently_bought_together = models.ManyToManyField('store.Product', blank=True, help_text="Products frequently bought together with the order", related_name='order_item_orderin')
     class Meta:
         ordering = ["-date"]
-        verbose_name_plural = "Cart Order"
+        verbose_name_plural = "Cart Orders"
+        indexes = [
+            models.Index(fields=['buyer', 'payment_status'], name='cartorder_buyer_payment_idx'),
+            models.Index(fields=['payment_status'], name='cartorder_payment_idx'),
+            models.Index(fields=['date'], name='cartorder_date_idx'),
+        ]
 
     def __str__(self):
-        return self.oid
+        """
+        Returns the string representation of the cart order (CO) Short UUID for the cart order.
+        """
+        return f"Cart Order: {self.oid}"
+
 
     def get_order_items(self):
         return CartOrderItem.objects.filter(order=self)
@@ -336,12 +383,12 @@ class CartOrder(models.Model):
 
 # Define a model for Cart Order Item
 class CartOrderItem(models.Model):
-    order = models.ForeignKey(CartOrder, on_delete=models.CASCADE, related_name="orderitem", help_text="Cart order associated with the order item")
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="order_item", help_text="Product associated with the order item")
+    order = models.ForeignKey(CartOrder, on_delete=models.CASCADE, related_name="cart_order", help_text="Cart order associated with the order item", db_index=True)  # Index order
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="order_item_product", help_text="Product associated with the order item", db_index=True)  # Index product
     qty = models.IntegerField(default=0, help_text="Quantity of the product in the order item")
     color = models.CharField(max_length=100, null=True, blank=True, help_text="Color of the product in the order item")
     size = models.CharField(max_length=100, null=True, blank=True, help_text="Size of the product in the order item")
-    price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="Price of the product in the order item")
+    price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="Price of the product in the order item", db_index=True)  # Index proce
     sub_total = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="Total of Product price * Product Qty")
     shipping_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="Estimated Shipping Fee = shipping_fee * total")
     service_fee = models.DecimalField(default=0.00, max_digits=12, decimal_places=2, help_text="Estimated Service Fee = service_fee * total (paid by buyer to platform)")
@@ -362,13 +409,14 @@ class CartOrderItem(models.Model):
     product_delivered = models.BooleanField(default=False, help_text="Whether the product has been delivered")
     delivery_status = models.CharField(max_length=100, choices=DELIVERY_STATUS, default="On Hold", help_text="Delivery status of the order item")
     delivery_couriers = models.ForeignKey('store.DeliveryCouriers', on_delete=models.SET_NULL, null=True, blank=True, help_text="Courier service used for delivery")
+    invoice_no = models.CharField(max_length=200, null=True, blank=True)
     tracking_id = models.CharField(max_length=100000, null=True, blank=True, help_text="Tracking ID for shipment")
     
-    coupon = models.ManyToManyField('store.Coupon', blank=True, help_text="Coupons applied to the order item")
+    coupon = models.ManyToManyField('store.Coupon', blank=True,related_name="order_item_coupon", help_text="Coupons applied to the order item")
     applied_coupon = models.BooleanField(default=False, help_text="Whether a coupon has been applied to the order item")
     oid = ShortUUIDField(length=10, max_length=25, alphabet="abcdefghijklmnopqrstuvxyz", help_text="Short UUID for the order item")
-    vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, help_text="Vendor associated with the order item")
-    date = models.DateTimeField(default=timezone.now, help_text="Date and time when the order item was created")
+    vendor = models.ForeignKey("vendor.Vendor",related_name="order_item_vendor", on_delete=models.SET_NULL, null=True, help_text="Vendor associated with the order item", db_index=True)  # Index vendor
+    date = models.DateTimeField(default=timezone.now, help_text="Date and time when the order item was created", db_index=True)  # Index date
     production_status = models.CharField(max_length=100, choices=[('Pending', 'Pending'), ('Accepted', 'Accepted'), ('Processing', 'Processing'), ('Completed', 'Completed')], default='Pending', help_text="Production status of the order item")
     due_date = models.DateField(null=True, blank=True, help_text="Due date for completion of production")
 
@@ -376,6 +424,13 @@ class CartOrderItem(models.Model):
     class Meta:
         verbose_name_plural = "Cart Order Item"
         ordering = ["-date"]
+        indexes = [
+            models.Index(fields=['order'], name='cartorderitem_order_idx'),
+            models.Index(fields=['product'], name='cartorderitem_product_idx'),
+            models.Index(fields=['price'], name='cartorderitem_price_idx'),
+            models.Index(fields=['vendor'], name='cartorderitem_vendor_idx'),  # Added index for vendor
+            models.Index(fields=['date'], name='cartorderitem_date_idx'),  # Added index for date
+        ]
         
     # Method to generate an HTML image tag for the order item
     def order_img(self):
@@ -391,19 +446,24 @@ class CartOrderItem(models.Model):
 
 # Define a model for Reviews
 class Review(models.Model):
-    user = models.ForeignKey(User, on_delete=models.SET_NULL, blank=True, null=True)
-    product = models.ForeignKey(Product, on_delete=models.SET_NULL, blank=True, null=True, related_name="reviews")
-    review = models.TextField()
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, blank=True, null=True, db_index=True, related_name="user_review")  # Index user
+    product = models.ForeignKey(Product, on_delete=models.SET_NULL, blank=True, null=True, related_name="review_product", db_index=True)  # Index product
+    review = models.TextField(null=True, blank=True)
     reply = models.CharField(null=True, blank=True, max_length=1000)
-    rating = models.IntegerField(choices=RATING, default=None)
+    rating = models.IntegerField(choices=RATING, default=None, db_index=True)  # Index rating
     active = models.BooleanField(default=False)
     helpful = models.ManyToManyField(User, blank=True, related_name="helpful")
     not_helpful = models.ManyToManyField(User, blank=True, related_name="not_helpful")
-    date = models.DateTimeField(auto_now_add=True)
+    date = models.DateTimeField(auto_now_add=True, db_index=True)  # Index date
     
     class Meta:
         verbose_name_plural = "Reviews & Rating"
         ordering = ["-date"]
+        indexes = [
+            models.Index(fields=['product', 'rating'], name='review_product_rating_idx'),
+            models.Index(fields=['user'], name='review_user_idx'),  # Add index for user
+            models.Index(fields=['date'], name='review_date_idx'),  # Add index for date
+        ]
         
     # Method to return a string representation of the object
     def __str__(self):
@@ -443,11 +503,12 @@ class Wishlist(models.Model):
  
 
 class Coupon(models.Model):
-    vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, related_name="coupon_vendor")
-    used_by = models.ManyToManyField(User, blank=True)
-    code = models.CharField(max_length=1000)
+    vendor = models.ForeignKey("vendor.Vendor", on_delete=models.SET_NULL, null=True, related_name="coupon_vendor", db_index=True)  # Index vendor
+    used_by = models.ManyToManyField(User, related_name="coupon_users",blank=True)
+    code = models.CharField(max_length=1000, db_index=True)  # Index code
     discount = models.IntegerField(default=1, validators=[MinValueValidator(0), MaxValueValidator(100)])
-    date = models.DateTimeField(auto_now_add=True)
+    date = models.DateTimeField(auto_now_add=True, db_index=True)  # Index date
+    # discount = models.FloatField()
     active = models.BooleanField(default=True)
     cid = ShortUUIDField(length=10, max_length=25, alphabet="abcdefghijklmnopqrstuvxyz")
     
@@ -457,25 +518,38 @@ class Coupon(models.Model):
         super(Coupon, self).save(*args, **kwargs) 
     
     def __str__(self):
+        """
+        Returns the string representation of the coupon (code).
+        """
         return self.code
     
     class Meta:
         ordering =['-id']
+        indexes = [
+            models.Index(fields=['vendor', 'code'], name='coupon_vendor_code_idx'),
+            models.Index(fields=['date'], name='coupon_date_idx'),  # Add index for date
+
+        ]
 
 class CouponUsers(models.Model):
-    coupon = models.ForeignKey(Coupon, on_delete=models.CASCADE)
-    order = models.ForeignKey(CartOrder, on_delete=models.CASCADE)
+    coupon = models.ForeignKey(Coupon, on_delete=models.CASCADE, related_name="couponusers_coupon") # Added related_name
+    order = models.ForeignKey(CartOrder, on_delete=models.CASCADE, related_name="couponusers_order") # Added related_name
     full_name = models.CharField(max_length=1000)
     email = models.CharField(max_length=1000)
     mobile = models.CharField(max_length=1000)
-    
+
+
+    date = models.DateTimeField(default=timezone.now)
+
     def __str__(self):
-        return str(self.coupon.code)
-    
+        return self.full_name if self.full_name else str(self.coupon.code)
+
     class Meta:
         ordering =['-id']
 
-# Define a model for Delivery Couriers
+
+
+# Model for Delivery Couriers
 class DeliveryCouriers(models.Model):
     # Field for courier name with max length 1000, allowing null and blank values
     couriers_name = models.CharField(max_length=1000, null=True, blank=True)

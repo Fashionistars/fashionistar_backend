@@ -1,0 +1,72 @@
+// {
+//     "version": "2.0.0",
+//     "tasks": [
+//         {
+//             "label": "Run Celery Worker",
+//             "type": "shell",
+//             "command": "celery -A backend worker -l info",
+//             "group": {
+//                 "kind": "build",
+//                 "isDefault": true
+//             },
+//             "problemMatcher": []
+//         },
+//         {
+//             "label": "Run Celery Beat",
+//             "type": "shell",
+//             "command": "celery -A backend beat -l info",
+//             "group": {
+//                 "kind": "build",
+//                 "isDefault": false
+//             },
+//             "problemMatcher": []
+//         }
+//     ]
+// }
+
+
+
+
+// celery -A backend worker --loglevel=info
+
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Run Celery Worker",
+            "type": "shell",
+            "command": "env\\Scripts\\activate && celery -A backend worker -l info",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [],
+            "options": {
+                "shell": {
+                    "executable": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+                }
+            }
+        },
+        {
+            "label": "Run Celery Beat",
+            "type": "shell",
+            "command": "env\\Scripts\\activate && celery -A backend beat -l info",
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "problemMatcher": [],
+            "options": {
+                "shell": {
+                    "executable": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+                }
+            }
+        }
+    ]
+}
+// celery -A backend worker --loglevel=info
+
+
+
+
+// celery -A backend worker --loglevel=info --pool=solo --time-limit=300

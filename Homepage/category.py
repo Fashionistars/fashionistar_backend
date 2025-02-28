@@ -3,8 +3,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAdminUser, AllowAny
 from django.shortcuts import get_object_or_404
-from Homepage.models import Category
-from Homepage.serializers import CategorySerializer
+from admin_backend.models import Category
+from admin_backend.serializers import CategorySerializer
 
 # Similarly, create views for Category and Brand models
 class CategoryListView(APIView):

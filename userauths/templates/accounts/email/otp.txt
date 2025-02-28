@@ -1,0 +1,20 @@
+{% extends 'accounts/email/base_email.txt' %}
+
+{% block title %}Verify Your Email{% endblock %}
+
+{% block content %}
+Hi there!
+
+{% if message %}
+{{ message }}
+{% else %}
+To complete your sign-up, please use the following One-Time Password (OTP) to verify your email:
+{% endif %}
+
+OTP: {{ token }}
+
+Expires in {{ time }}
+
+Best Regards,
+The Fashionistar Team
+{% endblock %}

@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied, NotFound
 import logging
-
+from rest_framework.parsers import MultiPartParser, FormParser
 
 from userauths.models import Profile
 from customer.serializers import ProfileSerializers
@@ -150,6 +150,7 @@ class CustomerProfileUpdateView(generics.RetrieveUpdateAPIView):
     queryset =  Profile.objects.all()
     serializer_class =  ProfileSerializers
     permission_classes = (IsAuthenticated, )
+    parser_classes = (MultiPartParser, FormParser) # Add parser classes for handling file uploads
     lookup_field = 'pid'
 
 

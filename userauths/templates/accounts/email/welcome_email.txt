@@ -1,0 +1,16 @@
+{% extends 'accounts/email/base_email.txt' %}
+
+{% block title %}Welcome to Fashionistar!{% endblock %}
+
+{% block content %}
+Hi {{ user.username }},
+
+Thank you for registering with Fashionistar! We're excited to have you as part of our community.
+
+{{ message }}
+
+Start exploring our latest collections and find your perfect style today!
+
+Best Regards,
+The Fashionistar Team
+{% endblock %}

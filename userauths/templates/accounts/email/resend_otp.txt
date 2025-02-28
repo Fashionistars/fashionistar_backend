@@ -1,0 +1,16 @@
+{% extends 'accounts/email/base_email.txt' %}
+
+{% block title %}New OTP for Fashionistar{% endblock %}
+
+{% block content %}
+Hi there!
+
+You requested a new OTP to verify your account.  Here it is:
+
+OTP: {{ otp }}
+
+Expires in {{ time }}
+
+Best Regards,
+The Fashionistar Team
+{% endblock %}

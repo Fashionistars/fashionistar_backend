@@ -12,7 +12,6 @@ from Paystack_Webhoook_Prod import VendorWithdrawView as vendor_withrawal_views
 
 
 
-
 app_name = 'vendor'  # Add this line to specify the app namespace
 
 
@@ -41,7 +40,7 @@ urlpatterns = [
     path('vendors/all', vendor_views.VENDORListView.as_view(), name='all-AllVENDORSerializer-products'),
 
     # Vendor API Endpoints
-    path('vendor/dashboard', vendor_views.DashboardStatsAPIView.as_view(), name='vendor-stats'),
+    # path('vendor/dashboard', vendor_views.DashboardStatsAPIView.as_view(), name='vendor-stats'),
     path('vendor/orders/', vendor_views.OrdersAPIView.as_view(), name='vendor-orders'),
     path('vendor/orders/<str:order_oid>/', vendor_views.OrderDetailAPIView.as_view(), name='vendor-order-detail'),
     

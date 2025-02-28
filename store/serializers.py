@@ -4,7 +4,7 @@ from admin_backend.models import Category
 from store.models import CartOrderItem, CouponUsers, Product, Tag , DeliveryCouriers, CartOrder, Gallery, ProductFaq, Review,  Specification, Coupon, Color, Size,  Wishlist, Vendor
 from addon.models import ConfigSettings
 from store.models import Gallery
-from userauths.serializer import ProfileSerializer, UserSerializer
+from userauths.serializer import *
 from admin_backend.serializers import CategorySerializer
 
 class ConfigSettingsSerializer(serializers.ModelSerializer):
@@ -192,7 +192,7 @@ class VendorSerializer(serializers.ModelSerializer):
     """Serializer for the Vendor model.
      """
     # Serialize related CartOrderItem models
-    user = UserSerializer(read_only=True, help_text="User associated with the vendor")
+    user = ProtectedUserSerializer(read_only=True, help_text="User associated with the vendor")
 
     class Meta:
         model = Vendor

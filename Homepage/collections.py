@@ -3,8 +3,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAdminUser, AllowAny
 from django.shortcuts import get_object_or_404
-from Homepage.models import Collections
-from Homepage.serializers import CollectionsSerializer
+from admin_backend.models import Collections
+from admin_backend.serializers import CollectionsSerializer
 
 class CollectionsListView(APIView):
     """

@@ -1,385 +1,868 @@
-from django.core.mail import EmailMultiAlternatives
 from django.shortcuts import get_object_or_404
-from django.core.exceptions import ObjectDoesNotExist
-from rest_framework.exceptions import NotFound, APIException
-from django.template.loader import render_to_string
-from django.conf import settings
-from django.db.models import Q
-
-# Restframework
-from rest_framework.views import APIView
-from rest_framework import status, viewsets, generics
-from rest_framework.decorators import api_view, action
+from rest_framework import generics, status
 from rest_framework.response import Response
-from rest_framework_simplejwt.views import TokenObtainPairView
-from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.decorators import api_view, permission_classes
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework.exceptions import AuthenticationFailed
-
-# Others
-import json
-import random
+from django_redis import get_redis_connection
+from userauths.models import User, Profile
+from userauths.serializer import (
+    OTPSerializer,
+    LoginSerializer,
+    UserRegistrationSerializer,
+    ResendOTPRequestSerializer,
+    PasswordResetRequestSerializer,
+    PasswordResetConfirmEmailSerializer,
+    PasswordResetConfirmPhoneSerializer,
+    LogoutSerializer,
+    ProfileSerializer,
+    )
+from django.db import transaction
+from rest_framework import serializers as rest_serializers
+from userauths.celery_tasks import send_email_task, send_sms_task
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.encoding import force_bytes, force_str
+from django.contrib.auth.tokens import default_token_generator
+from django.urls import reverse
+from django.contrib.sites.shortcuts import get_current_site
+from django.db.models import Q
+from celery import signature
 import time
-import datetime
-# Models
-from userauths.models import Profile, User, Tokens
-
-# Serializers
-from userauths.serializer import *
-
-# utils
-from userauths.utils import EmailManager, generate_token
-
-# Hashing
+import random
 from django.conf import settings
 from cryptography.fernet import Fernet
 import base64
 
-# Swagger
-from drf_yasg.utils import swagger_auto_schema
-from drf_yasg import openapi
 
+import logging
+application_logger = logging.getLogger('application')
+
+# Initialize Fernet cipher suite for OTP encryption/decryption
 base_key = settings.SECRET_KEY.encode()
-
-# Ensure that the key is 32 bytes by padding or truncating
-base_key = base_key.ljust(32, b'\0')[:32]
-
-# Encode the key in URL-safe base64 format
+base_key = base_key.ljust(32, b'\0')[:32]  # Pad or truncate to ensure 32 bytes
 cipher_suite = Fernet(base64.urlsafe_b64encode(base_key))
 
+# Retry settings for Redis connection
+REDIS_MAX_RETRIES = 3
+REDIS_RETRY_DELAY = 1  # seconds
 
-class MyTokenObtainPairView(TokenObtainPairView):
-    serializer_class = MyTokenObtainPairSerializer
 
 
-class RegisterView(generics.CreateAPIView):
+
+
+
+def encrypt_otp(otp):
     """
-    Registeration of new user using either email or phone number for signing up
-        Args:
-        email: Input field of the user base on user's choice
-        phone_number: Input field for phone number
-        password: password and password2(Check the serializers.py to see the implementation)
+    Encrypts the given OTP using Fernet.
     """
-    queryset = User.objects.all()
-    permission_classes = (AllowAny,)
-    serializer_class = RegisterSerializer
+    try:
+        return cipher_suite.encrypt(otp.encode()).decode()
+    except Exception as e:
+        application_logger.error(f"OTP encryption failed: {e}")
+        raise
 
-    def create(self, request, *args, **kwargs):
-        """OTP verification and validation"""
-        token = generate_token()
-        email = request.data.get('email')
-        phone = request.data.get('phone')
+def decrypt_otp(encrypted_otp):
+    """
+    Decrypts the given encrypted OTP using Fernet.
+    """
+    try:
+        return cipher_suite.decrypt(encrypted_otp.encode()).decode()
+    except Exception as e:
+        application_logger.error(f"OTP decryption failed: {e}")
+        raise
 
-        serializer = RegisterSerializer(data=request.data)
-        print(request.data)
+
+def get_redis_connection_safe(max_retries=REDIS_MAX_RETRIES, retry_delay=REDIS_RETRY_DELAY):
+    """
+    Establishes a safe connection to Redis, logging errors and returning None if unavailable.
+    Implements retry mechanism for transient Redis failures.
+    """
+    for attempt in range(max_retries):
         try:
-            if phone:
-                user_data = {
-                    'phone': phone,
-                    'password': request.data.get('password'),
-                    'role': request.data.get('role')
-                }
-                print(user_data)
-                return Response({"message": "Saved to database"}, status=status.HTTP_202_ACCEPTED)
+            redis_conn = get_redis_connection("default")
+            redis_conn.ping()  # Ensure Redis is available
+            return redis_conn
+        except Exception as e:
+            application_logger.error(f"Redis connection error (attempt {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)  # Wait before retrying
             else:
-                serializer.is_valid(raise_exception=True)
-                user_instance = serializer.save()
-                res_data = serializer.data
-                timestamp = time.time() + 300
-                dt_object = datetime.datetime.fromtimestamp(timestamp)
-                dt_object += datetime.timedelta()
-                
-                EmailManager.send_mail(
-                    subject="Fashionistar",
-                    recipients=[user_instance.email],
-                    template_name="otp.html",
-                    context={"user": user_instance.id, "token": token, "time": dt_object}
-                )
-
-                encrypted_token = cipher_suite.encrypt(token.encode()).decode()
-                
-                new_token = Tokens()
-                new_token.email = user_instance.email
-                new_token.action = 'register'
-                new_token.token = encrypted_token
-                new_token.exp_date = time.time() + 300
-                new_token.save()
-                
-                res = {"message": "Token sent!", "code": 200, "data": res_data}
-                return Response(res, status=status.HTTP_200_OK)
-                
-        except serializers.ValidationError as error:
-            error_dict = error.detail
-            error_messages = []
-
-            for field, messages in error_dict.items():
-                error_messages.extend(messages)
-
-            error_message = " ".join(str(msg) for msg in error_messages)
-
-            return Response({"message": error_message}, status=status.HTTP_400_BAD_REQUEST)
-            
+                application_logger.error("Max Redis connection retries reached. Redis unavailable.")
+                return None
+    return None
 
 
-class VerifyUserViewSet(viewsets.ViewSet):
+def generate_numeric_otp(length=6):
     """
-    Perform email verification and phone number verification
-    for registration
+    Generates a numeric OTP of the specified length.
     """
-    permission_classes = []
-    @swagger_auto_schema(
-        request_body=VerifyUserSerializer,
-        responses={200: 'Success', 400: 'Bad Request'},
-        operation_description="Verify user with valid email upon signing up"
-    )
-    @action(detail=False, methods=['post'])
-    def verify_user(self, request):
-        """
-        Email verification: Send 4 digits OTP to user email.
-        Phone number verification: Send 4 digits OTP to user valid phone number.(Coming soon!!!)
-        """
-        serializer = VerifyUserSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        otp = serializer.validated_data['otp']
-        
-        token = Tokens.objects.filter(Q(action='register')).order_by('-created_at')[:1].first()
-        key = token.token
-        decrypted_key = cipher_suite.decrypt(key.encode()).decode()
-        
-        if decrypted_key == otp and token.exp_date >= time.time():
-            email = token.email
-            user = User.objects.get(email=email)
-            token.date_used = datetime.datetime.now()
-            token.used = True
-            user.verified = True
-            user.is_active = True
-            user.save()
-            token.save()
-            return Response({"message": "User successfully verified"}, status=status.HTTP_200_OK)
-        else:
-            return Response({"error": "Invalid or expired OTP"})
+    return ''.join(random.choices('0123456789', k=length))
 
 
-
-class ResendTokenView(generics.GenericAPIView):
+def get_otp_expiry_datetime():
     """
-    Resend the registration token to the user via email.
-        Args:
-        email: Email of the user to resend the token to.
+    Calculates the OTP expiry datetime.
+
+    Returns:
+        datetime: A datetime object representing the OTP expiry time.
+    """
+    import time
+    import datetime
+    timestamp = time.time() + 300
+    dt_object = datetime.datetime.fromtimestamp(timestamp)
+    dt_object += datetime.timedelta()
+    return dt_object
+
+
+
+
+
+
+
+
+
+
+
+class RegisterViewCelery(generics.CreateAPIView):
+    """
+    Registers a new user, sending an OTP via email or SMS, and stores the encrypted token in Redis.
+
+    This endpoint handles user registration by accepting either an email or a phone number,
+    validating the input, creating a user account, and sending a One-Time Password (OTP)
+    for account verification. The OTP is delivered via email or SMS depending on the
+    user's provided contact information.
+
+    The OTP is encrypted before being stored in Redis with an expiry time of 300 seconds.
+    The user ID is also stored in Redis to associate the OTP with the user.
+    The key structure in Redis includes the user ID to prevent OTP collisions.
+
+    The endpoint uses atomic transactions to ensure data consistency; if any part of the
+    registration process fails, the entire transaction is rolled back, preventing partial
+    user creation. It also retries Redis connections and logs if OTP encryption fails.
+
+    Serializer errors are formatted into a user-friendly JSON response, aiding debugging.
     """
     queryset = User.objects.all()
     permission_classes = (AllowAny,)
-    serializer_class = ResendTokenSerializer
+    serializer_class = UserRegistrationSerializer
 
-    def post(self, request, *args, **kwargs):
-        """Resend the token for OTP verification"""
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        email = serializer.validated_data['email']
-
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        """
+        Creates a new user and sends an OTP via email or SMS.
+        """
         try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
-            return Response({"message": "User does not exist."}, status=status.HTTP_404_NOT_FOUND)
-        
-        token = generate_token()
-        timestamp = time.time() + 300
-        dt_object = datetime.datetime.fromtimestamp(timestamp)
-        dt_object += datetime.timedelta()
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
 
-        EmailManager.send_mail(
-            subject="Fashionistar - Resend OTP",
-            recipients=[user.email],
-            template_name="otp.html",
-            context={"user": user.id, "token": token, "time": dt_object}
-        )
+            user = serializer.save()
+            user_id = user.id  # Get user ID
 
-        encrypted_token = cipher_suite.encrypt(token.encode()).decode()
+            application_logger.info(f"User {user.identifying_info} registered successfully.")
 
-        new_token = Tokens()
-        new_token.email = user.email
-        new_token.action = 'register'
-        new_token.token = encrypted_token
-        new_token.exp_date = time.time() + 300
-        new_token.save()
+            # Generate OTP
+            otp = generate_numeric_otp()
+            application_logger.info(f"Generated OTP: {otp} for user {user.identifying_info}")
 
-        return Response({"message": "Token resent!", "code": 200}, status=status.HTTP_200_OK)
+            # Encrypt OTP before storing in Redis
+            try:
+                encrypted_otp = encrypt_otp(otp)
+                application_logger.info(f"Encrypted OTP: {encrypted_otp} for user {user.identifying_info}")
+            except Exception as e:
+                transaction.set_rollback(True)
+                return Response({'error': 'Failed to encrypt OTP.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+            # Check Redis Connection
+            redis_conn = get_redis_connection_safe()
+            if not redis_conn:
+                transaction.set_rollback(True)  # Rollback
+                return Response({'error': 'Redis Server Service Temporary unavailable Now, Please Try Again later.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
-class LoginView(TokenObtainPairView):
-    serializer_class = LoginSerializer
-    permission_classes = ()
-    
+            # Store OTP data in Redis with expiry, using user_id in the key to prevent collisions
+            otp_expiry_datetime = get_otp_expiry_datetime()
+            otp_data = {'user_id': user.id, 'otp': encrypted_otp}  # Store encrypted OTP
+            redis_key = f"otp_data:{user_id}:{encrypted_otp}" # Use the User ID in the Redis Key
+            redis_conn.setex(redis_key, 300, str(otp_data))  # Use hardcoded 300 seconds for expiry
+
+
+            # Determine whether to send via email or SMS
+            if user.email:
+                subject = 'Verify Your Email'
+                template_name = 'otp.html'
+                context = {'user': user.id, 'token': otp, 'time': otp_expiry_datetime}
+
+                # Use Celery Signature for Sending and Tracking Email Task
+                email_task = signature('userauths.celery_tasks.send_email_task', args=(subject, [user.email], template_name, context))
+                email_task.apply_async()
+
+                application_logger.info(f"Sent OTP email to {user.email} using Celery.")
+                message = "Registration successful. Please check your email for OTP verification."
+
+            elif user.phone:
+                body = f"Your OTP is: {otp}"
+                send_sms_task.delay(user.phone.as_e164, body)  # Pass user_id to the SMS task
+                application_logger.info(f"Sent OTP SMS to {user.phone} using Celery.")
+                message = "Registration successful. Please check your phone for OTP verification."
+            else:
+                application_logger.error(f"User {user.identifying_info} has neither email nor phone.")
+                return Response({'error': 'User has neither email nor phone.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            return Response({'message': message}, status=status.HTTP_201_CREATED)
+
+        except rest_serializers.ValidationError as e:  # Catch serializer validation errors specifically
+            application_logger.warning(f"Invalid registration attempt: {e}")
+            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)  # Return Serializer Errors
+
+        except Exception as e:
+            application_logger.error(f"An unexpected error occurred: {e} during registration. Error: {str(e)}")
+            transaction.set_rollback(True)  # Rollback
+            return Response({'error': f"An error occurred, please check your input or contact support. {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+
+
+
+
+
+class VerifyOTPView(generics.GenericAPIView):
+    """
+    Verifies the OTP entered by the user.
+
+    This endpoint receives the OTP, retrieves the user ID from Redis
+    based on the OTP, decrypts it, compares it with the provided OTP, and if valid,
+    activates the user account. It clears the OTP from Redis after
+    successful verification.
+
+    If the OTP has expired, it returns an error message.
+    The key structure in Redis includes the user ID to prevent OTP collisions.
+    """
+    permission_classes = (AllowAny,)
+    serializer_class = OTPSerializer
+
+    @transaction.atomic
     def post(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        
-        email = serializer.initial_data['email']
-        # phone_number = serializer.initial_data['phone_number']
-            
-        password = serializer.initial_data['password']
-
+        """
+        Verifies the OTP and activates the user account.
+        """
         try:
-            user = User.objects.get(email=email)
-            if not user.check_password(password):
-                raise AuthenticationFailed("Invalid authentication credentials")
-            
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            otp = serializer.validated_data['otp']
+
+            # Check Redis Connection
+            redis_conn = get_redis_connection_safe()
+            if not redis_conn:
+                transaction.set_rollback(True)  # Rollback
+                return Response({'error': 'Redis Server Service Temporary unavailable Now, Please Try Again later.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+            # Search for the OTP using scan_iter since the user_id is needed to find the key
+            user_id = None
+            redis_key = None
+            for key in redis_conn.scan_iter(match="otp_data:*"): #Find the key
+                otp_data_str = redis_conn.get(key)
+                if otp_data_str:
+                     otp_data = eval(otp_data_str.decode('utf-8'))
+                     decrypted_otp = decrypt_otp(otp_data.get('otp')) #decrypt the otp
+
+                     if decrypted_otp == otp:   #If decrypted OTP is correct
+                         user_id = otp_data.get('user_id')   # get user_id
+                         redis_key = key #Get Redis Key
+                         break #break loop
+                else:
+                   application_logger.warning(f"Invalid or expired OTP: {otp}")
+                   return Response({'error': 'Invalid or expired OTP. Please request a new one if it has expired.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            if not user_id:
+                application_logger.warning(f"Invalid or expired OTP: {otp}")
+                return Response({'error': 'Invalid or expired OTP. Please request a new one if it has expired.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Ensure user_id is valid before querying the database
+            try:
+                # Fetch user in a single optimized query
+                user = get_object_or_404(User.objects.only("id", "is_active", "verified"), id=user_id)  # Fetch user *after* OTP is validated
+            except Exception as e:
+                application_logger.error(f"User not found with ID {user_id}: {e}")
+                return Response({'error': 'Invalid OTP. Please request a new one if it has expired.'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+            # Update user verification status
             if not user.is_active:
-                raise AuthenticationFailed("Your account is not active.")
-        
-        except User.DoesNotExist:
-            raise AuthenticationFailed("Invalid authentication credentials")
-        
-        if serializer.is_valid():
-            
-            if serializer.is_valid():
-                tokens = serializer.validated_data
-                custom_data = {
-                    'access': str(tokens['access']),
-                    'refresh': str(tokens['refresh']),
-                    'user_id': user.id,
-                    'role': user.role
-                }
-                return Response(custom_data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_401_UNAUTHORIZED)
-    
+                user.is_active = True
+            user.verified = True
+            user.save()
+            application_logger.info(f"User {user.id} successfully verified.")
 
-class LogoutView(APIView):
-    """Logout functionality"""
-    permission_classes = (IsAuthenticated,)
+            # Delete OTP data from Redis after successful verification
+            redis_conn.delete(redis_key) # Delete the Redis Key
+
+            ####  LOGIN THE USER DIRECTLY IMMEDIATELY AFTER OTP VERIFICATION
+
+            # Generate JWT token
+            refresh = RefreshToken.for_user(user)
+
+            application_logger.info(f"User {user.identifying_info} logged in successfully.")
+            return Response({
+                'message': "Your account has been successfully verified.",
+                'user_id': user.id,
+                'role': user.role,
+                'identifying_info': user.identifying_info,  # Either the PhoneNumber or Email
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+            }, status=status.HTTP_200_OK)
+
+        except rest_serializers.ValidationError as e:  # Catch serializer validation errors specifically
+            application_logger.warning(f"Invalid OTP Verification attempt: {e}")
+            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)  # Return Serializer Errors
+
+        except Exception as e:
+            application_logger.exception(f"Error during OTP verification: {e}")
+            transaction.set_rollback(True)
+            return Response({'error': 'An error occurred during verification. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+
+
+
+
+class ResendOTPView(generics.GenericAPIView):
+    """
+    Resends the OTP to the user's email or phone if the previous OTP has expired.
+    """
+    permission_classes = (AllowAny,)
+    serializer_class = ResendOTPRequestSerializer
+
+    @transaction.atomic
+    def post(self, request, *args, **kwargs):
+        """
+        Resends the OTP based on email or phone number.
+        """
+        try:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            email_or_phone = serializer.validated_data['email_or_phone']
+
+            # Check Redis Connection
+            redis_conn = get_redis_connection_safe()
+            if not redis_conn:
+                transaction.set_rollback(True)  # Rollback
+                return Response({'error': 'Redis Server Service Temporary unavailable Now, Please Try Again later.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+            # Retrieve user based on email or phone
+            try:
+                user = get_object_or_404(User, email=email_or_phone) if '@' in email_or_phone else get_object_or_404(User, phone=email_or_phone)
+            except Exception as e:
+                application_logger.error(f"User not found with ID {email_or_phone}: {e}")
+                return Response({'error': 'User with this credentials not found'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Delete the old OTP data using scan_iter since User id is required to find the key
+            otp_exists = False
+            for key in redis_conn.scan_iter(match="otp_data:*"): #Find the key
+                otp_data_str = redis_conn.get(key)
+                if otp_data_str:
+                    otp_data = eval(otp_data_str.decode('utf-8'))
+                    if otp_data.get('user_id') == user.id:   #If User Id is equal
+                        otp_exists = True
+                        redis_conn.delete(key) #Delete Key
+                        break #Break Loop
+                else:
+                   application_logger.warning(f"Invalid or expired OTP for user {user.id}")
+                   return Response({'error': 'Invalid or expired OTP. Please request a new one if it has expired.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Generate a new OTP
+            otp = generate_numeric_otp()
+            application_logger.info(f"Generated new OTP: {otp} for user {user.id}")
+
+            # Encrypt OTP before storing in Redis
+            try:
+                encrypted_otp = encrypt_otp(otp)
+                application_logger.info(f"Encrypted OTP: {encrypted_otp} for user {user.identifying_info}")
+            except Exception as e:
+                transaction.set_rollback(True)
+                return Response({'error': 'Failed to encrypt OTP.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            # Store new OTP data in Redis, using user_id in the key to prevent collisions
+            otp_expiry_datetime = get_otp_expiry_datetime()
+            otp_data = {'user_id': user.id, 'otp': encrypted_otp}  # Store encrypted OTP
+            redis_key = f"otp_data:{user.id}:{encrypted_otp}" # Use the User ID in the Redis Key
+            redis_conn.setex(redis_key, 300, str(otp_data))
+
+
+
+            # Send the OTP via email or SMS
+            if user.email:
+                subject = 'Your New OTP'
+                template_name = 'otp.html'
+                context = {'user': user.id, 'token': otp, 'time': otp_expiry_datetime}
+
+                # Use Celery Signature for Sending and Tracking Email Task
+                email_task = signature('userauths.celery_tasks.send_email_task', args=(subject, [user.email], template_name, context))
+                email_task.apply_async()
+
+                application_logger.info(f"Resent OTP email to {user.email} using Celery.")
+                message = "New OTP sent to your email."
+
+            elif user.phone:
+                body = f"Your new OTP is: {otp}"
+                send_sms_task.delay(user.phone.as_e164, body)
+                application_logger.info(f"Resent OTP SMS to {user.phone} using Celery.")
+                message = "New OTP sent to your phone."
+            else:
+                application_logger.error(f"User {user.id} has neither email nor phone.")
+                return Response({'error': 'User has neither email nor phone.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Customize response message based on whether OTP existed before resending
+            response_message = "New OTP sent successfully." if otp_exists else "OTP has been resent successfully."
+
+            return Response({'message': response_message}, status=status.HTTP_200_OK)
+
+        except rest_serializers.ValidationError as e:
+            application_logger.warning(f"Invalid Resend OTP attempt: {e}")
+            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            application_logger.exception(f"Error during OTP resend: {e}")
+            transaction.set_rollback(True)
+            return Response({'error': 'An error occurred while resending the OTP. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+
+
+
+
+class LoginView(generics.GenericAPIView):
+    """
+    Logs in an existing user with either email or phone, using targeted exception handling.
+    """
+    permission_classes = (AllowAny,)
+    serializer_class = LoginSerializer
 
     def post(self, request):
-        serializer = LogoutSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        refresh_token = serializer.validated_data['refresh_token']
+        """
+        Logs in an existing user with either email or phone, using targeted exception handling.
+        """
         try:
+            serializer = self.get_serializer(data=request.data, context={'request': request})
+            serializer.is_valid(raise_exception=True)  # Check if Serializer has validation Errors
+
+            user = serializer.validated_data['user']  # Get User Instance
+            print(user.identifying_info)  # Email or Phone
+
+            # Generate JWT token
+            refresh = RefreshToken.for_user(user)
+
+            application_logger.info(f"User {user.identifying_info} logged in successfully.")
+            return Response({
+                'message': "Login successful.",
+                'user_id': user.id,
+                'role': user.role,
+                'identifying_info': user.identifying_info,  # Either the PhoneNumber or Email
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+            }, status=status.HTTP_200_OK)
+
+        except rest_serializers.ValidationError as e:  # Catch serializer validation errors specifically
+            application_logger.warning(f"Invalid login attempt: {e}")
+            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)  # Return Serializer Errors
+
+        except Exception as e:  # Catch other exceptions
+            application_logger.error(f"An unexpected error occurred: {e} during login.")
+            return Response({'error': f"An error occurred, please check your input or contact support. {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+
+
+
+
+class PasswordResetRequestView(generics.GenericAPIView):
+    """
+    Requests a password reset by sending a unique link to the user's email OR SMS OTP to phone.
+    """
+    permission_classes = (AllowAny,)
+    serializer_class = PasswordResetRequestSerializer
+
+    @transaction.atomic
+    def post(self, request, *args, **kwargs):
+        """
+        Sends a password reset link to the user's email or an SMS OTP to the phone.
+        """
+        try:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            email_or_phone = serializer.validated_data['email_or_phone']
+
+            # Check Redis Connection
+            redis_conn = get_redis_connection_safe()
+            if not redis_conn:
+                transaction.set_rollback(True)  # Rollback
+                return Response({'error': 'Redis Server Service Temporary unavailable Now, Please Try Again later.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+            # Retrieve user based on email or phone
+            try:
+                user = get_object_or_404(User, Q(email=email_or_phone) | Q(phone=email_or_phone))
+
+                # EMAIL FLOW
+                if user.email:
+                    # Check and Delete Existing RESET Email Data
+                    for key in redis_conn.scan_iter(f"reset_email_data:*"):
+                        reset_email_data_str = redis_conn.get(key)
+                        if reset_email_data_str:
+                            reset_email_data = eval(reset_email_data_str.decode('utf-8'))
+                            if reset_email_data.get('user_id') == user.id:
+                                redis_conn.delete(key)
+                                break
+
+                    # Generate a unique token for email
+                    token = default_token_generator.make_token(user)
+                    uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
+                    application_logger.info(f"Generated password reset token for user {user.identifying_info}")
+
+                    # Store all email data in a single Redis key with expiry
+                    reset_email_data = {'user_id': user.id, 'uidb64': uidb64, 'token': token}
+                    reset_email_key = f"reset_email_data:{user.id}:{uidb64}:{token}"  # Include user ID
+                    redis_conn.setex(reset_email_key, 300, str(reset_email_data))
+
+                    # Build password reset link
+                    current_site = get_current_site(request)
+                    reset_url = reverse('password-reset-confirm-email', kwargs={'uidb64': uidb64, 'token': token})
+                    absurl = f"http://{current_site.domain}{reset_url}"
+
+                    # Send password reset email
+                    subject = 'Password Reset Request'
+                    template_name = 'password_reset.html'
+                    context = {'reset_url': absurl, 'user': user.identifying_info}
+
+                    # Use Celery Signature for Sending and Tracking Email Task
+                    email_task = signature('userauths.celery_tasks.send_email_task', args=(subject, [user.email], template_name, context))
+                    email_task.apply_async()
+
+                    application_logger.info(f"Sent password reset link email to {user.email} using Celery.")
+                    return Response({'message': 'Password reset link sent to your email.'}, status=status.HTTP_200_OK)
+
+                # PHONE FLOW
+                elif user.phone:
+                    # Check and Delete Existing OTP Data
+                    for key in redis_conn.scan_iter(f"reset_otp_data:*"):
+                        otp_data_str = redis_conn.get(key)
+                        if otp_data_str:
+                            otp_data = eval(otp_data_str.decode('utf-8'))
+                            if otp_data.get('user_id') == user.id:
+                                redis_conn.delete(key)
+                                break
+
+                    # Generate OTP
+                    otp = generate_numeric_otp()
+                    application_logger.info(f"Generated OTP: {otp} for user {user.identifying_info}")
+
+                     # Encrypt OTP before storing in Redis
+                    try:
+                        encrypted_otp = encrypt_otp(otp)
+                        application_logger.info(f"Encrypted OTP: {encrypted_otp} for user {user.identifying_info}")
+                    except Exception as e:
+                        transaction.set_rollback(True)
+                        return Response({'error': 'Failed to encrypt OTP.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+                    # Store all OTP data in a single Redis key with expiry
+                    otp_data = {'user_id': user.id, 'otp': encrypted_otp}  # Store encrypted OTP
+                    redis_key = f"reset_otp_data:{user.id}:{encrypted_otp}"  # Include user ID
+                    redis_conn.setex(redis_key, 300, str(otp_data))
+
+                    current_site = get_current_site(request)
+                    reset_url = reverse('password-reset-confirm-phone')
+                    absurl = f"http://{current_site.domain}{reset_url}"
+
+                    # Send password reset SMS
+                    body = f"Your password reset OTP is: {otp}"
+                    send_sms_task.delay(user.phone.as_e164, body)  # Use Celery for sending SMS
+
+                    application_logger.info(f"Sent password reset OTP SMS to {user.phone} using Celery.")
+                    return Response({'message': f'Password reset OTP sent to your phone. Kindly proceed to visit {absurl} to make a reset with your phone OTP and new password.'}, status=status.HTTP_200_OK)
+
+                else:
+                    application_logger.error(f"User {user.identifying_info} has neither email nor phone.")
+                    return Response({'error': 'User has neither email nor phone configured.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            except User.DoesNotExist:
+                application_logger.warning(f"User with email or phone {email_or_phone} not found.")
+                return Response({'error': 'Invalid email or phone.'}, status=status.HTTP_404_NOT_FOUND)
+
+        except rest_serializers.ValidationError as e:  # Catch serializer validation errors specifically
+            application_logger.warning(f"Invalid Password Reset Request attempt: {e}")
+            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)  # Return Serializer Errors
+
+        except Exception as e:
+            application_logger.exception(f"Error during password reset request: {e}")
+            transaction.set_rollback(True)
+            return Response({'error': 'An error occurred while processing the password reset request.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+
+
+
+
+class PasswordResetConfirmEmailView(generics.GenericAPIView):
+    """
+    Confirms the password reset by verifying the token and setting the new password.
+    """
+    permission_classes = (AllowAny,)
+    serializer_class = PasswordResetConfirmEmailSerializer
+
+    @transaction.atomic
+    def post(self, request, uidb64, token, *args, **kwargs):
+        """
+        Verifies the token and sets the new password using Email flow
+        """
+        try:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            password = serializer.validated_data['password']
+
+            # Check Redis Connection
+            redis_conn = get_redis_connection_safe()
+            if not redis_conn:
+                transaction.set_rollback(True)  # Rollback
+                return Response({'error': 'Redis Server Service Temporary unavailable Now, Please Try Again later.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+            # Optimized Redis retrieval using scan_iter since it requires User ID
+            user_id = None
+            reset_email_key = None
+
+            for key in redis_conn.scan_iter(match="reset_email_data:*"): #Find the key
+                reset_email_data_str = redis_conn.get(key)
+                if reset_email_data_str:
+                    reset_email_data = eval(reset_email_data_str.decode('utf-8'))
+                    if reset_email_data.get('uidb64') == uidb64 and reset_email_data.get('token') == token:   #If uidb64 and token is equal
+                        user_id = reset_email_data.get('user_id')   # get user_id
+                        reset_email_key = key #Get Redis Key
+                        break #break loop
+                else:
+                   application_logger.warning(f"Invalid or expired Data for reset Email for user {user_id}")
+                   return Response({'error': 'Invalid or expired Data for reset Email.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            if not user_id:
+                application_logger.warning(f"Invalid or expired reset link for user")
+                return Response({'error': 'Invalid or expired reset link.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                uid = force_str(urlsafe_base64_decode(uidb64))
+                user = get_object_or_404(User.objects.only("id"), pk=uid)
+
+            except Exception as e:
+                application_logger.warning(f"Invalid user ID in password reset confirmation: {uidb64}, error: {e}")
+                return Response({'error': 'Invalid reset link.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Verify the token
+            if not default_token_generator.check_token(user, token):
+                application_logger.warning(f"Invalid token in password reset confirmation for user {user.id}.")
+                return Response({'error': 'Invalid reset link.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Set the new password
+            user.set_password(password)
+            user.save()
+            application_logger.info(f"Password reset successfully for user {user.id}.")
+
+            # Delete the token from Redis
+            redis_conn.delete(reset_email_key)
+
+            return Response({'message': 'Password reset successfully.'}, status=status.HTTP_200_OK)
+
+        except rest_serializers.ValidationError as e:
+            application_logger.warning(f"Invalid Password Reset Confirm attempt: {e}")
+            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            application_logger.exception(f"Error during password reset confirmation: {e}")
+            transaction.set_rollback(True)
+            return Response({'error': 'An error occurred during password reset confirmation. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+
+
+
+
+class PasswordResetConfirmPhoneView(generics.GenericAPIView):
+    """
+    Confirms the password reset PHONE by verifying the OTP and setting the new password.
+    """
+    permission_classes = (AllowAny,)
+    serializer_class = PasswordResetConfirmPhoneSerializer
+
+    @transaction.atomic
+    def post(self, request, *args, **kwargs):
+        """
+        Verifies the OTP and sets the new password for PHONE.
+        """
+        try:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            password = serializer.validated_data['password']
+            otp = serializer.validated_data['otp']  # Get OTP from serializer
+
+            # Check Redis Connection
+            redis_conn = get_redis_connection_safe()
+            if not redis_conn:
+                transaction.set_rollback(True)  # Rollback
+                return Response({'error': 'Redis Server Service Temporary unavailable Now, Please Try Again later.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+            # Optimized Redis retrieval using scan_iter since it requires User ID
+            user_id = None
+            redis_key = None
+
+            for key in redis_conn.scan_iter(match="reset_otp_data:*"): #Find the key
+                otp_data_str = redis_conn.get(key)
+                if otp_data_str:
+                     otp_data = eval(otp_data_str.decode('utf-8'))
+                     decrypted_otp = decrypt_otp(otp_data.get('otp'))  #decrypt the otp
+                     if  decrypted_otp == otp:   #If OTP is equal
+                         user_id = otp_data.get('user_id')   # get user_id
+                         redis_key = key #Get Redis Key
+                         break #break loop
+                else:
+                   application_logger.warning(f"Invalid or expired Data for reset OTP for user {user_id}")
+                   return Response({'error': 'Invalid or expired Data for reset OTP.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            if not user_id:
+                application_logger.warning(f"Invalid or expired OTP: {otp}")
+                return Response({'error': 'Invalid or expired OTP. Please request a new one if it has expired.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                # Fetch user in a single optimized query
+                user = get_object_or_404(User.objects.only("id"), id=user_id)  # Fetch user *after* OTP is validated
+            except Exception as e:
+                application_logger.error(f"User not found with ID {user_id}: {e}")
+                return Response({'error': 'Invalid OTP. Please request a new one if it has expired.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Set new password
+            user.set_password(password)
+            user.save()
+            application_logger.info(f"Password reset successfully for user {user.identifying_info}.")
+
+            # Clear OTP from Redis after successful verification
+            redis_conn.delete(redis_key)
+
+            return Response({'message': 'Password reset successfully.'}, status=status.HTTP_200_OK)
+
+        except rest_serializers.ValidationError as e:  # Catch serializer validation errors specifically
+            application_logger.warning(f"Invalid Password Reset Confirm attempt: {e}")
+            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)  # Return Serializer Errors
+
+        except Exception as e:
+            application_logger.exception(f"Error during password reset confirmation: {e}")
+            transaction.set_rollback(True)
+            return Response({'error': 'An error occurred during password reset confirmation.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+
+
+
+
+class LogoutView(generics.GenericAPIView):
+    """
+    Logs out a user by blacklisting the refresh token.
+    """
+    permission_classes = (IsAuthenticated,)
+    serializer_class = LogoutSerializer
+
+    def post(self, request, *args, **kwargs):
+        """
+        Blacklists the refresh token to log the user out.
+        """
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            refresh_token = serializer.validated_data['refresh_token']
             token = RefreshToken(refresh_token)
             token.blacklist()
-            return Response(status=status.HTTP_205_RESET_CONTENT)
+            application_logger.info(f"User {request.user.username} logged out.")
+            return Response({'message': 'Successfully logged out.'}, status=status.HTTP_205_RESET_CONTENT)
         except Exception as e:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
+            application_logger.exception(f"Logout error: {e}")
+            return Response({'error': 'An error occurred during logout.'}, status=status.HTTP_400_BAD_REQUEST)
 
 
-@api_view(['GET'])
-def getRoutes(request):
-    # It defines a list of API routes that can be accessed.
-    routes = [
-        '/api/token/',
-        '/api/register/',
-        '/api/token/refresh/',
-        '/api/test/'
-    ]
-    # It returns a DRF Response object containing the list of routes.
-    return Response(routes)
 
 
-@api_view(['GET', 'POST'])
-@permission_classes([IsAuthenticated])
-def testEndPoint(request):
-    if request.method == 'GET':
-        data = f"Congratulations {request.user}, your API just responded to a GET request."
-        return Response({'response': data}, status=status.HTTP_200_OK)
-    elif request.method == 'POST':
-        try:
-            body = request.body.decode('utf-8')
-            data = json.loads(body)
-            if 'text' not in data:
-                return Response("Invalid JSON data", status=status.HTTP_400_BAD_REQUEST)
-            text = data.get('text')
-            data = f'Congratulations, your API just responded to a POST request with text: {text}'
-            return Response({'response': data}, status=status.HTTP_200_OK)
-        except json.JSONDecodeError:
-            return Response("Invalid JSON data", status=status.HTTP_400_BAD_REQUEST)
-    return Response("Invalid JSON data", status=status.HTTP_400_BAD_REQUEST)
 
 
 
 class ProfileView(generics.RetrieveUpdateAPIView):
-    permission_classes = (AllowAny,)
+    """
+    Retrieves or updates the user's profile.
+    """
+    permission_classes = (IsAuthenticated,)
     serializer_class = ProfileSerializer
 
     def get_object(self):
-        pid = self.kwargs['pid']
+        """
+        Returns the user's profile.
+        """
+        return self.request.user.profile  # Efficiently fetch profile
+
+        # return get_object_or_404(Profile, user=self.request.user)  # Efficiently fetch profile
+
+    def update(self, request, *args, **kwargs):
+        """
+        Handles profile updates.
+        """
         try:
-            user = get_object_or_404(User, profile__pid=pid)
-            profile = get_object_or_404(Profile, user=user)
-            return profile
-        except ObjectDoesNotExist as e:
-            raise NotFound(f"Profile not found: {str(e)}")
+            instance = self.get_object()
+            serializer = self.get_serializer(instance, data=request.data, partial=True)  # Allow partial updates
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            application_logger.info(f"Profile updated for user: {request.user.username}")
+            return Response(serializer.data)
         except Exception as e:
-            raise APIException(f"An error occurred: {str(e)}")
+            application_logger.exception(f"Profile update error: {e}")
+            return Response({'error': 'An error occurred during profile update.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-def generate_numeric_otp(length=7):
-        # Generate a random 7-digit OTP
-        otp = ''.join([str(random.randint(0, 9)) for _ in range(length)])
-        return otp
 
-class PasswordEmailVerify(generics.RetrieveAPIView):
-    permission_classes = (AllowAny,)
-    serializer_class = UserSerializer
-    
-    def get_object(self):
-        email = self.kwargs['email']
-        user = User.objects.get(email=email)
-        
-        if user:
-            user.otp = generate_numeric_otp()
-            uidb64 = user.pk
-            
-            refresh = RefreshToken.for_user(user)
-            reset_token = str(refresh.access_token)
 
-            # Store the reset_token in the user model for later verification
-            user.reset_token = reset_token
-            user.save()
 
-            link = f"http://localhost:5173/create-new-password?otp={user.otp}&uidb64={uidb64}&reset_token={reset_token}"
-            
-            merge_data = {
-                'link': link, 
-                'username': user.username, 
-            }
-            subject = f"Password Reset Request"
-            text_body = render_to_string("email/password_reset.txt", merge_data)
-            html_body = render_to_string("email/password_reset.html", merge_data)
-            
-            msg = EmailMultiAlternatives(
-                subject=subject, from_email=settings.FROM_EMAIL,
-                to=[user.email], body=text_body
-            )
-            msg.attach_alternative(html_body, "text/html")
-            msg.send()
-        return user
-    
 
-class PasswordChangeView(generics.CreateAPIView):
-    permission_classes = (AllowAny,)
-    serializer_class = UserSerializer
-    
-    def create(self, request, *args, **kwargs):
-        payload = request.data
-        
-        otp = payload['otp']
-        uidb64 = payload['uidb64']
-        reset_token = payload['reset_token']
-        password = payload['password']
 
-        print("otp ======", otp)
-        print("uidb64 ======", uidb64)
-        print("reset_token ======", reset_token)
-        print("password ======", password)
 
-        user = User.objects.get(id=uidb64, otp=otp)
-        if user:
-            user.set_password(password)
-            user.otp = ""
-            user.reset_token = ""
-            user.save()
+class USERSPROFILELISTVIEW(generics.ListAPIView):
+    """
+    Lists all user profiles.
+    """
+    queryset = Profile.objects.all()
+    serializer_class = ProfileSerializer
+    permission_classes = (AllowAny,) # Update Permission Classes
 
-            
-            return Response( {"message": "Password Changed Successfully"}, status=status.HTTP_201_CREATED)
-        else:
-            return Response( {"message": "An Error Occured"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    def get_queryset(self):
+        """
+        Retrieves all user profiles.
+        """
+        try:
+            return super().get_queryset()
+        except Exception as e:
+            print(f"Error retrieving ALL USERS: {e}")
+            return Profile.objects.none()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

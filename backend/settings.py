@@ -14,6 +14,7 @@ from pathlib import Path
 from datetime import timedelta
 from environs import Env
 import os
+from decouple import config
 import dj_database_url
 import cloudinary
 import cloudinary.uploader
@@ -90,9 +91,16 @@ INSTALLED_APPS = [
     'import_export',
     'anymail',
     'storages',
+
     'phone_verify',
     'channels',
     'django_filters',
+
+
+    'phonenumber_field',  # Added
+    'django_redis',  # Added
+
+
     
     # Cloudinary
     'cloudinary_storage',
@@ -114,6 +122,8 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'backend.urls'   
+
+
 
 PHONE_VERIFICATION = {
     'BACKEND': 'phone_verify.backends.twilio.TwilioBackend',
@@ -175,6 +185,18 @@ DATABASES = {
 
 
 
+
+
+# # Database
+# # Use dj_database_url to parse database URL from environment variable
+# DATABASES = {
+#     'default': dj_database_url.config(
+#         default='sqlite:///db.sqlite3',  # Default to SQLite for local development
+#         conn_max_age=600,
+#     )
+# }
+
+
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
 
@@ -209,43 +231,14 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
-STATIC_URL = 'static/'
-STATICFILES_DIRS = [BASE_DIR / 'static']
-STATIC_ROOT = BASE_DIR / 'staticfiles'
+# Static files
+STATIC_URL = '/static/'
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')  # Ensure this exists    ############### COMPREHENSIVE FOR PRODUCTION PURPOSES PLEASE 
 
-MEDIA_URL = 'media/'
-MEDIA_ROOT = BASE_DIR / 'media'
-
-# # AWS Configs
-# AWS_ACCESS_KEY_ID = env("AWS_ACCESS_KEY_ID")
-
-# AWS_SECRET_ACCESS_KEY = env("AWS_SECRET_ACCESS_KEY")
-
-# AWS_STORAGE_BUCKET_NAME = env("AWS_STORAGE_BUCKET_NAME")
-
-# AWS_S3_FILE_OVERWRITE = False
-
-# AWS_DEFAULT_ACL = 'public-read'
-
-# DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
-
-# STATICFILES_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
-
-# AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
-
-# AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
-
-# AWS_LOCATION = 'static'
-
-# STATIC_LOCATION = 'static'
-
-# STATIC_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/{STATIC_LOCATION}/'
-
-# # Newly added settings to debug encripted chat message files
-# AWS_S3_REGION_NAME = 'us-east-1' 
-# AWS_S3_VERIFY = True
-# AWS_QUERYSTRING_AUTH = False
-# # MEDIA_URL = f'https://{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com/media/'
+# Media files
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')  # Ensure this exists
 
 
 
@@ -272,18 +265,35 @@ AUTH_USER_MODEL = 'userauths.User'
 PAYSTACK_TEST_KEY = "sk_test_f5995ad3b929498e963ca52a9a065dd5c3190e31"
 PAYSTACK_SECRET_KEY = "sk_test_f5995ad3b929498e963ca52a9a065dd5c3190e31"
 
-
+# REST Framework settings
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
         "rest_framework.permissions.AllowAny",
     ),
+
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework.authentication.TokenAuthentication",
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
+
+   'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.UserRateThrottle', # Added for rate limiting
+        'rest_framework.throttling.AnonRateThrottle'
+    ],
+    # 'DEFAULT_THROTTLE_RATES': {
+    #     'anon': '100/day',  # Unauthenticated users
+    #     'user': '1000/day'   # Authenticated users
+    # },
+
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 10  # Number of items per page
 }
+
+
+
 
 
 
@@ -308,12 +318,28 @@ ANYMAIL = {
     "MAILGUN_SENDER_DOMAIN": os.environ.get("MAILGUN_SENDER_DOMAIN"),
 }
 
-FROM_EMAIL = " youremail@gmail.com"
-EMAIL_BACKEND = "anymail.backends.mailgun.EmailBackend"
-DEFAULT_FROM_EMAIL = " youremail@gmail.com"
-SERVER_EMAIL = " youremail@gmail.com"
+# FROM_EMAIL = " youremail@gmail.com"
+# EMAIL_BACKEND = "anymail.backends.mailgun.EmailBackend"
+# DEFAULT_FROM_EMAIL = " youremail@gmail.com"
+# SERVER_EMAIL = " youremail@gmail.com"
+
+
+
+
+
 
 CORS_ALLOW_ALL_ORIGINS = True
+
+# # Configure CORS
+# CORS_ALLOWED_ORIGINS = [
+#     "http://localhost:3000",  # Example React development server
+#     "http://localhost:8000",  # Example Django development server
+#     # Add more origins as needed
+# ]
+
+
+
+
 
 
 SIMPLE_JWT = {
@@ -351,7 +377,7 @@ SIMPLE_JWT = {
 
 JAZZMIN_SETTINGS = {
      
-    "user_avatar": "profile.image",  # Ensure this field exists in your Profile model
+    "user_avatar": "request.user.profile.image.url if request.user.profile.image else None",  # Handle missing images, # Access image url  # Ensure this field exists in your Profile model
     "site_title": "Fashionistar",
     "site_header": "Fashionistar",
     "site_brand": "Modern Marketplace ",
@@ -464,14 +490,26 @@ PHONENUMBER_DEFAULT_REGION = "NG"
 
 PHONENUMBER_DEFAULT_FORMAT = "INTERNATIONAL"
 
+#  TESTING SMPTNSERVER FOR CONSOLE
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_HOST = "smtp.gmail.com"
+# # Email settings
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST = 'smtp.gmail.com'
+
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='fashionistar.home.beauty@gmail.com')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='zjpskvqwkhubavjg')
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='fashionistar.home.beauty@gmail.com')  # Add this line
+
+# EMAIL_PORT = 587  # Or 465 for SSL
+# EMAIL_USE_TLS = True  # Or EMAIL_USE_SSL = True
+
 EMAIL_PORT = 465
 EMAIL_USE_TLS = False
 EMAIL_USE_SSL = True
-EMAIL_HOST_PASSWORD='zjpskvqwkhubavjg'
-EMAIL_HOST_USER='fashionistar.home.beauty@gmail.com'
+
+
+
 
 
 # swagger settings
@@ -499,24 +537,46 @@ DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 
 
 
-CELERY_BROKER_URL = 'redis://default:HNkTuvjOvzDJEDszLhPoFLMsWIhdjBmA@redis.railway.internal:6379'
 
-CELERY_ACCEPT_CONTENT = ['json']
-
-CELERY_TASK_SERIALIZER = 'json'
-
-
-
-
-
-
-
-
-################  LOGGER SETTINGS FOR PRODUCTION ENVIRONMENT INCLUDING PAYSTACK WEBHOOOK URL RPE PRODUCTION   #####################
+# RATELIMIT_VIEW = 'userauths.utils.rate_limit_exceeded'
 
 
 
 # settings.py
+import os
+from datetime import timedelta
+from decouple import config
+
+# Celery settings
+CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://127.0.0.1:6379/0')
+CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='redis://127.0.0.1:6379/0')
+CELERY_ACCEPT_CONTENT = ['application/json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'  # Or your desired timezone
+CELERY_TASK_DEFAULT_QUEUE = 'default'
+
+# Redis settings
+REDIS_HOST = config('REDIS_HOST', default='127.0.0.1')
+REDIS_PORT = config('REDIS_PORT', default=6379, cast=int)
+REDIS_DB = config('REDIS_DB', default=0, cast=int)
+OTP_EXPIRY_TIME = 300  # OTP expiry time in seconds
+
+# Configure Django's CACHES to use Redis
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}',
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        }
+    }
+}
+
+
+import logging.config
+import codecs
+import sys # make sure you have imported sys
 
 LOGGING = {
     'version': 1,
@@ -533,20 +593,24 @@ LOGGING = {
     },
     'handlers': {
         'console': {
+            'level': 'INFO',
             'class': 'logging.StreamHandler',
-            'formatter': 'simple'
+            'formatter': 'simple',
+            'stream': sys.stdout # change this value to sys.stdout
         },
         'file': {
             'level': 'DEBUG',  # Log everything from debug and above. Change to 'INFO' in production
             'class': 'logging.FileHandler',
-            'filename': 'application.log', # location of the log file
-            'formatter': 'verbose'
+            'filename': os.path.join(BASE_DIR, 'application.log'),
+            'formatter': 'verbose',
+            'encoding': 'utf-8',  # IMPORTANT - ADD THIS LINE for file based logging.
         },
        'webhook_file': {
             'level': 'DEBUG',  # Log everything from debug and above. Change to 'INFO' in production
             'class': 'logging.FileHandler',
-            'filename': 'webhook.log',  # Location for webhook logs
-            'formatter': 'verbose'
+            'filename': os.path.join(BASE_DIR, 'webhook.log'),  # Location for webhook logs
+            'formatter': 'verbose',
+             'encoding': 'utf-8',  # IMPORTANT - ADD THIS LINE for file based logging.
         },
         'mail_admins': {
           'level': 'ERROR',
@@ -583,3 +647,147 @@ LOGGING = {
        }
     },
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#################################         PRODUCTION PURPOSES SETTINGS PLEASE        ####################################
+
+
+
+
+
+################  LOGGER SETTINGS FOR PRODUCTION ENVIRONMENT INCLUDING PAYSTACK WEBHOOOK URL RPE PRODUCTION   #####################
+
+# Configure Logging
+# # settings.py
+
+#             # 'encoding': 'utf-8' # YOU CAN ADD THIS TO YOUR EXISTING ENCODINGI ---------------------------I WILL USE THIS ONE LATER WHEN I UPDATE MY PTHON VERSIONTO3.9 AND ABOVE
+# LOGGING = {
+#     'version': 1,
+#     'disable_existing_loggers': False,
+#     'formatters': {
+#         'verbose': {
+#             'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+#             'style': '{',
+#         },
+#         'simple': {
+#             'format': '{levelname} {message}',
+#             'style': '{',
+#         },
+#     },
+#     'handlers': {
+#         'console': {
+#             'class': 'logging.StreamHandler',
+#             'formatter': 'simple', # OR verbose, depending on preference
+#             # 'encoding': 'utf-8' # YOU CAN ADD THIS TO YOUR EXISTING ENCODINGI ---------------------------I WILL USE THIS ONE LATER WHEN I UPDATE MY PTHON VERSIONTO3.9 AND ABOVE
+#         },
+#         'file': {
+#             'level': 'DEBUG',  # Log everything from debug and above. Change to 'INFO' in production
+#             'class': 'logging.FileHandler',
+#             'filename': os.path.join(BASE_DIR, 'application.log'),
+#             'formatter': 'verbose',
+#             'encoding': 'utf-8'  # IMPORTANT - ADD THIS LINE for file based logging.
+#         },
+#        'webhook_file': {
+#             'level': 'DEBUG',  # Log everything from debug and above. Change to 'INFO' in production
+#             'class': 'logging.FileHandler',
+#             'filename': os.path.join(BASE_DIR, 'webhook.log'),  # Location for webhook logs
+#             'formatter': 'verbose',
+#              'encoding': 'utf-8'  # IMPORTANT - ADD THIS LINE for file based logging.
+#         },
+#         'mail_admins': {
+#           'level': 'ERROR',
+#             'class': 'django.utils.log.AdminEmailHandler',
+#             'formatter': 'verbose',
+#             'filters': ['require_debug_false']
+#         }
+#     },
+#     'filters':{
+#         'require_debug_false':{
+#              '()': 'django.utils.log.RequireDebugFalse',
+#         }
+#     },
+#     'loggers': {
+#         'django': {
+#             'handlers': ['console', 'file', 'mail_admins'],
+#             'level': 'INFO',  # Default log level for Django
+#             'propagate': True,
+#         },
+#          'webhook':{
+#            'handlers': ['console', 'webhook_file', 'mail_admins'], # Specific logger for webhook
+#            'level': 'DEBUG',  # Set webhook log level
+#             'propagate': False, # Prevent log messages from being sent to other handlers
+#         },
+#         'paystack':{
+#            'handlers': ['console', 'file', 'mail_admins'], # specific logger for paystack
+#            'level': 'DEBUG',  # Set webhook log level
+#            'propagate': False,
+#          },
+#        'application':{
+#            'handlers': ['console', 'file', 'mail_admins'],
+#            'level': 'DEBUG',
+#            'propagate': False,
+#        }
+#     },
+# }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# # Twilio Settings (Import from twilio_settings.py)
+# from .twilio_settings import TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER
+
+
+# # Twilio settings
+# TWILIO_ACCOUNT_SID = config('TWILIO_ACCOUNT_SID', default='ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx')
+# TWILIO_AUTH_TOKEN = config('TWILIO_AUTH_TOKEN', default='your_twilio_auth_token')
+# TWILIO_PHONE_NUMBER = config('TWILIO_PHONE_NUMBER', default='+1234567890')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

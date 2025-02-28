@@ -6,7 +6,7 @@ from import_export.admin import ImportExportModelAdmin
 # Register your models here.
 class CategoryAdmin(ImportExportModelAdmin):
     list_editable = [ 'active']
-    list_display = ['title', 'thumbnail', 'active']
+    list_display = ['name', 'category_image', 'active']
 
 
 class BrandAdmin(ImportExportModelAdmin):

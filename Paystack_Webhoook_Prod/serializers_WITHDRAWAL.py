@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from decimal import Decimal
 
 
 class VendorWithdrawSerializer(serializers.Serializer):
