@@ -1,3 +1,5 @@
+# userauths/celery_task.py
+
 from celery import shared_task
 import logging
 from django.conf import settings
@@ -7,9 +9,11 @@ from django.template.exceptions import TemplateDoesNotExist
 application_logger = logging.getLogger('application')
 
 
+from django.conf import settings
+from twilio.rest import Client  # Import the Twilio Client
 
 
-# @shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 5, 'countdown': 10})
+
 @shared_task(bind=True, retry_backoff=True, max_retries=3)
 def send_email_task(self, subject: str, recipients: list[str], template_name: str, context: dict, attachments: list[tuple] | None = None) -> str:
     """
@@ -69,7 +73,7 @@ def send_email_task(self, subject: str, recipients: list[str], template_name: st
 # application_logger = logging.getLogger('application')
 
 
-# @shared_task(bind=True, retry_backoff=True, max_retries=5)
+# @shared_task(bind=True, retry_backoff=True, max_retries=3)
 # def process_email_queue_task(self):
 #     """Process the email queue."""
 #     try:
@@ -92,17 +96,69 @@ def send_email_task(self, subject: str, recipients: list[str], template_name: st
 
 
 
-@shared_task(bind=True, retry_backoff=True, max_retries=5)
+
+
+
+
+
+
+
+
+
+
+
+class SMSManagerError(Exception):
+    """Raise an exception if an error occurs in the SMS manager"""
+
+class SMSManager:
+    """
+    Manages the sending of SMS messages using Twilio.
+    """
+
+    @classmethod
+    def send_sms(cls, to: str, body: str) -> str:
+        """
+        Sends an SMS using Twilio.
+
+        Args:
+            to (str): Recipient's phone number (in E.164 format).
+            body (str): SMS message body.
+
+        Returns:
+            str: Message SID (string).
+
+        Raises:
+            SMSManagerError: If an error occurs during SMS sending.
+        """
+        try:
+            client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
+            message = client.messages.create(
+                body=body,
+                from_=settings.TWILIO_PHONE_NUMBER,
+                to=to
+            )
+            application_logger.info(f"SMS sent successfully to {to} with SID: {message.sid}")
+            return message.sid
+        except Exception as error:
+            application_logger.error(f"Failed to send SMS to {to}: {error}", exc_info=True)
+            raise SMSManagerError(f"Failed to send SMS to {to}: {error}")
+
+
+@shared_task(bind=True, retry_backoff=True, max_retries=3)
 def send_sms_task(self, to: str, body: str) -> str:
     """
     Sends an SMS asynchronously using Celery, leveraging the SMSManager.
 
     Args:
+        self (celery.Task): The Celery task instance.
         to (str): Recipient's phone number (in E.164 format).
         body (str): SMS message body.
 
     Returns:
         str: Message SID.
+
+    Raises:
+        Exception: If an error occurs during SMS sending, the task will be retried with exponential backoff.
     """
     try:
         message_sid = SMSManager.send_sms(to=to, body=body)
@@ -110,4 +166,4 @@ def send_sms_task(self, to: str, body: str) -> str:
         return message_sid
     except Exception as exc:
         application_logger.error(f"Error sending SMS to {to}: {exc}", exc_info=True)
-        raise self.retry(exc=exc, countdown=60) # Retry exponential backoff
+        raise self.retry(exc=exc, countdown=60)  # Retry with exponential backoff

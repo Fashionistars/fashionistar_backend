@@ -37,7 +37,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-b*tuoe%^o+=^35$0fufrm=oamh^(o0tabn39(7ni12(i-oup+4'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 # ALLOWED_HOSTS = ["fashionistar-backend.onrender.com", "127.0.0.1"]
 DJANGO_SECRET_ADMIN_URL="<your_secret_admin_url>"
@@ -65,13 +65,13 @@ INSTALLED_APPS = [
 
 
     # Custom Apps
+    'admin_backend',
     'userauths',
     'store',
     'vendor',
     'customer',
     'addon',
     'api',
-    'admin_backend',
     'ShopCart',
     'checkout',
     'notification',
@@ -125,20 +125,20 @@ ROOT_URLCONF = 'backend.urls'
 
 
 
-PHONE_VERIFICATION = {
-    'BACKEND': 'phone_verify.backends.twilio.TwilioBackend',
-    'OPTIONS': {
-        'SID': 'fake',
-        'SECRET': 'fake',
-        'FROM': '+14755292729',
-        'SANDBOX_TOKEN':'123456',
-    },
-    'TOKEN_LENGTH': 6,
-    'MESSAGE': 'Welcome to {app}! Please use security code {security_code} to proceed.',
-    'APP_NAME': 'Phone Verify',
-    'SECURITY_CODE_EXPIRATION_TIME': 3600,  # In seconds only
-    'VERIFY_SECURITY_CODE_ONLY_ONCE': False,  # If False, then a security code can be used multiple times for verification
-}
+# PHONE_VERIFICATION = {
+#     'BACKEND': 'phone_verify.backends.twilio.TwilioBackend',
+#     'OPTIONS': {
+#         'SID': 'fake',
+#         'SECRET': 'fake',
+#         'FROM': '+14755292729',
+#         'SANDBOX_TOKEN':'123456',
+#     },
+#     'TOKEN_LENGTH': 6,
+#     'MESSAGE': 'Welcome to {app}! Please use security code {security_code} to proceed.',
+#     'APP_NAME': 'Phone Verify',
+#     'SECURITY_CODE_EXPIRATION_TIME': 3600,  # In seconds only
+#     'VERIFY_SECURITY_CODE_ONLY_ONCE': False,  # If False, then a security code can be used multiple times for verification
+# }
 
 TEMPLATES = [
     {
@@ -313,15 +313,8 @@ SPECTACULAR_SETTINGS = {
     },
 }
 
-ANYMAIL = {
-    "MAILGUN_API_KEY": os.environ.get("MAILGUN_API_KEY"),
-    "MAILGUN_SENDER_DOMAIN": os.environ.get("MAILGUN_SENDER_DOMAIN"),
-}
 
-# FROM_EMAIL = " youremail@gmail.com"
-# EMAIL_BACKEND = "anymail.backends.mailgun.EmailBackend"
-# DEFAULT_FROM_EMAIL = " youremail@gmail.com"
-# SERVER_EMAIL = " youremail@gmail.com"
+
 
 
 
@@ -347,7 +340,7 @@ SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': timedelta(days=50),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
-    'UPDATE_LAST_LOGIN': False,
+    'UPDATE_LAST_LOGIN': True,
 
     'ALGORITHM': 'HS256',
 
@@ -375,9 +368,15 @@ SIMPLE_JWT = {
 }
 
 
+
+
+
+
+
 JAZZMIN_SETTINGS = {
      
-    "user_avatar": "request.user.profile.image.url if request.user.profile.image else None",  # Handle missing images, # Access image url  # Ensure this field exists in your Profile model
+    "user_avatar": "media/default-user.jpg",  # Handle missing images, # Access image url  # Ensure this field exists in your Profile model
+    # "user_avatar": "request.user.profile.image.url if request.user.profile.image else None",  # Handle missing images, # Access image url  # Ensure this field exists in your Profile model
     "site_title": "Fashionistar",
     "site_header": "Fashionistar",
     "site_brand": "Modern Marketplace ",
@@ -482,6 +481,11 @@ JAZZMIN_UI_TWEAKS = {
 }
 
 
+
+
+
+
+
 DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
 
 PHONENUMBER_DB_FORMAT = "INTERNATIONAL"
@@ -490,23 +494,72 @@ PHONENUMBER_DEFAULT_REGION = "NG"
 
 PHONENUMBER_DEFAULT_FORMAT = "INTERNATIONAL"
 
-#  TESTING SMPTNSERVER FOR CONSOLE
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
-# # Email settings
-# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-# EMAIL_HOST = 'smtp.gmail.com'
 
+
+# # Twilio settings
+# TWILIO_ACCOUNT_SID = config('TWILIO_ACCOUNT_SID', default='AC54b7212aa8ec1fb2985e8aa21f601c7f')
+# TWILIO_AUTH_TOKEN = config('TWILIO_AUTH_TOKEN', default='e7abf1b8f50c0ff20b7c12ee5f223be4')
+# TWILIO_PHONE_NUMBER = config('TWILIO_PHONE_NUMBER', default='+2349137654300')
+
+# Twilio settings
+TWILIO_ACCOUNT_SID = config('TWILIO_ACCOUNT_SID', default='ACa0ab628ce5d93d8fb0eaf92a82d1ec15')
+TWILIO_AUTH_TOKEN = config('TWILIO_AUTH_TOKEN', default='88ea59d8f5c79066c83137567a7a2c44')
+TWILIO_PHONE_NUMBER = config('TWILIO_PHONE_NUMBER', default='+2349156244345')
+
+
+
+
+
+
+
+
+
+# if DEBUG:
+#     #  TESTING SMPT SERVER FOR CONSOLE EMAIL TESTING
+#     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"  # During development only
+
+# else:
+    # EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend' # A safe production default. The correct one will be loaded later.
+
+    # EMAILBACKENDCONFIG THAT IS SET DYNAMICALLY STABLE FROM DATABASSE and by EmailBackendConfig
+EMAIL_BACKEND = 'admin_backend.backends.DatabaseConfiguredEmailBackend' # Set DatabaseConfiguredEmailBackend to use the backend configured from database.
+
+
+
+
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='fashionistar.home.beauty@gmail.com')
+SERVER_EMAIL = config('DEFAULT_FROM_EMAIL', default='fashionistar.home.beauty@gmail.com')
+
+
+# Gmail SMTP Configuration (Used if you choose Gmail in the admin)
+EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='fashionistar.home.beauty@gmail.com')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='zjpskvqwkhubavjg')
-DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='fashionistar.home.beauty@gmail.com')  # Add this line
+EMAIL_PORT = 465        # Or 587 for TSL
+EMAIL_USE_TLS = False   # Or EMAIL_USE_TSL = True
 
-# EMAIL_PORT = 587  # Or 465 for SSL
-# EMAIL_USE_TLS = True  # Or EMAIL_USE_SSL = True
+EMAIL_USE_SSL = True    # Or EMAIL_USE_SSL = False
 
-EMAIL_PORT = 465
-EMAIL_USE_TLS = False
-EMAIL_USE_SSL = True
+
+
+# Mailgun Configuration (Used if you choose Mailgun in the admin)
+ANYMAIL = {
+    "MAILGUN_API_KEY": os.environ.get("MAILGUN_API_KEY"),
+    "MAILGUN_SENDER_DOMAIN": os.environ.get("MAILGUN_DOMAIN"),
+}
+
+
+
+# Zoho ZeptoMail Configuration (Used if you choose Zoho in the admin)
+ZOHO_ZEPTOMAIL_API_KEY_TOKEN = 'Send Mail Token'  # Replace with your token
+ZOHO_ZEPTOMAIL_HOSTED_REGION = 'zeptomail.zoho.com'
+
+
+
+
+
+
 
 
 
@@ -538,7 +591,6 @@ DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 
 
 
-# RATELIMIT_VIEW = 'userauths.utils.rate_limit_exceeded'
 
 
 
@@ -745,29 +797,6 @@ LOGGING = {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# # Twilio Settings (Import from twilio_settings.py)
-# from .twilio_settings import TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER
-
-
-# # Twilio settings
-# TWILIO_ACCOUNT_SID = config('TWILIO_ACCOUNT_SID', default='ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx')
-# TWILIO_AUTH_TOKEN = config('TWILIO_AUTH_TOKEN', default='your_twilio_auth_token')
-# TWILIO_PHONE_NUMBER = config('TWILIO_PHONE_NUMBER', default='+1234567890')
 
 
 

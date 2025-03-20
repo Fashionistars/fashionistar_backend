@@ -2,12 +2,12 @@ import logging
 import os
 import time
 from typing import Any, List, Optional
-from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.template import TemplateDoesNotExist
 from django.utils import timezone
 from celery import shared_task
+from django.conf import settings
 from twilio.rest import Client  # Import the Twilio Client
 
 Logger = logging.getLogger('application')
@@ -168,33 +168,59 @@ def send_email_task(self, subject: str, recipients: list[str], template_name: st
 
 
 
-@shared_task(bind=True, retry_backoff=True, max_retries=5)
-def process_email_queue_task(self):
-    """
-    Processes emails from the email queue.
+# @shared_task(bind=True, retry_backoff=True, max_retries=5)
+# def process_email_queue_task(self):
+#     """
+#     Processes emails from the email queue.
 
-    This task is designed to run periodically and send emails stored in the email queue.
-    If an error occurs during the processing of emails, it will be retried with exponential backoff.
+#     This task is designed to run periodically and send emails stored in the email queue.
+#     If an error occurs during the processing of emails, it will be retried with exponential backoff.
 
-    Args:
-        self (celery.Task): The Celery task instance.
+#     Args:
+#         self (celery.Task): The Celery task instance.
 
-    Returns:
-        str: A success message or raises an exception on failure.
+#     Returns:
+#         str: A success message or raises an exception on failure.
 
-    Raises:
-        Exception: If an error occurs while processing the email queue, the task will be retried with exponential backoff.
-    """
-    try:
-        application_logger.info("⚙️ Starting email queue processing...")
-        # No email Queue implementation here
-        application_logger.info("✅ Email queue processing completed.")
-        return "Email queue processing completed successfully."
-    except Exception as exc:
-        application_logger.exception(f"❌ Error processing email queue: {exc}")
-        raise self.retry(exc=exc, countdown=60)  # Retry with exponential backoff
+#     Raises:
+#         Exception: If an error occurs while processing the email queue, the task will be retried with exponential backoff.
+#     """
+#     try:
+#         application_logger.info("⚙️ Starting email queue processing...")
+#         # No email Queue implementation here
+#         application_logger.info("✅ Email queue processing completed.")
+#         return "Email queue processing completed successfully."
+#     except Exception as exc:
+#         application_logger.exception(f"❌ Error processing email queue: {exc}")
+#         raise self.retry(exc=exc, countdown=60)  # Retry with exponential backoff
 
 
+
+
+
+
+
+# from celery import shared_task
+# from django.conf import settings
+# import logging
+# # from .utils import EmailManager, SMSManager
+# from userauths.UTILS.email_utils import EmailManager
+# import time
+# from django.utils import timezone
+
+# application_logger = logging.getLogger('application')
+
+
+# @shared_task(bind=True, retry_backoff=True, max_retries=3)
+# def process_email_queue_task(self):
+#     """Process the email queue."""
+#     try:
+#         EmailManager.process_email_queue()  # Invoke the email processing method
+#         application_logger.info(f"Email Queue Processed {timezone.now()}")
+#         return f"Email Queue Processed Successfully {timezone.now()}"
+#     except Exception as exc:
+#         application_logger.error(f"Error when processing Email Queue {exc}", exc_info=True)
+#         raise self.retry(exc=exc, countdown=60) # Retry exponential backoff
 
 
 

@@ -31,7 +31,7 @@ urlpatterns = [
    # Admin URL
    path('admin/', admin.site.urls),
    path("auth/", include("userauths.urls")),
-   path("", include("admin_backend.urls")),
+   path("admin_backend/", include("admin_backend.urls")),
 
 
    #  VENDORS   /  SHOP   /  SELLER 
