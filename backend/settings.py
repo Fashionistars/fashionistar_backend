@@ -520,9 +520,15 @@ PHONENUMBER_DEFAULT_FORMAT = "INTERNATIONAL"
 #     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"  # During development only
 
 # else:
-    # EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend' # A safe production default. The correct one will be loaded later.
+#     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend' # A safe production default. The correct one will be loaded later.
 
-    # EMAILBACKENDCONFIG THAT IS SET DYNAMICALLY STABLE FROM DATABASSE and by EmailBackendConfig
+#     #  EMAILBACKENDCONFIG THAT IS SET DYNAMICALLY STABLE FROM DATABASSE and by EmailBackendConfig
+#     EMAIL_BACKEND = 'admin_backend.backends.DatabaseConfiguredEmailBackend' # Set DatabaseConfiguredEmailBackend to use the backend configured from database.
+
+
+
+
+
 EMAIL_BACKEND = 'admin_backend.backends.DatabaseConfiguredEmailBackend' # Set DatabaseConfiguredEmailBackend to use the backend configured from database.
 
 
