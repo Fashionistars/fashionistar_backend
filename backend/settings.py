@@ -37,7 +37,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-b*tuoe%^o+=^35$0fufrm=oamh^(o0tabn39(7ni12(i-oup+4'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
 # ALLOWED_HOSTS = ["fashionistar-backend.onrender.com", "127.0.0.1"]
 DJANGO_SECRET_ADMIN_URL="<your_secret_admin_url>"
@@ -377,6 +377,10 @@ JAZZMIN_SETTINGS = {
      
     "user_avatar": "media/default-user.jpg",  # Handle missing images, # Access image url  # Ensure this field exists in your Profile model
     # "user_avatar": "request.user.profile.image.url if request.user.profile.image else None",  # Handle missing images, # Access image url  # Ensure this field exists in your Profile model
+    "usermodel_field_mappings": {
+        # Replace 'users.User' with your actual custom User model
+        "userauths.User": "avatar", 
+    },
     "site_title": "Fashionistar",
     "site_header": "Fashionistar",
     "site_brand": "Modern Marketplace ",
