@@ -56,10 +56,12 @@ INSTALLED_APPS = [
     'drf_yasg',
     'drf_spectacular',
 
-
-    
-    # Cloudinary "cloudinary_storage" BEFORE  "django.contrib.staticfiles" TO OVERIDE THE COLLECTSTATIC COMMAND
+    # =================================================================================
+    # Cloudinary "cloudinary_storage" MUST BE BEFORE "django.contrib.staticfiles"
+    # TO OVERRIDE THE COLLECTSTATIC COMMAND AND HANDLE CLOUDINARY UPLOADS CORRECTLY.
     'cloudinary_storage',
+    # =================================================================================
+
     
     'django.contrib.admin',
     'django.contrib.auth',
@@ -236,7 +238,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 # Static files
-STATIC_URL = '/static/'
+# STATIC_URL = '/static/'
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')  # Ensure this exists    ############### COMPREHENSIVE FOR PRODUCTION PURPOSES PLEASE 
 
@@ -265,12 +267,12 @@ CLOUDINARY_STORAGE = {
 #     "default": {
 #         "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
 #     },
-#     # 'staticfiles': {
-#     # 'BACKEND': 'cloudinary_storage.storage.StaticHashedCloudinaryStorage'
-#     # },
-#     "staticfiles": {
-#         "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+#     'staticfiles': {
+#     'BACKEND': 'cloudinary_storage.storage.StaticHashedCloudinaryStorage'
 #     },
+#     # "staticfiles": {
+#     #     "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+#     # },
 # }
 
 
@@ -285,6 +287,7 @@ STATICFILES_STORAGE = 'cloudinary_storage.storage.StaticCloudinaryStorage'
 # ====================================================================================
 
 
+STATIC_URL = f'https://res.cloudinary.com/dgpdlknc1/raw/upload/v1/static/'
 
 
 
