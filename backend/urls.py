@@ -60,12 +60,12 @@ urlpatterns = [
 # *** EDIT 3: CONDITIONAL STATIC FILE SERVING ***
 # - Serving media files is fine, though in prod, Cloudinary handles it fully.
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+# urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
 
 
-# # - STATIC files MUST only be served by the Django development server when DEBUG=True.
-# # - When DEBUG=False, Cloudinary/STATICFILES_STORAGE handles it, so this block is not run.
-# if settings.DEBUG:
-#    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
-# # ====================================================================================
+# - STATIC files MUST only be served by the Django development server when DEBUG=True.
+# - When DEBUG=False, Cloudinary/STATICFILES_STORAGE handles it, so this block is not run.
+if settings.DEBUG:
+   urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+# ====================================================================================
