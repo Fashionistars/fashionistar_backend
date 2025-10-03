@@ -9,7 +9,7 @@ class UserauthsConfig(AppConfig):
     verbose_name = _("User Authentication")
 
     def ready(self):
-        import userauths.celery_tasks  # noqa
+        import userauths.tasks  # noqa
 
 
 

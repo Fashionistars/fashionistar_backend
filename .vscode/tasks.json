@@ -77,6 +77,8 @@
 
 
 
+// I WILL MAKE USE OF YOU LATER TO WRITE EMAIL THREADING SENDING FOR ( REGISTRATIONS )
+// Database-backed queue: Implement a simple queue using your Django database. Tasks are put into a DB table and processed by the web server (if it has time) or a separate "management command" that you manually run. This is a very poor substitute for Celery.
 
 
 

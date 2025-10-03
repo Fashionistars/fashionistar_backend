@@ -14,17 +14,17 @@ from pathlib import Path
 from datetime import timedelta
 from environs import Env
 import os
-from decouple import config
+from decouple import config # Using decouple to read .env
 import dj_database_url
 import cloudinary
 import cloudinary.uploader
 import cloudinary.api
+import sys
+import logging.config # For logging
 
+# Initialize Env for reading .env file
 env = Env()
-env.read_env()
-
-env = Env()
-env.read_env()
+env.read_env() # Reads the .env file
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -34,19 +34,25 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-b*tuoe%^o+=^35$0fufrm=oamh^(o0tabn39(7ni12(i-oup+4'
+# Get SECRET_KEY from environment variable
+SECRET_KEY = env("SECRET_KEY", default='django-insecure-b*tuoe%^o+=^35$0fufrm=oamh^(o0tabn39(7ni12(i-oup+4') # Fallback for local, but ensure it's set in .env for production
+
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False  # TURN DEBUG TO 'TRUE' TO FIX STATICFILES NOT LOADING
-
-# ALLOWED_HOSTS = ["fashionistar-backend.onrender.com", "127.0.0.1"]
-DJANGO_SECRET_ADMIN_URL="<your_secret_admin_url>"
+# Get DEBUG from environment variable
+DEBUG = env.bool("DEBUG", default=True) # Default to True for local, set to False in .env for production
 
 
-# ALLOWED_HOSTS = ["fashionistar-backend.onrender.com", "127.0.0.1"]
-ALLOWED_HOSTS = ["fashionistar-backend.onrender.com", "127.0.0.1", "localhost:8000", "localhost3001", "localhost"]
-CSRF_TRUSTED_ORIGINS = ['https://fashionistar-backend.onrender.com', 'https://127.0.0.1']
+# Site URL
+# SITE_URL = env("SITE_URL")
+
+DJANGO_SECRET_ADMIN_URL=env("DJANGO_SECRET_ADMIN_URL", default="admin/")
+
+# ALLOWED_HOSTS from environment variable, split by comma
+ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["127.0.0.1", "localhost", "localhost:8000", "localhost:3001"])
+CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=['http://localhost:3000', 'http://localhost:8000'])
 SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
+
 
 
 # Application definition
@@ -106,6 +112,7 @@ INSTALLED_APPS = [
 
     'phonenumber_field',  # Added
     'django_redis',  # Added
+    'django_celery_beat',
 
 
     
@@ -130,22 +137,6 @@ MIDDLEWARE = [
 ROOT_URLCONF = 'backend.urls'   
 
 
-
-# PHONE_VERIFICATION = {
-#     'BACKEND': 'phone_verify.backends.twilio.TwilioBackend',
-#     'OPTIONS': {
-#         'SID': 'fake',
-#         'SECRET': 'fake',
-#         'FROM': '+14755292729',
-#         'SANDBOX_TOKEN':'123456',
-#     },
-#     'TOKEN_LENGTH': 6,
-#     'MESSAGE': 'Welcome to {app}! Please use security code {security_code} to proceed.',
-#     'APP_NAME': 'Phone Verify',
-#     'SECURITY_CODE_EXPIRATION_TIME': 3600,  # In seconds only
-#     'VERIFY_SECURITY_CODE_ONLY_ONCE': False,  # If False, then a security code can be used multiple times for verification
-# }
-
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -166,41 +157,52 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 
 ASGI_APPLICATION = 'backend.asgi.application'
 
+
+
+# Channel layers FOR (ASGI CHAT MESSAGES) for Redis, using REDIS_URL from .env
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            'hosts': [('127.0.0.1', 6379)],
+            'hosts': [env("REDIS_URL", default='redis://127.0.0.1:6379/0')],
         },
     },
 }
 
 
-# Database
-# https://docs.djangoproject.com/en/4.2/ref/settings/#databases
+# Get Redis URL from environment variable
+REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/0")
 
-DATABASES = {
+
+# Configure Django's CACHES to use Redis
+CACHES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': REDIS_URL,
         'OPTIONS': {
-            'timeout': 20,  # Increase the timeout to 20 seconds
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
         }
     }
 }
 
 
 
+# Database
+# Use dj_database_url to parse database URL from environment variable
+# Defaults to SQLite for local development if DATABASE_URL is not set in .env
+DATABASES = {
+    'default': dj_database_url.config(
+        default=env("DATABASE_URL", default='sqlite:///db.sqlite3'),
+        conn_max_age=600,
+    )
+}
+
+# Add SQLite timeout option only if using SQLite
+if DATABASES['default']['ENGINE'] == 'django.db.backends.sqlite3':
+    DATABASES['default']['OPTIONS'] = {'timeout': 20}
 
 
-# # Database
-# # Use dj_database_url to parse database URL from environment variable
-# DATABASES = {
-#     'default': dj_database_url.config(
-#         default='sqlite:///db.sqlite3',  # Default to SQLite for local development
-#         conn_max_age=600,
-#     )
-# }
+
 
 
 # Password validation
@@ -238,7 +240,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 # Static files
-# STATIC_URL = '/static/'
+STATIC_URL = '/static/'
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')  # Ensure this exists    ############### COMPREHENSIVE FOR PRODUCTION PURPOSES PLEASE 
 
@@ -248,62 +250,24 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')  # Ensure this exists
 
 
 
-import cloudinary
-
-# Configuration       
-CLOUDINARY_STORAGE = { 
-    "CLOUD_NAME": "dgpdlknc1", 
-    "API_KEY" : "494687484522475", 
-    "API_SECRET" : "ngdVN3NFn7L_3KiP75zZJl8DUno", # Click 'View Credentials' below to copy your API secret
-    # "secure":True
+# Cloudinary Configuration
+CLOUDINARY_STORAGE = {
+    "CLOUD_NAME": env("CLOUDINARY_CLOUD_NAME", default="your_cloud_name"),
+    "API_KEY" : env("CLOUDINARY_API_KEY", default="your_api_key"),
+    "API_SECRET" : env("CLOUDINARY_API_SECRET", default="your_api_secret"),
 }
 
+# Storages for media and static files
+STORAGES = {
+    "default": {
+        "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "cloudinary_storage.storage.StaticHashedCloudinaryStorage" if not DEBUG else "django.contrib.staticfiles.storage.StaticFilesStorage",
+    },
+}
 
-
-
-
-
-# STORAGES = {
-#     "default": {
-#         "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
-#     },
-#     'staticfiles': {
-#     'BACKEND': 'cloudinary_storage.storage.StaticHashedCloudinaryStorage'
-#     },
-#     # "staticfiles": {
-#     #     "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
-#     # },
-# }
-
-
-
-
-
-# ====================================================================================
-# *** EDIT 1: STATICFILES FOR PRODUCTION ***
-# 1. Use Cloudinary for static files when DEBUG=False
-DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
-STATICFILES_STORAGE = 'cloudinary_storage.storage.StaticCloudinaryStorage' 
-# ====================================================================================
-
-
-STATIC_URL = f'https://res.cloudinary.com/dgpdlknc1/raw/upload/v1/static/'
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# STATIC_URL = f'https://res.cloudinary.com/dgpdlknc1/raw/upload/v1/static/'
 
 
 
@@ -315,20 +279,13 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 AUTH_USER_MODEL = 'userauths.User'
 
-# Site URL
-# SITE_URL = env("SITE_URL")
 
-# # Stripe API Keys
-# STRIPE_PUBLIC_KEY = env("STRIPE_PUBLIC_KEY")
-# STRIPE_SECRET_KEY = env("STRIPE_SECRET_KEY")
-
-# # Paypal API Keys
-# PAYPAL_CLIENT_ID = env('PAYPAL_CLIENT_ID')
-# PAYPAL_SECRET_ID = env('PAYPAL_SECRET_ID')
+# Paystack API Keys
+PAYSTACK_TEST_KEY = env("PAYSTACK_TEST_KEY", default="sk_test_f5995ad3b929498e963ca52a9a065dd5c3190e31")
+PAYSTACK_SECRET_KEY = env("PAYSTACK_SECRET_KEY", default="sk_test_f5995ad3b929498e963ca52a9a065dd5c3190e31")
 
 
-PAYSTACK_TEST_KEY = "sk_test_f5995ad3b929498e963ca52a9a065dd5c3190e31"
-PAYSTACK_SECRET_KEY = "sk_test_f5995ad3b929498e963ca52a9a065dd5c3190e31"
+
 
 # REST Framework settings
 REST_FRAMEWORK = {
@@ -359,9 +316,6 @@ REST_FRAMEWORK = {
 
 
 
-
-
-
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Fashionistar Backend Project API',
     'DESCRIPTION': 'Fashionistar project description',
@@ -379,24 +333,7 @@ SPECTACULAR_SETTINGS = {
 }
 
 
-
-
-
-
-
-
-
 CORS_ALLOW_ALL_ORIGINS = True
-
-# # Configure CORS
-# CORS_ALLOWED_ORIGINS = [
-#     "http://localhost:3000",  # Example React development server
-#     "http://localhost:8000",  # Example Django development server
-#     # Add more origins as needed
-# ]
-
-
-
 
 
 
@@ -434,6 +371,15 @@ SIMPLE_JWT = {
 
 
 
+# swagger settings
+SWAGGER_SETTINGS = {
+    "USE_SESSION_AUTH": True,
+    "relative_paths": False,
+    "DISPLAY_OPERATION_ID": False,
+    "SECURITY_DEFINITIONS": {
+        "Bearer": {"type": "apiKey", "name": "Authorization", "in": "header"},
+    },
+}
 
 
 
@@ -552,9 +498,6 @@ JAZZMIN_UI_TWEAKS = {
 
 
 
-
-
-
 DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
 
 PHONENUMBER_DB_FORMAT = "INTERNATIONAL"
@@ -571,28 +514,23 @@ PHONENUMBER_DEFAULT_FORMAT = "INTERNATIONAL"
 # TWILIO_AUTH_TOKEN = config('TWILIO_AUTH_TOKEN', default='e7abf1b8f50c0ff20b7c12ee5f223be4')
 # TWILIO_PHONE_NUMBER = config('TWILIO_PHONE_NUMBER', default='+2349137654300')
 
-# # Twilio settings
-# TWILIO_ACCOUNT_SID = config('TWILIO_ACCOUNT_SID', default='ACa0ab628ce5d93d8fb0eaf92a82d1ec15')
-# TWILIO_AUTH_TOKEN = config('TWILIO_AUTH_TOKEN', default='88ea59d8f5c79066c83137567a7a2c44')
-# TWILIO_PHONE_NUMBER = config('TWILIO_PHONE_NUMBER', default='+2349156244345')
 
+# Twilio settings (get from .env, with dummy defaults for local if not set)
+PHONE_VERIFICATION = {
+    'BACKEND': 'phone_verify.backends.twilio.TwilioBackend',
+    'OPTIONS': {
+        'SID': env('TWILIO_ACCOUNT_SID', default='fake'),
+        'SECRET': env('TWILIO_AUTH_TOKEN', default='fake'),
+        'FROM': env('TWILIO_PHONE_NUMBER', default='+14755292729'),
+        'SANDBOX_TOKEN':'123456' if DEBUG else None, # Use sandbox token only in debug
+    },
+    'TOKEN_LENGTH': 6,
+    'MESSAGE': 'Welcome to {app}! Please use security code {security_code} to proceed.',
+    'APP_NAME': 'Phone Verify',
+    'SECURITY_CODE_EXPIRATION_TIME': 3600,
+    'VERIFY_SECURITY_CODE_ONLY_ONCE': False,
+}
 
-
-
-
-
-
-
-
-# if DEBUG:
-#     #  TESTING SMPT SERVER FOR CONSOLE EMAIL TESTING
-#     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"  # During development only
-
-# else:
-#     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend' # A safe production default. The correct one will be loaded later.
-
-#     #  EMAILBACKENDCONFIG THAT IS SET DYNAMICALLY STABLE FROM DATABASSE and by EmailBackendConfig
-#     EMAIL_BACKEND = 'admin_backend.backends.DatabaseConfiguredEmailBackend' # Set DatabaseConfiguredEmailBackend to use the backend configured from database.
 
 
 
@@ -618,17 +556,17 @@ EMAIL_USE_SSL = True    # Or EMAIL_USE_SSL = False
 
 
 
+
 # Mailgun Configuration (Used if you choose Mailgun in the admin)
 ANYMAIL = {
-    "MAILGUN_API_KEY": os.environ.get("MAILGUN_API_KEY"),
-    "MAILGUN_SENDER_DOMAIN": os.environ.get("MAILGUN_DOMAIN"),
+    "MAILGUN_API_KEY": env("MAILGUN_API_KEY", default=None),
+    "MAILGUN_SENDER_DOMAIN": env("MAILGUN_DOMAIN", default=None),
 }
-
 
 
 # Zoho ZeptoMail Configuration (Used if you choose Zoho in the admin)
-ZOHO_ZEPTOMAIL_API_KEY_TOKEN = 'Send Mail Token'  # Replace with your token
-ZOHO_ZEPTOMAIL_HOSTED_REGION = 'zeptomail.zoho.com'
+ZOHO_ZEPTOMAIL_API_KEY_TOKEN = env('ZOHO_ZEPTOMAIL_API_KEY_TOKEN', default='Send Mail Token')
+ZOHO_ZEPTOMAIL_HOSTED_REGION = env('ZOHO_ZEPTOMAIL_HOSTED_REGION', default='zeptomail.zoho.com')
 
 
 
@@ -638,58 +576,121 @@ ZOHO_ZEPTOMAIL_HOSTED_REGION = 'zeptomail.zoho.com'
 
 
 
+# ####   =======   CELERY CONFIGURATIOIN FOR SIMPLE LOCAL DEV TESTING ===================  ####
 
 
-# swagger settings
-SWAGGER_SETTINGS = {
-    "USE_SESSION_AUTH": True,
-    "relative_paths": False,
-    "DISPLAY_OPERATION_ID": False,
-    "SECURITY_DEFINITIONS": {
-        "Bearer": {"type": "apiKey", "name": "Authorization", "in": "header"},
+# =========================
+# CELERY CONFIGURATION
+# =========================
+
+# Use Redis Cloud (SSL connection) for broker and backend
+# Always prefer `rediss://` for encrypted connection
+CELERY_BROKER_URL = os.getenv(
+    "CELERY_BROKER_URL",
+    "rediss://default:sCGvqYf1qQq6z0LfHDu7uKSz1i51VHgP@redis-16681.c262.us-east-1-3.ec2.redns.redis-cloud.com:16681/0"
+)
+
+CELERY_RESULT_BACKEND = os.getenv(
+    "CELERY_RESULT_BACKEND",
+    "rediss://default:sCGvqYf1qQq6z0LfHDu7uKSz1i51VHgP@redis-16681.c262.us-east-1-3.ec2.redns.redis-cloud.com:16681/0"
+)
+
+# Core settings
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = "Africa/Lagos"
+
+# Task routing & reliability
+CELERY_TASK_TRACK_STARTED = True
+CELERY_ACKS_LATE = True  # ensures tasks aren’t lost if worker crashes
+CELERYD_PREFETCH_MULTIPLIER = 1  # prevent task duplication
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+
+# Retry and connection handling (production safe)
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_BROKER_CONNECTION_TIMEOUT = 30
+CELERY_BROKER_TRANSPORT_OPTIONS = {
+    "visibility_timeout": 3600,         # 1hr task visibility
+    "socket_timeout": 30,               # network read timeout
+    "socket_connect_timeout": 30,       # initial connection timeout
+    "retry_on_timeout": True,
+    "max_connections": 20,              # limit connections
+}
+
+# Beat Scheduler (if you use periodic tasks)
+CELERY_BEAT_SCHEDULE = {
+    # Example: send heartbeat every 10 minutes
+    "system-heartbeat": {
+        "task": "userauths.tasks.system_heartbeat",
+        "schedule": 600.0,  # seconds
     },
 }
 
+# Use Redis Cloud (SSL connection) for broker and backend
+# Always prefer `rediss://` for encrypted connection
+
+# ####   =======   CELERY CONFIGURATIOIN FOR SIMPLE LOCAL DEV TESTING ===================  ####
+
+# =============================================================================
 
 
 
 
-# settings.py
-import os
-from datetime import timedelta
-from decouple import config
-
-# Celery settings
-CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://127.0.0.1:6379/0')
-CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='redis://127.0.0.1:6379/0')
-CELERY_ACCEPT_CONTENT = ['application/json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = 'UTC'  # Or your desired timezone
-CELERY_TASK_DEFAULT_QUEUE = 'default'
-
-# Redis settings
-REDIS_HOST = config('REDIS_HOST', default='127.0.0.1')
-REDIS_PORT = config('REDIS_PORT', default=6379, cast=int)
-REDIS_DB = config('REDIS_DB', default=0, cast=int)
-OTP_EXPIRY_TIME = 300  # OTP expiry time in seconds
-
-# Configure Django's CACHES to use Redis
-CACHES = {
-    'default': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}',
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-        }
-    }
-}
 
 
-import logging.config
-import codecs
-import sys # make sure you have imported sys
 
+# ####   =======   CELERY CONFIGURATIOIN FOR SIMPLE PRODUCTION ===================  ####
+
+# # ======================
+# # Redis + Celery Section
+# # ======================
+
+# # Get Redis URL from environment variable
+# REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/0")
+
+# # Celery settings
+# CELERY_BROKER_URL = env('CELERY_BROKER_URL', default=REDIS_URL)
+# CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND', default=REDIS_URL)
+# CELERY_ACCEPT_CONTENT = ['application/json']
+# CELERY_TASK_SERIALIZER = 'json'
+# CELERY_RESULT_SERIALIZER = 'json'
+# CELERY_TIMEZONE = 'UTC'  # Or your desired timezone
+# CELERY_TASK_DEFAULT_QUEUE = 'default'
+
+# OTP_EXPIRY_TIME = 300  # OTP expiry time in seconds
+
+# # ======================
+# # Redis + Celery Section
+# # ======================
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Logging Configuration
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -705,24 +706,24 @@ LOGGING = {
     },
     'handlers': {
         'console': {
-            'level': 'INFO',
+            'level': 'INFO' if not DEBUG else 'DEBUG', # INFO in production, DEBUG in local
             'class': 'logging.StreamHandler',
             'formatter': 'simple',
-            'stream': sys.stdout # change this value to sys.stdout
+            'stream': sys.stdout
         },
         'file': {
-            'level': 'DEBUG',  # Log everything from debug and above. Change to 'INFO' in production
+            'level': 'INFO' if not DEBUG else 'DEBUG', # INFO in production, DEBUG in local
             'class': 'logging.FileHandler',
             'filename': os.path.join(BASE_DIR, 'application.log'),
             'formatter': 'verbose',
-            'encoding': 'utf-8',  # IMPORTANT - ADD THIS LINE for file based logging.
+            'encoding': 'utf-8',
         },
        'webhook_file': {
-            'level': 'DEBUG',  # Log everything from debug and above. Change to 'INFO' in production
+            'level': 'INFO' if not DEBUG else 'DEBUG', # INFO in production, DEBUG in local
             'class': 'logging.FileHandler',
-            'filename': os.path.join(BASE_DIR, 'webhook.log'),  # Location for webhook logs
+            'filename': os.path.join(BASE_DIR, 'webhook.log'),
             'formatter': 'verbose',
-             'encoding': 'utf-8',  # IMPORTANT - ADD THIS LINE for file based logging.
+            'encoding': 'utf-8',
         },
         'mail_admins': {
           'level': 'ERROR',
@@ -739,22 +740,22 @@ LOGGING = {
     'loggers': {
         'django': {
             'handlers': ['console', 'file', 'mail_admins'],
-            'level': 'INFO',  # Default log level for Django
+            'level': 'INFO',
             'propagate': True,
         },
          'webhook':{
-           'handlers': ['console', 'webhook_file', 'mail_admins'], # Specific logger for webhook
-           'level': 'DEBUG',  # Set webhook log level
-            'propagate': False, # Prevent log messages from being sent to other handlers
+           'handlers': ['console', 'webhook_file', 'mail_admins'],
+           'level': 'INFO' if not DEBUG else 'DEBUG',
+            'propagate': False,
         },
         'paystack':{
-           'handlers': ['console', 'file', 'mail_admins'], # specific logger for paystack
-           'level': 'DEBUG',  # Set webhook log level
+           'handlers': ['console', 'file', 'mail_admins'],
+           'level': 'INFO' if not DEBUG else 'DEBUG',
            'propagate': False,
          },
        'application':{
            'handlers': ['console', 'file', 'mail_admins'],
-           'level': 'DEBUG',
+           'level': 'INFO' if not DEBUG else 'DEBUG',
            'propagate': False,
        }
     },
@@ -772,85 +773,3 @@ LOGGING = {
 
 
 
-
-
-#################################         PRODUCTION PURPOSES SETTINGS PLEASE        ####################################
-
-
-
-
-
-################  LOGGER SETTINGS FOR PRODUCTION ENVIRONMENT INCLUDING PAYSTACK WEBHOOOK URL RPE PRODUCTION   #####################
-
-# Configure Logging
-# # settings.py
-
-#             # 'encoding': 'utf-8' # YOU CAN ADD THIS TO YOUR EXISTING ENCODINGI ---------------------------I WILL USE THIS ONE LATER WHEN I UPDATE MY PTHON VERSIONTO3.9 AND ABOVE
-# LOGGING = {
-#     'version': 1,
-#     'disable_existing_loggers': False,
-#     'formatters': {
-#         'verbose': {
-#             'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
-#             'style': '{',
-#         },
-#         'simple': {
-#             'format': '{levelname} {message}',
-#             'style': '{',
-#         },
-#     },
-#     'handlers': {
-#         'console': {
-#             'class': 'logging.StreamHandler',
-#             'formatter': 'simple', # OR verbose, depending on preference
-#             # 'encoding': 'utf-8' # YOU CAN ADD THIS TO YOUR EXISTING ENCODINGI ---------------------------I WILL USE THIS ONE LATER WHEN I UPDATE MY PTHON VERSIONTO3.9 AND ABOVE
-#         },
-#         'file': {
-#             'level': 'DEBUG',  # Log everything from debug and above. Change to 'INFO' in production
-#             'class': 'logging.FileHandler',
-#             'filename': os.path.join(BASE_DIR, 'application.log'),
-#             'formatter': 'verbose',
-#             'encoding': 'utf-8'  # IMPORTANT - ADD THIS LINE for file based logging.
-#         },
-#        'webhook_file': {
-#             'level': 'DEBUG',  # Log everything from debug and above. Change to 'INFO' in production
-#             'class': 'logging.FileHandler',
-#             'filename': os.path.join(BASE_DIR, 'webhook.log'),  # Location for webhook logs
-#             'formatter': 'verbose',
-#              'encoding': 'utf-8'  # IMPORTANT - ADD THIS LINE for file based logging.
-#         },
-#         'mail_admins': {
-#           'level': 'ERROR',
-#             'class': 'django.utils.log.AdminEmailHandler',
-#             'formatter': 'verbose',
-#             'filters': ['require_debug_false']
-#         }
-#     },
-#     'filters':{
-#         'require_debug_false':{
-#              '()': 'django.utils.log.RequireDebugFalse',
-#         }
-#     },
-#     'loggers': {
-#         'django': {
-#             'handlers': ['console', 'file', 'mail_admins'],
-#             'level': 'INFO',  # Default log level for Django
-#             'propagate': True,
-#         },
-#          'webhook':{
-#            'handlers': ['console', 'webhook_file', 'mail_admins'], # Specific logger for webhook
-#            'level': 'DEBUG',  # Set webhook log level
-#             'propagate': False, # Prevent log messages from being sent to other handlers
-#         },
-#         'paystack':{
-#            'handlers': ['console', 'file', 'mail_admins'], # specific logger for paystack
-#            'level': 'DEBUG',  # Set webhook log level
-#            'propagate': False,
-#          },
-#        'application':{
-#            'handlers': ['console', 'file', 'mail_admins'],
-#            'level': 'DEBUG',
-#            'propagate': False,
-#        }
-#     },
-# }

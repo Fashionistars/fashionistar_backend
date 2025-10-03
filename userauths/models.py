@@ -464,13 +464,14 @@ class Profile(models.Model):
     def __str__(self):
         return str(self.full_name) if self.full_name else self.user.identifying_info # Use identifying_info here    
 
-    from django.contrib.auth.hashers import make_password, check_password
 
     def set_transaction_password(self, password):
+        from django.contrib.auth.hashers import make_password
         self.transaction_password = make_password(password)
         self.save()
 
     def check_transaction_password(self, password):
+        from django.contrib.auth.hashers import  check_password
         return check_password(password, self.transaction_password)
 
     def thumbnail(self):

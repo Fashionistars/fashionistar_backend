@@ -1,0 +1,67 @@
+services:
+  # Django web service
+  - type: web
+    name: fashionistar-backend
+    env: python
+    plan: free
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT"
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: backend.settings
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: CELERY_RESULT_BACKEND
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: "fashionistar-backend.onrender.com"
+
+  # Celery Worker
+  - type: worker
+    name: fashionistar-celery-worker
+    env: python
+    plan: free
+    buildCommand: "./build.sh"
+    startCommand: "celery -A backend worker -l info"
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: backend.settings
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: CELERY_RESULT_BACKEND
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+
+  # Celery Beat (optional, for scheduled tasks)
+  - type: worker
+    name: fashionistar-celery-beat
+    env: python
+    plan: free
+    buildCommand: "./build.sh"
+    startCommand: "celery -A backend beat -l info"
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: backend.settings
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: CELERY_RESULT_BACKEND
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true

@@ -37,6 +37,7 @@ django-phone-verify
 django-phonenumber-field
 django-ratelimit
 django-redis
+django_celery_beat
 django-storages
 django-zoho-zeptomail
 djangorestframework
