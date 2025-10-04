@@ -49,6 +49,8 @@ DEBUG = env.bool("DEBUG", default=True) # Default to True for local, set to Fals
 DJANGO_SECRET_ADMIN_URL=env("DJANGO_SECRET_ADMIN_URL", default="admin/")
 
 # ALLOWED_HOSTS from environment variable, split by comma
+# For production, specify your Render URL and any other hostnames.
+# For local, '127.0.0.1' and 'localhost' are usually sufficient.
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["127.0.0.1", "localhost", "localhost:8000", "localhost:3001"])
 CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=['http://localhost:3000', 'http://localhost:8000'])
 SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
@@ -95,6 +97,7 @@ INSTALLED_APPS = [
     'Blog',
     'Homepage',
     'Paystack_Webhoook_Prod',
+    'utilities',
 
 
     # Third Party Apps
@@ -170,15 +173,13 @@ CHANNEL_LAYERS = {
 }
 
 
-# Get Redis URL from environment variable
-REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/0")
 
 
 # Configure Django's CACHES to use Redis
 CACHES = {
     'default': {
         'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': REDIS_URL,
+        'LOCATION': env("REDIS_URL", default="redis://127.0.0.1:6379/0"), # Get Redis URL from environment variable
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
         }
@@ -188,17 +189,21 @@ CACHES = {
 
 
 # Database
+# For Render production, DATABASE_URL will be set by Render (e.g., PostgreSQL).
 # Use dj_database_url to parse database URL from environment variable
 # Defaults to SQLite for local development if DATABASE_URL is not set in .env
 DATABASES = {
     'default': dj_database_url.config(
         default=env("DATABASE_URL", default='sqlite:///db.sqlite3'),
         conn_max_age=600,
+        ssl_require=False # Set to True if your DB requires SSL (e.g., some PostgreSQL on Heroku/Render)
+                          # Render's managed PostgreSQL typically handles SSL automatically.
     )
 }
 
-# Add SQLite timeout option only if using SQLite
-if DATABASES['default']['ENGINE'] == 'django.db.backends.sqlite3':
+
+# Add SQLite timeout option only if using SQLite (and not explicitly using a different DB)
+if 'sqlite' in DATABASES['default']['ENGINE'] and not env('DATABASE_URL', default='').startswith('postgres'):
     DATABASES['default']['OPTIONS'] = {'timeout': 20}
 
 
@@ -229,7 +234,8 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+# Consider 'Africa/Lagos' if that's your primary timezone for consistency with Celery
+TIME_ZONE = "Africa/Lagos"   # Can be 'Africa/Lagos' or 'UTC'
 
 USE_I18N = True
 
@@ -275,7 +281,7 @@ STORAGES = {
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField' # Keep this as BigAutoField for new projects
 
 AUTH_USER_MODEL = 'userauths.User'
 
@@ -498,7 +504,12 @@ JAZZMIN_UI_TWEAKS = {
 
 
 
-DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
+
+# The default for `DEFAULT_AUTO_FIELD` was changed back to `BigAutoField` above.
+# If you explicitly need `AutoField` for existing apps, keep this line.
+# Otherwise, relying on `BigAutoField` is generally better for new models.
+# DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
+
 
 PHONENUMBER_DB_FORMAT = "INTERNATIONAL"
 
@@ -576,32 +587,31 @@ ZOHO_ZEPTOMAIL_HOSTED_REGION = env('ZOHO_ZEPTOMAIL_HOSTED_REGION', default='zept
 
 
 
-# ####   =======   CELERY CONFIGURATIOIN FOR SIMPLE LOCAL DEV TESTING ===================  ####
+#                       =========================
+# ----------------------CELERY CONFIGURATION BEGINNING ------------------------------
+#                       =========================
 
-
-# =========================
-# CELERY CONFIGURATION
-# =========================
 
 # Use Redis Cloud (SSL connection) for broker and backend
 # Always prefer `rediss://` for encrypted connection
-CELERY_BROKER_URL = os.getenv(
-    "CELERY_BROKER_URL",
-    "rediss://default:sCGvqYf1qQq6z0LfHDu7uKSz1i51VHgP@redis-16681.c262.us-east-1-3.ec2.redns.redis-cloud.com:16681/0"
-)
+# Ensure REDIS_URL, CELERY_BROKER_URL, CELERY_RESULT_BACKEND are set in Render environment variables
 
-CELERY_RESULT_BACKEND = os.getenv(
-    "CELERY_RESULT_BACKEND",
-    "rediss://default:sCGvqYf1qQq6z0LfHDu7uKSz1i51VHgP@redis-16681.c262.us-east-1-3.ec2.redns.redis-cloud.com:16681/0"
-)
+# Get Redis URL from environment variable
+REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/0")
+
+# Celery settings
+CELERY_BROKER_URL = env('CELERY_BROKER_URL', default=REDIS_URL)
+CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND', default=REDIS_URL)
+
 
 # Core settings
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
-CELERY_TIMEZONE = "Africa/Lagos"
+CELERY_TIMEZONE = "Africa/Lagos"   # Can be 'Africa/Lagos' or 'UTC'
 
 # Task routing & reliability
+CELERY_TASK_DEFAULT_QUEUE = 'default'
 CELERY_TASK_TRACK_STARTED = True
 CELERY_ACKS_LATE = True  # ensures tasks aren’t lost if worker crashes
 CELERYD_PREFETCH_MULTIPLIER = 1  # prevent task duplication
@@ -616,81 +626,37 @@ CELERY_BROKER_TRANSPORT_OPTIONS = {
     "socket_connect_timeout": 30,       # initial connection timeout
     "retry_on_timeout": True,
     "max_connections": 20,              # limit connections
+    "ssl_cert_reqs": None, # Important for rediss schemes if not using full cert validation
 }
+
+
+
 
 # Beat Scheduler (if you use periodic tasks)
+# If using `django_celery_beat`, schedule via Admin UI, not hardcoded here.
+# For simple schedule:
+
 CELERY_BEAT_SCHEDULE = {
     # Example: send heartbeat every 10 minutes
-    "system-heartbeat": {
-        "task": "userauths.tasks.system_heartbeat",
-        "schedule": 600.0,  # seconds
-    },
+    # "system-heartbeat": {
+    #     "task": "userauths.tasks.system_heartbeat",
+    #     "schedule": 600.0,  # seconds
+    # },
 }
 
-# Use Redis Cloud (SSL connection) for broker and backend
-# Always prefer `rediss://` for encrypted connection
-
-# ####   =======   CELERY CONFIGURATIOIN FOR SIMPLE LOCAL DEV TESTING ===================  ####
-
-# =============================================================================
 
 
 
-
-
-
-
-# ####   =======   CELERY CONFIGURATIOIN FOR SIMPLE PRODUCTION ===================  ####
-
-# # ======================
-# # Redis + Celery Section
-# # ======================
-
-# # Get Redis URL from environment variable
-# REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/0")
-
-# # Celery settings
-# CELERY_BROKER_URL = env('CELERY_BROKER_URL', default=REDIS_URL)
-# CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND', default=REDIS_URL)
-# CELERY_ACCEPT_CONTENT = ['application/json']
-# CELERY_TASK_SERIALIZER = 'json'
-# CELERY_RESULT_SERIALIZER = 'json'
-# CELERY_TIMEZONE = 'UTC'  # Or your desired timezone
-# CELERY_TASK_DEFAULT_QUEUE = 'default'
-
-# OTP_EXPIRY_TIME = 300  # OTP expiry time in seconds
-
-# # ======================
-# # Redis + Celery Section
-# # ======================
+#                       =========================
+# ----------------------CELERY CONFIGURATION ENDS HERE ------------------------------
+#                       =========================
 
 
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Logging Configuration
+# Logging Configuration (already optimized for DEBUG / production)
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,

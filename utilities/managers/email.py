@@ -1,3 +1,4 @@
+# utilities/managers/email
 import logging
 import os
 import time
@@ -14,7 +15,11 @@ Logger = logging.getLogger('application')
 class EmailManagerError(Exception):
     """Raise an exception if an error occurs in the email manager"""
 
+
 class EmailManager:
+    """
+    Manages the sending of emails, including handling template rendering and attachments.
+    """
     max_attempts = 3  # retry logic
 
     @classmethod
@@ -29,7 +34,21 @@ class EmailManager:
         fail_silently: bool = False
     ) -> None:
         """
-        Send email to valid email addresses immediately.
+        Sends email to valid email addresses immediately.
+
+        Args:
+            subject (str): The subject of the email.
+            recipients (List[str]): A list of recipient email addresses.
+            context (Optional[dict[str, Any]]): A dictionary of context data for rendering the email template.
+            template_name (Optional[str]): The path to the HTML email template.
+            message (Optional[str]): A plain text email message if not using a template.
+            attachments (Optional[List[tuple]]): A list of tuples containing attachment filename, content, and mimetype.
+            fail_silently (bool): Whether to suppress exceptions.
+
+        Raises:
+            EmailManagerError: If context and template_name are not both set, or if neither context/template_name nor message is set.
+            TemplateDoesNotExist: If the specified template does not exist.
+            Exception: If an error occurs during email sending.
         """
         if (context and template_name is None) or (template_name and context is None):
             raise EmailManagerError(
@@ -77,12 +96,3 @@ class EmailManager:
         except Exception as error:
             Logger.error(f"Error sending email to {recipients}: {error}", exc_info=True)
             raise
-
-
-
-
-
-
-
-
-
