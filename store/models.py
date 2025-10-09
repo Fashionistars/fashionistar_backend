@@ -235,7 +235,7 @@ class Product(models.Model):
         if not self.slug or self.slug == "":
             uuid_key = shortuuid.uuid()
             uniqueid = uuid_key[:4]
-            self.slug = slugify(self.title, lowercase=True) + "-" + str(uniqueid.lower())
+            self.slug = slugify(self.title) + "-" + str(uniqueid.lower())
 
         if self.stock_qty > 0:
             self.in_stock = True
@@ -264,27 +264,6 @@ class Product(models.Model):
             super(Product, self).save(update_fields=['rating'])
 
   
-    # def save(self, *args, **kwargs):
-    #     if self.slug == "" or self.slug is None:
-    #         uuid_key = shortuuid.uuid()
-    #         uniqueid = uuid_key[:4]
-    #         self.slug = slugify(self.title, lowercase=True) + "-" + str(uniqueid.lower())
-        
-    #     if self.stock_qty is not None:
-    #         if self.stock_qty == 0:
-    #             self.in_stock = False
-                
-    #         if self.stock_qty > 0:
-    #             self.in_stock = True
-    #     else:
-    #         self.stock_qty = 0
-    #         self.in_stock = False
-        
-    #     self.rating = self.product_rating()
-    #     self.total_price = self.price + self.shipping_amount  # Assuming price and shipping_amount are set
-            
-    #     super(Product, self).save(*args, **kwargs) 
-
   
     def get_absolute_url(self):
         return reverse("vendor:vendor-product-details", kwargs={"slug": self.slug}) # Adjusted namespace

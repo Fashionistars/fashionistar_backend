@@ -12,11 +12,17 @@ from vendor.Views import product_update as product_update # TESTING
 from vendor.Views import product_delete as product_delete # TESTING
 
 
+from vendor.Views import dashboard # TESTING
 
 
 
 # +++++++++++++++    TESTING NEW PRODUCTS FORM PARSER CLASSES  WITH NEW ENDPOINTS
 urlpatterns = [
+
+
+    # VENDOR DASHBOARD URLS
+    path('new-vendor/dashboard/stats/', dashboard.DashboardStatsAPIView.as_view(), name='vendor-dashboard-stats'), 
+
 
     # # VENDOR PRODUCT MANAGEMENT URLS
     # path('vendor/productcreate', product_views.ProductCreateView.as_view(), name='vendor-product-create'),
