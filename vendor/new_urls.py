@@ -13,6 +13,7 @@ from vendor.Views import product_delete as product_delete # TESTING
 
 
 from vendor.Views import dashboard # TESTING
+from vendor.Views import chart_dashboard # TESTING
 
 
 
@@ -22,6 +23,8 @@ urlpatterns = [
 
     # VENDOR DASHBOARD URLS
     path('new-vendor/dashboard/stats/', dashboard.DashboardStatsAPIView.as_view(), name='vendor-dashboard-stats'), 
+    path('new-vendor/dashboard/charts/total-orders/', chart_dashboard.TotalOrdersChartAPIView.as_view(), name='vendor-chart-total-orders'), # <-- ADD THIS LINE
+    path('new-vendor/dashboard/charts/revenue-analytics/', chart_dashboard.RevenueAnalyticsChartAPIView.as_view(), name='vendor-chart-revenue-analytics'), 
 
 
     # # VENDOR PRODUCT MANAGEMENT URLS
