@@ -36,6 +36,7 @@ urlpatterns = [
 
    #  VENDORS   /  SHOP   /  SELLER 
    path("", include("vendor.urls")),
+   path("", include("vendor.new_urls")),  ######  NEW URLS
 
    #  CLIENTS   /  CUSTOMER   /  USER 
    path("", include("customer.urls")),

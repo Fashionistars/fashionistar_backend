@@ -670,7 +670,8 @@ class ProductCreateView(generics.CreateAPIView):
     """
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
-    permission_classes = [IsAuthenticated,]
+    permission_classes = [AllowAny,]
+    # parser_classes = [MultiPartParser, FormParser]
 
     @transaction.atomic
     def create(self, request, *args, **kwargs):

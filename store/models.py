@@ -123,22 +123,26 @@ class Product(models.Model):
     A model that handles the title, images, product details, etc.
     """
     # id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, help_text="Unique ID for the product (UUID)")
-    pid = ShortUUIDField(unique=True, length=10, max_length=20, alphabet="abcdefghijklmnopqrstuvxyz", help_text="Short product ID (unique)") #The Short Id for the product
+    pid = ShortUUIDField(unique=True, length=12, max_length=20, alphabet="abcdefghijklmnopqrstuvxyz", help_text="Short product ID (unique)") #The Short Id for the product
     sku = ShortUUIDField(unique=True, length=6, max_length=50, prefix="SKU", alphabet="1234567890", help_text="Stock Keeping Unit")
     vendor = models.ForeignKey("vendor.Vendor", on_delete=models.CASCADE, null=False, blank=False, related_name="vendor_product_set", help_text="Vendor of the product", db_index=True)  # Index vendor
     category = models.ManyToManyField('admin_backend.Category', related_name="product_category", help_text="Categories to which the product belongs")
     title = models.CharField(max_length=100, help_text="Product title", verbose_name="Product Name", db_index=True)  # Index title
     image = models.FileField(upload_to=user_directory_path, blank=True, null=True, default="product.jpg", help_text="Product image")
     description = models.TextField(null=True, blank=True, help_text="Product description")
+
     tags = models.CharField(max_length=1000, null=True, blank=True, help_text="Product tags (comma-separated)")
     brand = models.CharField(max_length=100, null=True, blank=True, help_text="Product brand")
-    old_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, null=True, blank=True, help_text="Original price of the product")
-    price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, null=True, blank=True, db_index=True, help_text="Selling price of the product")    # Index price
-    shipping_amount = models.DecimalField(max_digits=12, decimal_places=2,default=1000.00, help_text="Default shipping amount")
-    total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="'price' + #1,000 'for default shipping_amount' ", null=True, blank=True)
-    stock_qty = models.PositiveIntegerField(default=0, help_text="Available stock quantity")
+
+    old_price = models.DecimalField(max_digits=12, decimal_places=2, default='0.00', null=True, blank=True, help_text="Original price of the product")
+    price = models.DecimalField(max_digits=12, decimal_places=2, default='0.00', null=True, blank=True, db_index=True, help_text="Selling price of the product")    # Index price
+    shipping_amount = models.DecimalField(max_digits=12, decimal_places=2, editable=False, default='1000.00', help_text="Default shipping amount")
+    total_price = models.DecimalField(max_digits=12, decimal_places=2, default='0.00', help_text="'price' + #1,000 'for default shipping_amount' ", null=True, blank=True)
+
+    stock_qty = models.PositiveIntegerField(default=1, help_text="Available stock quantity")
     in_stock = models.BooleanField(default=True, help_text="Is the product in stock?")
-    status = models.CharField(choices=STATUS, max_length=50, default="published", null=True, blank=True, help_text="Product status", db_index=True)  # Index status
+
+    status = models.CharField(choices=STATUS, max_length=50, default="published", help_text="""Product status eg. Draft, Disabled, Review, Published""", db_index=True)  # Index status
     featured = models.BooleanField(default=False, db_index=True, help_text="Is the product featured?")  # Index featured
     hot_deal = models.BooleanField(default=False, help_text="Is the product a hot deal?")
     special_offer = models.BooleanField(default=False, help_text="Is the product on special offer?")
@@ -178,7 +182,7 @@ class Product(models.Model):
     
     # Returns the count of products in the same category as this product
     def category_count(self):
-        return Product.objects.filter(category__in=self.category.all()).count() #####Changed to self.category.all() to ensure it works with ManyToManyField.
+        return Product.objects.filter(category__in=self.category.all()).count() or 0 #####Changed to self.category.all() to ensure it works with ManyToManyField.
     
     # Calculates the discount percentage between old and new prices
     def get_precentage(self):
@@ -195,12 +199,12 @@ class Product(models.Model):
     # Returns the count of ratings for the product
     def rating_count(self):
         rating_count = Review.objects.filter(product=self).count()
-        return rating_count
+        return rating_count or 0
     
     # Returns the count of orders for the product with "paid" payment status
     def order_count(self):
         order_count = CartOrderItem.objects.filter(product=self, order__payment_status="paid").count()
-        return order_count
+        return order_count or 0
 
     # Returns the gallery images linked to this product
     def gallery(self):
@@ -223,37 +227,71 @@ class Product(models.Model):
         frequently_bought_together_products = Product.objects.filter(
             order_item__order__in=CartOrder.objects.filter(orderitem__product=self)
         ).exclude(id=self.id).annotate(count=models.Count('id')).order_by('-count')[:3]
-        return frequently_bought_together_products
+        return frequently_bought_together_products or []
     
     # Custom save method to generate a slug if it's empty, update in_stock, and calculate the product rating
     def save(self, *args, **kwargs):
-        if self.slug == "" or self.slug is None:
+        # First, generate the slug and set stock status
+        if not self.slug or self.slug == "":
             uuid_key = shortuuid.uuid()
             uniqueid = uuid_key[:4]
             self.slug = slugify(self.title, lowercase=True) + "-" + str(uniqueid.lower())
-        
-        if self.stock_qty is not None:
-            if self.stock_qty == 0:
-                self.in_stock = False
-                
-            if self.stock_qty > 0:
-                self.in_stock = True
+
+        if self.stock_qty > 0:
+            self.in_stock = True
         else:
-            self.stock_qty = 0
             self.in_stock = False
+            self.stock_qty = 0
+
+        # Calculate total price
+        from decimal import Decimal
+        # Explicitly convert both values to Decimal before adding
+
+        if self.price and self.shipping_amount:
+            self.total_price = Decimal(self.price or Decimal('0.00')) + Decimal(self.shipping_amount) # Ensure price is a Decimal, default to 0 if it's None or empty
+
+        # Check if the instance is being created for the first time
+        is_new = self._state.adding
         
-        self.rating = self.product_rating()
-        self.total_price = self.price + self.shipping_amount  # Assuming price and shipping_amount are set
+        # Save the instance to the database. This is crucial before querying related models.
+        super(Product, self).save(*args, **kwargs)
+
+        # Now that the product is saved, calculate the rating and save again if it's a new product.
+        # This check prevents infinite loops on subsequent saves.
+        if is_new:
+            self.rating = self.product_rating()
+            # We save again, but only update the rating field to be efficient
+            super(Product, self).save(update_fields=['rating'])
+
+  
+    # def save(self, *args, **kwargs):
+    #     if self.slug == "" or self.slug is None:
+    #         uuid_key = shortuuid.uuid()
+    #         uniqueid = uuid_key[:4]
+    #         self.slug = slugify(self.title, lowercase=True) + "-" + str(uniqueid.lower())
+        
+    #     if self.stock_qty is not None:
+    #         if self.stock_qty == 0:
+    #             self.in_stock = False
+                
+    #         if self.stock_qty > 0:
+    #             self.in_stock = True
+    #     else:
+    #         self.stock_qty = 0
+    #         self.in_stock = False
+        
+    #     self.rating = self.product_rating()
+    #     self.total_price = self.price + self.shipping_amount  # Assuming price and shipping_amount are set
             
-        super(Product, self).save(*args, **kwargs) 
+    #     super(Product, self).save(*args, **kwargs) 
 
+  
     def get_absolute_url(self):
-        return reverse("api:product-detail", kwargs={"slug": self.slug})
-
+        return reverse("vendor:vendor-product-details", kwargs={"slug": self.slug}) # Adjusted namespace
 
 # Model for Product Gallery
 class Gallery(models.Model):
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True, db_index=True)  # Index product
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True, db_index=True, related_name='product_gallery') # Changed related_name
     image = models.FileField(upload_to=user_directory_path, null=True,blank=True, default="gallery.jpg")
     active = models.BooleanField(default=True)
     date = models.DateTimeField(auto_now_add=True)
@@ -267,11 +305,11 @@ class Gallery(models.Model):
         ]
 
     def __str__(self):
-        return "Image"
+        return f"Gallery Image for {self.product.title if self.product else 'N/A'}"
 
 # Model for Product Specifications
 class Specification(models.Model):
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True, db_index=True)  # Index product
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True, db_index=True, related_name='product_specification') # Changed related_name
     title = models.CharField(max_length=100, blank=True, null=True, help_text="Made In")
     content = models.CharField(max_length=1000, blank=True, null=True, help_text="Country/HandMade")
 
@@ -279,21 +317,25 @@ class Specification(models.Model):
         indexes = [
             models.Index(fields=['product'], name='specification_product_idx'),
         ]
+    def __str__(self):
+        return f"{self.title}: {self.content}"
 
 # Model for Product Sizes
 class Size(models.Model):
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True, db_index=True)  # Index product
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True, db_index=True, related_name='product_size') # Changed related_name
     name = models.CharField(max_length=100, blank=True, null=True, help_text="M   XL   XXL   XXXL")
-    price = models.DecimalField(default=0.00, decimal_places=2, max_digits=12, help_text="$21.99")
+    price = models.DecimalField(default='0.00', decimal_places=2, max_digits=12, help_text="$21.99")
 
     class Meta:
         indexes = [
             models.Index(fields=['product'], name='size_product_idx'),
         ]
+    def __str__(self):
+        return f"{self.name} for {self.product.title if self.product else 'N/A'}"
 
 # Model for Product Colors
 class Color(models.Model):
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True, db_index=True)  # Index product
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True, db_index=True, related_name='product_color') # Changed related_name
     name = models.CharField(max_length=100, blank=True, null=True, help_text="Green Blue Red black White Grey Orange")
     color_code = models.CharField(max_length=100, blank=True, null=True)
     image = models.FileField(upload_to=user_directory_path, blank=True, null=True)
@@ -302,8 +344,10 @@ class Color(models.Model):
         indexes = [
             models.Index(fields=['product'], name='color_product_idx'),
         ]
+    def __str__(self):
+        return f"{self.name} for {self.product.title if self.product else 'N/A'}"
 
-# Model for Product FAQs
+
 class ProductFaq(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
     pid = ShortUUIDField(unique=True, length=10, max_length=20, alphabet="abcdefghijklmnopqrstuvxyz")
@@ -330,17 +374,17 @@ class CartOrder(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     vendor = models.ManyToManyField("vendor.Vendor", related_name="cartorder_vendor", help_text="Vendors associated with the cart order")
     buyer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="buyer", blank=True, help_text="Buyer associated with the cart order", db_index=True)  # Index buyer
-    sub_total = models.DecimalField(default=0.00, max_digits=12, decimal_places=2, help_text="Subtotal of the cart order")
-    shipping_amount = models.DecimalField(default=0.00, max_digits=12, decimal_places=2, help_text="Shipping amount for the cart order")
-    service_fee = models.DecimalField(default=0.00, max_digits=12, decimal_places=2, help_text="Service fee charged for the cart order")
-    total = models.DecimalField(default=0.00, max_digits=12, decimal_places=2, help_text="Total amount for the cart order")
+    sub_total = models.DecimalField(default='0.00', max_digits=12, decimal_places=2, help_text="Subtotal of the cart order")
+    shipping_amount = models.DecimalField(default='0.00', max_digits=12, decimal_places=2, help_text="Shipping amount for the cart order")
+    service_fee = models.DecimalField(default='0.00', max_digits=12, decimal_places=2, help_text="Service fee charged for the cart order")
+    total = models.DecimalField(default='0.00', max_digits=12, decimal_places=2, help_text="Total amount for the cart order")
    
     payment_status = models.CharField(max_length=100, choices=PAYMENT_STATUS, default="initiated", help_text="Payment status of the cart order", db_index=True)  # Index payment_status
 
     order_status = models.CharField(max_length=100, choices=ORDER_STATUS, default="Pending", help_text="Order status of the cart order")
 
-    initial_total = models.DecimalField(default=0.00, max_digits=12, decimal_places=2, help_text="Original total before discounts")
-    saved = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, null=True, blank=True, help_text="Amount saved by customer")
+    initial_total = models.DecimalField(default='0.00', max_digits=12, decimal_places=2, help_text="Original total before discounts")
+    saved = models.DecimalField(max_digits=12, decimal_places=2, default='0.00', null=True, blank=True, help_text="Amount saved by customer")
     full_name = models.CharField(max_length=1000, help_text="Full name of the customer")
     email = models.CharField(max_length=1000, help_text="Email address of the customer")
     mobile = models.CharField(max_length=1000, help_text="Mobile number of the customer")
@@ -388,17 +432,17 @@ class CartOrderItem(models.Model):
     qty = models.IntegerField(default=0, help_text="Quantity of the product in the order item")
     color = models.CharField(max_length=100, null=True, blank=True, help_text="Color of the product in the order item")
     size = models.CharField(max_length=100, null=True, blank=True, help_text="Size of the product in the order item")
-    price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="Price of the product in the order item", db_index=True)  # Index proce
-    sub_total = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="Total of Product price * Product Qty")
-    shipping_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="Estimated Shipping Fee = shipping_fee * total")
-    service_fee = models.DecimalField(default=0.00, max_digits=12, decimal_places=2, help_text="Estimated Service Fee = service_fee * total (paid by buyer to platform)")
-    total = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="Grand Total of all amounts listed above")
+    price = models.DecimalField(max_digits=12, decimal_places=2, default='0.00', help_text="Price of the product in the order item", db_index=True)  # Index proce
+    sub_total = models.DecimalField(max_digits=12, decimal_places=2, default='0.00', help_text="Total of Product price * Product Qty")
+    shipping_amount = models.DecimalField(max_digits=12, decimal_places=2, default='0.00', help_text="Estimated Shipping Fee = shipping_fee * total")
+    service_fee = models.DecimalField(default='0.00', max_digits=12, decimal_places=2, help_text="Estimated Service Fee = service_fee * total (paid by buyer to platform)")
+    total = models.DecimalField(max_digits=12, decimal_places=2, default='0.00', help_text="Grand Total of all amounts listed above")
     
     expected_delivery_date_from = models.DateField(auto_now_add=False, null=True, blank=True, help_text="Expected delivery date from")
     expected_delivery_date_to = models.DateField(auto_now_add=False, null=True, blank=True, help_text="Expected delivery date to")
     
-    initial_total = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="Grand Total of all amounts listed above before discount")
-    saved = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, null=True, blank=True, help_text="Amount saved by customer")
+    initial_total = models.DecimalField(max_digits=12, decimal_places=2, default='0.00', help_text="Grand Total of all amounts listed above before discount")
+    saved = models.DecimalField(max_digits=12, decimal_places=2, default='0.00', null=True, blank=True, help_text="Amount saved by customer")
     
     order_placed = models.BooleanField(default=False, help_text="Whether the order has been placed")
     processing_order = models.BooleanField(default=False, help_text="Whether the order is being processed")

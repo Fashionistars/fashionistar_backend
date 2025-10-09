@@ -61,8 +61,8 @@ class ColorSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-from cloudinary.uploader import upload
-from cloudinary.utils import cloudinary_url
+# from cloudinary.uploader import upload
+# from cloudinary.utils import cloudinary_url
 
 
 # Define a serializer for the Product model

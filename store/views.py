@@ -51,26 +51,8 @@ class FeaturedProductListView(generics.ListAPIView):
     queryset = Product.objects.filter(status="published", featured=True)[:3]
     permission_classes = (AllowAny,)
 
-class ProductListView(generics.ListAPIView):
-    serializer_class = ProductSerializer
-    queryset = Product.objects.filter(status="published")
-    permission_classes = (AllowAny,)
 
-class ProductDetailView(generics.RetrieveAPIView):
-    """Display product details """
-    serializer_class = ProductSerializer
-    permission_classes = [AllowAny,]
 
-    def get_object(self):
-        # Retrieve the product using the provided slug from the URL
-        slug = self.kwargs.get('slug')
-        product = Product.objects.get(slug=slug)
-        return product
-
-    def get(self, request, *args, **kwargs):
-        product = self.get_object()
-        serializer = self.get_serializer(product)
-        return Response(serializer.data, status=status.HTTP_200_OK)    
  
 
 

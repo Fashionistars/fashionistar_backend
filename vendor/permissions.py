@@ -1,4 +1,7 @@
+# vendor/permissions.py
+
 from rest_framework import permissions
+from .models import Vendor
 import logging
 
 # Get logger for application
@@ -6,72 +9,62 @@ application_logger = logging.getLogger('application')
 
 class IsVendor(permissions.BasePermission):
     """
-    Allows access only to vendors.
+    Allows view-level access only to users with the 'vendor' role.
+    Used for actions like creating a new product where no object exists yet.
     """
+    message = "You do not have permission to perform this action as you are not a vendor."
 
     def has_permission(self, request, view):
-        """
-        Check if the user is a vendor.
-        """
         return bool(request.user and request.user.is_authenticated and request.user.role == 'vendor')
-
-
-class VendorIsOwner(permissions.BasePermission):
-    """
-    Allows access only to vendors who own the object.
-    """
-
-    def has_object_permission(self, request, view, obj):
-        """
-        Check if the vendor owns the object.
-        """
-        if not request.user.is_authenticated or request.user.role != 'vendor':
-            return False
-
-        try:
-            vendor = request.user.vendor_profile # Assuming a OneToOneField named vendor_profile exists
-        except Vendor.DoesNotExist:
-            application_logger.error(f"No vendor profile found for user: {request.user.email}")
-            return False
-
-        # Ownership check based on vendor foreign key
-        if hasattr(obj, 'vendor'):
-            return obj.vendor == vendor
-        
-        # Ownership check based on user foreign key and vendor
-        if hasattr(obj, 'user'):
-            return obj.user == vendor.user # Check if the obj.user is the same as the vendor's user
-        
-        application_logger.warning(f"Object {obj} does not have 'vendor' or 'user' attribute for ownership check.")
-        return False
-
 
 class IsClient(permissions.BasePermission):
     """
-    Allows access only to clients.
+    Allows view-level access only to users with the 'client' role.
     """
+    message = "You do not have permission to perform this action as you are not a client."
 
     def has_permission(self, request, view):
-        """
-        Check if the user is a client.
-        """
         return bool(request.user and request.user.is_authenticated and request.user.role == 'client')
 
-
-class ClientIsOwner(permissions.BasePermission):
+class IsOwner(permissions.BasePermission):
     """
-    Allows access only to clients who own the object.
+    A unified object-level permission to only allow owners of an object to access it.
+    This class intelligently checks for ownership based on the user's role (vendor or client).
     """
+    message = "You do not have permission to access this object as you are not the owner."
 
     def has_object_permission(self, request, view, obj):
-        """
-        Check if the client owns the object.
-        """
-        if not request.user.is_authenticated or request.user.role != 'client':
+        # The user must be authenticated.
+        if not request.user or not request.user.is_authenticated:
             return False
 
-        if hasattr(obj, 'user'):
-            return obj.user == request.user
-        
-        application_logger.warning(f"Object {obj} does not have 'user' attribute.")
+        # --- Vendor Ownership Logic ---
+        if request.user.role == 'vendor':
+            try:
+                # Get the vendor profile associated with the requesting user.
+                vendor = request.user.vendor_profile
+            except Vendor.DoesNotExist:
+                application_logger.error(f"Permission check failed: No vendor profile found for user: {request.user.email}")
+                return False
+
+            # Check 1: The object has a direct 'vendor' foreign key (e.g., Product, Coupon).
+            if hasattr(obj, 'vendor'):
+                return obj.vendor == vendor
+
+            # Check 2: The object has a 'user' foreign key that belongs to the vendor (e.g., Profile).
+            if hasattr(obj, 'user'):
+                return obj.user == vendor.user
+
+            application_logger.warning(f"IsOwner check failed for vendor {vendor.name}: Object {obj} has no 'vendor' or 'user' attribute for ownership check.")
+            return False
+
+        # --- Client Ownership Logic ---
+        elif request.user.role == 'client':
+            # Check: The object has a 'user' foreign key matching the requesting client.
+            if hasattr(obj, 'user'):
+                return obj.user == request.user
+
+            application_logger.warning(f"IsOwner check failed for client {request.user.email}: Object {obj} has no 'user' attribute for ownership check.")
+            return False
+            
         return False

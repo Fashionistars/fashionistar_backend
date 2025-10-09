@@ -1,3 +1,5 @@
+# Homepage/product.py
+
 from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -8,7 +10,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
 
 from store.models import Product
-from store.serializers import ProductSerializer
+from Homepage.serializers import ProductListDetailSerializer
 
 # Get logger for application
 application_logger = logging.getLogger('application')
@@ -50,7 +52,7 @@ class ProductListView(generics.ListAPIView):
                    Possible Error Messages:
                     * "An error occurred, please check your input or contact support. {e}": if any error occurs during the request process.
     """
-    serializer_class = ProductSerializer
+    serializer_class = ProductListDetailSerializer
     permission_classes = (AllowAny,)
     queryset = Product.objects.filter(status="published")
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -112,7 +114,7 @@ class ProductDetailView(generics.RetrieveAPIView):
                     *  "Product not found": If product with slug does not exist.
                    * "An error occurred, please check your input or contact support. {e}": if any error occurs during the request process.
     """
-    serializer_class = ProductSerializer
+    serializer_class = ProductListDetailSerializer
     permission_classes = (AllowAny,)
     queryset = Product.objects.all()
     lookup_field = 'slug'

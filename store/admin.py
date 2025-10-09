@@ -41,13 +41,15 @@ class ProductAdminForm(forms.ModelForm):
         model = Product
         fields = '__all__'
 
-    vendor = forms.ModelChoiceField(queryset=Vendor.objects.filter(user__is_staff=True))
+    # vendor = forms.ModelChoiceField(queryset=Vendor.objects.filter(user__is_staff=True))
+    vendor = forms.ModelChoiceField(queryset=Vendor.objects.all())
+    
 
 class ProductAdmin(ImportExportModelAdmin):
     inlines = [ProductImagesAdmin, SpecificationAdmin, ColorAdmin, SizeAdmin]
     search_fields = ['title', 'price', 'slug']
     list_filter = ['featured', 'status', 'in_stock',  'vendor']
-    list_editable = [ 'price', 'featured', 'status', 'hot_deal', 'special_offer']
+    list_editable = ['featured', 'status', 'hot_deal', 'special_offer']
     list_display = ['product_image', 'title',   'price', 'featured', 'shipping_amount', 'in_stock' ,'stock_qty', 'order_count', 'vendor' ,'status', 'featured', 'special_offer' ,'hot_deal']
     actions = [make_published, make_in_review, make_featured]
     list_per_page = 100

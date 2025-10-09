@@ -122,13 +122,13 @@ class CategoryViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
-        created_instance = Category.objects.get(title=serializer.validated_data['title'])
+        created_instance = Category.objects.get(name=serializer.validated_data['name'])
     
         # Serialize the full instance
         full_serializer = self.get_serializer(created_instance)
         data = {
         'id': created_instance.id,
-        'title': created_instance.title,
+        'name': created_instance.name,
         'image': created_instance.image.url if created_instance.image else None,
         'slug': created_instance.slug,
         # 'createdAt': created_instance.createdAt,

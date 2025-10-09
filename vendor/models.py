@@ -1,6 +1,7 @@
 from django.db import models
 from shortuuid.django_fields import ShortUUIDField
 from django.utils.html import mark_safe
+from Paystack_Webhoook_Prod.models import WalletTransaction
 from userauths.models import User, user_directory_path
 from django.utils.text import slugify
 import shortuuid

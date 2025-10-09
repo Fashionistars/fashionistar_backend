@@ -21,7 +21,7 @@ class Category(models.Model):
         db_index=True
     )
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=100, unique=True, blank=True, null=True, db_index=True)
+    name = models.CharField(max_length=100, unique=True, db_index=True)
     image = models.ImageField(upload_to='category_images/', default="category.jpg", null=True, blank=True)
     active = models.BooleanField(default=True)
     slug = models.SlugField(unique=True, blank=True, null=True, db_index=True)
@@ -43,7 +43,7 @@ class Category(models.Model):
         return mark_safe(f'<img src="{self.image.url}" width="50" height="50" style="object-fit:cover; border-radius: 6px;" />') if self.image else "No Image"
 
     def __str__(self):
-        return self.name
+        return self.name  or ""
 
     def product_count(self):
         from store.models import Product

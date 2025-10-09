@@ -1,7 +1,6 @@
 from django.db import models
 import uuid
 from userauths.models import User
-from vendor.models import Vendor
 from django.utils.translation import gettext_lazy as _
 from django.core.exceptions import ValidationError
 import logging
@@ -28,7 +27,7 @@ class Transaction(models.Model):
     )
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='user_transactions')
-    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, null=True, blank=True, related_name='vendor_transactions')
+    vendor = models.ForeignKey("vendor.Vendor", on_delete=models.CASCADE, null=True, blank=True, related_name='vendor_transactions')
 
 
     amount = models.DecimalField(max_digits=100, decimal_places=2)
@@ -77,7 +76,7 @@ class Transaction(models.Model):
 class BankAccountDetails(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='user_bank_details')
-    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, null=True, blank=True, related_name='vendor_bank_details')
+    vendor = models.ForeignKey("vendor.Vendor", on_delete=models.CASCADE, null=True, blank=True, related_name='vendor_bank_details')
 
     account_number = models.CharField(max_length=20, blank=True, null=True)  # Added field
     account_full_name = models.CharField(max_length=255, blank=True, null=True) #Added field
@@ -131,7 +130,7 @@ class BankAccountDetails(models.Model):
 
 class WalletTransaction(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, related_name='wallet_transactions')
+    vendor = models.ForeignKey("vendor.Vendor", on_delete=models.CASCADE, related_name='wallet_transactions')
     amount = models.DecimalField(max_digits=100, decimal_places=2)
     transaction_type = models.CharField(max_length=10, choices=TransactionType.choices)
     status = models.CharField(max_length=100, choices=TransactionStatus.choices, default=TransactionStatus.PENDING)
