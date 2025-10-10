@@ -1,8 +1,9 @@
 # vendor/filters.py
 
 from django_filters import rest_framework as filters
-from store.models import Product
 
+from store.models import Product
+from store.models import CartOrder
 
 
 STATUS = (
@@ -30,3 +31,27 @@ class ProductFilter(filters.FilterSet):
     class Meta:
         model = Product
         fields = ['status', 'category']
+
+    
+
+
+
+from store.models import CartOrder
+
+
+class OrderFilter(filters.FilterSet):
+    """
+    Custom filterset for the Vendor's orders list.
+    Allows filtering orders by their current `order_status`.
+    """
+    # The `field_name` matches the model field, and `lookup_expr` allows for
+    # filtering based on a list of statuses, e.g., ?order_status=Pending
+    order_status = filters.CharFilter(field_name='order_status', lookup_expr='iexact')
+
+    class Meta:
+        model = CartOrder
+        fields = ['order_status']
+
+
+
+        

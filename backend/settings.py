@@ -246,7 +246,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 # Static files
-STATIC_URL = '/static/'
+STATIC_URL = '/static/' # Default for local dev if not using Cloudinary
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')  # Ensure this exists    ############### COMPREHENSIVE FOR PRODUCTION PURPOSES PLEASE 
 
@@ -269,11 +269,17 @@ STORAGES = {
         "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
     },
     "staticfiles": {
+        # Use StaticHashedCloudinaryStorage in production, Django's default for local DEBUG
         "BACKEND": "cloudinary_storage.storage.StaticHashedCloudinaryStorage" if not DEBUG else "django.contrib.staticfiles.storage.StaticFilesStorage",
     },
 }
 
-# STATIC_URL = f'https://res.cloudinary.com/dgpdlknc1/raw/upload/v1/static/'
+# Override STATIC_URL for production to point directly to Cloudinary
+if not DEBUG:
+    # Ensure this matches your Cloudinary setup for static raw files.
+    # The 'static' folder is often the default root.
+    STATIC_URL = f'https://res.cloudinary.com/{CLOUDINARY_STORAGE["CLOUD_NAME"]}/raw/upload/v1/static/'
+
 
 
 

@@ -1,0 +1,104 @@
+services:
+  # --------------------------------------------------------------------------
+  # 1. External Redis (REQUIRED for free plan Celery/Caching)
+  #    - Render's free tier for web services doesn't include managed Redis.
+  #    - You MUST sign up for a FREE Redis Cloud instance (or similar).
+  #    - The REDIS_URL from that service needs to be set as an environment variable
+  #      on this Render web service.
+  # --------------------------------------------------------------------------
+
+  # --------------------------------------------------------------------------
+  # 2. Django Web Service (Bundled with Celery Worker & Beat)
+  #    - This service will attempt to run Gunicorn, Celery Worker, and Celery Beat
+  #      all within the same instance. This is a severe compromise for the free tier.
+  #    - Not suitable for production due to performance, reliability, and scaling issues.
+  # --------------------------------------------------------------------------
+  - type: web
+    name: fashionistar-backend-free
+    env: python
+    region: oregon # Keep this consistent for Redis if it's in the same region
+    plan: free # Maximize free usage
+    autoDeploy: true # Auto-deploy on branch pushes
+    healthCheckPath: /healthz # Implement a simple /healthz endpoint in your Django app
+
+    # Build Command:
+    # - Install dependencies
+    # - Collect static files (crucial for Cloudinary)
+    # - Run database migrations (will use your DATABASE_URL, either SQLite or external free tier PostgreSQL)
+    buildCommand: |
+      pip install -r requirements.txt
+      python manage.py collectstatic --noinput
+      python manage.py migrate --noinput
+
+    # Start Command:
+    # - This is the tricky part. We'll use a wrapper script or a tool like `supervisord`
+    #   or a simple shell script to run all three processes (Gunicorn, Celery Worker, Celery Beat).
+    # - For simplicity in render.yaml, we'll point to a custom shell script.
+    #   You will need to create a file named `start_all.sh` in your project root.
+    startCommand: "./start_all.sh"
+
+    envVars:
+      # Render injects DATABASE_URL if you link to a paid PostgreSQL.
+      # For free tier, you'll need to either:
+      # 1. Use SQLite (only for dev/demo, not production).
+      # 2. Use a free external PostgreSQL (e.g., ElephantSQL) and set DATABASE_URL here.
+      - key: DATABASE_URL
+        # If using SQLite: value: "sqlite:///db.sqlite3" (make sure settings.py handles this)
+        # If using ElephantSQL: value: "postgres://user:password@host:port/dbname" (set this securely)
+        sync: false # Set in Render dashboard or link to free external DB.
+
+      # REDIS_URL is MANDATORY for Celery/Caching.
+      # You MUST provide this from a free Redis Cloud instance.
+      - key: REDIS_URL
+        sync: false # Set securely in Render dashboard
+
+      - key: DJANGO_SETTINGS_MODULE
+        value: backend.settings
+      - key: DEBUG
+        value: "False" # Always False for any kind of 'production' deployment
+      - key: SECRET_KEY
+        generateValue: true # Render will generate a strong key
+      - key: SITE_URL
+        value: https://fashionistar-backend-free.onrender.com # Use your Render URL
+      - key: ALLOWED_HOSTS
+        value: "fashionistar-backend-free.onrender.com" # Add custom domains if you have them
+
+      # Celery broker/backend should point to your REDIS_URL
+      - key: CELERY_BROKER_URL
+        value: ${REDIS_URL}
+      - key: CELERY_RESULT_BACKEND
+        value: ${REDIS_URL}
+
+      # Cloudinary and other third-party API keys (set securely in Render dashboard)
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: DEFAULT_FROM_EMAIL
+        sync: false
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: MAILGUN_API_KEY
+        sync: false
+      - key: MAILGUN_DOMAIN
+        sync: false
+      - key: PAYSTACK_TEST_KEY
+        sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_PHONE_NUMBER
+        sync: false
+      - key: ZOHO_ZEPTOMAIL_API_KEY_TOKEN
+        sync: false
+      - key: ZOHO_ZEPTOMAIL_HOSTED_REGION
+        sync: false
+      - key: DJANGO_SECRET_ADMIN_URL
+        generateValue: true

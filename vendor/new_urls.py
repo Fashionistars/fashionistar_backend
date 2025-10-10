@@ -16,6 +16,9 @@ from vendor.Views import dashboard # TESTING
 from vendor.Views import chart_dashboard # TESTING
 
 
+from vendor.Views import order # TESTING
+
+
 
 # +++++++++++++++    TESTING NEW PRODUCTS FORM PARSER CLASSES  WITH NEW ENDPOINTS
 urlpatterns = [
@@ -34,5 +37,11 @@ urlpatterns = [
     path('new-vendor/catalog/', product_list.VendorProductListView.as_view(), name='vendor-product-list'), # <-- ADD THIS LINE
     path('new-vendor/product/update/<str:product_pid>/', product_update.ProductUpdateAPIView.as_view(), name='vendor-product-update'),
     path('new-vendor/product/delete/<str:product_pid>/', product_delete.ProductDeleteAPIView.as_view(), name='vendor-product-delete'),
+
+
+    # VENDOR ORDER MANAGEMENT URLS
+    path('new-vendor/orders/', order.VendorOrderListView.as_view(), name='vendor-order-list'),
+    path('new-vendor/orders/<str:order_oid>/', order.VendorOrderDetailView.as_view(), name='vendor-order-detail'),
+
 
 ]
