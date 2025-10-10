@@ -44,7 +44,7 @@ DEBUG = env.bool("DEBUG", default=True) # Default to True for local, set to Fals
 
 
 # Site URL
-# SITE_URL = env("SITE_URL")
+SITE_URL = env("SITE_URL", default="http://127.0.0.1:8000")
 
 DJANGO_SECRET_ADMIN_URL=env("DJANGO_SECRET_ADMIN_URL", default="admin/")
 
@@ -247,7 +247,7 @@ USE_TZ = True
 
 # Static files
 STATIC_URL = '/static/' # Default for local dev if not using Cloudinary
-STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
+# STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]   # TEMPORARILY COMMENT THIS OFF IN ORDER TO SOLVER RENDER /STATIC/ FILE DIRECTORY ERROR PLEASE
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')  # Ensure this exists    ############### COMPREHENSIVE FOR PRODUCTION PURPOSES PLEASE 
 
 # Media files
