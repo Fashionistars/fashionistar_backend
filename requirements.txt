@@ -98,6 +98,7 @@ uritemplate
 urllib3
 vine
 virtualenv
+whitenoise
 wcwidth
 wheel
 wrapt
