@@ -11,7 +11,7 @@ class EmailBackendConfig(models.Model):
         ('anymail.backends.mailgun.EmailBackend', 'Mailgun'),
         ('zoho_zeptomail.backend.zeptomail_backend.ZohoZeptoMailEmailBackend', 'Zoho ZeptoMail'),
         # Add SendGrid when/if you need it later:
-        # ('anymail.backends.sendgrid.EmailBackend', 'SendGrid'),
+        ('anymail.backends.sendgrid.EmailBackend', 'SendGrid'),
     ]
     email_backend = models.CharField(
         max_length=250,  # Increased max length
