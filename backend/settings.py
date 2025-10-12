@@ -40,7 +40,7 @@ SECRET_KEY = env("SECRET_KEY", default='django-insecure-b*tuoe%^o+=^35$0fufrm=oa
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # Get DEBUG from environment variable
-DEBUG = env.bool("DEBUG", default=False) # Default to True for local, set to False in .env for production
+DEBUG = env.bool("DEBUG", default=True) # Default to True for local, set to False in .env for production
 
 
 # Site URL
@@ -582,8 +582,8 @@ EMAIL_USE_SSL = True    # Or EMAIL_USE_SSL = False
 
 # Mailgun Configuration (Used if you choose Mailgun in the admin)
 ANYMAIL = {
-    "MAILGUN_API_KEY": env("MAILGUN_API_KEY", default=None),
-    "MAILGUN_SENDER_DOMAIN": env("MAILGUN_DOMAIN", default=None),
+    "MAILGUN_API_KEY": env("MAILGUN_API_KEY", default="f9a3f2a672167992eae82f14279f7605-556e0aa9-c6f78849"),
+    "MAILGUN_SENDER_DOMAIN": env("MAILGUN_DOMAIN", default="sandbox74a201b97359476fbac5d688807b7e3a.mailgun.org"),
 }
 
 
