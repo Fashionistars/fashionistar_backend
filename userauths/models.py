@@ -204,7 +204,7 @@ class User(AbstractUser):
         """
         if hasattr(self, 'profile') and self.profile.image:
             return self.profile.image.url
-        return 'static/images/default-user.jpg'  # Default avatar URL - corrected
+        return 'default/default-user.jpg'  # Default avatar URL - corrected
 
 
 
@@ -416,7 +416,7 @@ class Profile(models.Model):
     Profile model associated with the user, containing additional user information.
     """
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile', db_index=True)  # Add related_name AND db_index
-    image = models.ImageField(upload_to=user_directory_path, default='static/images/default-user.jpg', null=True, blank=True)
+    image = models.ImageField(upload_to=user_directory_path, default='default/default-user.jpg', null=True, blank=True)
     full_name = models.CharField(max_length=1000, null=True, blank=True, db_index=True) # Add index
     about = models.TextField(null=True, blank=True)
     email = models.EmailField(blank=True, null=True, db_index=True)  # Added email field

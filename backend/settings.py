@@ -646,14 +646,14 @@ CELERY_BROKER_TRANSPORT_OPTIONS = {
 
 # Beat Scheduler (if you use periodic tasks)
 # If using `django_celery_beat`, schedule via Admin UI, not hardcoded here.
-# For simple schedule:
+
 
 CELERY_BEAT_SCHEDULE = {
-    # Example: send heartbeat every 10 minutes
-    # "system-heartbeat": {
-    #     "task": "userauths.tasks.system_heartbeat",
-    #     "schedule": 600.0,  # seconds
-    # },
+    # This is the hard-coded schedule that avoids using the Admin panel.
+    "keep-render-service-awake": {
+        "task": "keep_service_awake",  # This must match the name in @shared_task
+        "schedule": 300.0,  # Run every 600 seconds (10 minutes)
+    },
 }
 
 

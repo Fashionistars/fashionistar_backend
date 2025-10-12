@@ -19,15 +19,6 @@ path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc
 
 
 
-
-
-    whitenoise.storage.CompressedManifestStaticFilesStorage
-
-
-    MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
-    # ... other middleware
 ]
 
 
