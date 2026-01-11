@@ -1,4 +1,4 @@
-# aiohappyeyeballs
+aiohappyeyeballs
 aiohttp
 aiohttp-retry
 aiosignal
@@ -25,29 +25,35 @@ Deprecated
 diff-match-patch
 distlib
 dj-database-url
-Django
+Django==6.0
 django-anymail
+django-auditlog
+django-celery-beat
 django-cloudinary-storage
 django-cors-headers
+django-encrypted-model-fields
 django-environ
 django-filter
 django-import-export
 django-jazzmin
 django-phone-verify
 django-phonenumber-field
+django-phonenumber-field[phonenumbers]
 django-ratelimit
 django-redis
-django_celery_beat
 django-storages
 django-zoho-zeptomail
 djangorestframework
-djangorestframework_simplejwt
+djangorestframework-simplejwt
+drf-api-logger
 drf-spectacular
 drf-yasg
 environs
 filelock
 flower
 frozenlist
+grep uuid
+google-auth
 gunicorn
 hiredis
 humanize
@@ -72,6 +78,7 @@ psycopg2
 psycopg2-binary
 pycparser
 pycryptodome
+pydantic
 PyJWT
 python-dateutil
 python-decouple
@@ -96,10 +103,11 @@ typing_extensions
 tzdata
 uritemplate
 urllib3
+uuid6
 vine
 virtualenv
-whitenoise
 wcwidth
 wheel
+whitenoise
 wrapt
 yarl

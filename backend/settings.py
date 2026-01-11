@@ -79,6 +79,8 @@ INSTALLED_APPS = [
 
 
     # Custom Apps
+    'apps.common',
+    'apps.authentication',
     'admin_backend',
     'userauths',
     'store',
