@@ -21,6 +21,27 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
     - auth_provider: Tracks if user signed up via Email, Phone, or Google.
     - role: RBAC (Role Based Access Control).
     """
+
+    # Resolve conflicts with legacy User model
+    groups = models.ManyToManyField(
+        'auth.Group',
+        verbose_name=_('groups'),
+        blank=True,
+        help_text=_(
+            'The groups this user belongs to. A user will get all permissions '
+            'granted to each of their groups.'
+        ),
+        related_name="unified_user_set",
+        related_query_name="unified_user",
+    )
+    user_permissions = models.ManyToManyField(
+        'auth.Permission',
+        verbose_name=_('user permissions'),
+        blank=True,
+        help_text=_('Specific permissions for this user.'),
+        related_name="unified_user_set",
+        related_query_name="unified_user",
+    )
     
     # Auth Providers
     PROVIDER_EMAIL = "email"

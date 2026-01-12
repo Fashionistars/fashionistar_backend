@@ -110,3 +110,7 @@ wheel
 whitenoise
 wrapt
 yarl
+httpx
+adrf
+email-validator
+fido2

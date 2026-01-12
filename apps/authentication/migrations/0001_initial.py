@@ -93,79 +93,79 @@ class Migration(migrations.Migration):
                 ('is_email_verified', models.BooleanField(default=False)),
             ],
             options={
-                'indexes': [models.Index(fields=['email', 'action', 'exp_date'], name='tokens_email_action_exp_idx'), models.Index(fields=['phone', 'action', 'exp_date'], name='tokens_phone_action_exp_idx'), models.Index(fields=['token'], name='tokens_token_idx')],
+                'indexes': [models.Index(fields=['email', 'action', 'exp_date'], name='auth_temp_tokens_email_idx'), models.Index(fields=['phone', 'action', 'exp_date'], name='auth_temp_tokens_phone_idx'), models.Index(fields=['token'], name='auth_temp_tokens_token_idx')],
             },
         ),
         migrations.AddIndex(
             model_name='user',
-            index=models.Index(fields=['email'], name='user_email_idx'),
+            index=models.Index(fields=['email'], name='auth_temp_user_email_idx'),
         ),
         migrations.AddIndex(
             model_name='user',
-            index=models.Index(fields=['phone'], name='user_phone_idx'),
+            index=models.Index(fields=['phone'], name='auth_temp_user_phone_idx'),
         ),
         migrations.AddIndex(
             model_name='user',
-            index=models.Index(fields=['email', 'password'], name='user_email_password_idx'),
+            index=models.Index(fields=['email', 'password'], name='auth_temp_user_email_pass_idx'),
         ),
         migrations.AddIndex(
             model_name='user',
-            index=models.Index(fields=['phone', 'password'], name='user_phone_password_idx'),
+            index=models.Index(fields=['phone', 'password'], name='auth_temp_user_phone_pass_idx'),
         ),
         migrations.AddIndex(
             model_name='user',
-            index=models.Index(fields=['role'], name='user_role_idx'),
+            index=models.Index(fields=['role'], name='auth_temp_user_role_idx'),
         ),
         migrations.AddIndex(
             model_name='user',
-            index=models.Index(fields=['verified'], name='user_verified_idx'),
+            index=models.Index(fields=['verified'], name='auth_temp_user_verified_idx'),
         ),
         migrations.AddIndex(
             model_name='user',
-            index=models.Index(fields=['is_active'], name='user_is_active_idx'),
+            index=models.Index(fields=['is_active'], name='auth_temp_user_is_active_idx'),
         ),
         migrations.AddIndex(
             model_name='profile',
-            index=models.Index(fields=['user'], name='profile_user_idx'),
+            index=models.Index(fields=['user'], name='auth_temp_profile_user_idx'),
         ),
         migrations.AddIndex(
             model_name='profile',
-            index=models.Index(fields=['full_name'], name='profile_full_name_idx'),
+            index=models.Index(fields=['full_name'], name='auth_temp_profile_name_idx'),
         ),
         migrations.AddIndex(
             model_name='profile',
-            index=models.Index(fields=['email'], name='profile_email_idx'),
+            index=models.Index(fields=['email'], name='auth_temp_profile_email_idx'),
         ),
         migrations.AddIndex(
             model_name='profile',
-            index=models.Index(fields=['phone'], name='profile_phone_idx'),
+            index=models.Index(fields=['phone'], name='auth_temp_profile_phone_idx'),
         ),
         migrations.AddIndex(
             model_name='profile',
-            index=models.Index(fields=['country'], name='profile_country_idx'),
+            index=models.Index(fields=['country'], name='auth_temp_profile_cntry_idx'),
         ),
         migrations.AddIndex(
             model_name='profile',
-            index=models.Index(fields=['state'], name='profile_state_idx'),
+            index=models.Index(fields=['state'], name='auth_temp_profile_state_idx'),
         ),
         migrations.AddIndex(
             model_name='profile',
-            index=models.Index(fields=['city'], name='profile_city_idx'),
+            index=models.Index(fields=['city'], name='auth_temp_profile_city_idx'),
         ),
         migrations.AddIndex(
             model_name='profile',
-            index=models.Index(fields=['country', 'state'], name='profile_country_state_idx'),
+            index=models.Index(fields=['country', 'state'], name='auth_temp_prof_cntry_st_idx'),
         ),
         migrations.AddIndex(
             model_name='profile',
-            index=models.Index(fields=['country', 'city'], name='profile_country_city_idx'),
+            index=models.Index(fields=['country', 'city'], name='auth_temp_prof_cntry_ct_idx'),
         ),
         migrations.AddIndex(
             model_name='profile',
-            index=models.Index(fields=['state', 'city'], name='profile_state_city_idx'),
+            index=models.Index(fields=['state', 'city'], name='auth_temp_prof_st_ct_idx'),
         ),
         migrations.AddIndex(
             model_name='profile',
-            index=models.Index(fields=['user', 'full_name'], name='profile_user_full_name_idx'),
+            index=models.Index(fields=['user', 'full_name'], name='auth_temp_prof_usr_nam_idx'),
         ),
     ]

@@ -108,6 +108,7 @@ INSTALLED_APPS = [
     'import_export',
     'anymail',
     'storages',
+    'auditlog',
 
     'phone_verify',
     'channels',

@@ -9,8 +9,7 @@ from .category import Category
 from .brand import Brand
 from .collection import Collections
 from .email_backend_config import EmailBackendConfig
-
-
+from .sms_backend_config import SMSBackendConfig
 
 
 

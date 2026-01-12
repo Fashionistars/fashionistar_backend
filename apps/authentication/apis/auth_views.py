@@ -2,7 +2,9 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from adrf.views import APIView as AsyncAPIView
-from drf_api_logger.decorators import APILoggingDecorator
+# from drf_api_logger.decorators import APILoggingDecorator
+
+# # @APILoggingDecorator(level='INFO')
 
 from apps.authentication.types.auth_schemas import RegistrationSchema, LoginSchema, GoogleAuthSchema
 from apps.authentication.services.registration_service import RegistrationService
@@ -17,7 +19,7 @@ import logging
 
 logger = logging.getLogger('application')
 
-@APILoggingDecorator(level='INFO')
+# @APILoggingDecorator(level='INFO')
 class RegisterView(AsyncAPIView):
     """
     Async View for User Registration.

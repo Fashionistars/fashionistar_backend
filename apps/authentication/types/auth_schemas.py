@@ -79,7 +79,7 @@ class PasswordResetConfirmSchema(BaseModel):
     new_password: str
     confirm_password: str
 
-    @root_validator
+    @root_validator(skip_on_failure=True)
     def check_passwords(cls, values):
         if values.get('new_password') != values.get('confirm_password'):
             raise ValueError("Passwords do not match.")
@@ -90,7 +90,7 @@ class ChangePasswordSchema(BaseModel):
     new_password: str
     confirm_password: str
 
-    @root_validator
+    @root_validator(skip_on_failure=True)
     def check_passwords(cls, values):
         if values.get('new_password') != values.get('confirm_password'):
             raise ValueError("New passwords do not match.")
