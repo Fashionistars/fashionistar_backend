@@ -7,10 +7,12 @@ from django.conf import settings
 from cryptography.fernet import Fernet
 from django_redis import get_redis_connection
 import cloudinary.uploader
+import datetime
 
 application_logger = logging.getLogger('application')
 
 # Initialize Fernet cipher suite for OTP encryption/decryption
+# Ensure SECRET_KEY is robust enough or has fallback layer logic here
 base_key = settings.SECRET_KEY.encode()
 base_key = base_key.ljust(32, b'\0')[:32]  # Pad or truncate to ensure 32 bytes
 cipher_suite = Fernet(base64.urlsafe_b64encode(base_key))
@@ -71,12 +73,11 @@ def get_otp_expiry_datetime():
     Returns:
         datetime: A datetime object representing the OTP expiry time.
     """
-    import time
-    import datetime
-    timestamp = time.time() + 300
-    dt_object = datetime.datetime.fromtimestamp(timestamp)
-    dt_object += datetime.timedelta()
-    return dt_object
+    # Use timezone.now() if naive handling is tricky, strictly use UTC or server time
+    # User's code used simple time, but django.utils.timezone is better
+    # Keeping mostly faithful to user logic but robust
+    from django.utils import timezone
+    return timezone.now() + datetime.timedelta(seconds=300)
 
 def delete_cloudinary_asset(public_id, resource_type="image"):
     """

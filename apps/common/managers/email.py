@@ -1,4 +1,4 @@
-# utilities/managers/email
+# apps/common/managers/email
 import logging
 import os
 import time
@@ -8,6 +8,7 @@ from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.template import TemplateDoesNotExist
 from django.utils import timezone
+from asgiref.sync import sync_to_async
 
 Logger = logging.getLogger('application')
 
@@ -19,6 +20,7 @@ class EmailManagerError(Exception):
 class EmailManager:
     """
     Manages the sending of emails, including handling template rendering and attachments.
+    Supports both Sync and Async operations.
     """
     max_attempts = 3  # retry logic
 
@@ -34,7 +36,7 @@ class EmailManager:
         fail_silently: bool = False
     ) -> None:
         """
-        Sends email to valid email addresses immediately.
+        Sends email to valid email addresses immediately (SYNC).
 
         Args:
             subject (str): The subject of the email.
@@ -46,7 +48,7 @@ class EmailManager:
             fail_silently (bool): Whether to suppress exceptions.
 
         Raises:
-            EmailManagerError: If context and template_name are not both set, or if neither context/template_name nor message is set.
+            EmailManagerError: If context/template config is invalid.
             TemplateDoesNotExist: If the specified template does not exist.
             Exception: If an error occurs during email sending.
         """
@@ -96,3 +98,27 @@ class EmailManager:
         except Exception as error:
             Logger.error(f"Error sending email to {recipients}: {error}", exc_info=True)
             raise
+
+    @classmethod
+    async def asend_mail(
+        cls,
+        subject: str,
+        recipients: List[str],
+        context: Optional[dict[str, Any]] = None,
+        template_name: Optional[str] = None,
+        message: Optional[str] = None,
+        attachments: Optional[List[tuple]] = None,
+        fail_silently: bool = False
+    ) -> None:
+        """
+        Async wrapper for send_mail.
+        """
+        return await sync_to_async(cls.send_mail)(
+            subject=subject,
+            recipients=recipients,
+            context=context,
+            template_name=template_name,
+            message=message,
+            attachments=attachments,
+            fail_silently=fail_silently
+        )

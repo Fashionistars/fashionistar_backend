@@ -52,7 +52,6 @@ environs
 filelock
 flower
 frozenlist
-grep uuid
 google-auth
 gunicorn
 hiredis

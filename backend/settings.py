@@ -299,6 +299,12 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField' # Keep this as BigAutoField
 
 AUTH_USER_MODEL = 'userauths.User'
 
+# Authentication backends - include our new UnifiedUser backend
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',  # Default backend for old system
+    'apps.authentication.backends.UnifiedUserBackend',  # New backend for UnifiedUser
+]
+
 
 # Paystack API Keys
 PAYSTACK_TEST_KEY = env("PAYSTACK_TEST_KEY", default="sk_test_f5995ad3b929498e963ca52a9a065dd5c3190e31")

@@ -5,6 +5,7 @@ from django.utils.translation import gettext_lazy as _
 from apps.common.models import TimeStampedModel, SoftDeleteModel, HardDeleteMixin
 from phonenumber_field.modelfields import PhoneNumberField
 from auditlog.registry import auditlog
+from apps.authentication.managers import CustomUserManager
 import logging
 
 logger = logging.getLogger('application')
@@ -99,6 +100,8 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['phone']
+
+    objects = CustomUserManager()
 
     class Meta:
         verbose_name = "Unified User"
