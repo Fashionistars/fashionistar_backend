@@ -568,7 +568,7 @@ PHONE_VERIFICATION = {
 
 
 
-EMAIL_BACKEND = 'admin_backend.backends.DatabaseConfiguredEmailBackend' # Set DatabaseConfiguredEmailBackend to use the backend configured from database.
+EMAIL_BACKEND = 'admin_backend.backends.email_backends.DatabaseConfiguredEmailBackend' # Set DatabaseConfiguredEmailBackend to use the backend configured from database.
 
 
 

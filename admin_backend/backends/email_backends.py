@@ -1,4 +1,4 @@
-# admin_backend/backends.py
+# admin_backend/backends/email_backends.py
 from django.core.mail.backends.base import BaseEmailBackend
 from django.apps import apps
 from django.conf import settings
