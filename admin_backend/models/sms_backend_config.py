@@ -7,7 +7,7 @@ class SMSBackendConfig(models.Model):
     SMS_BACKEND_CHOICES = [
         ('apps.common.providers.SMS.twilio.TwilioSMSProvider', 'Twilio'),
         ('apps.common.providers.SMS.termii.TermiiSMSProvider', 'Termii'),
-        ('apps.common.providers.SMS.bulksmsNG.BulkSMSNGProvider', 'BulkSMS Nigeria'),
+        ('apps.common.providers.SMS.bulksmsNG.BulksmsNGSMSProvider', 'BulkSMS Nigeria'),
     ]
     
     sms_backend = models.CharField(
