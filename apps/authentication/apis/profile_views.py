@@ -5,7 +5,7 @@ from adrf.views import APIView as AsyncAPIView
 from apps.common.renderers import CustomJSONRenderer
 from apps.authentication.models import UnifiedUser
 from asgiref.sync import sync_to_async
-from apps.authentication.serializers import UserSerializer # Need to create this
+from apps.authentication.serializers import UserSerializer
 import logging
 
 class UserProfileDetailView(AsyncAPIView):

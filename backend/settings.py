@@ -318,15 +318,33 @@ PAYSTACK_SECRET_KEY = env("PAYSTACK_SECRET_KEY", default="sk_test_f5995ad3b92949
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 
+
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
         "rest_framework.permissions.AllowAny",
     ),
+    
 
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework.authentication.TokenAuthentication",
         "rest_framework_simplejwt.authentication.JWTAuthentication",
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
     ),
+
+
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+        'rest_framework.renderers.BrowsableAPIRenderer',
+    ],
+
+
+    'DEFAULT_PARSER_CLASSES': [
+    'rest_framework.parsers.JSONParser',
+    'rest_framework.parsers.FormParser',
+    'rest_framework.parsers.MultiPartParser'
+    ],
+    
 
    'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.UserRateThrottle', # Added for rate limiting
