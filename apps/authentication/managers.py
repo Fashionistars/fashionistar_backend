@@ -1,5 +1,3 @@
-# apps/authentication/managers.py
-
 from django.contrib.auth.base_user import BaseUserManager
 from django.utils.translation import gettext_lazy as _
 from django.db.models import Q
@@ -11,8 +9,8 @@ class CustomUserManager(BaseUserManager):
     """
     Custom user model manager defined with explicit Sync and Async methods.
     
-    This manager handles user creation and retrieval using normalized emails 
-    or phone numbers as unique identifiers. It avoids generic wrappers in favor 
+    This manager handles user creation and retrieval using normalized emails
+    or phone numbers as unique identifiers. It avoids generic wrappers in favor
     of native Django async support (acreate, aget, asave) for maximum performance.
     """
 

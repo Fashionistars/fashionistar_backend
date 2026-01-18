@@ -1,11 +1,7 @@
-# apps/authentication/backends.py
-
 from django.contrib.auth.backends import BaseBackend
 from django.contrib.auth import get_user_model
 from apps.authentication.models import UnifiedUser
 import logging
-
-from userauths.models import User as LegacyUser # Legacy user import for reference if needed
 
 logger = logging.getLogger('application')
 

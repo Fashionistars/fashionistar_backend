@@ -3,7 +3,6 @@ from django.core.exceptions import PermissionDenied
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import update_last_login
 from rest_framework_simplejwt.tokens import RefreshToken
-from apps.authentication.types.auth_schemas import LoginSchema
 from asgiref.sync import sync_to_async
 import redis
 import logging
@@ -18,29 +17,30 @@ class AuthService:
 
     # --- ASYNC METHODS ---
     @staticmethod
-    async def login_async(data: LoginSchema, request=None):
+    async def login_async(email_or_phone, password, request=None):
         """
         Authenticates a user asynchronously.
+        Accepts raw email_or_phone and password strings.
         """
         try:
             # Authenticate is typically synchronous in Django (DB access)
             # We wrap it.
             user = await sync_to_async(authenticate)(
-                request=request, # Pass request if needed by backend
-                username=data.email_or_phone, # Custom backend handles email/phone detection via 'username' arg typically
-                password=data.password
+                request=request, 
+                username=email_or_phone, 
+                password=password
             )
             
-            # If standard backend doesn't handle "email_or_phone" as username, logic:
+            # Logic fallback if username kwarg fails to route to custom backend fields
             if not user:
                  user = await sync_to_async(authenticate)(
-                    email=data.email_or_phone if '@' in data.email_or_phone else None,
-                    phone=data.email_or_phone if '@' not in data.email_or_phone else None,
-                    password=data.password
+                    email=email_or_phone if '@' in email_or_phone else None,
+                    phone=email_or_phone if '@' not in email_or_phone else None,
+                    password=password
                  )
 
             if not user:
-                logger.warning(f"⛔ Failed login attempt for {data.email_or_phone}")
+                logger.warning(f"⛔ Failed login attempt for {email_or_phone}")
                 raise Exception("Invalid credentials.")
 
             # Update last login
@@ -112,22 +112,22 @@ class AuthService:
 
     # --- SYNC METHODS ---
     @staticmethod
-    def login_sync(data: LoginSchema, request=None):
+    def login_sync(email_or_phone, password, request=None):
         """
         Authenticates a user synchronously.
         """
         try:
-            user = authenticate(username=data.email_or_phone, password=data.password)
+            user = authenticate(username=email_or_phone, password=password)
             # Logic fallback if username kwarg fails to route to custom backend fields
             if not user:
                  # Check if email or phone
-                 if '@' in data.email_or_phone:
-                     user = authenticate(email=data.email_or_phone, password=data.password)
+                 if '@' in email_or_phone:
+                     user = authenticate(email=email_or_phone, password=password)
                  else:
-                     user = authenticate(phone=data.email_or_phone, password=data.password)
+                     user = authenticate(phone=email_or_phone, password=password)
 
             if not user:
-                logger.warning(f"⛔ Failed login attempt for {data.email_or_phone}")
+                logger.warning(f"⛔ Failed login attempt for {email_or_phone}")
                 raise Exception("Invalid credentials.")
 
             update_last_login(None, user)

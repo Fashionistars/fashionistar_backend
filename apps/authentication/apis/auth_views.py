@@ -1,25 +1,28 @@
 from rest_framework import status
-from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
 from adrf.views import APIView as AsyncAPIView
-# from drf_api_logger.decorators import APILoggingDecorator
 
-# # @APILoggingDecorator(level='INFO')
-
-from apps.authentication.types.auth_schemas import RegistrationSchema, LoginSchema, GoogleAuthSchema
+from apps.authentication.serializers import (
+    UserRegistrationSerializer, 
+    AsyncUserRegistrationSerializer,
+    LoginSerializer, 
+    AsyncLoginSerializer,
+    GoogleAuthSerializer,
+    ResendOTPRequestSerializer
+)
 from apps.authentication.services.registration_service import RegistrationService
 from apps.authentication.services.auth_service import AuthService
 from apps.authentication.services.google_service import GoogleAuthService
 from apps.authentication.services.otp_service import OTPService
 from apps.common.renderers import CustomJSONRenderer
-from apps.common.utils import get_otp_expiry_datetime # Assuming utility exists or we use internal logic
 from apps.authentication.models import UnifiedUser
+from asgiref.sync import sync_to_async
 
 import logging
 
 logger = logging.getLogger('application')
 
-# @APILoggingDecorator(level='INFO')
 class RegisterView(AsyncAPIView):
     """
     Async View for User Registration.
@@ -29,20 +32,33 @@ class RegisterView(AsyncAPIView):
 
     async def post(self, request):
         try:
-            # 1. Validate Input
-            schema = RegistrationSchema(**request.data)
+            # 1. Validate Input using DRF Serializer
+            # Using AsyncUserRegistrationSerializer if available, or wrapping sync validation
+            serializer = AsyncUserRegistrationSerializer(data=request.data)
             
-            # 2. Process
-            user, otp = await RegistrationService.register_user_async(schema)
+            # Manual async validation call if supported, or wrapped
+            if hasattr(serializer, 'avalidate'):
+                validated_data = await serializer.avalidate(serializer.initial_data)
+            else:
+                # Fallback to sync validation wrapped in sync_to_async if IO bound checks exist
+                # But typically is_valid is CPU bound unless it checks DB uniqueness
+                # For DB uniqueness, sync_to_async is better
+                await sync_to_async(serializer.is_valid)(raise_exception=True)
+                validated_data = serializer.validated_data
+
+            # 2. Process via Service
+            user, otp = await RegistrationService.register_user_async(validated_data)
             
             return Response({
-                "message": f"Registration Successful. OTP sent to {schema.email or schema.phone}",
+                "message": f"Registration Successful. OTP sent to {validated_data.get('email') or validated_data.get('phone')}",
                 "user_id": user.id
             }, status=status.HTTP_201_CREATED)
 
         except Exception as e:
             logger.error(f"Registration Error: {e}")
+            # DRF exceptions usually handled by global handler, but if we catch generic:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 
 class LoginView(AsyncAPIView):
     """
@@ -58,11 +74,21 @@ class LoginView(AsyncAPIView):
             # 1. Check Rate Limit
             AuthService.check_rate_limit(ip)
 
-            # 2. Validate
-            schema = LoginSchema(**request.data)
+            # 2. Validate using DRF Serializer
+            serializer = AsyncLoginSerializer(data=request.data)
+            if hasattr(serializer, 'avalidate'):
+                 validated_data = await serializer.avalidate(serializer.initial_data)
+            else:
+                 await sync_to_async(serializer.is_valid)(raise_exception=True)
+                 validated_data = serializer.validated_data
 
             # 3. Authenticate
-            tokens = await AuthService.login_async(schema, request)
+            # Service now expects primitives
+            tokens = await AuthService.login_async(
+                validated_data['email_or_phone'], 
+                validated_data['password'], 
+                request
+            )
             
             # 4. Clear Rate Limit
             AuthService.reset_login_failures(ip)
@@ -78,6 +104,7 @@ class LoginView(AsyncAPIView):
             logger.error(f"Login Error: {e}")
             return Response({"error": str(e)}, status=status.HTTP_401_UNAUTHORIZED)
 
+
 class GoogleAuthView(AsyncAPIView):
     """
     Async View for Google Authentication.
@@ -88,10 +115,15 @@ class GoogleAuthView(AsyncAPIView):
     async def post(self, request):
         try:
             # 1. Validation
-            schema = GoogleAuthSchema(**request.data)
+            serializer = GoogleAuthSerializer(data=request.data)
+            await sync_to_async(serializer.is_valid)(raise_exception=True)
+            validated_data = serializer.validated_data
             
             # 2. Verify & Get User
-            user = await GoogleAuthService.verify_and_login_async(schema.id_token, schema.role)
+            user = await GoogleAuthService.verify_and_login_async(
+                validated_data['id_token'], 
+                validated_data.get('role', 'client')
+            )
             
             # 3. Generate Tokens
             tokens = await AuthService.get_tokens_async(user)
@@ -110,13 +142,15 @@ class GoogleAuthView(AsyncAPIView):
             logger.error(f"Google Auth Error: {e}")
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+
 class VerifyOTPView(AsyncAPIView):
     permission_classes = [AllowAny]
     renderer_classes = [CustomJSONRenderer]
 
     async def post(self, request):
+        # Could use OTPSerializer here
         otp_code = request.data.get('otp')
-        user_id = request.data.get('user_id') # Ideally passed via session or temporary token, but user_id here for flow simplicity
+        user_id = request.data.get('user_id') 
         
         if not otp_code or not user_id:
             return Response({"error": "OTP and User ID required."}, status=status.HTTP_400_BAD_REQUEST)
@@ -135,14 +169,18 @@ class VerifyOTPView(AsyncAPIView):
         else:
             return Response({"error": "Invalid or Expired OTP."}, status=status.HTTP_400_BAD_REQUEST)
 
+
 class ResendOTPView(AsyncAPIView):
     permission_classes = [AllowAny]
     renderer_classes = [CustomJSONRenderer]
 
     async def post(self, request):
-        email_or_phone = request.data.get('email_or_phone')
+        serializer = ResendOTPRequestSerializer(data=request.data)
+        await sync_to_async(serializer.is_valid)(raise_exception=True)
+        # validated_user = serializer.validated_data... 
         # Logic to resolve user and resend
         return Response({"message": "OTP Resent if account exists."}, status=status.HTTP_200_OK)
+
 
 class LogoutView(AsyncAPIView):
     permission_classes = [IsAuthenticated]

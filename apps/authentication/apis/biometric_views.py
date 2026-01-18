@@ -22,7 +22,7 @@ class BiometricRegisterOptionsView(AsyncAPIView):
         try:
             options, state = await BiometricService.generate_registration_options_async(request.user)
             # Store state in session (Sync op in async view, need wrapper if session backend is DB-based, but usually strict async views avoid session).
-            # For simplicity in this hybrid setup, we assume we can set session. 
+            # For simplicity in this hybrid setup, we assume we can set session.
             # In pure async DRF with async session storage it's clean, otherwise wrap.
             await sync_to_async(request.session.__setitem__)("biometric_reg_state", state)
             
@@ -44,8 +44,8 @@ class BiometricRegisterVerifyView(AsyncAPIView):
                 return Response({"error": "State missing. Restart registration."}, status=status.HTTP_400_BAD_REQUEST)
 
             success = await BiometricService.verify_registration_response_async(
-                request.user, 
-                request.data, 
+                request.user,
+                request.data,
                 state,
                 device_name=request.data.get("device_name", "Unknown Device")
             )

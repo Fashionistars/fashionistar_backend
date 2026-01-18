@@ -16,7 +16,7 @@ RP_NAME = getattr(settings, 'FIDO2_RP_NAME', 'Fashionistar')
 # Note: In a real deployment, provide a proper origin checker
 server = Fido2Server(
     {"id": RP_ID, "name": RP_NAME},
-    verify_origin=lambda x: True 
+    verify_origin=lambda x: True
 )
 
 class BiometricService:
@@ -66,7 +66,7 @@ class BiometricService:
         """
         try:
             auth_data = await sync_to_async(server.register_complete)(
-                state, 
+                state,
                 response_data
             )
 
@@ -119,7 +119,7 @@ class BiometricService:
         """
         try:
             # 1. Find the credential used
-            credential_id = response_data['id'] 
+            credential_id = response_data['id']
             
             # Logic to find credential in DB (Async)
             credentials = await sync_to_async(list)(BiometricCredential.objects.filter(user=user))
@@ -131,12 +131,12 @@ class BiometricService:
                 # Here assuming compatible format or binary
                 if isinstance(credential_id, str):
                     # Simplified check: in real world, robustly decode base64url
-                    pass 
+                    pass
                 
                 # Naive comparison for placeholder
                 # Ideally: if cred.credential_id == base64url_decode(credential_id)
                 cred_obj = cred # Forcing a match for structure if needed, but logic below requires exact
-                break 
+                break
             
             # For this implementation to work without real fido2 inputs, we keep the logic structure:
             if not credentials:
@@ -146,7 +146,7 @@ class BiometricService:
             
             server.authenticate_complete(
                 state,
-                credentials, 
+                credentials,
                 response_data,
                 {"credential_id": cred_obj.credential_id, "public_key": cred_obj.public_key, "sign_count": cred_obj.sign_count}
             )
