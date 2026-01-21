@@ -1,17 +1,14 @@
-# userauths/task.py
+# apps/authentication/tasks.py
 
 from celery import shared_task
 import logging
 from django.conf import settings
 from django.template.exceptions import TemplateDoesNotExist
+from utilities.managers.email import EmailManager
+from utilities.managers.sms import SMSManager
 
-from utilities.managers.email import EmailManager  # Import your EmailManager
-from utilities.managers.sms import SMSManager  # Import your SMSManager
-
+# Get logger for application
 application_logger = logging.getLogger('application')
-
-
-
 
 @shared_task(bind=True, retry_backoff=True, max_retries=3)
 def send_email_task(self, subject: str, recipients: list[str], template_name: str, context: dict, attachments: list[tuple] | None = None) -> str:
@@ -48,93 +45,12 @@ def send_email_task(self, subject: str, recipients: list[str], template_name: st
 
     except TemplateDoesNotExist as e:
         application_logger.error(f"🚨 Template missing / not found: {template_name} - {e}", exc_info=True)
-        raise  # Re-raise the exception to prevent retry, as the template issue won't resolve itself.  Fix template error!
+        raise  # Re-raise to prevent retry for missing templates
 
     except Exception as exc:
-        application_logger.exception(f"❌ Error sending email to {recipients}, retrying... Error: {exc}")  # Use exception for full traceback
+        application_logger.exception(f"❌ Error sending email to {recipients}, retrying... Error: {exc}")
         # Retry the task with exponential backoff.
         raise self.retry(exc=exc, countdown=60)
-
-
-
-
-
-
-
-
-
-
-
-
-# from celery import shared_task
-# from django.conf import settings
-# import logging
-# # from .utils import EmailManager, SMSManager
-# from userauths.UTILS.email_utils import EmailManager
-# import time
-# from django.utils import timezone
-
-# application_logger = logging.getLogger('application')
-
-
-# @shared_task(bind=True, retry_backoff=True, max_retries=3)
-# def process_email_queue_task(self):
-#     """Process the email queue."""
-#     try:
-#         EmailManager.process_email_queue()  # Invoke the email processing method
-#         application_logger.info(f"Email Queue Processed {timezone.now()}")
-#         return f"Email Queue Processed Successfully {timezone.now()}"
-#     except Exception as exc:
-#         application_logger.error(f"Error when processing Email Queue {exc}", exc_info=True)
-#         raise self.retry(exc=exc, countdown=60) # Retry exponential backoff
-
-
-
-
-
-
-# @shared_task(bind=True, retry_backoff=True, max_retries=5)
-# def process_email_queue_task(self):
-#     """
-#     Processes emails from the email queue.
-
-#     This task is designed to run periodically and send emails stored in the email queue.
-#     If an error occurs during the processing of emails, it will be retried with exponential backoff.
-
-#     Args:
-#         self (celery.Task): The Celery task instance.
-
-#     Returns:
-#         str: A success message or raises an exception on failure.
-
-#     Raises:
-#         Exception: If an error occurs while processing the email queue, the task will be retried with exponential backoff.
-#     """
-#     try:
-#         application_logger.info("⚙️ Starting email queue processing...")
-#         # No email Queue implementation here
-#         application_logger.info("✅ Email queue processing completed.")
-#         return "Email queue processing completed successfully."
-#     except Exception as exc:
-#         application_logger.exception(f"❌ Error processing email queue: {exc}")
-#         raise self.retry(exc=exc, countdown=60)  # Retry with exponential backoff
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 @shared_task(bind=True, retry_backoff=True, max_retries=3)
@@ -148,7 +64,7 @@ def send_sms_task(self, to: str, body: str) -> str:
         body (str): SMS message body.
 
     Returns:
-        str: Message SID.
+        str: Message SID or Success Message.
 
     Raises:
         Exception: If an error occurs during SMS sending, the task will be retried with exponential backoff.
@@ -159,4 +75,4 @@ def send_sms_task(self, to: str, body: str) -> str:
         return message_sid
     except Exception as exc:
         application_logger.error(f"Error sending SMS to {to}: {exc}", exc_info=True)
-        raise self.retry(exc=exc, countdown=60)  # Retry with exponential backoff
+        raise self.retry(exc=exc, countdown=60)

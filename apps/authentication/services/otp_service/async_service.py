@@ -2,44 +2,19 @@
 
 import logging
 import asyncio
-from typing import Optional
 from .sync_service import SyncOTPService
 
 logger = logging.getLogger('application')
 
 class AsyncOTPService:
     """
-    Asynchronous Service for handling One-Time Passwords (OTP).
-    Wraps synchronous Redis operations in threads to prevent event loop blocking.
+    Asynchronous Service for OTP Verification.
     """
 
     @staticmethod
-    async def generate_otp(user_id: str, purpose: str = 'login') -> str:
+    async def verify_otp(user_id, otp_input, purpose="activation"):
         """
-        Generates and stores an encrypted OTP (Asynchronous).
+        Async OTP Verification.
         """
-        try:
-            return await asyncio.to_thread(
-                SyncOTPService.generate_otp,
-                user_id,
-                purpose
-            )
-        except Exception as e:
-            logger.error(f"❌ Async OTP Generation Error: {str(e)}")
-            raise
-
-    @staticmethod
-    async def verify_otp(user_id: str, otp: str, purpose: str = 'login') -> bool:
-        """
-        Verifies a provided OTP against the encrypted version in Redis (Asynchronous).
-        """
-        try:
-            return await asyncio.to_thread(
-                SyncOTPService.verify_otp,
-                user_id,
-                otp,
-                purpose
-            )
-        except Exception as e:
-            logger.error(f"❌ Async OTP Verification Error: {str(e)}")
-            return False
+        # Redis operations are blocking, so we offload to thread
+        return await asyncio.to_thread(SyncOTPService.verify_otp, user_id, otp_input, purpose)
