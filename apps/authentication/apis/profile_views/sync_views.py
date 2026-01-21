@@ -1,34 +1,34 @@
+# apps/authentication/apis/profile_views/sync_views.py
+
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
-from adrf.views import APIView as AsyncAPIView
+from rest_framework.views import APIView
 from apps.common.renderers import CustomJSONRenderer
 from apps.authentication.models import UnifiedUser
-from asgiref.sync import sync_to_async
 from apps.authentication.serializers import UserSerializer
 import logging
 
-class UserProfileDetailView(AsyncAPIView):
+class UserProfileDetailView(APIView):
     permission_classes = [IsAuthenticated]
     renderer_classes = [CustomJSONRenderer]
 
-    async def get(self, request):
+    def get(self, request):
         serializer = UserSerializer(request.user)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-    async def patch(self, request):
+    def patch(self, request):
         serializer = UserSerializer(request.user, data=request.data, partial=True)
-        is_valid = await sync_to_async(serializer.is_valid)()
-        if is_valid:
-            await sync_to_async(serializer.save)()
+        if serializer.is_valid():
+            serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-class UserListView(AsyncAPIView):
+class UserListView(APIView):
     permission_classes = [IsAdminUser]
     renderer_classes = [CustomJSONRenderer]
 
-    async def get(self, request):
-        users = await sync_to_async(list)(UnifiedUser.objects.all())
+    def get(self, request):
+        users = UnifiedUser.objects.all()
         serializer = UserSerializer(users, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)

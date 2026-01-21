@@ -1,26 +1,27 @@
-import secrets
-import redis
-from django.conf import settings
-from apps.common.utils import encrypt_otp, decrypt_otp
+# apps/authentication/services/otp_service/sync_service.py
+
 import logging
+import secrets
+from django.conf import settings
+from utilities.django_redis import get_redis_connection_safe, encrypt_otp, decrypt_otp, generate_numeric_otp
 
 logger = logging.getLogger('application')
 
-class OTPService:
+class SyncOTPService:
     """
-    Service for handling One-Time Passwords (OTP).
+    Synchronous Service for handling One-Time Passwords (OTP).
     - Generates 6-digit numeric codes.
     - Encrypts codes before storage.
     - Stores in Redis with TTL (Time To Live).
     """
 
     @staticmethod
-    def generate_otp(user_id: int, purpose: str = 'login') -> str:
+    def generate_otp(user_id: str, purpose: str = 'login') -> str:
         """
-        Generates and stores an encrypted OTP.
+        Generates and stores an encrypted OTP (Synchronous).
         
         Args:
-            user_id: The ID of the user.
+            user_id: The ID of the user (UUID safe).
             purpose: Context (login, reset, verify).
             
         Returns:
@@ -28,14 +29,16 @@ class OTPService:
         """
         try:
             # 1. Generate Secure Random Number
-            otp_code = secrets.randbelow(1000000)
-            otp_str = f"{otp_code:06d}"
+            otp_str = generate_numeric_otp(6)
 
             # 2. Encrypt
             encrypted_otp = encrypt_otp(otp_str)
 
             # 3. Store in Redis
-            redis_client = redis.Redis.from_url(settings.REDIS_URL)
+            redis_client = get_redis_connection_safe()
+            if not redis_client:
+                 raise Exception("Redis unavailable for OTP storage.")
+            
             key = f"otp:{user_id}:{purpose}"
             redis_client.set(key, encrypted_otp, ex=300)  # 5 minutes expiry
 
@@ -46,12 +49,15 @@ class OTPService:
             raise Exception("Failed to generate OTP.")
 
     @staticmethod
-    def verify_otp(user_id: int, otp: str, purpose: str = 'login') -> bool:
+    def verify_otp(user_id: str, otp: str, purpose: str = 'login') -> bool:
         """
-        Verifies a provided OTP against the encrypted version in Redis.
+        Verifies a provided OTP against the encrypted version in Redis (Synchronous).
         """
         try:
-            redis_client = redis.Redis.from_url(settings.REDIS_URL)
+            redis_client = get_redis_connection_safe()
+            if not redis_client:
+                raise Exception("Redis unavailable for OTP verification.")
+
             key = f"otp:{user_id}:{purpose}"
             
             stored_data = redis_client.get(key)
