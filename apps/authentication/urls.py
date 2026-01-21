@@ -1,58 +1,110 @@
-from django.urls import path
-from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
+# apps/authentication/urls.py
+"""
+Authentication URLs - Synchronous & Asynchronous Routes
 
-# Import new Modular Views
-from apps.authentication.apis import (
-    auth_views,
-    password_views,
-    profile_views,
-    biometric_views
+Architecture:
+    v1/ - Synchronous endpoints (DRF GenericAPIView, WSGI-safe)
+    v2/ - Asynchronous endpoints (ADRF AsyncAPIView, ASGI, high-concurrency)
+"""
+
+import logging
+from django.urls import path
+
+# Sync views (DRF)
+from apps.authentication.apis.auth_views.sync_views import (
+    LoginView,
+    RegisterView,
+    LogoutView,
+    RefreshTokenView
 )
+from apps.authentication.apis.password_views.sync_views import (
+    PasswordResetRequestView,
+    PasswordResetConfirmEmailView as PasswordResetConfirmView, # Alias mapping
+    ChangePasswordView
+)
+
+# Async views (ADRF)
+try:
+    from apps.authentication.apis.auth_views.async_views import (
+        AsyncLoginView,
+        AsyncRegisterView,
+        AsyncLogoutView,
+        AsyncRefreshTokenView
+    )
+    from apps.authentication.apis.password_views.async_views import (
+        PasswordResetRequestView as AsyncPasswordResetRequestView, # Mapping if class names differ
+        PasswordResetConfirmEmailView as AsyncPasswordResetConfirmView,
+        ChangePasswordView as AsyncChangePasswordView
+    )
+    ASYNC_VIEWS_AVAILABLE = True
+except ImportError as e:
+    ASYNC_VIEWS_AVAILABLE = False
+    logger = logging.getLogger('application')
+    logger.warning(
+        f"❌ Async views not available: {e}. "
+        "Using sync endpoints only."
+    )
 
 app_name = 'authentication'
 
-urlpatterns = [
-    # ==========================================
-    # 1. CORE AUTHENTICATION (Registration & Login)
-    # ==========================================
-    path('register/', auth_views.RegisterView.as_view(), name='registration'),
-    path('login/', auth_views.LoginView.as_view(), name='login'),
-    # path('logout/', auth_views.LogoutView.as_view(), name='logout'), # Implement if LogoutView exists
-    
-    # Google Hybrid Auth
-    path('google/', auth_views.GoogleAuthView.as_view(), name='google_auth'),
+# ========================================================================
+# V1 API - Synchronous Endpoints (Production-Ready, WSGI-Safe)
+# ========================================================================
 
-    # ==========================================
-    # 2. OTP & VERIFICATION
-    # ==========================================
-    path('verify-otp/', auth_views.VerifyOTPView.as_view(), name='verify-otp'),
-    path('resend-otp/', auth_views.ResendOTPView.as_view(), name='resend-otp'),
+v1_auth_patterns = [
+    path('v1/auth/login/', LoginView.as_view(), name='login-sync'),
+    path('v1/auth/register/', RegisterView.as_view(), name='register-sync'),
+    path('v1/auth/logout/', LogoutView.as_view(), name='logout-sync'),
+    path('v1/auth/token/refresh/', RefreshTokenView.as_view(), name='refresh-token-sync'),
+]
 
-    # ==========================================
-    # 3. PASSWORD MANAGEMENT
-    # ==========================================
-    path('password-reset-request/', password_views.PasswordResetRequestView.as_view(), name='password-reset-request'),
-    path('password-reset-confirm-email/<str:uidb64>/<str:token>/', password_views.PasswordResetConfirmEmailView.as_view(), name='password-reset-confirm-email'),
-    path('password-reset-confirm-phone/', password_views.PasswordResetConfirmPhoneView.as_view(), name='password-reset-confirm-phone'),
-    path('change-password/', password_views.ChangePasswordView.as_view(), name='change-password'),
+v1_password_patterns = [
+    path('v1/password/reset-request/', PasswordResetRequestView.as_view(), name='password-reset-request-sync'),
+    path('v1/password/reset-confirm/', PasswordResetConfirmView.as_view(), name='password-reset-confirm-sync'),
+    path('v1/password/change/', ChangePasswordView.as_view(), name='password-change-sync'),
+]
 
-    # ==========================================
-    # 4. USER PROFILES
-    # ==========================================
-    path('user/profile/', profile_views.UserProfileDetailView.as_view(), name='user_profile'),
-    path('users/profile/', profile_views.UserListView.as_view(), name='all-users-and-profiles'),
+# ========================================================================
+# V2 API - Asynchronous Endpoints (High-Concurrency, ASGI-Ready)
+# ========================================================================
 
-    # ==========================================
-    # 5. BIOMETRIC AUTH
-    # ==========================================
-    path('biometric/register/options/', biometric_views.BiometricRegisterOptionsView.as_view(), name='biometric-register-options'),
-    path('biometric/register/verify/', biometric_views.BiometricRegisterVerifyView.as_view(), name='biometric-register-verify'),
-    path('biometric/login/options/', biometric_views.BiometricLoginOptionsView.as_view(), name='biometric-login-options'),
-    path('biometric/login/verify/', biometric_views.BiometricLoginVerifyView.as_view(), name='biometric-login-verify'),
+if ASYNC_VIEWS_AVAILABLE:
+    v2_auth_patterns = [
+        path('v2/auth/login/', AsyncLoginView.as_view(), name='login-async'),
+        path('v2/auth/register/', AsyncRegisterView.as_view(), name='register-async'),
+        path('v2/auth/logout/', AsyncLogoutView.as_view(), name='logout-async'),
+        path('v2/auth/token/refresh/', AsyncRefreshTokenView.as_view(), name='refresh-token-async'),
+    ]
 
-    # ==========================================
-    # 6. JWT TOKEN MANAGEMENT
-    # ==========================================
-    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('token/verify/', TokenVerifyView.as_view(), name='token_verify'),
+    v2_password_patterns = [
+        path('v2/password/reset-request/', AsyncPasswordResetRequestView.as_view(), name='password-reset-request-async'),
+        path('v2/password/reset-confirm/', AsyncPasswordResetConfirmView.as_view(), name='password-reset-confirm-async'),
+        path('v2/password/change/', AsyncChangePasswordView.as_view(), name='password-change-async'),
+    ]
+else:
+    v2_auth_patterns = []
+    v2_password_patterns = []
+
+# ========================================================================
+# Combined URL Patterns
+# ========================================================================
+
+urlpatterns = (
+    v1_auth_patterns +
+    v1_password_patterns +
+    v2_auth_patterns +
+    v2_password_patterns
+)
+
+# ========================================================================
+# Legacy Endpoints (Backward Compatibility)
+# ========================================================================
+urlpatterns += [
+    path('login/', LoginView.as_view(), name='login-legacy'),
+    path('register/', RegisterView.as_view(), name='register-legacy'),
+    path('logout/', LogoutView.as_view(), name='logout-legacy'),
+    path('token/refresh/', RefreshTokenView.as_view(), name='refresh-token-legacy'),
+    path('password-reset/', PasswordResetRequestView.as_view(), name='password-reset-request-legacy'),
+    path('password-reset-confirm/', PasswordResetConfirmView.as_view(), name='password-reset-confirm-legacy'),
+    path('password-change/', ChangePasswordView.as_view(), name='password-change-legacy'),
 ]

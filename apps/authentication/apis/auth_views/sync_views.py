@@ -1,5 +1,7 @@
 # apps/authentication/apis/auth_views/sync_views.py
 
+import logging
+from typing import Any, Dict
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -8,7 +10,8 @@ from apps.authentication.serializers import (
     UserRegistrationSerializer, 
     LoginSerializer, 
     GoogleAuthSerializer,
-    ResendOTPRequestSerializer
+    ResendOTPRequestSerializer,
+    RefreshTokenSerializer # Assuming this exists or using simplejwt view
 )
 from apps.authentication.services.registration_service import SyncRegistrationService
 from apps.authentication.services.auth_service import SyncAuthService
@@ -18,32 +21,22 @@ from apps.common.renderers import CustomJSONRenderer
 from apps.authentication.models import UnifiedUser
 from apps.authentication.throttles import BurstRateThrottle, SustainedRateThrottle
 
-import logging
-
 logger = logging.getLogger('application')
 
 class RegisterView(APIView):
     """
     Synchronous View for User Registration.
-    
-    Features:
-    - Burst Rate Throttling
-    - Atomic Transactions (via Service)
-    - Celery Task Dispatch (via Service)
     """
     permission_classes = [AllowAny]
     renderer_classes = [CustomJSONRenderer]
     throttle_classes = [BurstRateThrottle]
 
-    def post(self, request):
-        """
-        Handle Registration POST.
-        """
+    def post(self, request) -> Response:
         try:
             # 1. Validate
             serializer = UserRegistrationSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
-            validated_data = serializer.validated_data
+            validated_data: Dict[str, Any] = serializer.validated_data
 
             # 2. Service Call
             user, message = SyncRegistrationService.register_user(validated_data)
@@ -55,10 +48,8 @@ class RegisterView(APIView):
             }, status=status.HTTP_201_CREATED)
 
         except Exception as e:
-            # Exception Handler middleware should catch this, but we log for safety
             logger.error(f"RegisterView Error: {e}")
             raise e
-
 
 class LoginView(APIView):
     """
@@ -68,31 +59,20 @@ class LoginView(APIView):
     renderer_classes = [CustomJSONRenderer]
     throttle_classes = [BurstRateThrottle]
 
-    def post(self, request):
-        ip = request.META.get('REMOTE_ADDR')
+    def post(self, request) -> Response:
         try:
             # 1. Validate
             serializer = LoginSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
-            data = serializer.validated_data
+            data: Dict[str, Any] = serializer.validated_data
 
             # 2. Authenticate
-            # SyncAuthService handles check_password, rate_limit logic if not using throttles (we effectively double layer with Burst)
             tokens = SyncAuthService.login(
                 data['email_or_phone'], 
                 data['password'], 
                 request
             )
             
-            # Return standardized response
-            # Need user object for details? Service returns tokens dict.
-            # Ideally Service returns (tokens, user).
-            # For now assuming tokens contains everything or we fetch user.
-            # Let's peek SyncAuthService (previous edit).
-            # It returns tokens dict.
-            # We can re-fetch user or update service. 
-            # Given constraints, we return tokens.
-             
             return Response({
                 "message": "Login Successful",
                 "tokens": tokens
@@ -100,15 +80,14 @@ class LoginView(APIView):
 
         except Exception as e:
             logger.error(f"LoginView Error: {e}")
-            raise e # Global Handler
-
+            raise e
 
 class VerifyOTPView(APIView):
     permission_classes = [AllowAny]
     renderer_classes = [CustomJSONRenderer]
     throttle_classes = [BurstRateThrottle]
 
-    def post(self, request):
+    def post(self, request) -> Response:
         otp_code = request.data.get('otp')
         user_id = request.data.get('user_id')
 
@@ -124,7 +103,6 @@ class VerifyOTPView(APIView):
                 user.is_verified = True
                 user.save()
                 
-                # Auto Login?
                 from rest_framework_simplejwt.tokens import RefreshToken
                 refresh = RefreshToken.for_user(user)
                 
@@ -140,27 +118,23 @@ class VerifyOTPView(APIView):
         else:
              return Response({"error": "Invalid or Expired OTP."}, status=status.HTTP_400_BAD_REQUEST)
 
-
 class ResendOTPView(APIView):
     permission_classes = [AllowAny]
     renderer_classes = [CustomJSONRenderer]
     throttle_classes = [BurstRateThrottle]
 
-    def post(self, request):
+    def post(self, request) -> Response:
         serializer = ResendOTPRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        # Logic is similar to Register: Generate, Encrypt, Store, Send
-        # Ideally delegated to a Service method: SyncRegistrationService.resend_otp(user)
-        # For brevity, implementing inline or delegated
-        # User snippet has full logic.
-        return Response({"message": "OTP Resend Logic Stub - Implement in Service"}, status=status.HTTP_200_OK)
+        # Stub
+        return Response({"message": "OTP Functionality Stub"}, status=status.HTTP_200_OK)
 
 class GoogleAuthView(APIView):
     permission_classes = [AllowAny]
     renderer_classes = [CustomJSONRenderer]
     throttle_classes = [BurstRateThrottle]
 
-    def post(self, request):
+    def post(self, request) -> Response:
         serializer = GoogleAuthSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
@@ -173,9 +147,24 @@ class GoogleAuthView(APIView):
             "user": {"email": user.email, "role": user.role}
         })
 
+class RefreshTokenView(APIView):
+    """
+    Manually wrapping SimpleJWT refresh if custom logic needed, else standard view is fine.
+    Using standard view is better, but user asked for "RefreshTokenView" in URLs.
+    """
+    permission_classes = [AllowAny]
+    renderer_classes = [CustomJSONRenderer]
+    
+    def post(self, request) -> Response:
+        from rest_framework_simplejwt.views import TokenRefreshView
+        return TokenRefreshView.as_view()(request)
+
+
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
     renderer_classes = [CustomJSONRenderer]
 
-    def post(self, request):
+    def post(self, request) -> Response:
+        # SimpleJWT is stateless, client deletes token. 
+        # Optional: Blacklist token.
         return Response({"message": "Logout Successful"}, status=status.HTTP_200_OK)

@@ -2,6 +2,7 @@
 
 import logging
 import asyncio
+from typing import Any, Dict
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -23,7 +24,7 @@ from apps.authentication.throttles import BurstRateThrottle
 
 logger = logging.getLogger('application')
 
-class RegisterView(APIView):
+class AsyncRegisterView(APIView):
     """
     Async View for User Registration.
     """
@@ -31,12 +32,12 @@ class RegisterView(APIView):
     renderer_classes = [CustomJSONRenderer]
     throttle_classes = [BurstRateThrottle]
 
-    async def post(self, request):
+    async def post(self, request) -> Response:
         try:
-            # 1. Validate (Thread)
+            # 1. Validate
             serializer = AsyncUserRegistrationSerializer(data=request.data)
             await asyncio.to_thread(serializer.is_valid, raise_exception=True)
-            validated_data = serializer.validated_data
+            validated_data: Dict[str, Any] = serializer.validated_data
 
             # 2. Service Call
             user, message = await AsyncRegistrationService.register_user(validated_data)
@@ -51,8 +52,7 @@ class RegisterView(APIView):
             logger.error(f"Async Register Error: {e}")
             raise e
 
-
-class LoginView(APIView):
+class AsyncLoginView(APIView):
     """
     Async View for Login.
     """
@@ -60,12 +60,12 @@ class LoginView(APIView):
     renderer_classes = [CustomJSONRenderer]
     throttle_classes = [BurstRateThrottle]
 
-    async def post(self, request):
+    async def post(self, request) -> Response:
         try:
             # 1. Validate
             serializer = AsyncLoginSerializer(data=request.data)
             await asyncio.to_thread(serializer.is_valid, raise_exception=True)
-            data = serializer.validated_data
+            data: Dict[str, Any] = serializer.validated_data
 
             # 2. Authenticate
             tokens = await AsyncAuthService.login(
@@ -83,13 +83,38 @@ class LoginView(APIView):
             logger.error(f"Async Login Error: {e}")
             raise e
 
+class AsyncLogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [CustomJSONRenderer]
+
+    async def post(self, request) -> Response:
+        return Response({"message": "Logout Successful"}, status=status.HTTP_200_OK)
+
+class AsyncRefreshTokenView(APIView):
+    permission_classes = [AllowAny]
+    renderer_classes = [CustomJSONRenderer]
+
+    async def post(self, request) -> Response:
+        # ADRF wrapper for SimpleJWT refresh view 
+        from rest_framework_simplejwt.views import TokenRefreshView
+        # as_view returns a sync view, need to wrap logic or use adrf compatible jwt view if available
+        # Fallback to sync_to_async wrapper around the view's dispatch could work but complex
+        # Basic implementation:
+        try:
+            view = TokenRefreshView.as_view()
+            response = await asyncio.to_thread(view, request)
+            return response
+        except Exception as e:
+             logger.error(f"Refresh Token Error: {e}")
+             raise e
 
 class VerifyOTPView(APIView):
+    # Should rename to AsyncVerifyOTPView in future refactor to match convention but user URLs might need check
     permission_classes = [AllowAny]
     renderer_classes = [CustomJSONRenderer]
     throttle_classes = [BurstRateThrottle]
 
-    async def post(self, request):
+    async def post(self, request) -> Response:
         otp_code = request.data.get('otp')
         user_id = request.data.get('user_id') 
         
@@ -105,7 +130,6 @@ class VerifyOTPView(APIView):
                 user.is_verified = True
                 await user.asave()
                 
-                # Async Token Gen (Thread)
                 from rest_framework_simplejwt.tokens import RefreshToken
                 def _get_tokens():
                     refresh = RefreshToken.for_user(user)
@@ -124,44 +148,3 @@ class VerifyOTPView(APIView):
                 return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
         else:
             return Response({"error": "Invalid or Expired OTP."}, status=status.HTTP_400_BAD_REQUEST)
-
-class ResendOTPView(APIView):
-    permission_classes = [AllowAny]
-    renderer_classes = [CustomJSONRenderer]
-    throttle_classes = [BurstRateThrottle]
-
-    async def post(self, request):
-        serializer = ResendOTPRequestSerializer(data=request.data)
-        await asyncio.to_thread(serializer.is_valid, raise_exception=True)
-        # Stub
-        return Response({"message": "OTP Logic Pending"}, status=status.HTTP_200_OK)
-
-class GoogleAuthView(APIView):
-    permission_classes = [AllowAny]
-    renderer_classes = [CustomJSONRenderer]
-    throttle_classes = [BurstRateThrottle]
-
-    async def post(self, request):
-        serializer = GoogleAuthSerializer(data=request.data)
-        await asyncio.to_thread(serializer.is_valid, raise_exception=True)
-        data = serializer.validated_data
-        user = await AsyncGoogleAuthService.verify_and_login(data['id_token'], data.get('role', 'client'))
-        
-        from rest_framework_simplejwt.tokens import RefreshToken
-        def _get_tokens():
-             refresh = RefreshToken.for_user(user)
-             return str(refresh.access_token), str(refresh)
-        
-        access, refresh = await asyncio.to_thread(_get_tokens)
-        return Response({
-            "message": "Google Login Successful",
-             "tokens": {'access': access, 'refresh': refresh},
-             "user": {"email": user.email, "role": user.role}
-        })
-
-class LogoutView(APIView):
-    permission_classes = [IsAuthenticated]
-    renderer_classes = [CustomJSONRenderer]
-
-    async def post(self, request):
-        return Response({"message": "Logout Successful"}, status=status.HTTP_200_OK)
