@@ -1,135 +1,189 @@
-# AUTHENTICATION REFACTOR EXECUTION PLAN (V1.0)
+# AUTHENTICATION IMPLEMENTATION ROADMAP
 
-**Objective:** Implement "Industrial Enterprise Grade" Dual-Engine Authentication (Sync DRF + Async Ninja).
-**Legacy Source:** `userauths` (to be deprecated).
-**Target Destination:** `apps/authentication/`.
+## Complete Study & 10-Step Enterprise-Grade Implementation Plan
 
----
+### Version 2.0 (Execution Phase)
 
-## 🏗️ SECTION 1: REGISTRATION (DUAL-ENGINE)
-
-### Step 1: Centralized Service & Schema Definition
-
-- **Goal:** Decouple business logic from views. Move registration logic to a unified Service Layer.
-- **Actions:**
-  - Create `apps/authentication/services/registration_service.py`:
-    - Implement `create_user_atomic()`: Handles transactional user creation.
-    - Implement `trigger_otp_flow()`: Calls `OTPService` and dispatches Event.
-  - Define Pydantic Schemas in `apps/authentication/types/auth_types.py`:
-    - `UserRegistrationSchema`: Strict typing for Ninja (Email/Phone validation).
-  - **Architecture Check:** Ensure usage of `apps/common/utils.py` for logging and error handling.
-
-### Step 2: Async Registration (Django Ninja)
-
-- **Goal:** High-concurrency registration endpoint (~50ms target).
-- **Actions:**
-  - Create/Update `apps/authentication/apis/auth_views/async_views.py`.
-  - **Logic:**
-    - Use `asyncio.gather()` for parallel tasks (e.g., checking uniqueness of email & phone simultaneously).
-    - Call `RegistrationService` (async wrapper or native async method).
-    - Emit `UserRegisteredEvent` via `EventBus` (replacing signals).
-  - **Validation:** Strict Pydantic validation (No `rest_framework.serializers` in async path).
-
-### Step 3: Sync Registration (DRF)
-
-- **Goal:** Admin/Legacy compatibility and standard web form support.
-- **Actions:**
-  - Create/Update `apps/authentication/apis/auth_views/sync_views.py`.
-  - **Logic:**
-    - Use `transaction.atomic()` decorator.
-    - Call `RegistrationService` (sync method).
-    - Return standard DRF responses.
-  - **Validation:** Keep `UserRegistrationSerializer` for DRF navigability.
+### Date: Feb 2026
 
 ---
 
-## 🔐 SECTION 2: OTP VERIFICATION & RESEND
+## EXECUTIVE SUMMARY
 
-### Step 4: OTP Service Construction (The Core)
+This document represents a **comprehensive study and analysis** of the existing authentication system, combined with a **10-step implementation roadmap** that bridges the `userauths` legacy application with the new `apps/authentication` and `apps/common` modules designed for Django 6.0+ async-first architecture.
 
-- **Goal:** Centralize robust OTP handling with Redis encryption.
-- **Actions:**
-  - Create `apps/authentication/services/otp_service.py`:
-    - Integrate `generate_numeric_otp` and `encrypt_otp` from `apps/common/utils.py`.
-    - Implement `store_otp_safe()`: Uses `get_redis_connection_safe` with retries.
-    - Implement `verify_otp_logic()`: Handles decryption and user lookups (optimized `scan_iter`).
-  - **Backend:** Ensure `apps/common/providers/django_redis.py` is the simplified interface.
+**Current State Analysis:**
 
-### Step 5: Verify & Resend Endpoints (Sync + Async)
+- Legacy `userauths` uses DRF, Celery tasks, Redis OTP encryption (Fernet), and atomic transactions.
+- New `apps/authentication` has modern async services (`auth_service.py`, `otp_service.py`) with support for Dual-Engine (Sync+Async).
+- Unified `UnifiedUser` model merges legacy Profile data via `apps/common`.
 
-- **Goal:** Secure, idempotent OTP verification.
-- **Actions:**
-  - **Async (`apis/auth_views/async_views.py`)**:
-    - `POST /verify-otp/`: Async Ninja route. Fast validation.
-    - `POST /resend-otp/`: Async dispatch of SMS/Email task.
-  - **Sync (`apis/auth_views/sync_views.py`)**:
-    - `VerifyOTPView` (GenericAPIView): Standard DRF implementation.
-    - `ResendOTPView`: Standard DRF implementation.
+**Target State:**
+
+- **Industrial-Grade Separation:** Strict wall between Sync (DRF) and Async (Ninja) logic.
+- **Dual-Engine:** Parallel implementation for all 4 key flows (Register, OTP, Login, Password).
+- **Security:** Fernet OTP encryption, Redis TTL, atomic transactions, and IP-based throttling.
 
 ---
 
-## 🔑 SECTION 3: LOGIN & GOOGLE AUTH
+## PART A: EXISTING DESIGN ANALYSIS (The "Old" `userauths`)
 
-### Step 6: Dual-Engine Login Architecture
+### A.1. View Layer Pattern (DRF Generics)
 
-- **Goal:** Unified login for Email/Phone with JWT issuance.
-- **Actions:**
-  - **Service:** `apps/authentication/services/auth_service.py` -> `authenticate_user()` method.
-  - **Async Login (`async_views.py`)**:
-    - Native `aget()` calls for user lookup.
-    - Async JWT generation (manual encode or wrapped SimpleJWT).
-  - **Sync Login (`sync_views.py`)**:
-    - Standard `TokenObtainPairView` customization.
-  - **Security:** Enforce rate-limiting (throttling) on both engines.
+Legacy `RegisterViewCelery` uses `@transaction.atomic` to wrap user creation, OTP generation, and Celery dispatch.
+**Insight:** We must preserve this atomicity. If Redis fails or Email fails, the User DB record must rollback.
 
-### Step 7: Google Auth Integration
+### A.2. OTP Flow Pattern
 
-- **Goal:** Social Auth without `django-allauth` bloat in async path.
-- **Actions:**
-  - Create `apps/authentication/services/google_service.py`.
-  - **Async:** Use `httpx` or `aiohttp` to verify Google Tokens (non-blocking).
-  - **Sync:** Use `requests` (blocking) for legacy/admin flows.
-  - **Unified User Creation:** Both paths map to the same `get_or_create` logic in `RegistrationService`.
+Legacy uses a direct Redis key pattern: `otp_data:{user_id}:{encrypted_otp}`.
+**Insight:** We will upgrade this to **Purpose-Scoped Keys** (`otp:{user_id}:{purpose}:{encrypted_otp}`) to prevent OTP reuse across features (e.g., using a signup OTP for password reset).
+
+### A.3. Encryption Pattern
+
+Legacy uses `encrypt_otp` (Fernet) from `utilities`.
+**Insight:** We will use `apps/common/utils.py` which standardizes this with the same `SECRET_KEY`.
 
 ---
 
-## 🔄 SECTION 4: PASSWORD MANAGEMENT
+## PART B: 10-STEP IMPLEMENTATION ROADMAP
 
-### Step 8: Password Reset Request (Dispatch)
+### **SEGMENT 1: REGISTRATION (SYNC & ASYNC)**
 
-- **Goal:** Securely initiate reset flow via Email or SMS.
-- **Actions:**
-  - **Service:** `apps/authentication/services/password_service.py` -> `initiate_reset()`.
-  - **Logic:**
-    - Determine Email vs Phone.
-    - Generate Token (Email) or OTP (SMS).
-    - Store in Redis (isolated keys `reset_flow:{id}`).
-    - Dispatch `SendEmailTask` or `SendSMSTask` (Celery/Native).
+#### **STEP 1: Implement Registration Service (Both Sync & Async)**
 
-### Step 9: Password Reset Confirm (Execution)
+**Location:** `apps/authentication/services/registration_service.py`
+**Actions:**
 
-- **Goal:** Finalize password change transactionally.
-- **Actions:**
-  - **Async (`apis/password_views/async_views.py`)**:
-    - Fast verification of Token/OTP.
-    - `user.aset_password()` (native async).
-  - **Sync (`apis/password_views/sync_views.py`)**:
-    - Standard DRF `PasswordResetConfirmView`.
-  - **Security:** Invalidate all existing sessions/tokens upon success.
+- **Sync Logic (`register_sync`):**
+  - Atomic Transaction.
+  - `CustomUserManager.create_user()`.
+  - `OTPService.generate_otp_sync()`.
+  - `EmailManager.send_mail()` / `SMSManager.send_sms()`.
+- **Async Logic (`register_async`):**
+  - Async Atomic Transaction.
+  - `CustomUserManager.acreate_user()` (Native Async).
+  - `OTPService.generate_otp_async()`.
+  - `EmailManager.asend_mail()` (Native Async).
 
-### Step 10: Final Hardening & Integration
+#### **STEP 2: Implement Registration Serializer & Validation**
 
-- **Goal:** "Industrial Enterprise Grade" polish.
-- **Actions:**
-  - **URLs:** Wire up `apps/authentication/urls.py` with `v1` (DRF) and `v2` (Ninja) paths.
-  - **Logging:** Audit all Auth endpoints with `application_logger` (Entry/Exit/Fail).
-  - **Exceptions:** Ensure `apps/common/exceptions.py` catches `OTPFailed`, `UserNotFound`, etc., and renders standardized JSON errors for both engines.
-  - **Docs:** Auto-generate Swagger for both V1 and V2 to verify schema correctness.
+**Location:** `apps/authentication/serializers.py`
+**Actions:**
+
+- Extend `UserRegistrationSerializer`.
+- **Validation Rules:**
+  - `email` XOR `phone` (One required, not both).
+  - `password` strength & matching.
+  - `role` allowed choices.
+  - **Uniqueness Check:** Pre-check `UnifiedUser.objects.filter(...)` before saving.
+
+#### **STEP 3: Implement Registration Views (Sync & Async)**
+
+**Location:** `apis/auth/sync_views.py` & `async_views.py`
+**Actions:**
+
+- **Sync (DRF):** `RegisterView(CreateAPIView)`. Uses `BurstRateThrottle`.
+- **Async (Ninja/ADRF):** `AsyncRegisterView`. Uses non-blocking `await` calls.
+- **Response:** Standardized JSON (`{success: true, message: "...", data: ...}`).
 
 ---
 
-## 🛠️ DEPENDENCIES (MAPPED FROM LEGACY)
+### **SEGMENT 2: OTP VERIFICATION & RESEND**
 
-- **Email:** `apps/common/utils.py` / `userauths.tasks` -> `apps/common/tasks.py`.
-- **SMS:** `apps/common/utils.py` (Twilio/Provider integration).
-- **Redis:** `utilities.django_redis` -> `apps/common/providers/redis_provider.py`.
+#### **STEP 4: Implement OTP Verification Service**
+
+**Location:** `apps/authentication/services/otp_service.py`
+**Actions:**
+
+- **Redis Pattern:** Use `scan_iter` to find keys `otp:{user_id}:{purpose}:*`.
+- **Decryption:** Retrieve -> Decrypt -> Compare.
+- **Cleanup:** Delete key immediately upon usage (One-Time Use).
+- **Activation:** Set `is_active=True`, `is_verified=True`.
+- **Token Issue:** Generate JWT (Refresh/Access) immediately upon verification.
+
+#### **STEP 5: Verify & Resend Endpoints**
+
+**Location:** `apis/auth/sync_views.py` & `async_views.py`
+**Actions:**
+
+- **Sync:** `VerifyOTPView` & `ResendOTPView`.
+- **Async:** `AsyncVerifyOTPView` & `AsyncResendOTPView`.
+- **Resend Logic:** Invalidate _old_ OTP -> Generate New -> Dispatch.
+
+---
+
+### **SEGMENT 3: LOGIN (SYNC & ASYNC)**
+
+#### **STEP 6: Implement Login Service (Dual-Engine)**
+
+**Location:** `apps/authentication/services/auth_service.py`
+**Actions:**
+
+- **Logic:**
+  - Find User (Email/Phone).
+  - Check Password (`check_password`).
+  - Check `is_active`/`is_verified`.
+  - Update `last_login`.
+  - Generate Tokens.
+- **Audit:** Log IP, User-Agent, and Timestamp.
+
+#### **STEP 7: Implement Login Serializers & Views**
+
+**Location:** `apis/auth/sync_views.py` & `async_views.py`
+**Actions:**
+
+- **Sync:** `LoginView(GenericAPIView)`.
+- **Async:** `AsyncLoginView` (Native Async).
+- **Security:** Strict output serialization (no password leaking).
+
+#### **STEP 8: Google Auth Integration**
+
+**Location:** `apps/authentication/services/google_service.py`
+**Actions:**
+
+- **Verify:** Validate Google ID Token with Google Servers.
+- **Get/Create:** Find user by email OR create new instance.
+- **Auto-Verify:** Google users are `is_verified=True` by default.
+- **Issue:** JWT Tokens.
+
+---
+
+### **SEGMENT 4: PASSWORD MANAGEMENT**
+
+#### **STEP 9: Password Reset Request (Dispatch)**
+
+**Location:** `apps/authentication/services/password_service.py`
+**Actions:**
+
+- **Email Flow:** Generate Token (`default_token_generator`) -> Email Link.
+- **Phone Flow:** Generate OTP -> SMS.
+- **Security:** Generic response ("If account exists...") to prevent enumeration.
+
+#### **STEP 10: Password Reset Confirm (Execution)**
+
+**Location:** `apis/password/sync_views.py` & `async_views.py`
+**Actions:**
+
+- **Verify:** Check Token/OTP validity in Redis.
+- **Action:** `user.set_password(new_passwd)`.
+- **Cleanup:** Delete Token/OTP.
+- **Hardening:** Invalidate existing sessions if possible.
+
+---
+
+## PART C: DEPENDENCY MAPPING
+
+| Component      | Legacy Source                     | New Destination                                             |
+| -------------- | --------------------------------- | ----------------------------------------------------------- |
+| **User Model** | `userauths.models.User`           | `apps/authentication.models.UnifiedUser`                    |
+| **Email**      | `userauths.tasks.send_email_task` | `apps/common.managers.email.EmailManager`                   |
+| **SMS**        | `userauths.tasks.send_sms_task`   | `apps/common.managers.sms.SMSManager`                       |
+| **Redis**      | `utilities.django_redis`          | `apps/common.providers.redis_provider`                      |
+| **Encryption** | `utilities.encrypt_otp`           | `apps/common.utils.encrypt_otp`                             |
+| **Views**      | `RegisterViewCelery`              | `services.registration_service` + `apis/auth/sync_views.py` |
+
+## PART D: TECHNICAL REQUIREMENTS
+
+1.  **Strict Separation:** `sync_views.py` MUST NOT contain `async def`. `async_views.py` MUST NOT contain blocking calls.
+2.  **Robust Error Handling:** Every `try` block must catch `ValidationError` and generic `Exception` with distinct logging.
+3.  **Logging:** Every entry point and exit point must be logged using `application_logger`.
