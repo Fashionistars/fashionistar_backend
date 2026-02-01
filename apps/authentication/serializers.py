@@ -158,7 +158,7 @@ class AsyncLoginSerializer(LoginSerializer):
 class UserRegistrationSerializer(serializers.ModelSerializer):
     """
     Serializer for user registration, handling both email and phone registration with merged Profile fields.
-    Strictly enforces One-of-Email-or-Phone logic.
+    Strictly enforces One-of-Email-or-Phone logic and delegates creation to Service layer.
     """
     password = serializers.CharField(
         write_only=True, 
@@ -253,37 +253,43 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         """
-        Creates a new user with merged profile data.
+        Creates a new user via RegistrationService.
         """
         try:
+            from apps.authentication.services.registration_service import RegistrationService
+            
+            # Delegate to Service
+            # Note: Service returns dict {'message': ..., 'user_id': ...}
+            # We need to return the User instance to satisfy serializer.save() usually.
+            # But Authentication Registration usually returns a response dict.
+            # If we are using serializer.save(), we expect an instance.
+            # Let's adjust based on Service return. 
+            # Service returns dict. We might need to fetch the user or adjust Service to return user.
+            # The Service `register_sync` returns a dict.
+            # Let's Modify Service to return (User, dict) or just User with attached attributes?
+            # Or simpler: The View calls Service directly (as per plan).
+            # So this create method is just a fallback/proxy.
+            
+            # Let's extract params
             email = validated_data.get('email')
             phone = validated_data.get('phone')
             password = validated_data.get('password')
             role = validated_data.get('role')
-
-            # Extract extra fields (bio, country, etc.)
-            # These are passed to create_user which should handle extra_fields
-            extra_fields = {
-                k: v for k, v in validated_data.items() 
-                if k not in ['password', 'password2', 'email', 'phone', 'role']
-            }
-
-            # Determine Auth Provider
-            auth_provider = UnifiedUser.PROVIDER_EMAIL if email else UnifiedUser.PROVIDER_PHONE
-
-            user = User.objects.create_user(
-                email=email if email else None,
+            
+            result = RegistrationService.register_sync(
+                email=email,
                 phone=phone,
                 password=password,
                 role=role,
-                is_active=False,  # Require verification
-                auth_provider=auth_provider,
-                **extra_fields
+                **validated_data
             )
-            logger.info(f"New user registered: {user.pk} - {role}")
-            return user
+            
+            # Retrieve the user to return instance
+            from apps.authentication.models import UnifiedUser
+            return UnifiedUser.objects.get(id=result['user_id'])
+            
         except Exception as e:
-            logger.error(f"Error creating user: {str(e)}")
+            logger.error(f"Error creating user via serializer: {str(e)}")
             raise serializers.ValidationError({"error": f"An error occurred during user creation: {e}"})
 
 

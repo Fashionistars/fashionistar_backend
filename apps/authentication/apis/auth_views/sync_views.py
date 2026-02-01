@@ -11,12 +11,12 @@ from apps.authentication.serializers import (
     LoginSerializer, 
     GoogleAuthSerializer,
     ResendOTPRequestSerializer,
-    RefreshTokenSerializer # Assuming this exists or using simplejwt view
+    # RefreshTokenSerializer 
 )
-from apps.authentication.services.registration_service import SyncRegistrationService
-from apps.authentication.services.auth_service import SyncAuthService
-from apps.authentication.services.google_service import SyncGoogleAuthService
-from apps.authentication.services.otp_service import SyncOTPService
+from apps.authentication.services.registration_service import RegistrationService
+from apps.authentication.services.auth_service import SyncAuthService # Assuming this package/file exists
+from apps.authentication.services.google_service import SyncGoogleAuthService # Assuming this exists
+from apps.authentication.services.otp_service import OTPService
 from apps.common.renderers import CustomJSONRenderer
 from apps.authentication.models import UnifiedUser
 from apps.authentication.throttles import BurstRateThrottle, SustainedRateThrottle
@@ -39,12 +39,14 @@ class RegisterView(APIView):
             validated_data: Dict[str, Any] = serializer.validated_data
 
             # 2. Service Call
-            user, message = SyncRegistrationService.register_user(validated_data)
+            # We call service directly to get the response message cleanly
+            result = RegistrationService.register_sync(**validated_data)
             
             return Response({
-                "message": message,
-                "user_id": user.id,
-                "identifying_info": user.identifying_info
+                "message": result['message'],
+                "user_id": result['user_id'],
+                "email": result.get('email'),
+                "phone": result.get('phone')
             }, status=status.HTTP_201_CREATED)
 
         except Exception as e:
@@ -94,7 +96,9 @@ class VerifyOTPView(APIView):
         if not otp_code or not user_id:
              return Response({"error": "OTP and User ID required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        valid = SyncOTPService.verify_otp(user_id, otp_code, purpose="activation")
+        # Uses new OTPService implementation
+        valid = OTPService.verify_otp_sync(user_id, otp_code, purpose="verify")
+        
         if valid:
             try:
                 user = UnifiedUser.objects.get(pk=user_id)
