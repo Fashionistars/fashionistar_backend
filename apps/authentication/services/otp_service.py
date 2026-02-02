@@ -9,6 +9,9 @@ from apps.common.utils import (
     decrypt_otp,
     get_otp_expiry_datetime
 )
+from apps.authentication.models import UnifiedUser
+from apps.common.managers.email import EmailManager
+from apps.common.managers.sms import SMSManager
 
 logger = logging.getLogger('application')
 
@@ -135,3 +138,105 @@ class OTPService:
         Verifies an OTP (Asynchronous).
         """
         return await sync_to_async(OTPService.verify_otp_sync)(user_id, otp, purpose)
+
+    @staticmethod
+    def resend_otp_sync(email_or_phone: str, purpose: str = 'verify') -> str:
+        """
+        Resends an OTP to the user (Synchronous).
+        Invalidates previous OTPs for the same purpose.
+        """
+        try:
+            # 1. Find User
+            user = None
+            if '@' in email_or_phone:
+                user = UnifiedUser.objects.filter(email=email_or_phone).first()
+            else:
+                user = UnifiedUser.objects.filter(phone=email_or_phone).first()
+
+            if not user:
+                # Return generic message to prevent enumeration
+                logger.warning(f"Resend OTP requested for non-existent user: {email_or_phone}")
+                return "If an account exists, a new OTP has been sent."
+
+            # 2. Invalidate Old OTPs
+            redis_conn = get_redis_connection_safe()
+            if redis_conn:
+                pattern = f"otp:{user.id}:{purpose}:*"
+                keys = redis_conn.keys(pattern)
+                for key in keys:
+                    redis_conn.delete(key)
+                logger.info(f"Invalidated old OTPs for user {user.id}")
+
+            # 3. Generate New OTP
+            otp = OTPService.generate_otp_sync(user.id, purpose)
+
+            # 4. Dispatch
+            if user.email:
+                context = {'user_id': user.id, 'otp': otp}
+                EmailManager.send_mail(
+                    subject="Resend Verification OTP",
+                    recipients=[user.email],
+                    template_name='otp.html',
+                    context=context
+                )
+            elif user.phone:
+                body = f"Your new verification OTP: {otp}"
+                SMSManager.send_sms(str(user.phone), body)
+
+            return "If an account exists, a new OTP has been sent."
+
+        except Exception as e:
+            logger.error(f"Resend OTP Error: {e}", exc_info=True)
+            raise
+
+    @staticmethod
+    async def resend_otp_async(email_or_phone: str, purpose: str = 'verify') -> str:
+        """
+        Resends an OTP to the user (Asynchronous).
+        """
+        try:
+            # 1. Find User (Async)
+            user = None
+            if '@' in email_or_phone:
+                user = await UnifiedUser.objects.filter(email=email_or_phone).afirst()
+            else:
+                user = await UnifiedUser.objects.filter(phone=email_or_phone).afirst()
+
+            if not user:
+                logger.warning(f"Resend OTP requested (Async) for non-existent user: {email_or_phone}")
+                return "If an account exists, a new OTP has been sent."
+
+            # 2. Invalidate Old OTPs (Sync call is likely fine for fast Redis, or wrap it)
+            # Keeping it simple with sync_to_async wrapper mainly around the whole flow if complex, 
+            # but here we mix async ORM and sync redis. 
+            # Ideally all I/O should be awaited.
+            
+            redis_conn = get_redis_connection_safe()
+            if redis_conn:
+                pattern = f"otp:{user.id}:{purpose}:*"
+                # keys() is blocking. In high conc, wrap this.
+                keys = await sync_to_async(redis_conn.keys)(pattern)
+                for key in keys:
+                    await sync_to_async(redis_conn.delete)(key)
+
+            # 3. Generate New OTP (Async)
+            otp = await OTPService.generate_otp_async(user.id, purpose)
+
+            # 4. Dispatch (Async)
+            if user.email:
+                context = {'user_id': user.id, 'otp': otp}
+                await EmailManager.asend_mail(
+                    subject="Resend Verification OTP",
+                    recipients=[user.email],
+                    template_name='otp.html',
+                    context=context
+                )
+            elif user.phone:
+                body = f"Your new verification OTP: {otp}"
+                await SMSManager.asend_sms(str(user.phone), body)
+
+            return "If an account exists, a new OTP has been sent."
+
+        except Exception as e:
+            logger.error(f"Resend OTP Async Error: {e}", exc_info=True)
+            raise

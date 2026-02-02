@@ -70,6 +70,25 @@ class RegistrationSchema(BaseModel):
             
         return values
 
+class VerifyOTPSchema(BaseModel):
+    """
+    Schema for OTP Verification.
+    """
+    user_id: int
+    otp: str
+
+    @validator('otp')
+    def validate_otp(cls, v):
+        if not v.isdigit() or len(v) != 6:
+            raise ValueError("OTP must be exactly 6 digits.")
+        return v
+
+class ResendOTPSchema(BaseModel):
+    """
+    Schema for Resending OTP.
+    """
+    email_or_phone: str
+
 class PasswordResetRequestSchema(BaseModel):
     email_or_phone: str
 

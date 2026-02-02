@@ -128,10 +128,22 @@ class ResendOTPView(APIView):
     throttle_classes = [BurstRateThrottle]
 
     def post(self, request) -> Response:
-        serializer = ResendOTPRequestSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        # Stub
-        return Response({"message": "OTP Functionality Stub"}, status=status.HTTP_200_OK)
+        try:
+            # 1. Validate Input
+            serializer = ResendOTPRequestSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            
+            email_or_phone = serializer.validated_data.get('email_or_phone')
+            
+            # 2. Call Service
+            message = OTPService.resend_otp_sync(email_or_phone=email_or_phone)
+            
+            return Response({"message": message}, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"ResendOTPView Error: {e}")
+            # Raise exception to be handled by DRF exception handler
+            raise e
 
 class GoogleAuthView(APIView):
     permission_classes = [AllowAny]

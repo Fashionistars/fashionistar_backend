@@ -9,8 +9,13 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from adrf.views import APIView
 
-from apps.authentication.types.auth_schemas import RegistrationSchema
+from apps.authentication.types.auth_schemas import (
+    RegistrationSchema, 
+    VerifyOTPSchema, 
+    ResendOTPSchema
+)
 from apps.authentication.services.registration_service import RegistrationService
+from apps.authentication.services.otp_service import OTPService
 from apps.authentication.serializers import (
     AsyncUserRegistrationSerializer,
     AsyncLoginSerializer,
@@ -57,39 +62,82 @@ async def register(request, data: RegistrationSchema):
         # We can re-raise specific HttpErrors if needed
         raise e
 
+@auth_router.post("/verify-otp", response={200: Dict[str, Any]}, auth=None)
+async def verify_otp(request, data: VerifyOTPSchema):
+    """
+    Async OTP Verification (Django Ninja).
+    Verifies OTP, activates account, and returns JWT tokens.
+    """
+    try:
+        # Verify
+        valid = await OTPService.verify_otp_async(user_id=data.user_id, otp=data.otp)
+        
+        if valid:
+            # Activate and Get Tokens
+            # Ideally this logic moves to OTPService or AuthService to keep View thin
+            # But per roadmap, we can verify and then act.
+            # Let's clean this up by moving token generation to Service if possible,
+            # but for now, we follow the pattern established in the service or sync view.
+            
+            # Using OTPService directly doesn't yield tokens, need to construct response.
+            user = await UnifiedUser.objects.aget(pk=data.user_id)
+            if not user.is_active:
+                user.is_active = True
+            user.is_verified = True
+            await user.asave()
+            
+            from rest_framework_simplejwt.tokens import RefreshToken
+            def _get_tokens():
+                refresh = RefreshToken.for_user(user)
+                return str(refresh.access_token), str(refresh)
+            
+            access, refresh = await asyncio.to_thread(_get_tokens)
+
+            return 200, {
+                "message": "Account Verified. Login Successful.",
+                'user_id': user.id,
+                'role': user.role,
+                'access': access,
+                'refresh': refresh,
+            }
+        else:
+            # Ninja expects HTTP exceptions or specific return codes
+            # Returning 400 manually or raising exception
+            # We can use ninja.errors.HttpError(400, "...")
+            from ninja.errors import HttpError
+            raise HttpError(400, "Invalid or Expired OTP.")
+
+    except UnifiedUser.DoesNotExist:
+        from ninja.errors import HttpError
+        raise HttpError(404, "User not found.")
+    except Exception as e:
+        logger.error(f"Async Verify OTP Error: {e}")
+        raise e
+
+@auth_router.post("/resend-otp", response={200: Dict[str, Any]}, auth=None)
+async def resend_otp(request, data: ResendOTPSchema):
+    """
+    Async Resend OTP (Django Ninja).
+    Invalidates old OTP and sends a new one via Email/SMS.
+    """
+    try:
+        message = await OTPService.resend_otp_async(email_or_phone=data.email_or_phone)
+        return 200, {"message": message}
+    except Exception as e:
+        logger.error(f"Async Resend OTP Error: {e}")
+        # Return generic error to user or re-raise
+        from ninja.errors import HttpError
+        raise HttpError(500, "Failed to resend OTP.")
 
 # =============================================================================
-# ADRF VIEWS (Legacy/Transition)
+# ADRF VIEWS (Legacy/Transition Compatibility)
 # =============================================================================
 
-# class AsyncRegisterView(APIView):
-#     """
-#     Async View for User Registration.
-#     DEPRECATED: Use Ninja Router 'auth_router' instead.
-#     """
-#     permission_classes = [AllowAny]
-#     renderer_classes = [CustomJSONRenderer]
-#     throttle_classes = [BurstRateThrottle]
-#
-#     async def post(self, request) -> Response:
-#         try:
-#             # 1. Validate
-#             serializer = AsyncUserRegistrationSerializer(data=request.data)
-#             await asyncio.to_thread(serializer.is_valid, raise_exception=True)
-#             validated_data: Dict[str, Any] = serializer.validated_data
-#
-#             # 2. Service Call
-#             user, message = await LegacyAsyncRegistrationService.register_user(validated_data)
-#             
-#             return Response({
-#                 "message": message,
-#                 "user_id": user.id,
-#                 "identifying_info": user.identifying_info
-#             }, status=status.HTTP_201_CREATED)
-# 
-#         except Exception as e:
-#             logger.error(f"Async Register Error: {e}")
-#             raise e
+# Deprecated AsyncRegisterView removed.
+# Deprecated VerifyOTPView (ADRF) removed/commented out since Ninja covers it 
+# BUT explicit URLs might still point to adrf views.
+# We should keep ADRF views if they are separately routed in urls.py until fully switched.
+# However, the roadmap implies we implement the Async endpoints. Ninja is the preferred way.
 
 class AsyncLoginView(APIView):
     """
@@ -146,6 +194,7 @@ class AsyncRefreshTokenView(APIView):
              logger.error(f"Refresh Token Error: {e}")
              raise e
 
+# Kept for backward compatibility if `urls.py` still points here, otherwise Ninja route takes precedence if configured
 class VerifyOTPView(APIView):
     # Should rename to AsyncVerifyOTPView in future refactor to match convention but user URLs might need check
     permission_classes = [AllowAny]
