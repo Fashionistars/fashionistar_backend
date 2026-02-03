@@ -35,8 +35,13 @@ class RegistrationService:
         """
         try:
             with transaction.atomic():
+                # Sanitize input: Remove non-model fields
+                extra_fields.pop('password_confirm', None)
+                extra_fields.pop('password2', None)
+
                 # 1. Create User
-                user = CustomUserManager().create_user(
+                # Use objects manager directly to avoid instantiation issues
+                user = UnifiedUser.objects.create_user(
                     email=email, 
                     phone=phone, 
                     password=password, 
@@ -85,55 +90,18 @@ class RegistrationService:
                             request: Any = None, **extra_fields) -> Dict[str, Any]:
         """
         Asynchronous User Registration Flow (Ninja/ASGI).
-        
-        Uses Native Async methods where available (Django 4.1+ / 6.0).
+        Wraps synchronous method to ensure transaction atomicity.
         """
         try:
-            # Async Atomic Transaction
-            async with transaction.atomic():
-                # 1. Create User (Async)
-                # Note: CustomUserManager must implement acreate_user or inherit from BaseUserManager
-                # Django's BaseUserManager has `acreate_user` since 4.1 via AsyncManager mixin usually.
-                # If CustomUserManager overrides create_user but not acreate_user, we might need check.
-                # Assuming CustomUserManager is standard or has acreate_user.
-                user = await CustomUserManager().acreate_user(
-                    email=email,
-                    phone=phone,
-                    password=password,
-                    role=role,
-                    is_active=False,
-                    is_verified=False,
-                    **extra_fields
-                )
-                logger.info(f"✅ User created (Async): {email or phone} (ID: {user.id})")
-                
-                # 2. Generate OTP (Async)
-                otp = await OTPService.generate_otp_async(user.id, purpose='verify')
-                
-                # 3. Send Notification (Async)
-                if email:
-                    context = {'user_id': user.id, 'otp': otp}
-                    await EmailManager.asend_mail(
-                        subject="Verify Your Email",
-                        recipients=[email],
-                        template_name='otp.html',
-                        context=context
-                    )
-                    logger.info(f"✅ OTP email sent (Async) to {email}")
-                elif phone:
-                    body = f"Your verification OTP: {otp}"
-                    # Ensure phone is string for SMS manager
-                    await SMSManager.asend_sms(str(phone), body)
-                    logger.info(f"✅ OTP SMS sent (Async) to {phone}")
-                
-                return {
-                    'message': 'Registration successful. Check email/phone for OTP.',
-                    'user_id': user.id,
-                    'email': email,
-                    'phone': str(phone) if phone else None
-                }
+            return await sync_to_async(RegistrationService.register_sync)(
+                email=email,
+                phone=phone,
+                password=password,
+                role=role,
+                request=request,
+                **extra_fields
+            )
 
         except Exception as e:
-            logger.error(f"❌ Registration Failed (Async): {str(e)}", exc_info=True)
-            # Async transaction rollback
+            logger.error(f"❌ Registration Failed (Async Wrapper): {str(e)}", exc_info=True)
             raise e

@@ -117,7 +117,7 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
     is_verified = models.BooleanField(default=False, db_index=True, help_text="True if email/phone OTP is verified.")
     
     # Legacy Support
-    pid = models.CharField(max_length=50, unique=True, null=True, help_text="Unique identifier.")
+    pid = models.CharField(max_length=50, unique=True, null=True, blank=True, help_text="Unique identifier.")
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['phone']
