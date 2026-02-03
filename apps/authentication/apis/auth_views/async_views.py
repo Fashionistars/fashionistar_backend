@@ -25,7 +25,7 @@ from apps.authentication.serializers import (
 # from apps.authentication.services.registration_service_legacy import AsyncRegistrationService as LegacyAsyncRegistrationService
 from apps.authentication.services.auth_service import AsyncAuthService
 from apps.authentication.services.google_service import AsyncGoogleAuthService
-from apps.authentication.services.otp_service import AsyncOTPService
+# from apps.authentication.services.otp_service import AsyncOTPService
 from apps.common.renderers import CustomJSONRenderer
 from apps.authentication.models import UnifiedUser
 from apps.authentication.throttles import BurstRateThrottle
@@ -208,7 +208,7 @@ class VerifyOTPView(APIView):
         if not otp_code or not user_id:
             return Response({"error": "OTP and User ID required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        valid = await AsyncOTPService.verify_otp(user_id, otp_code)
+        valid = await OTPService.verify_otp_async(user_id, otp_code)
         if valid:
             try:
                 user = await UnifiedUser.objects.aget(pk=user_id)

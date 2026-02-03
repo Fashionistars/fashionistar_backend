@@ -6,7 +6,7 @@ from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.conf import settings
 from apps.authentication.models import UnifiedUser
-from apps.authentication.services.otp_service import SyncOTPService
+from apps.authentication.services.otp_service import OTPService
 from apps.common.managers.email import EmailManager
 from apps.common.managers.sms import SMSManager
 
@@ -61,7 +61,7 @@ class SyncPasswordService:
 
             else:
                 # PHONE FLOW
-                otp = SyncOTPService.generate_otp(str(user.id), purpose='password_reset')
+                otp = OTPService.generate_otp_sync(user.id, purpose='password_reset')
                 message = f"Your Password Reset Code is: {otp}. Valid for 5 minutes."
                 SMSManager.send_sms(to=str(user.phone), body=message)
                 logger.info(f"📱 Reset SMS sent to {user.phone}")
@@ -96,9 +96,9 @@ class SyncPasswordService:
                 try:
                     user = UnifiedUser.objects.get(phone=data['phone'])
                 except UnifiedUser.DoesNotExist:
-                     raise Exception("Invalid phone.")
+                    raise Exception("Invalid phone.")
                      
-                if not SyncOTPService.verify_otp(str(user.id), data['token'], purpose='password_reset'):
+                if not OTPService.verify_otp_sync(user.id, data['token'], purpose='password_reset'):
                     raise Exception("Invalid or expired OTP.")
             
             else:

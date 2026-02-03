@@ -32,7 +32,7 @@ urlpatterns = [
    path('admin/', admin.site.urls),
    path("auth/", include("userauths.urls")),
    # New Modular Monolith Auth
-   path('api/v2/auth/', include('apps.authentication.urls', namespace='authentication')),
+   path('api/', include('apps.authentication.urls', namespace='authentication')),
    path("admin_backend/", include("admin_backend.urls")),
 
 
