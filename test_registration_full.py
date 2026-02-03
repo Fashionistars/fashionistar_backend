@@ -2,7 +2,7 @@ import urllib.request
 import json
 import time
 
-BASE_URL = "http://127.0.0.1:8000/api"
+BASE_URL = "http://127.0.0.1:8001/api"
 
 def make_request(url, data):
     print(f"Requesting: {url}")

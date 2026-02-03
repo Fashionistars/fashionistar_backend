@@ -563,10 +563,10 @@ PHONENUMBER_DEFAULT_FORMAT = "INTERNATIONAL"
 
 
 
-# # Twilio settings
-# TWILIO_ACCOUNT_SID = config('TWILIO_ACCOUNT_SID', default='AC54b7212aa8ec1fb2985e8aa21f601c7f')
-# TWILIO_AUTH_TOKEN = config('TWILIO_AUTH_TOKEN', default='e7abf1b8f50c0ff20b7c12ee5f223be4')
-# TWILIO_PHONE_NUMBER = config('TWILIO_PHONE_NUMBER', default='+2349137654300')
+# Twilio settings
+TWILIO_ACCOUNT_SID = config('TWILIO_ACCOUNT_SID', default='AC_PLACEHOLDER_SID')
+TWILIO_AUTH_TOKEN = config('TWILIO_AUTH_TOKEN', default='PLACEHOLDER_AUTH_TOKEN')
+TWILIO_PHONE_NUMBER = config('TWILIO_PHONE_NUMBER', default='+15005550006')
 
 
 # Twilio settings (get from .env, with dummy defaults for local if not set)
