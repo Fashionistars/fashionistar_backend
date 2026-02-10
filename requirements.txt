@@ -1,119 +1,135 @@
-aiohappyeyeballs
-aiohttp
-aiohttp-retry
-aiosignal
-amqp
-asgiref
-async-timeout
-attrs
-billiard
-boto3
-botocore
-celery
-certifi
-cffi
-channels
-charset-normalizer
-click
-click-didyoumean
-click-plugins
-click-repl
-cloudinary
-colorama
-cryptography
+# ===========================================================
+# FASHIONISTAR AI — Backend Dependencies
+# Django 6.0 | Python 3.12+ | Dual-Engine (DRF + Ninja)
+# ===========================================================
 
-Deprecated
-diff-match-patch
-distlib
-dj-database-url
+# ─── Core Framework ───
 Django==6.0
-django-anymail
-django-auditlog
-django-celery-beat
-django-cloudinary-storage
-django-cors-headers
-django-encrypted-model-fields
-django-environ
-django-filter
-django-import-export
-django-jazzmin
-django-phone-verify
-django-phonenumber-field
-django-phonenumber-field[phonenumbers]
-django-ratelimit
-django-redis
-django-storages
-django-zoho-zeptomail
 djangorestframework
-djangorestframework-simplejwt
-drf-api-logger
+django-ninja
+
+# ─── API Documentation ───
 drf-spectacular
 drf-yasg
-environs
-filelock
-flower
-frozenlist
-google-auth
-gunicorn
-hiredis
-humanize
-idna
-inflection
-jmespath
-jsonschema
-jsonschema-specifications
-kombu
-marshmallow
-multidict
-nexmo
-packaging
-phonenumbers
-pillow
-pipenv
-platformdirs
-prometheus_client
-prompt_toolkit
-propcache
-psycopg2
-psycopg2-binary
-pycparser
-pycryptodome
-pydantic
+
+# ─── Authentication & Security ───
+djangorestframework-simplejwt
 PyJWT
+cryptography
+pycryptodome
+django-encrypted-model-fields
+django-ratelimit
+fido2
+
+# ─── Database ───
+psycopg2-binary
+dj-database-url
+
+# ─── Caching & Tasks ───
+django-redis
+redis
+hiredis
+
+# ─── Background Tasks (Legacy — migrate to Django 6.0 Tasks in Phase 4) ───
+celery
+django-celery-beat
+amqp
+billiard
+kombu
+vine
+flower
+
+# ─── ASGI Servers ───
+uvicorn
+daphne
+gunicorn
+
+# ─── CORS & Middleware ───
+django-cors-headers
+whitenoise
+
+# ─── Storage & Media ───
+django-storages
+django-cloudinary-storage
+cloudinary
+boto3
+botocore
+s3transfer
+pillow
+
+# ─── Phone & SMS ───
+django-phonenumber-field[phonenumbers]
+phonenumbers
+twilio
+django-phone-verify
+
+# ─── Email ───
+django-anymail
+django-zoho-zeptomail
+email-validator
+
+# ─── Environment & Configuration ───
+django-environ
+
+# ─── Admin ───
+django-jazzmin
+django-import-export
+django-auditlog
+
+# ─── Data & Validation ───
+pydantic
+django-filter
+marshmallow
+tablib
+
+# ─── HTTP & Networking ───
+requests
+httpx
+aiohttp
+aiohttp-retry
+certifi
+charset-normalizer
+idna
+urllib3
+
+# ─── Channels (WebSocket / Real-time) ───
+channels
+
+# ─── Logging & Monitoring ───
+drf-api-logger
+prometheus_client
+
+# ─── Utilities ───
+asgiref
+attrs
+click
+colorama
+humanize
+inflection
+jsonschema
+packaging
 python-dateutil
-python-decouple
-python-dotenv
 pytz
 PyYAML
-rave-python
-redis
-referencing
-requests
-rpds-py
-s3transfer
 setuptools
 shortuuid
 six
 sqlparse
-stripe
-tablib
-tornado
-twilio
 typing_extensions
 tzdata
 uritemplate
-urllib3
 uuid6
-vine
-virtualenv
-wcwidth
-wheel
-whitenoise
 wrapt
+
+# ─── Payment Gateways ───
+stripe
+rave-python
+
+# ─── Async Utilities ───
+aiohappyeyeballs
+aiosignal
+async-timeout
+frozenlist
+multidict
+propcache
 yarl
-httpx
-adrf
-email-validator
-fido2
-uvicorn
-daphne
