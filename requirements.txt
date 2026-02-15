@@ -1,10 +1,10 @@
 # ===========================================================
 # FASHIONISTAR AI — Backend Dependencies
-# Django 6.0 | Python 3.12+ | Dual-Engine (DRF + Ninja)
+# Django 6.0.2 | Python 3.12+ | Dual-Engine (DRF + Ninja)
 # ===========================================================
 
 # ─── Core Framework ───
-Django==6.0
+Django==6.0.2
 djangorestframework
 django-ninja
 
@@ -33,10 +33,6 @@ hiredis
 # ─── Background Tasks (Legacy — migrate to Django 6.0 Tasks in Phase 4) ───
 celery
 django-celery-beat
-amqp
-billiard
-kombu
-vine
 flower
 
 # ─── ASGI Servers ───
@@ -52,9 +48,6 @@ whitenoise
 django-storages
 django-cloudinary-storage
 cloudinary
-boto3
-botocore
-s3transfer
 pillow
 
 # ─── Phone & SMS ───
@@ -105,7 +98,6 @@ attrs
 click
 colorama
 humanize
-inflection
 jsonschema
 packaging
 python-dateutil
