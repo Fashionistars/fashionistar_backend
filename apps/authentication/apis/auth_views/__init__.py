@@ -1,6 +1,35 @@
-from .sync_views import RegisterView as SyncRegisterView, LoginView as SyncLoginView
-from .async_views import RegisterView, LoginView, GoogleAuthView, VerifyOTPView, ResendOTPView, LogoutView
+# apps/authentication/apis/auth_views/__init__.py
+"""
+Auth Views Package — Sync (DRF) + Async (Ninja/ADRF).
 
-# Default export is Async for new apps, but can import Sync versions explicitly if needed.
-# For URLs, we use Async.
-__all__ = ['RegisterView', 'LoginView', 'GoogleAuthView', 'VerifyOTPView', 'ResendOTPView', 'LogoutView']
+Sync views:  RegisterView, LoginView, VerifyOTPView, etc.
+Async views: auth_router (Ninja), AsyncLoginView (ADRF), etc.
+"""
+from .sync_views import (  # noqa: F401
+    RegisterView as SyncRegisterView,
+    LoginView as SyncLoginView,
+    VerifyOTPView as SyncVerifyOTPView,
+    ResendOTPView as SyncResendOTPView,
+    GoogleAuthView as SyncGoogleAuthView,
+    LogoutView as SyncLogoutView,
+    RefreshTokenView as SyncRefreshTokenView,
+)
+from .async_views import (  # noqa: F401
+    auth_router,
+    AsyncLoginView,
+    AsyncLogoutView,
+    AsyncRefreshTokenView,
+    VerifyOTPView as AsyncVerifyOTPView,
+)
+
+__all__ = [
+    # Sync (DRF)
+    'SyncRegisterView', 'SyncLoginView', 'SyncVerifyOTPView',
+    'SyncResendOTPView', 'SyncGoogleAuthView', 'SyncLogoutView',
+    'SyncRefreshTokenView',
+    # Async (Ninja Router + ADRF)
+    'auth_router',
+    'AsyncLoginView', 'AsyncLogoutView', 'AsyncRefreshTokenView',
+    'AsyncVerifyOTPView',
+]
+

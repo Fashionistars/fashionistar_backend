@@ -1,11 +1,25 @@
 # apps/authentication/tasks.py
+"""
+Celery Tasks for Authentication Module.
+
+These tasks offload I/O-heavy operations (email, SMS) to background workers,
+preventing request/response cycles from blocking on SMTP or HTTP calls.
+
+Architecture:
+    - send_email_task: Dispatches templated emails via EmailManager.
+    - send_sms_task: Dispatches SMS messages via SMSManager.
+
+Both tasks use exponential backoff with max 3 retries.
+"""
 
 from celery import shared_task
 import logging
 from django.conf import settings
 from django.template.exceptions import TemplateDoesNotExist
-from utilities.managers.email import EmailManager
-from utilities.managers.sms import SMSManager
+
+# ── Corrected import paths (apps.common, not utilities) ─────────────
+from apps.common.managers.email import EmailManager
+from apps.common.managers.sms import SMSManager
 
 # Get logger for application
 application_logger = logging.getLogger('application')

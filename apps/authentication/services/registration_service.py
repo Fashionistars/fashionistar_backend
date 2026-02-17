@@ -21,41 +21,81 @@ class RegistrationService:
     """
 
     @staticmethod
-    def register_sync(email: str = None, phone: str = None, 
-                     password: str = None, role: str = 'client',
-                     request: Any = None, **extra_fields) -> Dict[str, Any]:
+    def register_sync(
+        email: str = None,
+        phone: str = None,
+        password: str = None,
+        role: str = 'client',
+        request: Any = None,
+        **extra_fields
+    ) -> Dict[str, Any]:
         """
         Synchronous User Registration Flow (DRF/Classic).
-        
-        Orchestrates:
-        1. Atomic Database Transaction
-        2. User Creation (via CustomUserManager)
-        3. OTP Generation (via OTPService)
-        4. Email/SMS Dispatch (via Managers)
+
+        Orchestrates the full registration pipeline inside a single
+        atomic transaction, mirroring the legacy ``RegisterViewCelery``
+        pattern line-by-line:
+
+        1. Atomic Database Transaction (rollback on ANY failure)
+        2. User Creation via ``CustomUserManager.create_user``
+        3. OTP Generation via ``OTPService.generate_otp_sync``
+        4. Email / SMS Dispatch via ``EmailManager`` / ``SMSManager``
+
+        Args:
+            email (str, optional): User's email address.
+            phone (str, optional): User's phone number (E.164 format).
+            password (str): Plain-text password (hashed internally).
+            role (str): RBAC role — 'vendor' or 'client'. Defaults to 'client'.
+            request (Any, optional): The originating HTTP request (for audit).
+            **extra_fields: Additional model fields (first_name, etc.).
+
+        Returns:
+            Dict[str, Any]: Dictionary containing:
+                - message (str): Human-readable success message.
+                - user_id (int): Primary key of the created user.
+                - email (str | None): User's email if provided.
+                - phone (str | None): User's phone if provided.
+
+        Raises:
+            Exception: Re-raises any exception after logging and
+                       triggering transaction rollback.
         """
         try:
             with transaction.atomic():
-                # Sanitize input: Remove non-model fields
-                extra_fields.pop('password_confirm', None)
-                extra_fields.pop('password2', None)
+                # ── Sanitize: Strip validation-only / non-model fields ───
+                for key in ('password_confirm', 'password2',
+                            'password_confirmation'):
+                    extra_fields.pop(key, None)
 
-                # 1. Create User
-                # Use objects manager directly to avoid instantiation issues
+                # ── Auto-detect auth_provider from identifier ────────────
+                if email:
+                    extra_fields.setdefault('auth_provider', 'email')
+                elif phone:
+                    extra_fields.setdefault('auth_provider', 'phone')
+
+                # ── 1. Create User (via CustomUserManager) ───────────────
                 user = UnifiedUser.objects.create_user(
-                    email=email, 
-                    phone=phone, 
-                    password=password, 
+                    email=email,
+                    phone=phone,
+                    password=password,
                     role=role,
-                    is_active=False, 
+                    is_active=False,
                     is_verified=False,
                     **extra_fields
                 )
-                logger.info(f"✅ User created (Sync): {email or phone} (ID: {user.id})")
-                
-                # 2. Generate OTP
-                otp = OTPService.generate_otp_sync(user.id, purpose='verify')
-                
-                # 3. Send Notification containing OTP
+                logger.info(
+                    f"✅ User created (Sync): "
+                    f"identifier={email or phone}, "
+                    f"id={user.id}, role={role}, "
+                    f"provider={user.auth_provider}"
+                )
+
+                # ── 2. Generate OTP ──────────────────────────────────────
+                otp = OTPService.generate_otp_sync(
+                    user.id, purpose='verify'
+                )
+
+                # ── 3. Send Notification (Email or SMS) ──────────────────
                 if email:
                     context = {'user_id': user.id, 'otp': otp}
                     EmailManager.send_mail(
@@ -70,19 +110,29 @@ class RegistrationService:
                     SMSManager.send_sms(str(phone), body)
                     logger.info(f"✅ OTP SMS sent to {phone}")
                 else:
-                    logger.warning(f"⚠️ User {user.id} created without Email or Phone?")
+                    logger.warning(
+                        f"⚠️ User {user.id} created without "
+                        f"Email or Phone — no OTP dispatched"
+                    )
 
                 return {
-                    'message': 'Registration successful. Check email/phone for OTP.',
+                    'message': (
+                        'Registration successful. '
+                        'Check email/phone for OTP.'
+                    ),
                     'user_id': user.id,
                     'email': email,
                     'phone': str(phone) if phone else None
                 }
-                
+
         except Exception as e:
-            logger.error(f"❌ Registration Failed (Sync): {str(e)}", exc_info=True)
-            # Transaction automatically rolls back on exception exit of context manager
-            raise e
+            # ── Explicit rollback (matches legacy pattern) ───────────────
+            transaction.set_rollback(True)
+            logger.error(
+                f"❌ Registration Failed (Sync): {str(e)}",
+                exc_info=True
+            )
+            raise
 
     @staticmethod
     async def register_async(email: str = None, phone: str = None,

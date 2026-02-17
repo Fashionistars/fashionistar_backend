@@ -1,11 +1,12 @@
 import logging
-from rest_framework import serializers
-from django.utils.translation import gettext_lazy as _
+
+from apps.authentication.models import UnifiedUser  # Explicit import for choices if needed
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
-from phonenumber_field.serializerfields import PhoneNumberField
 from django.shortcuts import get_object_or_404
-from apps.authentication.models import UnifiedUser # Explicit import for choices if needed
+from django.utils.translation import gettext_lazy as _
+from phonenumber_field.serializerfields import PhoneNumberField
+from rest_framework import serializers
 
 # Get the User model dynamically (should be UnifiedUser)
 User = get_user_model()
@@ -253,44 +254,52 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         """
-        Creates a new user via RegistrationService.
+        Creates a new user via RegistrationService (Sync).
+
+        This method delegates user creation to the centralized RegistrationService,
+        which handles atomic transactions, OTP generation, and notification dispatch.
+        It strips non-model fields (password2/password_confirm) before forwarding.
+
+        Args:
+            validated_data (dict): Validated registration data from DRF validation.
+
+        Returns:
+            UnifiedUser: The newly created user instance.
+
+        Raises:
+            serializers.ValidationError: If user creation fails for any reason.
         """
         try:
-            from apps.authentication.services.registration_service import RegistrationService
-            
-            # Delegate to Service
-            # Note: Service returns dict {'message': ..., 'user_id': ...}
-            # We need to return the User instance to satisfy serializer.save() usually.
-            # But Authentication Registration usually returns a response dict.
-            # If we are using serializer.save(), we expect an instance.
-            # Let's adjust based on Service return. 
-            # Service returns dict. We might need to fetch the user or adjust Service to return user.
-            # The Service `register_sync` returns a dict.
-            # Let's Modify Service to return (User, dict) or just User with attached attributes?
-            # Or simpler: The View calls Service directly (as per plan).
-            # So this create method is just a fallback/proxy.
-            
-            # Let's extract params
-            email = validated_data.get('email')
-            phone = validated_data.get('phone')
-            password = validated_data.get('password')
-            role = validated_data.get('role')
-            
-            result = RegistrationService.register_sync(
-                email=email,
-                phone=phone,
-                password=password,
-                role=role,
-                **validated_data
+            from apps.authentication.services.registration_service import (
+                RegistrationService,
             )
-            
-            # Retrieve the user to return instance
+
+            # ── Strip non-model fields before forwarding to service ──────
+            # password2/password_confirm are validation-only; the service
+            # only needs the canonical 'password' field.
+            validated_data.pop('password2', None)
+            validated_data.pop('password_confirm', None)
+
+            # ── Delegate to RegistrationService (atomic, OTP, Email/SMS) ─
+            # Pass validated_data directly — it already contains email,
+            # phone, password, role. No duplicate kwargs.
+            result = RegistrationService.register_sync(**validated_data)
+
+            # ── Retrieve created user instance for serializer.save() ─────
             from apps.authentication.models import UnifiedUser
-            return UnifiedUser.objects.get(id=result['user_id'])
-            
+            user = UnifiedUser.objects.get(id=result['user_id'])
+
+            logger.info(
+                f"✅ User created via serializer: {user.email or user.phone} "
+                f"(ID: {user.id}, Role: {user.role})"
+            )
+            return user
+
         except Exception as e:
-            logger.error(f"Error creating user via serializer: {str(e)}")
-            raise serializers.ValidationError({"error": f"An error occurred during user creation: {e}"})
+            logger.error(f"❌ Error creating user via serializer: {str(e)}", exc_info=True)
+            raise serializers.ValidationError(
+                {"error": f"An error occurred during user creation: {e}"}
+            )
 
 
 class AsyncUserRegistrationSerializer(UserRegistrationSerializer):
