@@ -34,6 +34,8 @@ from import_export.admin import ImportExportModelAdmin
 from auditlog.admin import LogEntryAdmin
 from auditlog.models import LogEntry
 
+from apps.common.admin_mixins import SoftDeleteAdminMixin
+
 from apps.authentication.models import UnifiedUser, BiometricCredential
 
 logger = logging.getLogger('application')
@@ -335,7 +337,11 @@ class BiometricInline(admin.TabularInline):
 # ================================================================
 
 @admin.register(UnifiedUser)
-class UnifiedUserAdmin(ImportExportModelAdmin, BaseUserAdmin):
+class UnifiedUserAdmin(
+    SoftDeleteAdminMixin,
+    ImportExportModelAdmin,
+    BaseUserAdmin,
+):
     """
     Enterprise-grade admin for the UnifiedUser model.
 
@@ -631,127 +637,12 @@ class UnifiedUserAdmin(ImportExportModelAdmin, BaseUserAdmin):
             )
             raise
 
-    # ---- Queryset (soft-delete aware) ----
-
-    def get_queryset(self, request):
-        """
-        Return all users including soft-deleted records.
-
-        Uses the ``all_with_deleted()`` manager method if
-        available (from ``SoftDeleteModel``), otherwise falls
-        back to the default ``all()`` queryset.
-
-        Args:
-            request: The current HTTP request.
-
-        Returns:
-            QuerySet: All UnifiedUser records.
-        """
-        if hasattr(UnifiedUser.objects, 'all_with_deleted'):
-            return UnifiedUser.objects.all_with_deleted()
-        return UnifiedUser.objects.all()
-
-    # ---- Bulk actions ----
-
-    @admin.action(
-        description=_("Soft-delete selected users")
-    )
-    def soft_delete_selected(self, request, queryset):
-        """
-        Bulk soft-delete action for the admin list view.
-
-        Marks selected users as deleted via the model's
-        ``soft_delete()`` method, which also archives the
-        record in ``DeletedRecords`` for recovery.
-
-        Args:
-            request: The current HTTP request.
-            queryset: Selected UnifiedUser records.
-        """
-        count = 0
-        for user in queryset.filter(is_deleted=False):
-            try:
-                user.soft_delete()
-                count += 1
-                logger.info(
-                    "Admin %s soft-deleted user %s",
-                    request.user.pk,
-                    user.pk,
-                )
-            except Exception:
-                logger.exception(
-                    "Failed to soft-delete user %s",
-                    user.pk,
-                )
-
-        self.message_user(
-            request,
-            _("%d user(s) soft-deleted successfully.") % count,
-        )
-
-    @admin.action(
-        description=_("Restore selected users")
-    )
-    def restore_selected(self, request, queryset):
-        """
-        Bulk restore action for the admin list view.
-
-        Restores soft-deleted users via the model's
-        ``restore()`` method, clearing the ``is_deleted``
-        flag and ``deleted_at`` timestamp.
-
-        Args:
-            request: The current HTTP request.
-            queryset: Selected UnifiedUser records.
-        """
-        count = 0
-        for user in queryset.filter(is_deleted=True):
-            try:
-                user.restore()
-                count += 1
-                logger.info(
-                    "Admin %s restored user %s",
-                    request.user.pk,
-                    user.pk,
-                )
-            except Exception:
-                logger.exception(
-                    "Failed to restore user %s",
-                    user.pk,
-                )
-
-        self.message_user(
-            request,
-            _("%d user(s) restored successfully.") % count,
-        )
-
-    # ---- Delete override (soft-delete) ----
-
-    def delete_model(self, request, obj):
-        """
-        Override single-object delete to use soft-delete.
-
-        Instead of permanently removing the record, delegates
-        to the model's ``soft_delete()`` method for safe
-        archival and audit trail preservation.
-
-        Args:
-            request: The current HTTP request.
-            obj: The UnifiedUser instance to soft-delete.
-        """
-        try:
-            obj.soft_delete()
-            logger.info(
-                "Admin %s soft-deleted user %s via delete",
-                request.user.pk,
-                obj.pk,
-            )
-        except Exception:
-            logger.exception(
-                "Failed to soft-delete user %s via delete",
-                obj.pk,
-            )
-            raise
+    # ---- Soft-delete behavior ----
+    # Inherited from SoftDeleteAdminMixin:
+    #   - get_queryset()         -> includes soft-deleted records
+    #   - delete_model()         -> soft-delete instead of hard-delete
+    #   - soft_delete_selected() -> bulk soft-delete action
+    #   - restore_selected()     -> bulk restore action
 
 
 # ================================================================
