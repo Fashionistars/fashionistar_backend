@@ -3,16 +3,67 @@ from django.utils.translation import gettext_lazy as _
 from django.db.models import Q
 import logging
 
+from apps.common.managers.soft_delete import (
+    SoftDeleteQuerySet,
+)
+
 logger = logging.getLogger('application')
+
 
 class CustomUserManager(BaseUserManager):
     """
-    Custom user model manager defined with explicit Sync and Async methods.
-    
-    This manager handles user creation and retrieval using normalized emails
-    or phone numbers as unique identifiers. It avoids generic wrappers in favor
-    of native Django async support (acreate, aget, asave) for maximum performance.
+    Custom user model manager with soft-delete awareness.
+
+    Inherits user-creation logic from ``BaseUserManager`` and
+    adds soft-delete queryset methods via composition with
+    ``SoftDeleteQuerySet``.
+
+    Default queryset:
+        Excludes ``is_deleted=True`` records so that normal
+        ORM queries never return deactivated users.
+
+    Explicit methods:
+        - ``all_with_deleted()`` — returns all records.
+        - ``deleted_only()`` — returns only soft-deleted records.
     """
+
+    def get_queryset(self):
+        """
+        Return only alive (non-deleted) users by default.
+
+        Returns:
+            SoftDeleteQuerySet: Filtered to
+                ``is_deleted=False``.
+        """
+        return SoftDeleteQuerySet(
+            self.model,
+            using=self._db,
+        ).alive()
+
+    def all_with_deleted(self):
+        """
+        Return ALL users including soft-deleted ones.
+
+        Returns:
+            SoftDeleteQuerySet: Unfiltered queryset.
+        """
+        return SoftDeleteQuerySet(
+            self.model,
+            using=self._db,
+        )
+
+    def deleted_only(self):
+        """
+        Return only soft-deleted users.
+
+        Returns:
+            SoftDeleteQuerySet: Filtered to
+                ``is_deleted=True``.
+        """
+        return SoftDeleteQuerySet(
+            self.model,
+            using=self._db,
+        ).dead()
 
     def create_user(self, email=None, phone=None, password=None, **extra_fields):
         """

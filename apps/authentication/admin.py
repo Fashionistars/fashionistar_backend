@@ -380,13 +380,21 @@ class UnifiedUserAdmin(ImportExportModelAdmin, BaseUserAdmin):
                 'role',
                 'password',
                 'auth_provider',
-                'is_verified',
                 'pid',
+            ),
+        }),
+        (_('Personal Info'), {
+            'fields': (
+                'first_name',
+                'last_name',
+                'avatar',
+                'bio',
             ),
         }),
         (_('Permissions'), {
             'fields': (
                 'is_active',
+                'is_verified',
                 'is_staff',
                 'is_superuser',
                 'groups',
@@ -397,14 +405,6 @@ class UnifiedUserAdmin(ImportExportModelAdmin, BaseUserAdmin):
             'fields': (
                 'last_login',
                 'date_joined',
-            ),
-        }),
-        (_('Personal Info'), {
-            'fields': (
-                'first_name',
-                'last_name',
-                'avatar',
-                'bio',
             ),
         }),
         (_('Location'), {
@@ -472,12 +472,11 @@ class UnifiedUserAdmin(ImportExportModelAdmin, BaseUserAdmin):
 
     # -- Read-only timestamps --
     readonly_fields = (
-        'pid',
+        'last_login',
+        'date_joined',
         'created_at',
         'updated_at',
         'deleted_at',
-        'last_login',
-        'date_joined',
     )
 
     # -- Bulk actions --
