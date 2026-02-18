@@ -197,7 +197,7 @@ class UnifiedUserChangeForm(forms.ModelForm):
 
     class Meta:
         model = UnifiedUser
-        fields = '__all__'
+        exclude = ('password',)
 
     def __init__(self, *args, **kwargs):
         """
@@ -440,6 +440,8 @@ class UnifiedUserAdmin(
                 'email',
                 'phone',
                 'password',
+                'first_name',
+                'last_name',
                 'role',
                 'auth_provider',
             ),
@@ -607,8 +609,14 @@ class UnifiedUserAdmin(
                 ):
                     obj.password = make_password(raw_password)
                 else:
-                    # Preserve existing password hash
-                    existing = UnifiedUser.objects.get(pk=obj.pk)
+                    # Preserve existing password hash.
+                    # Must use all_with_deleted() because the
+                    # default manager filters out soft-deleted
+                    # users, which would crash with DoesNotExist
+                    # when editing a soft-deleted record.
+                    existing = UnifiedUser.objects.all_with_deleted().get(
+                        pk=obj.pk,
+                    )
                     obj.password = existing.password
 
                 logger.info(

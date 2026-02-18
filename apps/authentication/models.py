@@ -247,8 +247,12 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
         """
         super().clean()
 
-        if not self.pk:
+        if self._state.adding:
             # ── NEW USER VALIDATION ──────────────────────────
+            # Note: we use ``self._state.adding`` instead of
+            # ``not self.pk`` because UUID primary keys are
+            # auto-generated at __init__ time, making self.pk
+            # always truthy.
 
             # 1. Mutually Exclusive Identifiers
             #    (Email OR Phone, unless Google)
@@ -310,7 +314,11 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
 
         else:
             # ── EXISTING USER — IMMUTABILITY GUARDS ─────────
-            existing = UnifiedUser.objects.get(pk=self.pk)
+            # ``self._state.adding`` is False for DB-loaded
+            # instances, safe to query for the existing row.
+            existing = UnifiedUser.objects.all_with_deleted().get(
+                pk=self.pk,
+            )
 
             # Prevent email modification
             if (
