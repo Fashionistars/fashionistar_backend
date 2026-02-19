@@ -268,6 +268,41 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
                         _('Either Email or Phone is required.')
                     )
 
+            # 2. Auth Provider ↔ Identifier Cross-Validation
+            #    (CRITICAL SECURITY FIX)
+            if self.auth_provider == 'email' and not self.email:
+                raise ValidationError({
+                    'auth_provider': _(
+                        'Auth provider "email" requires an email '
+                        'address to be provided.'
+                    ),
+                })
+            if self.auth_provider == 'phone' and not self.phone:
+                raise ValidationError({
+                    'auth_provider': _(
+                        'Auth provider "phone" requires a phone '
+                        'number to be provided.'
+                    ),
+                })
+            if (
+                self.auth_provider == 'email'
+                and self.email
+                and self.phone
+            ):
+                raise ValidationError(
+                    _('Email auth provider should not have '
+                      'a phone number. Use email only.')
+                )
+            if (
+                self.auth_provider == 'phone'
+                and self.phone
+                and self.email
+            ):
+                raise ValidationError(
+                    _('Phone auth provider should not have '
+                      'an email address. Use phone only.')
+                )
+
             # 2. Google Auth Requirement
             if (
                 self.auth_provider == self.PROVIDER_GOOGLE

@@ -131,6 +131,23 @@ class UnifiedUserCreationForm(forms.ModelForm):
             'last_name',
         )
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Disable field-level required so clean() handles
+        # all validation with human-readable messages
+        self.fields['password'].required = False
+        self.fields['role'].required = False
+
+    def clean_first_name(self):
+        from django.utils.html import strip_tags
+        value = self.cleaned_data.get('first_name', '')
+        return strip_tags(value).strip()
+
+    def clean_last_name(self):
+        from django.utils.html import strip_tags
+        value = self.cleaned_data.get('last_name', '')
+        return strip_tags(value).strip()
+
     def clean(self):
         """
         Cross-field validation for new user creation.
@@ -142,13 +159,55 @@ class UnifiedUserCreationForm(forms.ModelForm):
         cleaned_data = super().clean()
         email = cleaned_data.get('email')
         phone = cleaned_data.get('phone')
+        password = cleaned_data.get('password')
+        role = cleaned_data.get('role')
+        auth_provider = cleaned_data.get('auth_provider')
+        errors = {}
 
-        # At least one identifier is required
+        # 1. Identifier required
         if not email and not phone:
-            raise ValidationError(
-                _("Either an email or a phone number "
-                  "must be provided.")
+            errors['email'] = _(
+                "Either an email or a phone number "
+                "must be provided."
             )
+
+        # 2. Password required
+        if not password:
+            errors['password'] = _(
+                "Password is required when creating "
+                "a new user."
+            )
+
+        # 3. Role required
+        if not role:
+            errors['role'] = _(
+                "Please select a role for the new user."
+            )
+
+        # 4. Auth_provider ↔ identifier cross-validation
+        if auth_provider == 'email' and not email:
+            errors['auth_provider'] = _(
+                'Auth provider "email" requires an '
+                'email address.'
+            )
+        elif auth_provider == 'phone' and not phone:
+            errors['auth_provider'] = _(
+                'Auth provider "phone" requires a '
+                'phone number.'
+            )
+        elif auth_provider == 'email' and email and phone:
+            errors['phone'] = _(
+                'Email auth provider should not have '
+                'a phone number.'
+            )
+        elif auth_provider == 'phone' and phone and email:
+            errors['email'] = _(
+                'Phone auth provider should not have '
+                'an email address.'
+            )
+
+        if errors:
+            raise ValidationError(errors)
 
         return cleaned_data
 
@@ -375,7 +434,20 @@ class UnifiedUserAdmin(
     resource_class = UnifiedUserResource
 
     # -- Inlines --
+    # -- Inlines --
     inlines = [BiometricInline]
+
+    def get_inlines(self, request, obj=None):
+        """Hide biometric inline when creating a new user."""
+        if obj is None:
+            return []
+        return super().get_inlines(request, obj)
+
+    # -- Performance (1M+ users) --
+    list_per_page = 25
+    list_max_show_all = 100
+    show_full_result_count = False  # Avoids COUNT(*) on large tables
+    list_select_related = True
 
     # -- Fieldsets (Change form) --
     fieldsets = (
