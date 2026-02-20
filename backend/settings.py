@@ -514,8 +514,7 @@ JAZZMIN_SETTINGS = {
     "changeform_format_overrides": {
         "auth.user": "collapsible",
         "auth.group": "vertical_tabs",
-        "authentication.unifieduser": "collapsible",
-        "userauths.user": "collapsible",
+        "authentication.unifieduser": "vertical_tabs",
     },
 }
 
