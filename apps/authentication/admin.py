@@ -253,6 +253,19 @@ class UnifiedUserChangeForm(forms.ModelForm):
             "Role cannot be changed after user creation."
         ),
     )
+    auth_provider = forms.ChoiceField(
+        choices=UnifiedUser.PROVIDER_CHOICES,
+        required=False,
+        help_text=_(
+            "Auth provider cannot be changed after user creation."
+        ),
+    )
+    date_joined = forms.DateTimeField(
+        required=False,
+        help_text=_(
+            "Date joined cannot be changed."
+        )
+    )
 
     class Meta:
         model = UnifiedUser
