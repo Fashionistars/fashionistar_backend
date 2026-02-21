@@ -46,7 +46,12 @@ dev: ## Start Django development server (sync — port 8000)
 	@echo "$(CYAN)Starting Django dev server...$(NC)"
 	python manage.py runserver 0.0.0.0:8000
 
-run: dev ## Alias for 'make dev'
+vir-dev: ## Start Django development server (sync — port 8000)
+	@echo "$(CYAN)Starting Django dev server...$(NC)"
+	source env/Scripts/activate
+	python manage.py runserver 0.0.0.0:8000
+
+# run: dev ## Alias for 'make dev'
 
 run-asgi: ## Start ASGI server with Uvicorn (async — port 8000)
 	@echo "$(CYAN)Starting Uvicorn ASGI server...$(NC)"
