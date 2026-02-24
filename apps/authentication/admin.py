@@ -82,152 +82,334 @@ class UnifiedUserResource(resources.ModelResource):
 # 2. FORMS — Creation & Change
 # ================================================================
 
-class UnifiedUserAdminForm(forms.ModelForm):
+class UnifiedUserCreationForm(forms.ModelForm):
     """
-    Admin form for creating and updating UnifiedUser records.
-    Mirrors the legacy UserAdminForm pattern exactly to prevent
-    validation errors when editing existing records.
+    Admin form for creating NEW UnifiedUser records.
+
+    Enforces:
+        - Email / Phone mutual-exclusivity (at least one required).
+        - Password is mandatory for new users.
+        - Role must be a valid choice from ``ROLE_CHOICES``.
+
+    Mirrors the legacy ``UserAdminForm`` validation pattern.
     """
+
     email = forms.EmailField(
         required=False,
-        help_text=_("Enter email or leave empty if using phone.")
+        help_text=_(
+            "Enter email or leave empty if using phone."
+        ),
     )
     phone = forms.CharField(
         required=False,
-        help_text=_("Enter phone or leave empty if using email.")
+        help_text=_(
+            "Enter phone or leave empty if using email."
+        ),
     )
     password = forms.CharField(
         widget=forms.PasswordInput(),
-        required=False,
-        help_text=_("Leave blank to keep the current password.")
+        required=True,
+        help_text=_(
+            "Password is required when creating a new user."
+        ),
     )
     role = forms.ChoiceField(
-        choices=UnifiedUser.ROLE_CHOICES,
-        required=True,
-        help_text=_("Select the user role.")
-    )
-    auth_provider = forms.ChoiceField(
-        choices=UnifiedUser.PROVIDER_CHOICES,
+        choices=[('', '--- Select role ---')] + list(UnifiedUser.ROLE_CHOICES),
         required=False,
-        help_text=_("Authentication provider used at signup.")
+        help_text=_("Select the user role."),
     )
 
     class Meta:
         model = UnifiedUser
-        fields = [
+        fields = (
             'email',
             'phone',
             'password',
-            'first_name',
-            'last_name',
             'role',
             'auth_provider',
-            'is_active',
-            'is_verified',
-        ]
+            'first_name',
+            'last_name',
+        )
 
     def __init__(self, *args, **kwargs):
-        """Ensure immutable fields are preserved when updating an existing user."""
         super().__init__(*args, **kwargs)
-
-        if self.instance and self.instance.pk:
-            # 🔹 Ensure role, auth_provider, email, and phone fields are always included and read-only
-            self.fields['role'] = forms.ChoiceField(choices=UnifiedUser.ROLE_CHOICES, required=False)
-            self.fields['role'].initial = self.instance.role
-            self.fields['role'].widget.attrs['readonly'] = True
-            self.fields['role'].help_text = _("Role cannot be changed after user creation.")
-
-            self.fields['auth_provider'] = forms.ChoiceField(choices=UnifiedUser.PROVIDER_CHOICES, required=False)
-            self.fields['auth_provider'].initial = self.instance.auth_provider
-            self.fields['auth_provider'].widget.attrs['readonly'] = True
-            self.fields['auth_provider'].help_text = _("Auth provider cannot be changed after user creation.")
-
-            self.fields['email'] = forms.EmailField(required=False, initial=self.instance.email)
-            self.fields['phone'] = forms.CharField(required=False, initial=self.instance.phone)
-
-            # Password not required on updates
-            self.fields['password'].required = False
-        else:
-            # Disable field-level required so clean() handles validation with human-readable messages
-            self.fields['password'].required = False
-            self.fields['role'].required = False
+        # Disable field-level required so clean() handles
+        # all validation with human-readable messages
+        self.fields['password'].required = False
+        self.fields['role'].required = False
+        # Prevent browser autofill from injecting email
+        # addresses into the phone field (UX fix)
+        self.fields['email'].widget.attrs['autocomplete'] = 'off'
+        self.fields['phone'].widget.attrs['autocomplete'] = 'off'
 
     def clean_first_name(self):
         from django.utils.html import strip_tags
         value = self.cleaned_data.get('first_name', '')
-        return strip_tags(value).strip() if value else value
+        return strip_tags(value).strip()
 
     def clean_last_name(self):
         from django.utils.html import strip_tags
         value = self.cleaned_data.get('last_name', '')
-        return strip_tags(value).strip() if value else value
+        return strip_tags(value).strip()
+
+    def clean(self):
+        """
+        Cross-field validation for new user creation.
+
+        Raises:
+            ValidationError: If neither email nor phone is
+                provided.
+        """
+        cleaned_data = super().clean()
+        email = cleaned_data.get('email')
+        phone = cleaned_data.get('phone')
+        password = cleaned_data.get('password')
+        role = cleaned_data.get('role')
+        auth_provider = cleaned_data.get('auth_provider')
+        errors = {}
+
+        # 1. Identifier required
+        if not email and not phone:
+            errors['email'] = _(
+                "Either an email or a phone number "
+                "must be provided."
+            )
+
+        # 2. Password required
+        if not password:
+            errors['password'] = _(
+                "Password is required when creating "
+                "a new user."
+            )
+
+        # 3. Role required
+        if not role:
+            errors['role'] = _(
+                "Please select a role for the new user."
+            )
+
+        # 4. Auth_provider ↔ identifier cross-validation
+        if auth_provider == 'email' and not email:
+            errors['auth_provider'] = _(
+                'Auth provider "email" requires an '
+                'email address.'
+            )
+        elif auth_provider == 'phone' and not phone:
+            errors['auth_provider'] = _(
+                'Auth provider "phone" requires a '
+                'phone number.'
+            )
+        elif auth_provider == 'email' and email and phone:
+            errors['phone'] = _(
+                'Email auth provider should not have '
+                'a phone number.'
+            )
+        elif auth_provider == 'phone' and phone and email:
+            errors['email'] = _(
+                'Phone auth provider should not have '
+                'an email address.'
+            )
+
+        if errors:
+            raise ValidationError(errors)
+
+        return cleaned_data
+
+
+class UnifiedUserChangeForm(forms.ModelForm):
+    """
+    Admin form for updating EXISTING UnifiedUser records.
+
+    Immutability guards:
+        - ``email``, ``phone``, ``role``, ``auth_provider``
+          are preserved from the database and cannot be
+          changed via the admin form after creation.
+        - Password field is optional; hashing is handled
+          in ``save_model()``, not in the form.
+
+    Mirrors the legacy ``UserAdminForm.__init__`` / ``clean_*``
+    pattern for field locking.
+    """
+
+    email = forms.EmailField(
+        required=False,
+        help_text=_(
+            "Email cannot be changed after user creation."
+        ),
+    )
+    phone = forms.CharField(
+        required=False,
+        help_text=_(
+            "Phone cannot be changed after user creation."
+        ),
+    )
+    password = forms.CharField(
+        widget=forms.PasswordInput(),
+        required=False,
+        help_text=_(
+            "Leave blank to keep the current password."
+        ),
+    )
+    role = forms.ChoiceField(
+        choices=[('', '--- Select role ---')] + list(UnifiedUser.ROLE_CHOICES),
+        required=False,
+        help_text=_(
+            "Role cannot be changed after user creation."
+        ),
+    )
+    auth_provider = forms.ChoiceField(
+        choices=[('', '--- Select provider ---')] + list(UnifiedUser.PROVIDER_CHOICES),
+        required=False,
+        help_text=_(
+            "Auth provider cannot be changed after user creation."
+        ),
+    )
+    date_joined = forms.DateTimeField(
+        required=False,
+        help_text=_(
+            "Date joined cannot be changed."
+        )
+    )
+
+    class Meta:
+        model = UnifiedUser
+        exclude = ('password',)
+
+    def __init__(self, *args, **kwargs):
+        """
+        Lock immutable fields for existing users.
+
+        Sets ``readonly`` widget attribute and populates
+        initial values from the database instance to prevent
+        accidental modification.
+        """
+        super().__init__(*args, **kwargs)
+
+        if self.instance and self.instance.pk:
+            # Lock immutable identity fields
+            for field_name in ('email', 'phone', 'role',
+                               'auth_provider'):
+                if field_name in self.fields:
+                    self.fields[field_name].widget.attrs[
+                        'readonly'
+                    ] = True
+
+        # Prevent browser autofill from injecting email
+        # addresses into the phone field (UX fix).
+        # Guard with 'in self.fields' because Django removes
+        # readonly fields from the field dict before __init__
+        # completes on the change view.
+        if 'email' in self.fields:
+            self.fields['email'].widget.attrs['autocomplete'] = 'off'
+        if 'phone' in self.fields:
+            self.fields['phone'].widget.attrs['autocomplete'] = 'off'
+
+    # -- Per-field immutability guards --
+
+    def clean_email(self):
+        """
+        Preserve email on existing users.
+
+        Returns:
+            str or None: The original email from the database
+                if the user already exists, otherwise the
+                submitted value.
+        """
+        if self.instance and self.instance.pk:
+            return self.instance.email
+        return self.cleaned_data.get('email')
+
+    def clean_phone(self):
+        """
+        Preserve phone on existing users.
+
+        Returns:
+            str or None: The original phone from the database
+                if the user already exists, otherwise the
+                submitted value.
+        """
+        if self.instance and self.instance.pk:
+            return self.instance.phone
+        return self.cleaned_data.get('phone')
 
     def clean_role(self):
-        """Preserve role when updating an existing user."""
+        """
+        Preserve role on existing users.
+
+        Returns:
+            str: The original role from the database if the
+                user already exists, otherwise the submitted
+                value.
+        """
         if self.instance and self.instance.pk:
             return self.instance.role
         return self.cleaned_data.get('role')
 
     def clean_auth_provider(self):
-        """Preserve auth_provider when updating an existing user."""
+        """
+        Preserve auth_provider on existing users.
+
+        Returns:
+            str: The original auth_provider from the database
+                if the user already exists, otherwise the
+                submitted value.
+        """
         if self.instance and self.instance.pk:
             return self.instance.auth_provider
         return self.cleaned_data.get('auth_provider')
 
-    def clean_email(self):
-        """Ensure email is preserved when updating an existing user."""
-        email = self.cleaned_data.get('email')
-        if self.instance and self.instance.pk and not email:
-            return self.instance.email
-        return email
+    def clean_password(self):
+        """
+        Pass-through for password field.
 
-    def clean_phone(self):
-        """Ensure phone is preserved when updating an existing user."""
-        phone = self.cleaned_data.get('phone')
-        if self.instance and self.instance.pk and not phone:
-            return self.instance.phone
-        return phone
+        Hashing is handled in ``UnifiedUserAdmin.save_model()``,
+        not in the form clean step, to keep separation of
+        concerns.
+
+        Returns:
+            str: The raw password input (or empty string).
+        """
+        return self.cleaned_data.get('password')
 
     def clean(self):
+        """
+        Cross-field validation for existing users.
+
+        Ensures the user still has at least one identifier
+        (email or phone). For existing users, identity fields
+        (email, phone, role, auth_provider) may be stripped
+        from the POST data by Django because they are declared
+        as read-only in ``get_readonly_fields``. We explicitly
+        write the instance values back into ``cleaned_data`` so
+        that ``save_model`` and model-level ``full_clean``
+        receive valid data.
+
+        Raises:
+            ValidationError: If both email and phone are empty.
+        """
         cleaned_data = super().clean()
-        email = cleaned_data.get("email")
-        phone = cleaned_data.get("phone")
-        password = cleaned_data.get("password")
-        role = cleaned_data.get("role")
-        auth_provider = cleaned_data.get("auth_provider")
 
-        # Fallback to instance values for validation if they are missing (e.g. read-only fields)
         if self.instance and self.instance.pk:
-            email = email or self.instance.email
-            phone = phone or self.instance.phone
-            role = role or self.instance.role
-            auth_provider = auth_provider or self.instance.auth_provider
+            # Readonly fields are stripped from POST by Django
+            # — restore them from the database instance so
+            # downstream validation and save_model work.
+            if not cleaned_data.get('email'):
+                cleaned_data['email'] = self.instance.email
+            if not cleaned_data.get('phone'):
+                cleaned_data['phone'] = self.instance.phone
+            if not cleaned_data.get('role'):
+                cleaned_data['role'] = self.instance.role
+            if not cleaned_data.get('auth_provider'):
+                cleaned_data['auth_provider'] = self.instance.auth_provider
 
-        errors = {}
+        email = cleaned_data.get('email')
+        phone = cleaned_data.get('phone')
 
-        # 1. Identifier required
         if not email and not phone:
-            errors['email'] = _("Either an email or a phone number must be provided.")
-
-        # 2. Validation strictly for new users
-        if not self.instance.pk:
-            if not password:
-                errors['password'] = _("Password is required when creating a new user.")
-            if not role:
-                errors['role'] = _("Please select a role for the new user.")
-            
-            # Auth_provider ↔ identifier cross-validation
-            if auth_provider == 'email' and not email:
-                errors['auth_provider'] = _('Auth provider "email" requires an email address.')
-            elif auth_provider == 'phone' and not phone:
-                errors['auth_provider'] = _('Auth provider "phone" requires a phone number.')
-            elif auth_provider == 'email' and email and phone:
-                errors['phone'] = _('Email auth provider should not have a phone number.')
-            elif auth_provider == 'phone' and phone and email:
-                errors['email'] = _('Phone auth provider should not have an email address.')
-
-        if errors:
-            raise ValidationError(errors)
+            raise ValidationError(
+                _("Either an email or a phone number "
+                  "must be provided.")
+            )
 
         return cleaned_data
 
@@ -294,8 +476,8 @@ class UnifiedUserAdmin(
     """
 
     # -- Forms --
-    form = UnifiedUserAdminForm
-    add_form = UnifiedUserAdminForm
+    form = UnifiedUserChangeForm
+    add_form = UnifiedUserCreationForm
     resource_class = UnifiedUserResource
 
     # -- Inlines --
