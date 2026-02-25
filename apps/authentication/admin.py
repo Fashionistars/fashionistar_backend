@@ -500,12 +500,12 @@ class UnifiedUserAdmin(
     fieldsets = (
         (_('User Information'), {
             'fields': (
+                'member_id',
                 'email',
                 'phone',
                 'role',
                 'password',
                 'auth_provider',
-                'pid',
             ),
         }),
         (_('Personal Info'), {
@@ -573,6 +573,7 @@ class UnifiedUserAdmin(
         'identifying_info',
         'role',
         'auth_provider',
+        'is_superuser',
         'is_verified',
         'is_active',
         'is_deleted',
@@ -592,7 +593,7 @@ class UnifiedUserAdmin(
         'phone',
         'first_name',
         'last_name',
-        'pid',
+        'member_id',
     )
     ordering = ('-date_joined',)
     date_hierarchy = 'date_joined'
@@ -676,12 +677,14 @@ class UnifiedUserAdmin(
         """
         if obj:
             return (
+                'member_id',
                 'email',
                 'phone',
                 'role',
                 'auth_provider',
             ) + self.readonly_fields
-        return self.readonly_fields
+        # New users: member_id is auto-generated, always readonly
+        return ('member_id',) + self.readonly_fields
 
     # ---- Save logic ----
 

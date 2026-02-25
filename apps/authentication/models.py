@@ -1,5 +1,6 @@
 from django.contrib.auth.models import AbstractUser
-from django.db import models
+from django.db import models, transaction
+from django.db.models import F
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 from apps.common.models import TimeStampedModel, SoftDeleteModel, HardDeleteMixin
@@ -9,6 +10,84 @@ from apps.authentication.managers import CustomUserManager
 import logging
 
 logger = logging.getLogger('application')
+
+
+# ================================================================
+# MEMBER ID — Race-safe human-readable user identifier
+# Format: FASTAR0001 ... FASTAR9999 (10 chars, all caps)
+# ================================================================
+
+MEMBER_ID_PREFIX = "FASTAR"
+MEMBER_ID_DIGITS = 4  # 0001 – 9999
+
+
+class MemberIDCounter(models.Model):
+    """
+    Single-row atomic counter for ``member_id`` generation.
+
+    Uses ``select_for_update()`` inside a transaction to guarantee
+    no two concurrent user-creation requests receive the same
+    sequence number. The table always has exactly one row (id=1).
+
+    Never instantiate or delete this model manually.
+    """
+
+    counter = models.PositiveIntegerField(
+        default=0,
+        help_text="Current highest sequence number issued.",
+    )
+
+    class Meta:
+        verbose_name = "Member ID Counter"
+        db_table = "authentication_member_id_counter"
+
+    @classmethod
+    def next_value(cls):
+        """
+        Atomically increment and return the next sequence number.
+
+        Returns:
+            int: The next available counter value (1-indexed).
+
+        Raises:
+            OverflowError: If the counter would exceed the maximum
+                representable value for the digit width (9999).
+        """
+        max_value = 10 ** MEMBER_ID_DIGITS - 1  # 9999
+
+        with transaction.atomic():
+            obj, _ = cls.objects.select_for_update().get_or_create(
+                id=1,
+                defaults={'counter': 0},
+            )
+            if obj.counter >= max_value:
+                raise OverflowError(
+                    f"MemberIDCounter has reached the maximum value "
+                    f"({max_value}). Extend MEMBER_ID_DIGITS to continue."
+                )
+            obj.counter = F('counter') + 1
+            obj.save(update_fields=['counter'])
+            obj.refresh_from_db(fields=['counter'])
+            return obj.counter
+
+
+def generate_member_id():
+    """
+    Generate a unique, human-readable, brand-aligned member ID.
+
+    Format:  ``FASTAR`` + zero-padded 4-digit counter
+    Example: ``FASTAR0001``, ``FASTAR0042``, ``FASTAR1337``
+
+    The counter is sourced from ``MemberIDCounter.next_value()``
+    which uses row-level locking (``SELECT FOR UPDATE``) to
+    guarantee uniqueness under concurrent writes.
+
+    Returns:
+        str: A 10-character uppercase string.
+    """
+    seq = MemberIDCounter.next_value()
+    return f"{MEMBER_ID_PREFIX}{seq:0{MEMBER_ID_DIGITS}d}"
+
 
 class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMixin):
     """
@@ -158,13 +237,27 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
         help_text="True if user account is active.",
     )
 
-    # Legacy Support
-    pid = models.CharField(
-        max_length=50,
+    # ── Human-Readable Public Identifier ─────────────────────
+    # ``member_id`` is the user-facing identity code displayed
+    # on dashboards and support tickets.  The internal UUID
+    # ``id`` remains the actual primary key and is used for all
+    # API requests and relational lookups.
+    #
+    # Format  : FASTAR0001  (prefix + 4 zero-padded digits)
+    # Length  : 10 characters, always uppercase
+    # Pattern : FASTAR[0001-9999]
+    # Mutable : NO — locked after first generation in save()
+    member_id = models.CharField(
+        max_length=10,
         unique=True,
         null=True,
         blank=True,
-        help_text="Legacy unique identifier for backward compatibility.",
+        editable=False,
+        db_index=True,
+        help_text=(
+            "Unique human-readable brand ID (e.g. FASTAR0042). "
+            "Auto-generated on user creation. Cannot be changed."
+        ),
     )
 
     USERNAME_FIELD = 'email'
@@ -415,10 +508,19 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
 
     def save(self, *args, **kwargs):
         """
-        Save method to enforce validation and NULL normalization.
-        Ensures email and phone are stored as NULL instead of
-        empty strings to preserve UNIQUE constraint integrity.
+        Save with validation, NULL normalisation, and member_id
+        auto-generation.
+
+        On first creation (``_state.adding`` is True), generates
+        a unique ``member_id`` via the atomic counter before
+        persisting.  On subsequent saves the existing value is
+        preserved — ``editable=False`` and the form's
+        ``get_readonly_fields`` prevent UI modification.
         """
+        # Auto-generate member_id exactly once at creation
+        if self._state.adding and not self.member_id:
+            self.member_id = generate_member_id()
+
         self.full_clean()
 
         # Normalize empty strings → NULL
@@ -429,9 +531,10 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
 
         super().save(*args, **kwargs)
         logger.info(
-            "Saved UnifiedUser %s [%s]",
+            "Saved UnifiedUser %s [%s] member_id=%s",
             self.pk,
             self.auth_provider,
+            self.member_id,
         )
 
     def is_owner(self, user):
