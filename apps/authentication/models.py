@@ -516,19 +516,32 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
         persisting.  On subsequent saves the existing value is
         preserved — ``editable=False`` and the form's
         ``get_readonly_fields`` prevent UI modification.
+
+        .. important::
+            NULL normalisation MUST happen before ``full_clean()``
+            and before ``super().save()`` to prevent Django's
+            unique-constraint check from treating an empty string
+            as a duplicate phone/email across multiple users.
         """
-        # Auto-generate member_id exactly once at creation
-        if self._state.adding and not self.member_id:
-            self.member_id = generate_member_id()
-
-        self.full_clean()
-
-        # Normalize empty strings → NULL
+        # ── 1. Normalize empty strings → NULL (MUST be first) ──
+        # PhoneNumberField and EmailField can receive '' (empty
+        # string) from admin forms when the field is left blank.
+        # PostgreSQL treats '' != NULL for unique constraints, but
+        # SQLite can still hit UNIQUE violations on ''. Normalize
+        # to NULL here so the DB always gets None when blank.
         if not self.email:
             self.email = None
         if not self.phone:
             self.phone = None
 
+        # ── 2. Auto-generate member_id exactly once at creation ─
+        if self._state.adding and not self.member_id:
+            self.member_id = generate_member_id()
+
+        # ── 3. Full model validation ────────────────────────────
+        self.full_clean()
+
+        # ── 4. Persist ─────────────────────────────────────────
         super().save(*args, **kwargs)
         logger.info(
             "Saved UnifiedUser %s [%s] member_id=%s",

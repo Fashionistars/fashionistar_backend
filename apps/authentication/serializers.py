@@ -193,7 +193,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     )
 
     class Meta:
-        model = User
+        model = UnifiedUser
         fields = (
             'email', 'phone', 'role', 'password', 'password2', 
             'bio', 'avatar', 'country', 'state', 'city', 'address'
@@ -331,9 +331,9 @@ class ResendOTPRequestSerializer(serializers.Serializer):
             email_or_phone = data.get('email_or_phone')
             user = None
             if '@' in email_or_phone:
-                user = get_object_or_404(User, email=email_or_phone)
+                user = get_object_or_404(UnifiedUser, email=email_or_phone)
             else:
-                user = get_object_or_404(User, phone=email_or_phone)
+                user = get_object_or_404(UnifiedUser, phone=email_or_phone)
                 
             logger.info(f"Resend OTP validation successful for {email_or_phone}")
             return data
@@ -360,9 +360,9 @@ class PasswordResetRequestSerializer(serializers.Serializer):
         try:
             email_or_phone = data.get('email_or_phone')
             if '@' in email_or_phone:
-                get_object_or_404(User, email=email_or_phone)
+                get_object_or_404(UnifiedUser, email=email_or_phone)
             else:
-                get_object_or_404(User, phone=email_or_phone)
+                get_object_or_404(UnifiedUser, phone=email_or_phone)
             logger.info(f"Password reset request validation successful for {email_or_phone}")
             return data
         except Exception as e:
@@ -447,7 +447,7 @@ class ProtectedUserSerializer(serializers.ModelSerializer):
     Optimized for speed by explicitly listing fields.
     """
     class Meta:
-        model = User
+        model = UnifiedUser
         fields = (
             'id', 'email', 'phone', 'role', 
             'is_active', 'is_verified', 
@@ -462,7 +462,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     Includes all fields minus internal ones.
     """
     class Meta:
-        model = User
+        model = UnifiedUser
         fields = '__all__'
         read_only_fields = ('id', 'password', 'last_login', 'is_superuser', 'is_staff', 'groups', 'user_permissions')
         extra_kwargs = {
