@@ -19,7 +19,6 @@ Usage:
 import logging
 
 from django.contrib import admin
-from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 
 logger = logging.getLogger('application')
@@ -192,8 +191,9 @@ class SoftDeleteAdminMixin:
         Returns:
             str: Safe HTML badge markup.
         """
+        from django.utils.safestring import mark_safe
         if obj.is_deleted:
-            return format_html(
+            return mark_safe(
                 '<span style="'
                 'background:#dc3545;color:#fff;'
                 'padding:2px 8px;border-radius:12px;'
@@ -201,7 +201,7 @@ class SoftDeleteAdminMixin:
                 'letter-spacing:.5px;">'
                 '🔴 DELETED</span>'
             )
-        return format_html(
+        return mark_safe(
             '<span style="'
             'background:#28a745;color:#fff;'
             'padding:2px 8px;border-radius:12px;'
