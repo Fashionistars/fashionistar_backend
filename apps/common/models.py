@@ -96,23 +96,54 @@ class SoftDeleteModel(models.Model):
 
         Steps:
             1. Archive a copy to ``DeletedRecords``.
-            2. Set ``is_deleted=True`` and ``deleted_at``.
-            3. Dispatch email/SMS notification via Celery.
+            2. Set ``is_deleted=True`` and ``deleted_at`` via
+               direct queryset UPDATE (bypasses ``full_clean()``
+               to avoid triggering immutability guards on models
+               like ``UnifiedUser``).
+            3. Refresh instance from DB.
+            4. Dispatch email/SMS notification via Celery.
+
+        .. important::
+            We intentionally use ``QuerySet.update()`` rather
+            than ``self.save()`` to avoid calling
+            ``full_clean()`` — which would re-run all model
+            validators and immutability checks.
         """
         try:
             # Lazy import to avoid circular dependencies
             from apps.common.models import DeletedRecords
+            from django.forms.models import model_to_dict
 
-            # Archive for recovery
+            # Archive for recovery — use model_to_dict for
+            # clean, JSON-serialisable representation
+            try:
+                archive_data = model_to_dict(self)
+                # Convert non-serializable types to str
+                serialized = {
+                    k: str(v) if v is not None else None
+                    for k, v in archive_data.items()
+                }
+            except Exception:
+                serialized = {'pk': str(self.pk)}
+
             DeletedRecords.objects.create(
                 model_name=self.__class__.__name__,
                 record_id=str(self.pk),
-                data=self.__dict__,  #erialize for recovery
+                data=serialized,
             )
 
+            # Direct UPDATE — bypasses full_clean()
+            now = timezone.now()
+            self.__class__.objects.filter(
+                pk=self.pk
+            ).update(
+                is_deleted=True,
+                deleted_at=now,
+            )
+
+            # Sync in-memory state
             self.is_deleted = True
-            self.deleted_at = timezone.now()
-            self.save(update_fields=['is_deleted', 'deleted_at'])
+            self.deleted_at = now
 
             logger.info(
                 "Soft-deleted %s with ID %s",
@@ -135,13 +166,28 @@ class SoftDeleteModel(models.Model):
         """
         Restore a soft-deleted record.
 
-        Clears ``is_deleted`` and ``deleted_at``, then
-        dispatches a restoration notification via Celery.
+        Clears ``is_deleted`` and ``deleted_at`` via direct
+        QuerySet UPDATE (no ``full_clean()``), then dispatches
+        a restoration notification via Celery.
+
+        .. important::
+            Same rationale as ``soft_delete()`` — we use
+            ``QuerySet.update()`` to avoid re-triggering
+            model-level validation, which would crash on
+            models with immutability guards.
         """
         try:
+            # Direct UPDATE — bypasses full_clean()
+            self.__class__.objects.filter(
+                pk=self.pk
+            ).update(
+                is_deleted=False,
+                deleted_at=None,
+            )
+
+            # Sync in-memory state
             self.is_deleted = False
             self.deleted_at = None
-            self.save(update_fields=['is_deleted', 'deleted_at'])
 
             logger.info(
                 "Restored %s with ID %s",
@@ -160,6 +206,7 @@ class SoftDeleteModel(models.Model):
             )
             raise
 
+
     def _dispatch_status_notification(self, action):
         """
         Dispatch email and SMS notifications as background
@@ -170,28 +217,61 @@ class SoftDeleteModel(models.Model):
         Non-user models that inherit ``SoftDeleteModel`` will
         silently skip notification.
 
+        Celery/Redis errors are caught and logged as
+        WARNING — notifications are best-effort and must NOT
+        prevent the primary soft-delete or restore from
+        completing.
+
         Args:
             action (str): One of 'soft_deleted', 'hard_deleted',
                 'restored'.
         """
-        from apps.common.tasks import (
-            send_account_status_email,
-            send_account_status_sms,
-        )
-
-        email = getattr(self, 'email', None)
-        phone = getattr(self, 'phone', None)
-
-        if email:
-            send_account_status_email.delay(
-                email=str(email),
-                action=action,
+        try:
+            from apps.common.tasks import (
+                send_account_status_email,
+                send_account_status_sms,
             )
-        if phone:
-            send_account_status_sms.delay(
-                phone=str(phone),
-                action=action,
+
+            email = getattr(self, 'email', None)
+            phone = getattr(self, 'phone', None)
+
+            if email:
+                try:
+                    send_account_status_email.delay(
+                        email=str(email),
+                        action=action,
+                    )
+                except Exception:
+                    logger.warning(
+                        "Could not enqueue status email "
+                        "[%s] to %s — Celery unavailable?",
+                        action,
+                        email,
+                    )
+
+            if phone:
+                try:
+                    send_account_status_sms.delay(
+                        phone=str(phone),
+                        action=action,
+                    )
+                except Exception:
+                    logger.warning(
+                        "Could not enqueue status SMS "
+                        "[%s] to %s — Celery unavailable?",
+                        action,
+                        phone,
+                    )
+
+        except Exception:
+            logger.warning(
+                "Notification dispatch skipped for "
+                "%s %s (action=%s) — Celery not available",
+                self.__class__.__name__,
+                self.pk,
+                action,
             )
+
 
 
 # ================================================================

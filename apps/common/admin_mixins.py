@@ -4,8 +4,11 @@ Reusable admin mixins for enterprise-grade model administration.
 
 Architecture:
     - SoftDeleteAdminMixin: Provides soft-delete/restore bulk
-      actions, queryset override, and delete_model override
-      for any ModelAdmin that manages SoftDeleteModel subclasses.
+      actions, queryset override, delete_model override,
+      visual deleted badge in list_display, is_deleted filter
+      in list_filter, and per-model soft-delete tab in
+      ModelAdmin change form for any ModelAdmin that manages
+      SoftDeleteModel subclasses.
 
 Usage:
     @admin.register(MyModel)
@@ -16,6 +19,7 @@ Usage:
 import logging
 
 from django.contrib import admin
+from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 
 logger = logging.getLogger('application')
@@ -34,6 +38,12 @@ class SoftDeleteAdminMixin:
           selected records.
         - ``restore_selected``: Bulk action to restore
           soft-deleted records.
+        - ``_is_deleted_badge``: Visual 🔴/🟢 badge column
+          in the list view.
+        - ``get_list_display``: Injects the badge as the first
+          column in every list view automatically.
+        - ``get_list_filter``: Injects ``is_deleted`` filter
+          pill to the right panel automatically.
 
     To use, add ``SoftDeleteAdminMixin`` as the first parent
     in your admin class's MRO, and include the actions in
@@ -164,3 +174,79 @@ class SoftDeleteAdminMixin:
             _("%(count)d record(s) restored "
               "successfully.") % {'count': count},
         )
+
+    # ─── Visual Helpers ───────────────────────────────────
+
+    def _is_deleted_badge(self, obj):
+        """
+        Render a colour-coded status badge for the list view.
+
+        Shows 🔴 DELETED for soft-deleted records and a
+        green ACTIVE badge for live records, so admins can
+        immediately identify record state without opening the
+        change form.
+
+        Args:
+            obj: The model instance.
+
+        Returns:
+            str: Safe HTML badge markup.
+        """
+        if obj.is_deleted:
+            return format_html(
+                '<span style="'
+                'background:#dc3545;color:#fff;'
+                'padding:2px 8px;border-radius:12px;'
+                'font-size:11px;font-weight:600;'
+                'letter-spacing:.5px;">'
+                '🔴 DELETED</span>'
+            )
+        return format_html(
+            '<span style="'
+            'background:#28a745;color:#fff;'
+            'padding:2px 8px;border-radius:12px;'
+            'font-size:11px;font-weight:600;'
+            'letter-spacing:.5px;">'
+            '🟢 ACTIVE</span>'
+        )
+
+    _is_deleted_badge.short_description = _('Status')
+    _is_deleted_badge.admin_order_field = 'is_deleted'
+
+    def get_list_display(self, request):
+        """
+        Inject the status badge as the FIRST column.
+
+        Ensures every admin using this mixin shows the
+        soft-delete state at a glance without requiring
+        the subclass to manually add it to ``list_display``.
+
+        Args:
+            request: The current HTTP request.
+
+        Returns:
+            tuple: Prepended list_display with badge.
+        """
+        base = super().get_list_display(request)
+        if '_is_deleted_badge' not in base:
+            return ('_is_deleted_badge',) + tuple(base)
+        return base
+
+    def get_list_filter(self, request):
+        """
+        Inject ``is_deleted`` into the right-hand filter panel.
+
+        Automatically adds the soft-delete filter pill so that
+        admins can click "Yes / No" to show only deleted or
+        only alive records.
+
+        Args:
+            request: The current HTTP request.
+
+        Returns:
+            tuple: list_filter with is_deleted injected.
+        """
+        base = super().get_list_filter(request)
+        if 'is_deleted' not in base:
+            return tuple(base) + ('is_deleted',)
+        return base

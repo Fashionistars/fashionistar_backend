@@ -18,7 +18,7 @@ logger = logging.getLogger('application')
 # ================================================================
 
 MEMBER_ID_PREFIX = "FASTAR"
-MEMBER_ID_DIGITS = 4  # 0001 – 9999
+MEMBER_ID_DIGITS = 6  # 000001 – 999999
 
 
 class MemberIDCounter(models.Model):
@@ -75,8 +75,8 @@ def generate_member_id():
     """
     Generate a unique, human-readable, brand-aligned member ID.
 
-    Format:  ``FASTAR`` + zero-padded 4-digit counter
-    Example: ``FASTAR0001``, ``FASTAR0042``, ``FASTAR1337``
+    Format:  ``FASTAR`` + zero-padded 6-digit counter
+    Example: ``FASTAR000001``, ``FASTAR000062``, ``FASTAR0001337``
 
     The counter is sourced from ``MemberIDCounter.next_value()``
     which uses row-level locking (``SELECT FOR UPDATE``) to
@@ -243,19 +243,19 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
     # ``id`` remains the actual primary key and is used for all
     # API requests and relational lookups.
     #
-    # Format  : FASTAR0001  (prefix + 4 zero-padded digits)
+    # Format  : FASTAR0001  (prefix + 6 zero-padded digits)
     # Length  : 10 characters, always uppercase
     # Pattern : FASTAR[0001-9999]
     # Mutable : NO — locked after first generation in save()
     member_id = models.CharField(
-        max_length=10,
+        max_length=12,
         unique=True,
         null=True,
         blank=True,
         editable=False,
         db_index=True,
         help_text=(
-            "Unique human-readable brand ID (e.g. FASTAR0042). "
+            "Unique human-readable brand ID (e.g. FASTAR000062). "
             "Auto-generated on user creation. Cannot be changed."
         ),
     )

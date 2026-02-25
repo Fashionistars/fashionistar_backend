@@ -22,7 +22,7 @@ def backfill_member_ids(apps, schema_editor):
     counter stays in sync after the backfill completes.
     """
     PREFIX = "FASTAR"
-    DIGITS = 4
+    DIGITS = 6
 
     UnifiedUser = apps.get_model('authentication', 'UnifiedUser')
     MemberIDCounter = apps.get_model('authentication', 'MemberIDCounter')
@@ -102,10 +102,10 @@ class Migration(migrations.Migration):
                 db_index=True,
                 editable=False,
                 help_text=(
-                    'Unique human-readable brand ID (e.g. FASTAR0042). '
+                    'Unique human-readable brand ID (e.g. FASTAR000062). '
                     'Auto-generated on user creation. Cannot be changed.'
                 ),
-                max_length=10,
+                max_length=12,
                 null=True,
                 unique=True,
             ),

@@ -130,6 +130,12 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    # ── Fashionistar Custom Observability Middleware ────────────
+    # Must be FIRST so every subsequent middleware & view has
+    # access to request.request_id and consistent timing.
+    'apps.common.middleware.RequestIDMiddleware',
+    'apps.common.middleware.RequestTimingMiddleware',
+    # ────────────────────────────────────────────────────────────
     'django.middleware.security.SecurityMiddleware',
     # Whitenoise Middleware - serves static files in production.
     # Should be placed right after the security middleware.
