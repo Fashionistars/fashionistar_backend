@@ -5,7 +5,7 @@ Enterprise abstract base models for the Fashionistar platform.
 Architecture:
     - TimeStampedModel: Auto-timestamping (created_at, updated_at).
     - SoftDeleteModel:  Soft-delete with archival, restore, and
-                        background notification via Celery tasks.
+                        fire-and-forget background notifications.
     - DeletedRecords:   Archive table for soft-deleted record data.
     - HardDeleteMixin:  Protected hard-delete with permission checks
                         and Cloudinary media cleanup.
@@ -67,13 +67,15 @@ class SoftDeleteModel(models.Model):
     Abstract base class that prevents physical deletion.
 
     Records are marked as deleted (``is_deleted=True``) and
-    archived to ``DeletedRecords`` for recovery. The default
-    manager (``SoftDeleteManager``) filters out deleted records
-    from normal queries.
+    archived to ``DeletedRecords`` for forensic recovery. The
+    default manager (``SoftDeleteManager``) filters out deleted
+    records from normal queries.
 
-    On soft-delete and restore, background Celery tasks dispatch
-    email/SMS notifications to the affected user via the
-    platform's ``EmailManager`` and ``SMSManager``.
+    On soft-delete and restore, fire-and-forget Celery tasks
+    dispatch email/SMS notifications to the affected user.
+    Tasks are dispatched with ``retry=False`` and a 1-second
+    socket timeout so they NEVER block the caller — even when
+    Redis / the broker is completely down.
     """
 
     is_deleted = models.BooleanField(
@@ -90,35 +92,35 @@ class SoftDeleteModel(models.Model):
     class Meta:
         abstract = True
 
+    # ----------------------------------------------------------------
+    # Soft-delete
+    # ----------------------------------------------------------------
+
     def soft_delete(self):
         """
         Mark the record as deleted and archive it.
 
-        Steps:
-            1. Archive a copy to ``DeletedRecords``.
-            2. Set ``is_deleted=True`` and ``deleted_at`` via
-               direct queryset UPDATE (bypasses ``full_clean()``
-               to avoid triggering immutability guards on models
-               like ``UnifiedUser``).
-            3. Refresh instance from DB.
-            4. Dispatch email/SMS notification via Celery.
+        Steps
+        -----
+        1. Serialise a snapshot into ``DeletedRecords``.
+        2. ``QuerySet.update()`` — bypasses ``full_clean()``
+           to avoid crashing on models with immutability guards
+           (e.g. ``UnifiedUser``).
+        3. Sync in-memory state.
+        4. Fire-and-forget Celery notification.
 
         .. important::
-            We intentionally use ``QuerySet.update()`` rather
-            than ``self.save()`` to avoid calling
-            ``full_clean()`` — which would re-run all model
-            validators and immutability checks.
+            We use ``QuerySet.update()`` throughout this class,
+            never ``self.save()``, to avoid re-triggering model
+            validation.
         """
         try:
-            # Lazy import to avoid circular dependencies
             from apps.common.models import DeletedRecords
             from django.forms.models import model_to_dict
 
-            # Archive for recovery — use model_to_dict for
-            # clean, JSON-serialisable representation
+            # ── 1. Archive snapshot ──────────────────────────────
             try:
                 archive_data = model_to_dict(self)
-                # Convert non-serializable types to str
                 serialized = {
                     k: str(v) if v is not None else None
                     for k, v in archive_data.items()
@@ -132,7 +134,9 @@ class SoftDeleteModel(models.Model):
                 data=serialized,
             )
 
-            # Direct UPDATE — bypasses full_clean()
+            # ── 2. Bulk UPDATE — bypasses full_clean() ───────────
+            # objects.filter() is safe here because the record is
+            # still alive (is_deleted=False) at this point.
             now = timezone.now()
             self.__class__.objects.filter(
                 pk=self.pk
@@ -141,7 +145,7 @@ class SoftDeleteModel(models.Model):
                 deleted_at=now,
             )
 
-            # Sync in-memory state
+            # ── 3. Sync in-memory state ──────────────────────────
             self.is_deleted = True
             self.deleted_at = now
 
@@ -151,8 +155,8 @@ class SoftDeleteModel(models.Model):
                 self.pk,
             )
 
-            # Dispatch background notifications
-            self._dispatch_status_notification('soft_deleted')
+            # ── 4. Fire-and-forget notification ──────────────────
+            self._fire_and_forget_notification('soft_deleted')
 
         except Exception:
             logger.exception(
@@ -162,30 +166,72 @@ class SoftDeleteModel(models.Model):
             )
             raise
 
+    # ----------------------------------------------------------------
+    # Restore
+    # ----------------------------------------------------------------
+
     def restore(self):
         """
         Restore a soft-deleted record.
 
-        Clears ``is_deleted`` and ``deleted_at`` via direct
-        QuerySet UPDATE (no ``full_clean()``), then dispatches
-        a restoration notification via Celery.
+        Steps
+        -----
+        1. ``QuerySet.update()`` via ``all_with_deleted()``
+           manager so the UPDATE actually finds the
+           ``is_deleted=True`` row (the default alive-only
+           manager would silently match 0 rows).
+        2. Purge the matching ``DeletedRecords`` archive entry.
+        3. Sync in-memory state.
+        4. Fire-and-forget Celery notification.
 
         .. important::
-            Same rationale as ``soft_delete()`` — we use
-            ``QuerySet.update()`` to avoid re-triggering
-            model-level validation, which would crash on
-            models with immutability guards.
+            ``BUG FIX``: Previous implementation used
+            ``self.__class__.objects.filter(pk=self.pk)``
+            which uses the alive-only manager and always returns
+            an empty queryset for deleted records → 0 rows
+            updated → silent no-op. We now explicitly call
+            ``all_with_deleted()`` to bypass the alive filter.
         """
         try:
-            # Direct UPDATE — bypasses full_clean()
-            self.__class__.objects.filter(
-                pk=self.pk
+            # ── 1. Bulk UPDATE via unfiltered manager ────────────
+            # CRITICAL: must use all_with_deleted() — the default
+            # objects manager has alive_only=True and will match
+            # ZERO rows when is_deleted=True, making restore a
+            # silent no-op.
+            updated = self.__class__.objects.all_with_deleted().filter(
+                pk=self.pk,
+                is_deleted=True,
             ).update(
                 is_deleted=False,
                 deleted_at=None,
             )
 
-            # Sync in-memory state
+            if updated == 0:
+                logger.warning(
+                    "restore() matched 0 rows for %s %s "
+                    "— already active or not found",
+                    self.__class__.__name__,
+                    self.pk,
+                )
+
+            # ── 2. Purge archive entry ───────────────────────────
+            # Remove the DeletedRecords snapshot so the audit
+            # table stays accurate (only lists currently-deleted
+            # records).
+            from apps.common.models import DeletedRecords
+            purged = DeletedRecords.objects.filter(
+                model_name=self.__class__.__name__,
+                record_id=str(self.pk),
+            ).delete()
+            if purged[0]:
+                logger.debug(
+                    "Purged %d archive entries for %s %s",
+                    purged[0],
+                    self.__class__.__name__,
+                    self.pk,
+                )
+
+            # ── 3. Sync in-memory state ──────────────────────────
             self.is_deleted = False
             self.deleted_at = None
 
@@ -195,8 +241,8 @@ class SoftDeleteModel(models.Model):
                 self.pk,
             )
 
-            # Dispatch background notifications
-            self._dispatch_status_notification('restored')
+            # ── 4. Fire-and-forget notification ──────────────────
+            self._fire_and_forget_notification('restored')
 
         except Exception:
             logger.exception(
@@ -206,25 +252,29 @@ class SoftDeleteModel(models.Model):
             )
             raise
 
+    # ----------------------------------------------------------------
+    # Notification dispatch (fire-and-forget — NEVER blocks caller)
+    # ----------------------------------------------------------------
 
-    def _dispatch_status_notification(self, action):
+    def _fire_and_forget_notification(self, action):
         """
-        Dispatch email and SMS notifications as background
-        Celery tasks when the account status changes.
+        Enqueue email/SMS notifications as Celery background tasks.
 
-        Only fires if the model instance has ``email`` or
-        ``phone`` attributes (i.e., it is a user-like model).
-        Non-user models that inherit ``SoftDeleteModel`` will
-        silently skip notification.
-
-        Celery/Redis errors are caught and logged as
-        WARNING — notifications are best-effort and must NOT
-        prevent the primary soft-delete or restore from
-        completing.
+        Design principles
+        -----------------
+        * **Non-blocking**: uses ``apply_async(retry=False)`` so
+          Celery will NOT retry the broker connection on failure.
+          The call returns immediately regardless of broker state.
+        * **Fail-safe**: any exception (broker down, import error,
+          etc.) is caught and logged as WARNING — it NEVER
+          propagates to the caller. Notifications are best-effort.
+        * **Zero-timeout socket**: CELERY_BROKER_TRANSPORT_OPTIONS
+          must set ``socket_timeout=1`` so a dead Redis never hangs
+          the process for more than 1 second.
 
         Args:
-            action (str): One of 'soft_deleted', 'hard_deleted',
-                'restored'.
+            action (str): One of ``'soft_deleted'``,
+                ``'hard_deleted'``, ``'restored'``.
         """
         try:
             from apps.common.tasks import (
@@ -237,28 +287,36 @@ class SoftDeleteModel(models.Model):
 
             if email:
                 try:
-                    send_account_status_email.delay(
-                        email=str(email),
-                        action=action,
+                    send_account_status_email.apply_async(
+                        kwargs={
+                            'email': str(email),
+                            'action': action,
+                        },
+                        retry=False,           # never retry broker connect
+                        ignore_result=True,    # no result backend round-trip
                     )
                 except Exception:
                     logger.warning(
-                        "Could not enqueue status email "
-                        "[%s] to %s — Celery unavailable?",
+                        "Broker unavailable — "
+                        "skipping status email [%s] → %s",
                         action,
                         email,
                     )
 
             if phone:
                 try:
-                    send_account_status_sms.delay(
-                        phone=str(phone),
-                        action=action,
+                    send_account_status_sms.apply_async(
+                        kwargs={
+                            'phone': str(phone),
+                            'action': action,
+                        },
+                        retry=False,
+                        ignore_result=True,
                     )
                 except Exception:
                     logger.warning(
-                        "Could not enqueue status SMS "
-                        "[%s] to %s — Celery unavailable?",
+                        "Broker unavailable — "
+                        "skipping status SMS [%s] → %s",
                         action,
                         phone,
                     )
@@ -266,12 +324,14 @@ class SoftDeleteModel(models.Model):
         except Exception:
             logger.warning(
                 "Notification dispatch skipped for "
-                "%s %s (action=%s) — Celery not available",
+                "%s %s (action=%s) — import or task error",
                 self.__class__.__name__,
                 self.pk,
                 action,
             )
 
+    # Keep backward-compatible alias
+    _dispatch_status_notification = _fire_and_forget_notification
 
 
 # ================================================================
@@ -282,9 +342,14 @@ class DeletedRecords(models.Model):
     """
     Archive table for soft-deleted records.
 
-    Stores serialized data from any model that inherits
-    ``SoftDeleteModel``, allowing full recovery without
-    querying the main table.
+    Stores a serialised snapshot of any model instance that
+    inherits ``SoftDeleteModel`` at the moment of its soft
+    deletion.  A matching row is automatically removed from
+    this table when the original record is restored.
+
+    Deleting a row from this admin table (superuser only) will
+    also permanently DELETE the source record from its original
+    table — use with extreme caution.
     """
 
     model_name = models.CharField(
@@ -323,6 +388,24 @@ class DeletedRecords(models.Model):
             self.deleted_at,
         )
 
+    def resolve_original_model(self):
+        """
+        Dynamically resolve the original Django model class
+        from ``model_name``.
+
+        Returns:
+            type | None: The model class, or ``None`` if it
+                cannot be resolved.
+        """
+        from django.apps import apps
+        for app_config in apps.get_app_configs():
+            try:
+                model = app_config.get_model(self.model_name)
+                return model
+            except LookupError:
+                continue
+        return None
+
 
 # ================================================================
 # 4. HARD-DELETE MIXIN
@@ -330,26 +413,17 @@ class DeletedRecords(models.Model):
 
 class HardDeleteMixin:
     """
-    Mixin for hard-delete functionality, protected for
-    admins, vendors, and record owners.
+    Mixin for protected hard-delete functionality.
 
-    Handles Cloudinary media deletion and dispatches a
-    'hard_deleted' notification via Celery before physical
-    deletion.
+    Only admins, vendors (for their own records), or record
+    owners may perform a hard delete. Handles Cloudinary media
+    cleanup and dispatches a ``'hard_deleted'`` notification
+    before physically removing the record.
     """
 
     def hard_delete(self, user):
         """
         Permanently delete the record from the database.
-
-        Protected: Only admins, vendors (for their own
-        records), or owners can perform this operation.
-
-        Steps:
-            1. Permission check.
-            2. Dispatch 'hard_deleted' notification.
-            3. Clean up Cloudinary media.
-            4. Physical SQL DELETE.
 
         Args:
             user: The user performing the deletion.
@@ -358,7 +432,6 @@ class HardDeleteMixin:
             PermissionDenied: If user lacks permission.
         """
         try:
-            # Permission check
             if not (
                 user.is_superuser
                 or user.role in ['admin', 'vendor']
@@ -369,17 +442,11 @@ class HardDeleteMixin:
                     "perform hard delete."
                 )
 
-            # Dispatch notification BEFORE deletion
-            if hasattr(self, '_dispatch_status_notification'):
-                self._dispatch_status_notification(
-                    'hard_deleted'
-                )
+            if hasattr(self, '_fire_and_forget_notification'):
+                self._fire_and_forget_notification('hard_deleted')
 
-            # Handle media deletion (Cloudinary)
             if hasattr(self, 'avatar') and self.avatar:
-                from apps.common.utils import (
-                    delete_cloudinary_asset,
-                )
+                from apps.common.utils import delete_cloudinary_asset
                 delete_cloudinary_asset(self.avatar.name)
 
             logger.info(
@@ -389,7 +456,6 @@ class HardDeleteMixin:
                 user.pk,
             )
 
-            # Perform physical delete
             super().delete()
 
         except PermissionDenied:
@@ -405,14 +471,6 @@ class HardDeleteMixin:
     def is_owner(self, user):
         """
         Check if the user is the owner of this record.
-
-        Override in subclasses for model-specific ownership
-        logic.
-
-        Args:
-            user: The user to check.
-
-        Returns:
-            bool: ``False`` by default.
+        Override in subclasses for model-specific logic.
         """
         return False

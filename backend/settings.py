@@ -778,6 +778,48 @@ LOGGING = {
 }
 
 
+# ================================================================
+# CELERY — ENTERPRISE PRODUCTION CONFIGURATION
+# ================================================================
+#
+# Key design decision: ALL timeouts set to 1 second so a dead
+# Redis broker fails IMMEDIATELY rather than blocking for 3×60s.
+# apply_async(retry=False) in _fire_and_forget_notification()
+# means individual task dispatches never retry the connection.
+#
+CELERY_BROKER_URL = env(
+    'REDIS_URL',
+    default='redis://127.0.0.1:6379/0',
+)
+CELERY_RESULT_BACKEND = env(
+    'REDIS_URL',
+    default='redis://127.0.0.1:6379/0',
+)
+
+# ── Fast-fail socket timeouts ─────────────────────────────────────
+CELERY_BROKER_TRANSPORT_OPTIONS = {
+    'socket_connect_timeout': 1,   # TCP connect timeout (seconds)
+    'socket_timeout': 1,           # operation timeout (seconds)
+    'socket_keepalive': True,
+}
+
+# Stop Django startup from hanging when Redis is down at boot time.
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = False
+
+# ── Serialisation ─────────────────────────────────────────────────
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TIMEZONE = 'UTC'
+CELERY_ENABLE_UTC = True
+
+# ── Worker safety ─────────────────────────────────────────────────
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 200   # Prevent memory bloat
+CELERY_TASK_ACKS_LATE = True             # Ack after completion
+CELERY_TASK_REJECT_ON_WORKER_LOST = True  # No infinite re-queue
+CELERY_TASK_IGNORE_RESULT = True          # Fire-and-forget
+
+
 
 
 

@@ -611,6 +611,7 @@ class UnifiedUserAdmin(
     actions = [
         'soft_delete_selected',
         'restore_selected',
+        'hard_delete_selected',   # Superuser-only permanent delete
     ]
 
     # ---- Display helpers ----
