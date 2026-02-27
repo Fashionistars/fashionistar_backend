@@ -613,27 +613,26 @@ class ModelAnalytics(models.Model):
     )
     total_created = models.PositiveBigIntegerField(
         default=0,
-        help_text=(
-            "Cumulative records ever created. Never decrements."
-        ),
+        help_text="Cumulative records ever created. Never decrements.",
     )
     total_active = models.PositiveBigIntegerField(
         default=0,
+        help_text="Records currently alive (is_deleted=False).",
+    )
+    total_updated = models.PositiveBigIntegerField(
+        default=0,
         help_text=(
-            "Records currently alive (is_deleted=False)."
+            "Cumulative update (save) operations on existing records. "
+            "Captures every vendor/client field change."
         ),
     )
     total_soft_deleted = models.PositiveBigIntegerField(
         default=0,
-        help_text=(
-            "Records currently soft-deleted (recoverable)."
-        ),
+        help_text="Records currently soft-deleted (recoverable).",
     )
     total_hard_deleted = models.PositiveBigIntegerField(
         default=0,
-        help_text=(
-            "Cumulative permanently purged records. Never decrements."
-        ),
+        help_text="Cumulative permanently purged records. Never decrements.",
     )
     last_updated = models.DateTimeField(
         auto_now=True,
@@ -647,12 +646,13 @@ class ModelAnalytics(models.Model):
 
     def __str__(self):
         return (
-            "%s — created=%d active=%d "
-            "soft_del=%d hard_del=%d"
+            "%s — created=%d active=%d upd=%d "
+            "soft=%d hard=%d"
         ) % (
             self.model_name,
             self.total_created,
             self.total_active,
+            self.total_updated,
             self.total_soft_deleted,
             self.total_hard_deleted,
         )
@@ -665,55 +665,68 @@ class ModelAnalytics(models.Model):
     def _adjust(cls, model_name, app_label='', **deltas):
         """
         Atomically apply ``deltas`` to the counter row for
-        ``model_name``.
+        ``model_name`` using a race-condition-safe pattern:
 
-        Uses ``SELECT ... FOR UPDATE`` inside ``transaction.atomic()``
-        to lock the row and prevent concurrent writers from
-        trampling each other's increments.
+        1. Attempt a direct F()-expression UPDATE on the existing
+           row.  F() expressions translate to a single atomic
+           ``UPDATE ... SET col = col + N`` — no read-modify-write
+           race.
+        2. If 0 rows were updated (row doesn't exist yet) perform
+           ``get_or_create`` inside ``transaction.atomic()``.
+           An ``IntegrityError`` from the duplicate-key race
+           is caught and the UPDATE is retried, making the whole
+           operation correct under any concurrency level.
+
+        Why NOT ``select_for_update().get_or_create()``?
+        -------------------------------------------------
+        ``select_for_update`` issues a ``SELECT ... FOR UPDATE``
+        but the FOR UPDATE lock only applies to an **existing**
+        row.  When the row is absent both concurrent workers see
+        "0 rows" and both try an INSERT → ``IntegrityError``.
+        This new pattern avoids that two-phase race entirely.
 
         Args:
-            model_name (str): The Django model class name.
-            app_label (str): The Django app label.
-            **deltas (int): Keyword arguments mapping field names
-                to integer deltas (positive = increment,
-                negative = decrement). Example::
-
-                    ModelAnalytics._adjust(
-                        'UnifiedUser',
-                        total_created=+1,
-                        total_active=+1,
-                    )
-
-        .. note::
-            This method is called from Celery background tasks
-            so that the hot request path is never blocked.
-            Do NOT call this directly from model signals; use
-            ``record_created / record_soft_deleted / ...``
-            class methods which fire the Celery task instead.
+            model_name (str): Django model class name.
+            app_label  (str): Django app label.
+            **deltas   (int): Field-name → integer delta. Negatives
+                decrement (clamped to 0 at the DB level via CASE).
         """
-        from django.db import transaction
-        from django.db.models import F
+        from django.db import IntegrityError, transaction
+        from django.db.models import F, Value
+        from django.db.models.functions import Greatest
 
         with transaction.atomic():
-            obj, _ = cls.objects.select_for_update().get_or_create(
+            # ── Step 1: optimistic F()-expression UPDATE ──────────
+            update_kwargs = {}
+            for field, delta in deltas.items():
+                # Clamp at 0: never store a negative count.
+                update_kwargs[field] = Greatest(
+                    F(field) + Value(delta), Value(0)
+                )
+            rows = cls.objects.filter(
                 model_name=model_name,
-                defaults={
-                    'app_label': app_label,
-                    **{k: max(v, 0) for k, v in deltas.items()},
-                },
-            )
-            if not _:
-                # Row already existed — apply deltas atomically.
-                # Clamp each field to 0 (never go negative).
-                update_kwargs = {}
-                for field, delta in deltas.items():
-                    update_kwargs[field] = F(field) + delta
+            ).update(**update_kwargs)
+
+            if rows == 0:
+                # ── Step 2: row absent — create it ────────────────
+                try:
+                    cls.objects.create(
+                        model_name=model_name,
+                        app_label=app_label,
+                        **{k: max(v, 0) for k, v in deltas.items()},
+                    )
+                except IntegrityError:
+                    # Another worker created the row between our
+                    # UPDATE (0 rows) and this INSERT — just retry
+                    # the UPDATE which will now find the row.
+                    cls.objects.filter(
+                        model_name=model_name,
+                    ).update(**update_kwargs)
+            elif app_label:
+                # Ensure app_label is set (idempotent).
                 cls.objects.filter(
                     model_name=model_name,
-                ).update(**update_kwargs)
-            if app_label and not obj.app_label:
-                cls.objects.filter(
-                    model_name=model_name,
+                    app_label='',
                 ).update(app_label=app_label)
 
         logger.debug(
@@ -731,16 +744,30 @@ class ModelAnalytics(models.Model):
     @classmethod
     def _dispatch(cls, model_name, app_label, **deltas):
         """
-        Schedule an ``_adjust`` call as a fire-and-forget Celery
-        task after the current DB transaction commits.
+        Schedule ``_adjust`` as a fire-and-forget background task.
 
-        Pattern: ``transaction.on_commit → task.apply_async``
-        guarantees the counter is only updated after the original
-        write has committed — no phantom increments on rollback.
+        Transaction-safety
+        ------------------
+        When called from within a DB transaction (HTTP view, admin
+        action, model signal), wraps the Celery dispatch in
+        ``transaction.on_commit()`` so the counter mutates ONLY
+        after the outer transaction commits — preventing phantom
+        increments on rollbacks.
+
+        Async/Celery-task safety
+        ------------------------
+        When called from INSIDE a Celery task there is no outer
+        Django transaction (Celery autocommit mode) so
+        ``on_commit`` fires immediately — this is correct.
+
+        Broker-down fallback
+        --------------------
+        If the Celery broker (Redis) is unreachable, falls back
+        to a direct synchronous ``_adjust()`` call so no counts
+        are permanently lost.
         """
-        from django.db import transaction as _tx
-
         try:
+            from django.db import transaction as _tx
             from apps.common.tasks import update_model_analytics_counter
 
             def _fire():
@@ -754,25 +781,24 @@ class ModelAnalytics(models.Model):
                         retry=False,
                         ignore_result=True,
                     )
-                except Exception:
-                    # Broker down — fall back to synchronous update.
-                    # This path is hit during local dev without Redis.
+                except Exception:  # noqa: BLE001
+                    # Broker down fallback — synchronous update.
                     try:
                         cls._adjust(
                             model_name,
                             app_label=app_label,
                             **deltas,
                         )
-                    except Exception:
+                    except Exception:  # noqa: BLE001
                         logger.warning(
-                            "ModelAnalytics._adjust failed for "
-                            "%s — counters may be inaccurate",
+                            "ModelAnalytics sync fallback failed "
+                            "for %s",
                             model_name,
                         )
 
             _tx.on_commit(_fire)
 
-        except Exception:
+        except Exception:  # noqa: BLE001
             logger.warning(
                 "ModelAnalytics._dispatch failed for %s",
                 model_name,
@@ -785,6 +811,21 @@ class ModelAnalytics(models.Model):
             model_name, app_label,
             total_created=+count,
             total_active=+count,
+        )
+
+    @classmethod
+    def record_updated(cls, model_name, app_label='', count=1):
+        """
+        Call when ``count`` existing records are updated
+        (``post_save`` with ``created=False``).
+
+        ``total_updated`` increments monotonically — it captures
+        every field change made by vendors, clients, or admins.
+        It does NOT affect ``total_active`` or ``total_created``.
+        """
+        cls._dispatch(
+            model_name, app_label,
+            total_updated=+count,
         )
 
     @classmethod

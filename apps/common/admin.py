@@ -413,6 +413,7 @@ class ModelAnalyticsAdmin(admin.ModelAdmin):
         'app_label',
         'colored_created',
         'colored_active',
+        'colored_updated',
         'colored_soft_deleted',
         'colored_hard_deleted',
         'balance_check',
@@ -453,6 +454,11 @@ class ModelAnalyticsAdmin(admin.ModelAdmin):
         return self._badge(obj.total_active, '#28a745')
     colored_active.short_description = _('Active')
     colored_active.admin_order_field = 'total_active'
+
+    def colored_updated(self, obj):
+        return self._badge(obj.total_updated, '#0d6efd')
+    colored_updated.short_description = _('Updates')
+    colored_updated.admin_order_field = 'total_updated'
 
     def colored_soft_deleted(self, obj):
         return self._badge(obj.total_soft_deleted, '#fd7e14')
