@@ -19,7 +19,7 @@ import json
 import logging
 
 from django.contrib import admin
-from django.utils.html import format_html
+from django.utils.html import format_html, mark_safe
 from django.utils.translation import gettext_lazy as _
 
 from apps.common.models import (
@@ -487,7 +487,7 @@ class ModelAnalyticsAdmin(admin.ModelAdmin):
         )
         ok = (obj.total_created == expected)
         if ok:
-            return format_html(
+            return mark_safe(
                 '<span style="color:#28a745;font-weight:700;">'
                 '✅ OK</span>'
             )
