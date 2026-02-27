@@ -135,6 +135,10 @@ MIDDLEWARE = [
     # access to request.request_id and consistent timing.
     'apps.common.middleware.RequestIDMiddleware',
     'apps.common.middleware.RequestTimingMiddleware',
+    
+    # SECURITY AUDIT: Captures every request (IP, UA, URL, method,
+    # role) for production SIEM logging across 7 user roles.
+    'apps.common.middleware.SecurityAuditMiddleware',
     # ────────────────────────────────────────────────────────────
     'django.middleware.security.SecurityMiddleware',
     # Whitenoise Middleware - serves static files in production.
@@ -755,8 +759,8 @@ LOGGING = {
             'filters': ['require_debug_false']
         }
     },
-    'filters':{
-        'require_debug_false':{
+    'filters': {
+        'require_debug_false': {
              '()': 'django.utils.log.RequireDebugFalse',
         }
     },
@@ -766,21 +770,26 @@ LOGGING = {
             'level': 'INFO',
             'propagate': True,
         },
-         'webhook':{
-           'handlers': ['console', 'webhook_file', 'mail_admins'],
-           'level': 'INFO' if not DEBUG else 'DEBUG',
+        'webhook': {
+            'handlers': ['console', 'webhook_file', 'mail_admins'],
+            'level': 'INFO' if not DEBUG else 'DEBUG',
             'propagate': False,
         },
-        'paystack':{
-           'handlers': ['console', 'file', 'mail_admins'],
-           'level': 'INFO' if not DEBUG else 'DEBUG',
-           'propagate': False,
-         },
-       'application':{
-           'handlers': ['console', 'file', 'mail_admins'],
-           'level': 'INFO' if not DEBUG else 'DEBUG',
-           'propagate': False,
-       }
+        'paystack': {
+            'handlers': ['console', 'file', 'mail_admins'],
+            'level': 'INFO' if not DEBUG else 'DEBUG',
+            'propagate': False,
+        },
+        'application': {
+            'handlers': ['console', 'file', 'mail_admins'],
+            'level': 'INFO' if not DEBUG else 'DEBUG',
+            'propagate': False,
+        },
+        'security': {
+            'handlers': ['console', 'file', 'mail_admins'],
+            'level': 'INFO' if not DEBUG else 'DEBUG',
+            'propagate': False,
+        }
     },
 }
 
