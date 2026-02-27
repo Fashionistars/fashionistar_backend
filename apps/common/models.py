@@ -408,6 +408,126 @@ class DeletedRecords(models.Model):
 
 
 # ================================================================
+# 4. DELETION AUDIT COUNTER
+# ================================================================
+
+class DeletionAuditCounter(models.Model):
+    """
+    Cumulative audit counter for soft-delete, hard-delete, and
+    restore operations across every model on the platform.
+
+    One row per (model_name, action) pair. The ``total`` field
+    is atomically incremented by ``DeletionAuditCounter.increment()``
+    so concurrent requests never lose counts.
+
+    Superadmin use cases
+    --------------------
+    * Total users ever created vs currently active.
+    * Number of accounts soft-deleted (recoverable).
+    * Number of accounts permanently purged (GDPR compliance).
+    * Number of restore operations (customer retention signal).
+    * Per-model deletion analytics for geographical marketing
+      and churn analysis.
+
+    Access control
+    --------------
+    Only superusers may view this table — enforced in the admin
+    via ``has_module_perms`` and ``has_view_permission`` overrides.
+    """
+
+    ACTION_CHOICES = [
+        ('soft_delete', 'Soft Delete'),
+        ('hard_delete', 'Hard Delete (Permanent)'),
+        ('restore',     'Restore'),
+    ]
+
+    model_name = models.CharField(
+        max_length=100,
+        help_text="Django model class name (e.g. 'UnifiedUser').",
+    )
+    action = models.CharField(
+        max_length=20,
+        choices=ACTION_CHOICES,
+        help_text="Type of deletion operation.",
+    )
+    total = models.PositiveBigIntegerField(
+        default=0,
+        help_text=(
+            "Cumulative count of this action on this model. "
+            "Atomically incremented — safe under concurrent load."
+        ),
+    )
+    last_updated = models.DateTimeField(
+        auto_now=True,
+        help_text="Timestamp of the most recent increment.",
+    )
+
+    class Meta:
+        verbose_name = "Deletion Audit Counter"
+        verbose_name_plural = "Deletion Audit Counters"
+        unique_together = [('model_name', 'action')]
+        indexes = [
+            models.Index(
+                fields=['model_name'],
+                name='idx_del_counter_model',
+            ),
+        ]
+        ordering = ['model_name', 'action']
+
+    def __str__(self):
+        return "%s — %s: %d" % (
+            self.model_name,
+            self.get_action_display(),
+            self.total,
+        )
+
+    @classmethod
+    def increment(cls, model_name, action, count=1):
+        """
+        Atomically increment the counter for the given
+        (model_name, action) pair.
+
+        Uses ``F()`` expressions + ``update_or_create`` so
+        concurrent Django processes never race-condition the
+        counter — each increment is a single atomic SQL UPDATE.
+
+        Args:
+            model_name (str): The model class name.
+            action (str): One of 'soft_delete', 'hard_delete',
+                'restore'.
+            count (int): Number to add (default 1).
+        """
+        try:
+            from django.db.models import F
+            obj, created = cls.objects.get_or_create(
+                model_name=model_name,
+                action=action,
+                defaults={'total': count},
+            )
+            if not created:
+                cls.objects.filter(
+                    model_name=model_name,
+                    action=action,
+                ).update(total=F('total') + count)
+            logger.debug(
+                "DeletionAuditCounter[%s][%s] += %d",
+                model_name,
+                action,
+                count,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to increment DeletionAuditCounter "
+                "[%s][%s] by %d",
+                model_name,
+                action,
+                count,
+            )
+
+
+
+
+# ================================================================
 # 4. HARD-DELETE MIXIN
 # ================================================================
 

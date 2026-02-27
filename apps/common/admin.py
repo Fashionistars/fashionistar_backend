@@ -22,7 +22,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 
-from apps.common.models import DeletedRecords
+from apps.common.models import DeletedRecords, DeletionAuditCounter
 
 logger = logging.getLogger('application')
 
@@ -274,3 +274,111 @@ class DeletedRecordsAdmin(admin.ModelAdmin):
             " ".join(str(p) for p in msg_parts) or _("Nothing to restore."),
             level='warning' if failed else 'info',
         )
+
+
+# ================================================================
+# DELETION AUDIT COUNTER ADMIN (Superadmin only)
+# ================================================================
+
+@admin.register(DeletionAuditCounter)
+class DeletionAuditCounterAdmin(admin.ModelAdmin):
+    """
+    Superadmin-only analytics view for deletion/restore counters.
+
+    Each row shows the cumulative count of a specific action
+    (soft delete, hard delete, restore) for a specific Django
+    model.  This gives superadmins a real-time dashboard of:
+
+    * Total accounts ever soft-deleted vs restored (churn signal).
+    * Total accounts permanently purged (GDPR compliance audit).
+    * Per-model breakdown for non-user models in future.
+
+    Access control
+    --------------
+    Only superusers can view this admin. Staff who are not
+    superusers are entirely blocked from seeing this module.
+
+    Data management
+    ---------------
+    Counters are auto-managed by ``DeletionAuditCounter.increment()``.
+    No add / edit / delete via the admin — this is a read-only
+    analytics dashboard. Counters reset only via direct DB access.
+    """
+
+    list_display = (
+        'model_name',
+        'action_display',
+        'colored_total',
+        'last_updated',
+    )
+    list_filter = (
+        'model_name',
+        'action',
+    )
+    search_fields = ('model_name',)
+    ordering = ('model_name', 'action')
+    readonly_fields = (
+        'model_name',
+        'action',
+        'total',
+        'last_updated',
+    )
+
+    def action_display(self, obj):
+        """Human-readable action label."""
+        return obj.get_action_display()
+    action_display.short_description = _('Action')
+    action_display.admin_order_field = 'action'
+
+    def colored_total(self, obj):
+        """
+        Render the total with a colour-coded badge:
+          🔴 hard_delete  — permanent purges
+          🟠 soft_delete  — recoverable deletions
+          🟢 restore      — recoveries / customer retention
+        """
+        colors = {
+            'hard_delete': '#dc3545',
+            'soft_delete': '#fd7e14',
+            'restore':     '#28a745',
+        }
+        badges = {
+            'hard_delete': '🔴',
+            'soft_delete': '🟠',
+            'restore':     '🟢',
+        }
+        color = colors.get(obj.action, '#6c757d')
+        badge = badges.get(obj.action, '⚪')
+        return format_html(
+            '<span style="'
+            'background:{};color:#fff;'
+            'padding:2px 10px;border-radius:12px;'
+            'font-size:13px;font-weight:700;">'
+            '{} {}</span>',
+            color,
+            badge,
+            obj.total,
+        )
+    colored_total.short_description = _('Total Count')
+    colored_total.admin_order_field = 'total'
+
+    # ── Permission overrides: strictly superadmin only ────────────
+
+    def has_module_perms(self, request, app_label=None):
+        """Block entire module from non-superusers."""
+        return request.user.is_superuser
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_add_permission(self, request):
+        """Counters are system-managed — no manual creation."""
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        """Counters are immutable from the admin UI."""
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        """Only superusers may reset a counter (rare)."""
+        return request.user.is_superuser

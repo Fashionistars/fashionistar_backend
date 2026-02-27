@@ -637,47 +637,54 @@ ZOHO_ZEPTOMAIL_HOSTED_REGION = env('ZOHO_ZEPTOMAIL_HOSTED_REGION', default='zept
 
 
 
-#                       =========================
-# ----------------------CELERY CONFIGURATION BEGINNING ------------------------------
-#                       =========================
+# #                       =========================
+# # ----------------------CELERY CONFIGURATION BEGINNING ------------------------------
+# #                       =========================
 
 
-# Use Redis Cloud (SSL connection) for broker and backend
-# Always prefer `rediss://` for encrypted connection
-# Ensure REDIS_URL, CELERY_BROKER_URL, CELERY_RESULT_BACKEND are set in Render environment variables
+# # Use Redis Cloud (SSL connection) for broker and backend
+# # Always prefer `rediss://` for encrypted connection
+# # Ensure REDIS_URL, CELERY_BROKER_URL, CELERY_RESULT_BACKEND are set in Render environment variables
 
-# Get Redis URL from environment variable
-REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/0")
+# # Get Redis URL from environment variable
+# REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/0")
 
-# Celery settings
-CELERY_BROKER_URL = env('CELERY_BROKER_URL', default=REDIS_URL)
-CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND', default=REDIS_URL)
+# # Celery settings
+# CELERY_BROKER_URL = env('CELERY_BROKER_URL', default=REDIS_URL)
+# CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND', default=REDIS_URL)
 
 
-# Core settings
-CELERY_ACCEPT_CONTENT = ["json"]
-CELERY_TASK_SERIALIZER = "json"
-CELERY_RESULT_SERIALIZER = "json"
-CELERY_TIMEZONE = "Africa/Lagos"   # Can be 'Africa/Lagos' or 'UTC'
+# # Core settings
+# CELERY_ACCEPT_CONTENT = ["json"]
+# CELERY_TASK_SERIALIZER = "json"
+# CELERY_RESULT_SERIALIZER = "json"
+# CELERY_TIMEZONE = "Africa/Lagos"   # Can be 'Africa/Lagos' or 'UTC'
 
-# Task routing & reliability
-CELERY_TASK_DEFAULT_QUEUE = 'default'
-CELERY_TASK_TRACK_STARTED = True
-CELERY_ACKS_LATE = True  # ensures tasks aren’t lost if worker crashes
-CELERYD_PREFETCH_MULTIPLIER = 1  # prevent task duplication
-CELERY_TASK_REJECT_ON_WORKER_LOST = True
+# # Task routing & reliability
+# CELERY_TASK_DEFAULT_QUEUE = 'default'
+# CELERY_TASK_TRACK_STARTED = True
+# CELERY_ACKS_LATE = True  # ensures tasks aren’t lost if worker crashes
+# CELERYD_PREFETCH_MULTIPLIER = 1  # prevent task duplication
 
-# Retry and connection handling (production safe)
-CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
-CELERY_BROKER_CONNECTION_TIMEOUT = 30
-CELERY_BROKER_TRANSPORT_OPTIONS = {
-    "visibility_timeout": 3600,         # 1hr task visibility
-    "socket_timeout": 30,               # network read timeout
-    "socket_connect_timeout": 30,       # initial connection timeout
-    "retry_on_timeout": True,
-    "max_connections": 20,              # limit connections
-    "ssl_cert_reqs": None, # Important for rediss schemes if not using full cert validation
-}
+# # ── Worker safety ─────────────────────────────────────────────────
+# CELERY_WORKER_MAX_TASKS_PER_CHILD = 200   # Prevent memory bloat
+# CELERY_TASK_ACKS_LATE = True             # Ack after completion
+# CELERY_TASK_IGNORE_RESULT = True          # Fire-and-forget
+# CELERY_TASK_REJECT_ON_WORKER_LOST = True  # No infinite re-queue
+
+
+# # Retry and connection handling (production safe)
+# CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+# CELERY_BROKER_CONNECTION_TIMEOUT = 30
+# CELERY_BROKER_TRANSPORT_OPTIONS = {
+#     "visibility_timeout": 3600,         # 1hr task visibility
+#     "socket_timeout": 30,               # network read timeout
+#     "socket_connect_timeout": 30,       # initial connection timeout
+#     "retry_on_timeout": True,
+#     "max_connections": 20,              # limit connections
+#     'socket_keepalive': True,
+#     "ssl_cert_reqs": None, # Important for rediss schemes if not using full cert validation
+# }
 
 
 

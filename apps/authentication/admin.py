@@ -759,7 +759,42 @@ class UnifiedUserAdmin(
                 obj.role,
             )
 
-        except Exception:
+        except ValidationError:
+            # Let Django admin render field-level errors normally.
+            raise
+
+        except Exception as exc:
+            # ── Convert DB unique-constraint violations into
+            #    human-readable form validation errors so the
+            #    admin shows an inline message instead of a
+            #    Django yellow debug crash page.
+            exc_str = str(exc).lower()
+            if 'unique constraint' in exc_str or 'unique' in exc_str:
+                if 'email' in exc_str:
+                    raise ValidationError({
+                        'email': _(
+                            "A user with this email address already "
+                            "exists. Please use a different email."
+                        )
+                    })
+                if 'phone' in exc_str:
+                    raise ValidationError({
+                        'phone': _(
+                            "A user with this phone number already "
+                            "exists. Please use a different phone."
+                        )
+                    })
+                if 'member_id' in exc_str:
+                    raise ValidationError(_(
+                        "A duplicate member ID was generated. "
+                        "Please try again."
+                    ))
+                # Generic unique violation
+                raise ValidationError(_(
+                    "A user with these details already exists. "
+                    "Please check the email and phone fields."
+                ))
+
             logger.exception(
                 "Admin save failed for UnifiedUser %s "
                 "by admin %s",
@@ -767,6 +802,7 @@ class UnifiedUserAdmin(
                 request.user.pk,
             )
             raise
+
 
     # ---- Soft-delete behavior ----
     # Inherited from SoftDeleteAdminMixin:

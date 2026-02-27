@@ -221,6 +221,27 @@ class SoftDeleteAdminMixin:
             klass_name,
         )
 
+        # 3. Fire-and-forget notification PER RECORD
+        #    (best-effort — never blocks the response)
+        #    We re-fetch from DB so each obj has accurate state.
+        for obj in klass.objects.all_with_deleted().filter(
+            pk__in=pks,
+            is_deleted=True,
+        ):
+            if hasattr(obj, '_fire_and_forget_notification'):
+                obj._fire_and_forget_notification('soft_deleted')
+
+        # 4. Increment audit counter
+        try:
+            from apps.common.models import DeletionAuditCounter
+            DeletionAuditCounter.increment(
+                model_name=klass_name,
+                action='soft_delete',
+                count=updated,
+            )
+        except Exception:
+            pass  # Never block admin actions for audit counters
+
         self.message_user(
             request,
             _(
@@ -303,6 +324,17 @@ class SoftDeleteAdminMixin:
             if hasattr(obj, '_fire_and_forget_notification'):
                 obj._fire_and_forget_notification('restored')
 
+        # 4. Increment audit counter (restore reduces soft-delete count)
+        try:
+            from apps.common.models import DeletionAuditCounter
+            DeletionAuditCounter.increment(
+                model_name=klass_name,
+                action='restore',
+                count=updated,
+            )
+        except Exception:
+            pass  # Never block admin actions for audit counters
+
         self.message_user(
             request,
             _(
@@ -357,13 +389,21 @@ class SoftDeleteAdminMixin:
         klass_name = klass.__name__
         pks = list(queryset.values_list('pk', flat=True))
 
-        # Purge archive entries first
+        # 1. Send hard-delete notifications BEFORE deletion
+        #    (objects must still exist in DB so we can read email/phone)
+        for obj in klass.objects.all_with_deleted().filter(
+            pk__in=pks,
+        ):
+            if hasattr(obj, '_fire_and_forget_notification'):
+                obj._fire_and_forget_notification('hard_deleted')
+
+        # 2. Purge archive entries first
         DeletedRecords.objects.filter(
             model_name=klass_name,
             record_id__in=[str(pk) for pk in pks],
         ).delete()
 
-        # Physical deletion via all_with_deleted() so we can hit
+        # 3. Physical deletion via all_with_deleted() so we can hit
         # both alive and soft-deleted rows in one call.
         deleted_count, _detail = klass.objects.all_with_deleted().filter(
             pk__in=pks,
@@ -376,6 +416,17 @@ class SoftDeleteAdminMixin:
             klass_name,
             pks,
         )
+
+        # 4. Increment audit counter
+        try:
+            from apps.common.models import DeletionAuditCounter
+            DeletionAuditCounter.increment(
+                model_name=klass_name,
+                action='hard_delete',
+                count=deleted_count,
+            )
+        except Exception:
+            pass  # Never block admin actions for audit counters
 
         self.message_user(
             request,
