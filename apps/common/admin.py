@@ -22,7 +22,11 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 
-from apps.common.models import DeletedRecords, DeletionAuditCounter
+from apps.common.models import (
+    DeletedRecords,
+    DeletionAuditCounter,
+    ModelAnalytics,
+)
 
 logger = logging.getLogger('application')
 
@@ -382,3 +386,126 @@ class DeletionAuditCounterAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         """Only superusers may reset a counter (rare)."""
         return request.user.is_superuser
+
+
+# ================================================================
+# MODEL ANALYTICS ADMIN (Superadmin only)
+# ================================================================
+
+@admin.register(ModelAnalytics)
+class ModelAnalyticsAdmin(admin.ModelAdmin):
+    """
+    Superadmin-only real-time analytics dashboard.
+
+    One row per Django model. Shows:
+    * total_created  — every record ever created
+    * total_active   — currently alive records
+    * total_soft_deleted — recoverable deletions
+    * total_hard_deleted — permanent purges
+    * identity_check — total_created == active + soft + hard?
+
+    Access control: superadmin only (same policy as
+    DeletionAuditCounterAdmin).
+    """
+
+    list_display = (
+        'model_name',
+        'app_label',
+        'colored_created',
+        'colored_active',
+        'colored_soft_deleted',
+        'colored_hard_deleted',
+        'balance_check',
+        'last_updated',
+    )
+    list_filter = ('app_label',)
+    search_fields = ('model_name', 'app_label')
+    ordering = ('app_label', 'model_name')
+    readonly_fields = (
+        'model_name',
+        'app_label',
+        'total_created',
+        'total_active',
+        'total_soft_deleted',
+        'total_hard_deleted',
+        'last_updated',
+    )
+
+    # ── Colored column methods ────────────────────────────────────
+
+    def _badge(self, value, color):
+        return format_html(
+            '<span style="'
+            'background:{c};color:#fff;'
+            'padding:2px 9px;border-radius:10px;'
+            'font-size:12px;font-weight:700;">'
+            '{v}</span>',
+            c=color,
+            v=value,
+        )
+
+    def colored_created(self, obj):
+        return self._badge(obj.total_created, '#6f42c1')
+    colored_created.short_description = _('Total Created')
+    colored_created.admin_order_field = 'total_created'
+
+    def colored_active(self, obj):
+        return self._badge(obj.total_active, '#28a745')
+    colored_active.short_description = _('Active')
+    colored_active.admin_order_field = 'total_active'
+
+    def colored_soft_deleted(self, obj):
+        return self._badge(obj.total_soft_deleted, '#fd7e14')
+    colored_soft_deleted.short_description = _('Soft-Deleted')
+    colored_soft_deleted.admin_order_field = 'total_soft_deleted'
+
+    def colored_hard_deleted(self, obj):
+        return self._badge(obj.total_hard_deleted, '#dc3545')
+    colored_hard_deleted.short_description = _('Hard-Deleted')
+    colored_hard_deleted.admin_order_field = 'total_hard_deleted'
+
+    def balance_check(self, obj):
+        """
+        Algebraic identity check:
+          total_created == total_active + total_soft_deleted +
+                           total_hard_deleted
+
+        Green ✅ = balanced. Red ❌ = drift detected (should
+        never happen — indicates a missing signal or manual
+        DB edit).
+        """
+        expected = (
+            obj.total_active
+            + obj.total_soft_deleted
+            + obj.total_hard_deleted
+        )
+        ok = (obj.total_created == expected)
+        if ok:
+            return format_html(
+                '<span style="color:#28a745;font-weight:700;">'
+                '✅ OK</span>'
+            )
+        return format_html(
+            '<span style="color:#dc3545;font-weight:700;">'
+            '❌ Drift {diff}</span>',
+            diff=obj.total_created - expected,
+        )
+    balance_check.short_description = _('Balance Check')
+
+    # ── Permission overrides: strictly superadmin only ────────────
+
+    def has_module_perms(self, request, app_label=None):
+        return request.user.is_superuser
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
+

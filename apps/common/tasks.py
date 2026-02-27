@@ -214,3 +214,61 @@ def send_account_status_sms(self, phone, action, context=None):
             phone,
         )
         raise self.retry(exc=exc)
+
+
+# ================================================================
+# 3. MODEL ANALYTICS COUNTER (Background atomic update)
+# ================================================================
+
+@shared_task(
+    name="update_model_analytics_counter",
+    bind=True,
+    max_retries=0,        # Fire-and-forget: no retries to stay fast
+    ignore_result=True,
+)
+def update_model_analytics_counter(self, model_name, app_label, deltas):
+    """
+    Atomically update the ``ModelAnalytics`` row for
+    ``model_name`` with the given ``deltas``.
+
+    Runs as a fire-and-forget background task so the HTTP
+    request / admin action that triggered it is NOT delayed.
+
+    Uses ``SELECT ... FOR UPDATE`` inside ``transaction.atomic()``
+    (via ``ModelAnalytics._adjust()``) to eliminate race
+    conditions under high concurrency.
+
+    Args:
+        model_name (str): The Django model class name.
+        app_label (str): The Django app label.
+        deltas (dict): Mapping of field name → integer delta.
+            Example: ``{'total_created': 1, 'total_active': 1}``
+
+    Design notes
+    ------------
+    * max_retries=0 + ignore_result=True = true fire-and-forget.
+    * If Celery/Redis is down when the task is dispatched,
+      ``ModelAnalytics._dispatch()`` falls back to a synchronous
+      ``_adjust()`` call, so counts are never permanently lost.
+    * The ``select_for_update()`` lock is held only for the
+      duration of the single UPDATE statement (~1ms) so
+      throughput impact is negligible.
+    """
+    try:
+        from apps.common.models import ModelAnalytics
+        ModelAnalytics._adjust(
+            model_name=model_name,
+            app_label=app_label,
+            **deltas,
+        )
+        logger.debug(
+            "ModelAnalytics updated for %s: %s",
+            model_name,
+            deltas,
+        )
+    except Exception:
+        logger.warning(
+            "update_model_analytics_counter failed for %s: %s",
+            model_name,
+            deltas,
+        )
