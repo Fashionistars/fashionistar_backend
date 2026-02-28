@@ -18,8 +18,7 @@
   <ul style="list-style:disc;padding-left:1.5rem;line-height:2;">
     {% for obj in queryset %}
     <li>
-      <strong>{{ obj.__class__.__name__ }}</strong>: {{ obj }}
-      {% if obj.pk %}<small style="color:#999;">(ID: {{ obj.pk }})</small>{% endif %}
+      <strong>{{ klass_name }}</strong>: {{ obj }}
     </li>
     {% endfor %}
   </ul>
