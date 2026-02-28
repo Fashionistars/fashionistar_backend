@@ -55,7 +55,8 @@ class AsyncPasswordService:
                 await EmailManager.asend_mail(
                     subject="Password Reset Request",
                     recipients=[user.email],
-                    template_name="accounts/email/password_reset.html",
+                    template_name="authentication/email/password_reset.html",
+
                     context={"user": user, "reset_link": reset_link}
                 )
                 logger.info(f"📧 Reset Email sent to {user.email}")
@@ -114,7 +115,8 @@ class AsyncPasswordService:
                 await EmailManager.asend_mail(
                     subject="Password Changed",
                     recipients=[user.email],
-                    template_name="accounts/email/password_changed.html",
+                    template_name="authentication/email/password_changed.html",
+
                     context={"user": user}
                 )
                 

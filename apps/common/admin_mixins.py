@@ -497,22 +497,34 @@ class SoftDeleteAdminMixin:
                     obj._fire_and_forget_notification('hard_deleted')
 
             # 2. Purge archive entries
+        # 2. Purge archive entries
             DeletedRecords.objects.filter(
                 model_name=klass_name,
                 record_id__in=[str(pk) for pk in real_pks],
             ).delete()
 
-            # 3. Physical DELETE —— handle both SoftDeleteModel and plain models
-            if hasattr(klass.objects, 'all_with_deleted'):
-                deleted_count, _detail = (
+            # 3. Physical DELETE — handle both SoftDeleteModel and plain models.
+            #    IMPORTANT: For SoftDeleteModel subclasses, never call .delete()
+            #    (which routes through SoftDeleteModel.delete() and returns an int
+            #    or soft-deletes again). Always call .hard_delete() which performs
+            #    the real SQL DELETE and returns (count, detail_dict).
+            from apps.common.models import SoftDeleteModel as _SDM
+            is_soft_delete_model = issubclass(klass, _SDM)
+
+            if is_soft_delete_model:
+                result = (
                     klass.objects.all_with_deleted()
                     .filter(pk__in=real_pks)
-                    .delete()
+                    .hard_delete()
                 )
             else:
-                deleted_count, _detail = (
-                    klass.objects.filter(pk__in=real_pks).delete()
-                )
+                result = klass.objects.filter(pk__in=real_pks).delete()
+
+            # Unpack safely — handle both tuple (int, dict) and raw int
+            if isinstance(result, tuple):
+                deleted_count = result[0]
+            else:
+                deleted_count = int(result)
 
             logger.warning(
                 "Admin %s HARD-DELETED %d %s record(s): %s",

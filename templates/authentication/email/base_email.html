@@ -1,0 +1,28 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { width: 80%; margin: 0 auto; padding: 20px; border: 1px solid #ddd; }
+        .header { background-color: #f0f0f0; padding: 10px; text-align: center; }
+        .footer { margin-top: 20px; text-align: center; color: #777; }
+        .otp { font-size: 48px; font-weight: bold; color: #007bff; }
+    </style>
+    <title>{% block title %}Fashionistar{% endblock %}</title>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>{% block header_text %}Fashionistar{% endblock %}</h1>
+        </div>
+        {% block content %}{% endblock %}
+        <div class="footer">
+            <p>This is an automated email. Please do not reply.</p>
+            <p>© Fashionistar</p>
+        </div>
+    </div>
+</body>
+</html>

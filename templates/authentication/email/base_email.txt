@@ -1,0 +1,6 @@
+{% block title %}Fashionistar{% endblock %}
+
+{% block content %}{% endblock %}
+
+This is an automated email. Please do not reply.
+© Fashionistar
