@@ -32,6 +32,9 @@ Usage:
 import logging
 
 from django.contrib import admin
+from django.http import HttpResponseRedirect
+from django.template.response import TemplateResponse
+from django.urls import path, reverse
 from django.utils import timezone
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
@@ -57,6 +60,39 @@ class SoftDeleteAdminMixin:
     * ``get_list_display``    — auto-injects badge as first column.
     * ``get_list_filter``     — auto-injects is_deleted filter pill.
     """
+
+    # ----------------------------------------------------------------
+    # Remove Django's default "Delete selected" action entirely.
+    # Our 3 custom actions (soft-delete / restore / hard-delete)
+    # cover every use-case, and the default action bypasses all our
+    # archival / notification / analytics pipeline.
+    # ----------------------------------------------------------------
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        # Strip the built-in bulk-delete action so the dropdown
+        # contains ONLY our three custom actions.
+        actions.pop('delete_selected', None)
+        return actions
+
+    # ----------------------------------------------------------------
+    # Custom URL for hard-delete confirmation page
+    # ----------------------------------------------------------------
+
+    def get_urls(self):
+        urls = super().get_urls()
+        model_info = (
+            self.model._meta.app_label,
+            self.model._meta.model_name,
+        )
+        custom_urls = [
+            path(
+                'hard-delete-confirm/',
+                self.admin_site.admin_view(self.hard_delete_confirm_view),
+                name='%s_%s_hard_delete_confirm' % model_info,
+            ),
+        ]
+        return custom_urls + urls
 
     # ----------------------------------------------------------------
     # Queryset
@@ -353,27 +389,14 @@ class SoftDeleteAdminMixin:
         """
         Permanently delete selected records from the database.
 
-        .. danger::
-            This action is **irreversible**. Records are physically
-            removed from the database and cannot be recovered.
-            Only superusers may execute this action.
+        STEP 1 (this method): Check permissions, stash PKs in session,
+        then REDIRECT to a confirmation page listing all objects.
+        STEP 2 (hard_delete_confirm_view): Show Django-style confirm page.
+        STEP 3 (POST confirm): Execute the irreversible DELETE.
 
-        Use cases
-        ---------
-        * Purging soft-deleted records that are no longer needed.
-        * GDPR "right to erasure" requests.
-        * Cleaning up test data.
-
-        Behaviour
-        ---------
-        * Non-superusers: rejected with an error message.
-        * Alive records: first soft-deleted (archived), then
-          hard-deleted so the audit trail is preserved.
-        * Already soft-deleted records: hard-deleted directly,
-          ``DeletedRecords`` entry also purged.
+        This matches the UX of Django's built-in 'Delete selected'
+        flow so no record is ever lost without an explicit confirmation.
         """
-        from apps.common.models import DeletedRecords
-
         if not request.user.is_superuser:
             self.message_user(
                 request,
@@ -385,55 +408,159 @@ class SoftDeleteAdminMixin:
             )
             return
 
-        klass = queryset.model
-        klass_name = klass.__name__
         pks = list(queryset.values_list('pk', flat=True))
+        if not pks:
+            self.message_user(
+                request,
+                _("⚠️ No records selected."),
+            )
+            return
 
-        # 1. Send hard-delete notifications BEFORE deletion
-        #    (objects must still exist in DB so we can read email/phone)
-        for obj in klass.objects.all_with_deleted().filter(
-            pk__in=pks,
-        ):
-            if hasattr(obj, '_fire_and_forget_notification'):
-                obj._fire_and_forget_notification('hard_deleted')
-
-        # 2. Purge archive entries first
-        DeletedRecords.objects.filter(
-            model_name=klass_name,
-            record_id__in=[str(pk) for pk in pks],
-        ).delete()
-
-        # 3. Physical deletion via all_with_deleted() so we can hit
-        # both alive and soft-deleted rows in one call.
-        deleted_count, _detail = klass.objects.all_with_deleted().filter(
-            pk__in=pks,
-        ).hard_delete()
-
-        logger.warning(
-            "Admin %s HARD-DELETED %d %s record(s): %s",
-            request.user.pk,
-            deleted_count,
-            klass_name,
-            pks,
+        # Stash the selected PKs in the session so the confirm view
+        # can reconstruct the queryset on GET and POST.
+        request.session['hard_delete_pks'] = [str(pk) for pk in pks]
+        request.session['hard_delete_model'] = (
+            '%s.%s' % (
+                queryset.model._meta.app_label,
+                queryset.model._meta.model_name,
+            )
         )
 
-        # 4. Increment audit counter
-        try:
-            from apps.common.models import DeletionAuditCounter
-            DeletionAuditCounter.increment(
-                model_name=klass_name,
-                action='hard_delete',
-                count=deleted_count,
-            )
-        except Exception:
-            pass  # Never block admin actions for audit counters
+        model_info = (
+            self.model._meta.app_label,
+            self.model._meta.model_name,
+        )
+        confirm_url = reverse(
+            'admin:%s_%s_hard_delete_confirm' % model_info,
+            current_app=self.admin_site.name,
+        )
+        return HttpResponseRedirect(confirm_url)
 
-        self.message_user(
+    def hard_delete_confirm_view(self, request):
+        """
+        Confirmation page for hard-delete (GET) and execution (POST).
+        """
+        from apps.common.models import DeletedRecords
+        from django.apps import apps as django_apps
+
+        pks = request.session.get('hard_delete_pks', [])
+        model_path = request.session.get('hard_delete_model', '')
+
+        if not pks or not model_path:
+            self.message_user(
+                request,
+                _("⚠️ Session expired or no records to delete. Please try again."),
+                level='warning',
+            )
+            return HttpResponseRedirect('../')
+
+        # Resolve model from app_label.model_name
+        try:
+            app_label, model_name = model_path.split('.')
+            klass = django_apps.get_model(app_label, model_name)
+        except (ValueError, LookupError):
+            self.message_user(
+                request,
+                _("⚠️ Invalid model reference in session."),
+                level='error',
+            )
+            return HttpResponseRedirect('../')
+
+        klass_name = klass.__name__
+        qs = klass.objects.all_with_deleted().filter(pk__in=pks)
+
+        if request.method == 'POST':
+            if '_confirm_hard_delete' not in request.POST:
+                # User clicked "No, take me back"
+                request.session.pop('hard_delete_pks', None)
+                request.session.pop('hard_delete_model', None)
+                self.message_user(
+                    request,
+                    _("ℹ️ Hard delete cancelled."),
+                )
+                return HttpResponseRedirect('../')
+
+            if not request.user.is_superuser:
+                self.message_user(
+                    request,
+                    _("⛔ Permission denied."),
+                    level='error',
+                )
+                return HttpResponseRedirect('../')
+
+            # Perform the actual hard deletion
+            real_pks = list(qs.values_list('pk', flat=True))
+
+            # 1. Send hard-delete notifications BEFORE deletion
+            for obj in qs:
+                if hasattr(obj, '_fire_and_forget_notification'):
+                    obj._fire_and_forget_notification('hard_deleted')
+
+            # 2. Purge archive entries
+            DeletedRecords.objects.filter(
+                model_name=klass_name,
+                record_id__in=[str(pk) for pk in real_pks],
+            ).delete()
+
+            # 3. Physical DELETE —— handle both SoftDeleteModel and plain models
+            if hasattr(klass.objects, 'all_with_deleted'):
+                deleted_count, _detail = (
+                    klass.objects.all_with_deleted()
+                    .filter(pk__in=real_pks)
+                    .delete()
+                )
+            else:
+                deleted_count, _detail = (
+                    klass.objects.filter(pk__in=real_pks).delete()
+                )
+
+            logger.warning(
+                "Admin %s HARD-DELETED %d %s record(s): %s",
+                request.user.pk,
+                deleted_count,
+                klass_name,
+                real_pks,
+            )
+
+            # 4. Increment audit counter
+            try:
+                from apps.common.models import DeletionAuditCounter
+                DeletionAuditCounter.increment(
+                    model_name=klass_name,
+                    action='hard_delete',
+                    count=deleted_count,
+                )
+            except Exception:
+                pass
+
+            # 5. Clear session
+            request.session.pop('hard_delete_pks', None)
+            request.session.pop('hard_delete_model', None)
+
+            self.message_user(
+                request,
+                _(
+                    "%(count)d record(s) permanently deleted."
+                ) % {'count': deleted_count},
+                level='warning',
+            )
+            return HttpResponseRedirect('../')
+
+        # GET — render the confirmation page
+        context = {
+            **self.admin_site.each_context(request),
+            'title': _('⚠️ Confirm Permanent (Hard) Delete'),
+            'queryset': qs,
+            'klass_name': klass_name,
+            'count': qs.count(),
+            'opts': klass._meta,
+            'action_checkbox_name': admin.helpers.ACTION_CHECKBOX_NAME,
+            'media': self.media,
+        }
+        return TemplateResponse(
             request,
-            _(
-                "%(count)d record(s) permanently deleted."
-            ) % {'count': deleted_count},
-            level='warning',
+            'admin/hard_delete_confirmation.html',
+            context,
         )
 
     # ----------------------------------------------------------------

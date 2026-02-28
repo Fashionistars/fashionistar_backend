@@ -411,7 +411,9 @@ class ModelAnalyticsAdmin(admin.ModelAdmin):
     list_display = (
         'model_name',
         'app_label',
+        'colored_lifetime',
         'colored_created',
+        'colored_records',
         'colored_active',
         'colored_updated',
         'colored_soft_deleted',
@@ -421,14 +423,19 @@ class ModelAnalyticsAdmin(admin.ModelAdmin):
     )
     list_filter = ('app_label',)
     search_fields = ('model_name', 'app_label')
-    ordering = ('app_label', 'model_name')
+    # ordering = ('app_label', 'model_name')
+    ordering = ('-last_updated',)
+
     readonly_fields = (
         'model_name',
         'app_label',
         'total_created',
         'total_active',
+        'total_updated',
         'total_soft_deleted',
         'total_hard_deleted',
+        'total_records',
+        'total_lifetime_records',
         'last_updated',
     )
 
@@ -444,6 +451,16 @@ class ModelAnalyticsAdmin(admin.ModelAdmin):
             c=color,
             v=value,
         )
+
+    def colored_lifetime(self, obj):
+        return self._badge(obj.total_lifetime_records, '#343a40')
+    colored_lifetime.short_description = _('All-Time (Ever)')
+    colored_lifetime.admin_order_field = 'total_lifetime_records'
+
+    def colored_records(self, obj):
+        return self._badge(obj.total_records, '#17a2b8')
+    colored_records.short_description = _('In DB Now')
+    colored_records.admin_order_field = 'total_records'
 
     def colored_created(self, obj):
         return self._badge(obj.total_created, '#6f42c1')

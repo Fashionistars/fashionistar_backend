@@ -634,6 +634,21 @@ class ModelAnalytics(models.Model):
         default=0,
         help_text="Cumulative permanently purged records. Never decrements.",
     )
+    total_records = models.PositiveBigIntegerField(
+        default=0,
+        help_text=(
+            "Live count of ALL rows in the DB (active + soft-deleted). "
+            "Decrements on hard-delete. Use for real-time capacity reports."
+        ),
+    )
+    total_lifetime_records = models.PositiveBigIntegerField(
+        default=0,
+        help_text=(
+            "Monotonically increasing. NEVER decrements. Counts every row "
+            "ever inserted since first migration — the ultimate source of "
+            "truth for 'how many X have ever used our platform?'"
+        ),
+    )
     last_updated = models.DateTimeField(
         auto_now=True,
         help_text="Last counter mutation timestamp.",
@@ -642,7 +657,8 @@ class ModelAnalytics(models.Model):
     class Meta:
         verbose_name = "Model Analytics"
         verbose_name_plural = "Model Analytics"
-        ordering = ['model_name']
+        # ordering = ['model_name']
+        ordering = ['-last_updated']
 
     def __str__(self):
         return (
@@ -806,11 +822,21 @@ class ModelAnalytics(models.Model):
 
     @classmethod
     def record_created(cls, model_name, app_label='', count=1):
-        """Call when ``count`` new records are created."""
+        """
+        Call when ``count`` new records are created.
+
+        Increments:
+          - total_created (+count): cumulative inserts, never decrements.
+          - total_active (+count): live active records.
+          - total_records (+count): live DB row count (active + soft-deleted).
+          - total_lifetime_records (+count): the eternal all-time counter.
+        """
         cls._dispatch(
             model_name, app_label,
             total_created=+count,
             total_active=+count,
+            total_records=+count,
+            total_lifetime_records=+count,
         )
 
     @classmethod
@@ -821,7 +847,7 @@ class ModelAnalytics(models.Model):
 
         ``total_updated`` increments monotonically — it captures
         every field change made by vendors, clients, or admins.
-        It does NOT affect ``total_active`` or ``total_created``.
+        It does NOT affect any other counter.
         """
         cls._dispatch(
             model_name, app_label,
@@ -830,7 +856,12 @@ class ModelAnalytics(models.Model):
 
     @classmethod
     def record_soft_deleted(cls, model_name, app_label='', count=1):
-        """Call when ``count`` records are soft-deleted."""
+        """
+        Call when ``count`` records are soft-deleted.
+
+        Moves active → soft_deleted. total_records unchanged
+        (row still exists in DB). total_lifetime_records unchanged.
+        """
         cls._dispatch(
             model_name, app_label,
             total_soft_deleted=+count,
@@ -839,7 +870,12 @@ class ModelAnalytics(models.Model):
 
     @classmethod
     def record_restored(cls, model_name, app_label='', count=1):
-        """Call when ``count`` soft-deleted records are restored."""
+        """
+        Call when ``count`` soft-deleted records are restored.
+
+        Moves soft_deleted → active. total_records unchanged.
+        total_lifetime_records unchanged.
+        """
         cls._dispatch(
             model_name, app_label,
             total_soft_deleted=-count,
@@ -853,6 +889,10 @@ class ModelAnalytics(models.Model):
         """
         Call when ``count`` records are permanently deleted.
 
+        ``total_lifetime_records`` is NEVER touched here — it must
+        remain the eternal source of truth ("ever existed").
+        ``total_records`` decrements because the physical row is gone.
+
         Args:
             was_soft_deleted (bool): If True the record was already
                 soft-deleted (so decrement soft_deleted instead of
@@ -863,13 +903,53 @@ class ModelAnalytics(models.Model):
                 model_name, app_label,
                 total_soft_deleted=-count,
                 total_hard_deleted=+count,
+                total_records=-count,
             )
         else:
             cls._dispatch(
                 model_name, app_label,
                 total_active=-count,
                 total_hard_deleted=+count,
+                total_records=-count,
             )
+
+    @classmethod
+    def record_seeded(
+        cls, model_name, app_label='',
+        total_active=0, total_soft_deleted=0,
+        total_created=0, total_updated=0, total_hard_deleted=0,
+    ):
+        """
+        Bootstrap / seed a ModelAnalytics row from real DB counts.
+
+        Called by the ``seed_model_analytics`` management command.
+        Safe to call multiple times (upsert pattern). Overwrites
+        all counters based on live DB counts so drift is corrected.
+
+        Args:
+            total_active        int: COUNT(*) WHERE is_deleted=False.
+            total_soft_deleted  int: COUNT(*) WHERE is_deleted=True.
+            total_created       int: total_active + total_soft_deleted
+                                    + total_hard_deleted (if available).
+            total_hard_deleted  int: inferred from existing row if possible.
+        """
+        total_records_now = total_active + total_soft_deleted
+        # total_lifetime = total_created (if available) else total_records
+        total_lifetime = total_created if total_created else total_records_now
+
+        cls.objects.update_or_create(
+            model_name=model_name,
+            defaults=dict(
+                app_label=app_label,
+                total_active=total_active,
+                total_soft_deleted=total_soft_deleted,
+                total_created=total_created or total_records_now,
+                total_updated=total_updated,
+                total_hard_deleted=total_hard_deleted,
+                total_records=total_records_now,
+                total_lifetime_records=total_lifetime,
+            ),
+        )
 
 
 # ================================================================
