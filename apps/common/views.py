@@ -52,13 +52,12 @@ import logging
 import time
 from datetime import datetime, timezone
 from typing import Any
+import asyncio
 
 from django.conf import settings
 from django.db import connection
 from django.views import View
-from django.http import HttpRequest
-
-from apps.common.renderers import django_json_success, django_json_error
+from django.http import HttpRequest, JsonResponse
 
 logger = logging.getLogger("application")
 
@@ -73,72 +72,86 @@ API_VERSION: str = getattr(settings, "API_VERSION", "2.0.0")
 # Individual sub-checks
 # ---------------------------------------------------------------------------
 
-def _check_database() -> dict[str, Any]:
-    """Verify primary DB connection and measure round-trip latency."""
-    t0 = time.monotonic()
-    try:
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT 1")
-            cursor.fetchone()
-        latency_ms = round((time.monotonic() - t0) * 1000, 2)
-        return {"status": "ok", "latency_ms": latency_ms}
-    except Exception as exc:  # noqa: BLE001
-        logger.error("Health check — database error: %s", exc)
-        return {"status": "error", "error": str(exc)}
-
-
-def _check_redis() -> dict[str, Any]:
-    """Verify Redis connection and measure PING latency."""
-    try:
-        from apps.common.utils import get_redis_connection_safe
+async def _acheck_database() -> dict[str, Any]:
+    """Verify primary DB connection and measure round-trip latency (Async)."""
+    def _do_check():
         t0 = time.monotonic()
-        conn = get_redis_connection_safe(max_retries=1, retry_delay=0)
-        if conn is None:
-            return {"status": "error", "error": "Unable to connect to Redis"}
-        conn.ping()
-        latency_ms = round((time.monotonic() - t0) * 1000, 2)
-        return {"status": "ok", "latency_ms": latency_ms}
-    except Exception as exc:  # noqa: BLE001
-        logger.error("Health check — redis error: %s", exc)
-        return {"status": "error", "error": str(exc)}
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+            latency_ms = round((time.monotonic() - t0) * 1000, 2)
+            return {"status": "ok", "latency_ms": latency_ms}
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Health check — database error: %s", exc)
+            return {"status": "error", "error": str(exc)}
+    return await asyncio.to_thread(_do_check)
 
 
-def _check_celery() -> dict[str, Any]:
+async def _acheck_redis() -> dict[str, Any]:
+    """Verify Redis connection and measure PING latency (Async)."""
+    def _do_check():
+        try:
+            from apps.common.utils import get_redis_connection_safe
+            t0 = time.monotonic()
+            conn = get_redis_connection_safe(max_retries=1, retry_delay=0)
+            if conn is None:
+                return {
+                    "status": "error",
+                    "error": "Unable to connect to Redis"
+                }
+            conn.ping()
+            latency_ms = round((time.monotonic() - t0) * 1000, 2)
+            return {"status": "ok", "latency_ms": latency_ms}
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Health check — redis error: %s", exc)
+            return {"status": "error", "error": str(exc)}
+    return await asyncio.to_thread(_do_check)
+
+
+async def _acheck_celery() -> dict[str, Any]:
     """
-    Count active Celery workers via Celery's inspect interface.
+    Count active Celery workers via Celery's inspect interface (Async).
     Falls back gracefully if broker is unavailable.
     """
-    try:
-        from backend.celery import app as celery_app
-        inspector = celery_app.control.inspect(timeout=1.0)
-        stats = inspector.stats()
-        if stats:
-            worker_count = len(stats)
-            return {"status": "ok", "workers": worker_count}
-        return {"status": "warning", "workers": 0, "note": "No active workers found"}
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("Health check — celery inspect failed: %s", exc)
-        return {"status": "warning", "error": str(exc), "note": "Celery stats unavailable"}
+    def _do_check():
+        try:
+            from backend.celery import app as celery_app
+            inspector = celery_app.control.inspect(timeout=1.0)
+            stats = inspector.stats()
+            if stats:
+                worker_count = len(stats)
+                return {"status": "ok", "workers": worker_count}
+            return {"status": "warning", "workers": 0, "note": "No active workers found"}
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Health check — celery inspect failed: %s", exc)
+            return {"status": "warning", "error": str(exc), "note": "Celery stats unavailable"}
+    return await asyncio.to_thread(_do_check)
 
 
-def _check_migrations() -> dict[str, Any]:
-    """Check for unapplied database migrations."""
-    try:
-        from django.db.migrations.executor import MigrationExecutor
-        executor = MigrationExecutor(connection)
-        plan = executor.migration_plan(executor.loader.graph.leaf_nodes())
-        pending = len(plan)
-        if pending:
-            return {"status": "warning", "pending": pending,
-                    "note": f"{pending} migration(s) not applied"}
-        return {"status": "ok", "pending": 0}
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("Health check — migrations check failed: %s", exc)
-        return {"status": "warning", "error": str(exc)}
+async def _acheck_migrations() -> dict[str, Any]:
+    """Check for unapplied database migrations (Async)."""
+    def _do_check():
+        try:
+            from django.db.migrations.executor import MigrationExecutor
+            executor = MigrationExecutor(connection)
+            plan = executor.migration_plan(executor.loader.graph.leaf_nodes())
+            pending = len(plan)
+            if pending:
+                return {
+                    "status": "warning",
+                    "pending": pending,
+                    "note": f"{pending} migrations not applied"
+                }
+            return {"status": "ok", "pending": 0}
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Health check — migrations check failed: %s", exc)
+            return {"status": "warning", "error": str(exc)}
+    return await asyncio.to_thread(_do_check)
 
 
-def _check_storage() -> dict[str, Any]:
-    """Identify the configured storage/CDN provider."""
+async def _acheck_storage() -> dict[str, Any]:
+    """Identify the configured storage/CDN provider (Non-blocking)."""
     try:
         default_storage = getattr(settings, "DEFAULT_FILE_STORAGE", "")
         if "cloudinary" in default_storage.lower():
@@ -150,8 +163,8 @@ def _check_storage() -> dict[str, Any]:
         return {"status": "warning", "error": str(exc)}
 
 
-def _check_email() -> dict[str, Any]:
-    """Identify the configured email backend/provider."""
+async def _acheck_email() -> dict[str, Any]:
+    """Identify the configured email backend/provider (Non-blocking)."""
     try:
         email_backend = getattr(settings, "EMAIL_BACKEND", "")
         if "anymail" in email_backend.lower():
@@ -184,16 +197,31 @@ class HealthCheckView(View):
 
     http_method_names = ["get", "head"]
 
-    def get(self, request: HttpRequest, *args: Any, **kwargs: Any):
+    async def get(self, request: HttpRequest, *args: Any, **kwargs: Any):
         t0 = time.monotonic()
 
+        # Gather all checks concurrently to minimize overall latency
+        db_res, redis_res, cel_res, mig_res, store_res, email_res = await asyncio.gather(
+            _acheck_database(),
+            _acheck_redis(),
+            _acheck_celery(),
+            _acheck_migrations(),
+            _acheck_storage(),
+            _acheck_email(),
+            return_exceptions=True
+        )
+
+        def _safe_res(res: Any, fall: str) -> dict[str, Any]:
+            return res if isinstance(res, dict) else {"status": fall, "error": str(res)}
+
+        # Handle potential asyncio exceptions by converting to error dicts
         checks: dict[str, Any] = {
-            "database":   _check_database(),
-            "redis":      _check_redis(),
-            "celery":     _check_celery(),
-            "migrations": _check_migrations(),
-            "storage":    _check_storage(),
-            "email":      _check_email(),
+            "database":   _safe_res(db_res,    "error"),
+            "redis":      _safe_res(redis_res, "error"),
+            "celery":     _safe_res(cel_res,   "warning"),
+            "migrations": _safe_res(mig_res,   "error"),
+            "storage":    _safe_res(store_res, "warning"),
+            "email":      _safe_res(email_res, "warning"),
         }
 
         elapsed_ms = round((time.monotonic() - t0) * 1000, 2)
@@ -242,5 +270,4 @@ class HealthCheckView(View):
                 [k for k, v in checks.items() if v.get("status") == "warning"],
             )
 
-        from django.http import JsonResponse
         return JsonResponse(payload, status=http_status)
