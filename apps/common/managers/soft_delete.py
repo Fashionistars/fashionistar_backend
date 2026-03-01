@@ -83,6 +83,20 @@ class SoftDeleteQuerySet(models.QuerySet):
         )
         return count
 
+    async def asoft_delete(self):
+        """
+        Async version of soft_delete using aupdate.
+        """
+        count = await self.aupdate(
+            is_deleted=True,
+            deleted_at=timezone.now(),
+        )
+        logger.info(
+            "Bulk soft-deleted %d record(s) via queryset async",
+            count,
+        )
+        return count
+
     def restore(self):
         """
         Bulk restore all soft-deleted records in this queryset.
@@ -99,6 +113,20 @@ class SoftDeleteQuerySet(models.QuerySet):
         )
         logger.info(
             "Bulk restored %d record(s) via queryset",
+            count,
+        )
+        return count
+
+    async def arestore(self):
+        """
+        Async version of restore using aupdate.
+        """
+        count = await self.aupdate(
+            is_deleted=False,
+            deleted_at=None,
+        )
+        logger.info(
+            "Bulk restored %d record(s) via queryset async",
             count,
         )
         return count
@@ -121,6 +149,18 @@ class SoftDeleteQuerySet(models.QuerySet):
         )
         return super().delete()
 
+    async def ahard_delete(self):
+        """
+        Async evaluation of hard_delete.
+        """
+        acount_val = await self.acount()
+        logger.warning(
+            "Hard-deleting %d record(s) via queryset async — "
+            "this is irreversible",
+            acount_val,
+        )
+        return await super().adelete()
+
     def delete(self):
         """
         Override default ``delete()`` to soft-delete instead.
@@ -134,6 +174,12 @@ class SoftDeleteQuerySet(models.QuerySet):
             int: Number of rows soft-deleted.
         """
         return self.soft_delete()
+
+    async def adelete(self):
+        """
+        Async override of adelete to trigger soft-delete.
+        """
+        return await self.asoft_delete()
 
 
 # ================================================================

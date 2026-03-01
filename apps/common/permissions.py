@@ -9,7 +9,6 @@ robust error handling and logging for maintainability.
 # apps/common/permissions.py
 from rest_framework.permissions import BasePermission
 from django.contrib.auth.models import AnonymousUser
-from asgiref.sync import sync_to_async
 import logging
 
 # Get logger for permission-related logging
@@ -76,7 +75,7 @@ class IsVendor(BasePermission):
             bool: True if the user is a vendor, False otherwise.
         """
         try:
-            user = request.user
+            user = await request.auser() if hasattr(request, 'auser') else request.user
             if isinstance(user, AnonymousUser):
                 permission_logger.warning("Anonymous user attempted vendor access (async)")
                 return False
@@ -144,7 +143,7 @@ class IsClient(BasePermission):
             bool: True if the user is a client, False otherwise.
         """
         try:
-            user = request.user
+            user = await request.auser() if hasattr(request, 'auser') else request.user
             if isinstance(user, AnonymousUser):
                 permission_logger.warning("Anonymous user attempted client access (async)")
                 return False
@@ -213,7 +212,7 @@ class IsStaff(BasePermission):
             bool: True if the user is staff, False otherwise.
         """
         try:
-            user = request.user
+            user = await request.auser() if hasattr(request, 'auser') else request.user
             if isinstance(user, AnonymousUser):
                 permission_logger.warning("Anonymous user attempted staff access (async)")
                 return False
@@ -288,7 +287,7 @@ class IsOwner(BasePermission):
             bool: True if the user owns the object, False otherwise.
         """
         try:
-            user = request.user
+            user = await request.auser() if hasattr(request, 'auser') else request.user
             if isinstance(user, AnonymousUser):
                 permission_logger.warning("Anonymous user attempted owner access (async)")
                 return False
@@ -356,7 +355,7 @@ class IsSupport(BasePermission):
             bool: True if the user is support, False otherwise.
         """
         try:
-            user = request.user
+            user = await request.auser() if hasattr(request, 'auser') else request.user
             if isinstance(user, AnonymousUser):
                 permission_logger.warning("Anonymous user attempted support access (async)")
                 return False
@@ -423,7 +422,7 @@ class IsEditor(BasePermission):
             bool: True if the user is an editor, False otherwise.
         """
         try:
-            user = request.user
+            user = await request.auser() if hasattr(request, 'auser') else request.user
             if isinstance(user, AnonymousUser):
                 permission_logger.warning("Anonymous user attempted editor access (async)")
                 return False
@@ -490,7 +489,7 @@ class IsSales(BasePermission):
             bool: True if the user is sales, False otherwise.
         """
         try:
-            user = request.user
+            user = await request.auser() if hasattr(request, 'auser') else request.user
             if isinstance(user, AnonymousUser):
                 permission_logger.warning("Anonymous user attempted sales access (async)")
                 return False

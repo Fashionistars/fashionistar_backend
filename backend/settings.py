@@ -192,16 +192,33 @@ CHANNEL_LAYERS = {
 
 
 
-# Configure Django's CACHES to use Redis
+# Configure Django's CACHES
+# - 'default': Redis (sessions, throttling, app-level caching)
+# - 'schema':  LocMemCache — OpenAPI/Swagger schema caching (drf-yasg)
+#              Uses in-process memory so Redis unavailability NEVER causes
+#              a 500 on GET / (the Swagger UI homepage).
 CACHES = {
     'default': {
         'BACKEND': 'django_redis.cache.RedisCache',
         'LOCATION': env("REDIS_URL", default="redis://127.0.0.1:6379/0"), # Get Redis URL from environment variable
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-        }
-    }
+            # Silently return None on cache misses when Redis is unreachable.
+            # Prevents Redis outages from propagating as 500 errors to users.
+            # Production best practice: https://github.com/jazzband/django-redis#ignore-exceptions
+            'IGNORE_EXCEPTIONS': True,
+        },
+    },
+    # ── Schema cache: LocMemCache (no Redis dependency) ──────────────────
+    # Used by drf-yasg schema_view via cache_page('schema') decorator.
+    # Falls back to per-process memory — always available regardless of
+    # whether Redis is running.
+    'schema': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'fashionistar-schema-cache',
+    },
 }
+
 
 
 
@@ -326,51 +343,67 @@ PAYSTACK_SECRET_KEY = env("PAYSTACK_SECRET_KEY", default="sk_test_f5995ad3b92949
 
 
 
-# REST Framework settings
+# ─────────────────────────────────────────────────────────────────────────────
+# REST Framework — Enterprise Configuration
+# ─────────────────────────────────────────────────────────────────────────────
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 
-
-    "DEFAULT_PERMISSION_CLASSES": (
-        "rest_framework.permissions.IsAuthenticated",
-        "rest_framework.permissions.AllowAny",
+    # ── Permissions ────────────────────────────────────────────────────────
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
     ),
-    
 
-    "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework.authentication.TokenAuthentication",
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    # ── Authentication ─────────────────────────────────────────────────────
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.TokenAuthentication',
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.BasicAuthentication',
     ),
 
-
+    # ── Rendering — Fashionistar standard envelope ─────────────────────────
+    # FashionistarRenderer wraps every response in {success, message, data}.
+    # BrowsableAPIRenderer kept for local development (removed in production).
     'DEFAULT_RENDERER_CLASSES': [
-        'rest_framework.renderers.JSONRenderer',
+        'apps.common.renderers.FashionistarRenderer',
         'rest_framework.renderers.BrowsableAPIRenderer',
     ],
 
-
+    # ── Parsers ────────────────────────────────────────────────────────────
     'DEFAULT_PARSER_CLASSES': [
-    'rest_framework.parsers.JSONParser',
-    'rest_framework.parsers.FormParser',
-    'rest_framework.parsers.MultiPartParser'
+        'rest_framework.parsers.JSONParser',
+        'rest_framework.parsers.FormParser',
+        'rest_framework.parsers.MultiPartParser',
     ],
-    
 
-   'DEFAULT_THROTTLE_CLASSES': [
-        'rest_framework.throttling.UserRateThrottle', # Added for rate limiting
-        'rest_framework.throttling.AnonRateThrottle'
+    # ── Rate Limiting (Fashionistar tiered throttle classes) ───────────────
+    # Burst + sustained throttles applied per request.
+    # Override individual rates via THROTTLE_RATES dict in this file.
+    'DEFAULT_THROTTLE_CLASSES': [
+        'apps.common.throttling.AnonBurstThrottle',
+        'apps.common.throttling.AnonSustainedThrottle',
+        'apps.common.throttling.UserBurstThrottle',
+        'apps.common.throttling.UserSustainedThrottle',
     ],
-    # 'DEFAULT_THROTTLE_RATES': {
-    #     'anon': '100/day',  # Unauthenticated users
-    #     'user': '1000/day'   # Authenticated users
-    # },
+    'DEFAULT_THROTTLE_RATES': {
+        # Mapped by scope in apps.common.throttling
+        'anon_burst':  '30/minute',
+        'anon_day':    '500/day',
+        'user_burst':  '120/minute',
+        'user_day':    '5000/day',
+        'auth':        '5/minute',
+        'otp':         '3/minute',
+        'upload':      '20/hour',
+        'vendor':      '200/minute',
+    },
 
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 10,  # Number of items per page
+    # ── Pagination — Fashionistar standard envelope ─────────────────────────
+    'DEFAULT_PAGINATION_CLASS': 'apps.common.pagination.DefaultPagination',
+    'PAGE_SIZE': 20,
 
-    'EXCEPTION_HANDLER': 'apps.authentication.exceptions.custom_exception_handler',
+    # ── Exception Handler — unified DRF + Django errors ────────────────────
+    'EXCEPTION_HANDLER': 'apps.common.exceptions.custom_exception_handler',
 }
 
 

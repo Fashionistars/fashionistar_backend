@@ -178,6 +178,67 @@ class SoftDeleteModel(models.Model):
             )
             raise
 
+    async def asoft_delete(self):
+        """
+        Async version of soft_delete.
+        """
+        try:
+            from apps.common.models import DeletedRecords
+            from django.forms.models import model_to_dict
+
+            try:
+                archive_data = model_to_dict(self)
+                serialized = {
+                    k: str(v) if v is not None else None
+                    for k, v in archive_data.items()
+                }
+            except Exception:
+                serialized = {'pk': str(self.pk)}
+
+            await DeletedRecords.objects.acreate(
+                model_name=self.__class__.__name__,
+                record_id=str(self.pk),
+                data=serialized,
+            )
+
+            now = timezone.now()
+            await self.__class__.objects.filter(
+                pk=self.pk
+            ).aupdate(
+                is_deleted=True,
+                deleted_at=now,
+            )
+
+            self.is_deleted = True
+            self.deleted_at = now
+
+            logger.info(
+                "Soft-deleted %s with ID %s (async)",
+                self.__class__.__name__,
+                self.pk,
+            )
+
+            self._fire_and_forget_notification('soft_deleted')
+
+            try:
+                from apps.common.models import ModelAnalytics
+                ModelAnalytics._dispatch(
+                    model_name=self.__class__.__name__,
+                    app_label=self.__class__._meta.app_label,
+                    total_active=-1,
+                    total_soft_deleted=1
+                )
+            except Exception:
+                pass
+
+        except Exception:
+            logger.exception(
+                "Error during async soft-delete of %s %s",
+                self.__class__.__name__,
+                self.pk,
+            )
+            raise
+
     # ----------------------------------------------------------------
     # Restore
     # ----------------------------------------------------------------
@@ -271,6 +332,71 @@ class SoftDeleteModel(models.Model):
         except Exception:
             logger.exception(
                 "Error during restore of %s %s",
+                self.__class__.__name__,
+                self.pk,
+            )
+            raise
+
+    async def arestore(self):
+        """
+        Async version of restore.
+        """
+        try:
+            updated = await self.__class__.objects.all_with_deleted().filter(
+                pk=self.pk,
+                is_deleted=True,
+            ).aupdate(
+                is_deleted=False,
+                deleted_at=None,
+            )
+
+            if updated == 0:
+                logger.warning(
+                    "arestore() matched 0 rows for %s %s "
+                    "— already active or not found",
+                    self.__class__.__name__,
+                    self.pk,
+                )
+
+            from apps.common.models import DeletedRecords
+            purged, _ = await DeletedRecords.objects.filter(
+                model_name=self.__class__.__name__,
+                record_id=str(self.pk),
+            ).adelete()
+            
+            if purged:
+                logger.debug(
+                    "Purged %d archive entries for %s %s (async)",
+                    purged,
+                    self.__class__.__name__,
+                    self.pk,
+                )
+
+            self.is_deleted = False
+            self.deleted_at = None
+
+            logger.info(
+                "Restored %s with ID %s (async)",
+                self.__class__.__name__,
+                self.pk,
+            )
+
+            self._fire_and_forget_notification('restored')
+
+            try:
+                from apps.common.models import ModelAnalytics
+                ModelAnalytics._dispatch(
+                    model_name=self.__class__.__name__,
+                    app_label=self.__class__._meta.app_label,
+                    total_active=1,
+                    total_soft_deleted=-1
+                )
+            except Exception:
+                pass
+
+        except Exception:
+            logger.exception(
+                "Error during async restore of %s %s",
                 self.__class__.__name__,
                 self.pk,
             )
@@ -747,6 +873,48 @@ class ModelAnalytics(models.Model):
 
         logger.debug(
             "ModelAnalytics[%s] adjusted: %s",
+            model_name,
+            deltas,
+        )
+
+    @classmethod
+    async def _aadjust(cls, model_name, app_label='', **deltas):
+        """
+        Async evaluation of _adjust.
+        """
+        from django.db import IntegrityError
+        from django.db.models import F, Value
+        from django.db.models.functions import Greatest
+
+        update_kwargs = {}
+        for field, delta in deltas.items():
+            update_kwargs[field] = Greatest(
+                F(field) + Value(delta), Value(0)
+            )
+            
+        rows = await cls.objects.filter(
+            model_name=model_name,
+        ).aupdate(**update_kwargs)
+
+        if rows == 0:
+            try:
+                await cls.objects.acreate(
+                    model_name=model_name,
+                    app_label=app_label,
+                    **{k: max(v, 0) for k, v in deltas.items()},
+                )
+            except IntegrityError:
+                await cls.objects.filter(
+                    model_name=model_name,
+                ).aupdate(**update_kwargs)
+        elif app_label:
+            await cls.objects.filter(
+                model_name=model_name,
+                app_label='',
+            ).aupdate(app_label=app_label)
+
+        logger.debug(
+            "ModelAnalytics[%s] adjusted async: %s",
             model_name,
             deltas,
         )

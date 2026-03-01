@@ -133,11 +133,66 @@ def get_otp_expiry_datetime() -> datetime.datetime:
     Returns:
         datetime: A timezone-aware datetime object representing the expiry time.
     """
-    # Use timezone.now() if naive handling is tricky, strictly use UTC or server time
-    # User's code used simple time, but django.utils.timezone is better
-    # Keeping mostly faithful to user logic but robust
     from django.utils import timezone
     return timezone.now() + datetime.timedelta(seconds=300)
+
+
+def user_directory_path(instance, filename) -> str:
+    """
+    Generate an optimized, role-separated file path for a given user directory.
+    Matches Cloudinary modern layout expectations, with full domain separation
+    (Users, Products, Vendors, Categories, Brands) and RBAC accountability.
+    """
+    import time
+    from django.core.exceptions import ValidationError
+
+    try:
+        user = None
+        domain = 'other'
+
+        # 1. Determine root domain based on the instance's class name
+        model_name = instance.__class__.__name__.lower()
+        if 'product' in model_name:
+            domain = 'products'
+        elif 'vendor' in model_name:
+            domain = 'vendors'
+        elif 'category' in model_name:
+            domain = 'categories'
+        elif 'brand' in model_name:
+            domain = 'brands'
+        elif 'user' in model_name or 'profile' in model_name:
+            domain = 'users'
+
+        # 2. Extract the associated user for accountability mapping
+        if hasattr(instance, 'user') and instance.user:
+            user = instance.user
+        elif hasattr(instance, 'vendor') and hasattr(instance.vendor, 'user') and instance.vendor.user:
+            user = instance.vendor.user
+        elif hasattr(instance, 'product') and hasattr(instance.product, 'vendor') and hasattr(instance.product.vendor, 'user'):
+            user = getattr(instance.product.vendor, 'user', None)
+
+        # 3. Handle Role-Based Access Control Segregation
+        role_folder = "general"
+        if user and hasattr(user, 'role') and user.role:
+            role = str(user.role).lower()
+            if role in ['admin', 'staff', 'support', 'reviewer', 'assistant']:
+                role_folder = 'internal_staff'
+            elif role == 'vendor':
+                role_folder = 'vendors'
+            elif role == 'client':
+                role_folder = 'clients'
+
+        # 4. Construct a latency-friendly path structure
+        ext = filename.split('.')[-1] if '.' in filename else ''
+        safe_filename = f"{getattr(instance, 'pk', 'new')}_{int(time.time())}.{ext}" if ext else f"{getattr(instance, 'pk', 'new')}_{int(time.time())}"
+
+        if user:
+            return f"uploads/{role_folder}/{domain}/user_{user.id}/{safe_filename}"
+        else:
+            return f"uploads/system/{domain}/general/{safe_filename}"
+
+    except Exception as e:
+        raise ValidationError(f"Error generating optimized file path: {str(e)}")
 
 
 # ============================================================================
@@ -146,24 +201,41 @@ def get_otp_expiry_datetime() -> datetime.datetime:
 
 def delete_cloudinary_asset(public_id: str, resource_type: str = "image") -> Optional[dict]:
     """
-    Deletes an asset from Cloudinary.
-
-    Args:
-        public_id (str): The public ID of the asset.
-        resource_type (str): Type of resource (image, video, raw).
-
-    Returns:
-        dict or None: Result of deletion or None if failed.
+    Deletes an asset from Cloudinary synchronously.
     """
     try:
         if not public_id:
             return None
-        # Remove version if present (not strictly needed for destroy, but good practice if URL is passed)
-        # Assuming public_id is passed directly.
-        
         result = cloudinary.uploader.destroy(public_id, resource_type=resource_type)
         application_logger.info(f"Cloudinary asset {public_id} deletion result: {result}")
         return result
     except Exception as e:
         application_logger.error(f"Error deleting Cloudinary asset {public_id}: {e}")
         return None
+
+def delete_cloudinary_asset_async(public_id: str, resource_type: str = "image"):
+    """
+    Dispatches a background Celery task to delete a Cloudinary asset.
+    Makes file deletions transaction-atomic and completely non-blocking
+    for the main event loop to reduce latency.
+    """
+    if not public_id:
+        return
+
+    from django.db import transaction
+    from apps.common.tasks import delete_cloudinary_asset_task
+
+    def _fire():
+        try:
+            delete_cloudinary_asset_task.apply_async(
+                args=[public_id],
+                kwargs={"resource_type": resource_type},
+                retry=False,
+                ignore_result=True
+            )
+        except Exception as e:
+            application_logger.warning(f"Broker unavailable — fallback to sync delete for {public_id}. Error: {e}")
+            delete_cloudinary_asset(public_id, resource_type)
+
+    # Fire ONLY after DB transaction commits successfully
+    transaction.on_commit(_fire)

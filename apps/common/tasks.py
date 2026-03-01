@@ -272,3 +272,47 @@ def update_model_analytics_counter(self, model_name, app_label, deltas):
             model_name,
             deltas,
         )
+
+# ================================================================
+# 4. CLOUDINARY BACKGROUND TASKS
+# ================================================================
+
+
+@shared_task(
+    name="delete_cloudinary_asset_task",
+    bind=True,
+    max_retries=3,
+    default_retry_delay=30,
+    ignore_result=True,
+)
+def delete_cloudinary_asset_task(self, public_id, resource_type="image"):
+    """
+    Deletes an asset from Cloudinary in the background.
+
+    Dispatched as a Celery background task to make Cloudinary
+    deletes non-blocking during model updates or deletes.
+    """
+    from apps.common.utils import delete_cloudinary_asset
+    try:
+        result = delete_cloudinary_asset(
+            public_id,
+            resource_type=resource_type
+        )
+        if result and result.get('result') == 'ok':
+            logger.info(
+                "Background deletion of Cloudinary asset %s successful.",
+                public_id
+            )
+        else:
+            logger.warning(
+                "Background deletion of Cloudinary asset %s returned: %s",
+                public_id,
+                result
+            )
+    except Exception as exc:
+        logger.error(
+            "Failed to delete Cloudinary asset %s: %s",
+            public_id,
+            exc
+        )
+        raise self.retry(exc=exc)
