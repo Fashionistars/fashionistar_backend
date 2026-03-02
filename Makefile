@@ -44,12 +44,12 @@ setup: install install-dev migrate static ## Full first-time setup
 
 dev: ## Start Django development server (sync — port 8000)
 	@echo "$(CYAN)Starting Django dev server...$(NC)"
-	python manage.py runserver 0.0.0.0:8000
+	python manage.py runserver
 
 vir-dev: ## Start Django development server (sync — port 8000)
 	@echo "$(CYAN)Starting Django dev server...$(NC)"
 	source env/Scripts/activate
-	python manage.py runserver 0.0.0.0:8000
+	python manage.py runserver
 
 # run: dev ## Alias for 'make dev'
 
