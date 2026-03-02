@@ -4,7 +4,7 @@ export
 ENV_FILE_PARAM = --env-file .env
 endif
 
-.PHONY: help install dev run run-asgi migrate test lint clean shell docker-build docker-up docker-down
+.PHONY: help install dev run run-asgi run-daphne migrate test lint clean shell docker-build docker-up docker-down start-redis stop-redis stress-redis stress-health
 .DEFAULT_GOAL := help
 
 # ─── Colors ───
@@ -48,18 +48,21 @@ dev: ## Start Django development server (sync — port 8000)
 
 vir-dev: ## Start Django development server (sync — port 8000)
 	@echo "$(CYAN)Starting Django dev server...$(NC)"
-	source env/Scripts/activate
-	python manage.py runserver
+	venv\Scripts\python manage.py runserver
 
 # run: dev ## Alias for 'make dev'
 
-run-asgi: ## Start ASGI server with Uvicorn (async — port 8000)
+run-asgi: ## Start ASGI + Uvicorn (auto-starts Redis first)
+	@echo "$(CYAN)Ensuring Redis is running ...$(NC)"
+	@if [ -d '../.tmp_redis' ]; then cd ../.tmp_redis && ./redis-server.exe --port 6379 & sleep 1; fi
 	@echo "$(CYAN)Starting Uvicorn ASGI server...$(NC)"
-	uvicorn backend.asgi:application --host 0.0.0.0 --port 8000 --reload --ws auto
+	venv\Scripts\uvicorn backend.asgi:application --host 0.0.0.0 --port 8000 --reload --ws auto
 
-run-daphne: ## Start Daphne ASGI server (WebSocket support — port 8000)
+run-daphne: ## Start Daphne ASGI (WebSocket — auto-starts Redis first)
+	@echo "$(CYAN)Ensuring Redis is running ...$(NC)"
+	@if [ -d '../.tmp_redis' ]; then cd ../.tmp_redis && ./redis-server.exe --port 6379 & sleep 1; fi
 	@echo "$(CYAN)Starting Daphne ASGI server...$(NC)"
-	daphne -b 0.0.0.0 -p 8000 backend.asgi:application
+	venv\Scripts\daphne -b 0.0.0.0 -p 8000 backend.asgi:application
 
 shell: ## Open Django interactive shell
 	python manage.py shell
@@ -171,25 +174,29 @@ test-watch: ## Run tests in watch mode (requires pytest-watch)
 ##@ Celery & Background Tasks
 # ═══════════════════════════════════════════════════════════════
 
-celery: ## Start Celery worker (general queue)
+celery: ## Start Celery worker — general queue (auto-starts Redis)
+	@echo "$(CYAN)Ensuring Redis is running ...$(NC)"
+	@if [ -d '../.tmp_redis' ]; then cd ../.tmp_redis && ./redis-server.exe --port 6379 & sleep 1; fi
 	@echo "$(CYAN)Starting Celery worker...$(NC)"
-	celery -A backend worker --loglevel=info --concurrency=4
+	venv\Scripts\celery -A backend worker --loglevel=info --concurrency=4
 
-celery-emails: ## Start Celery worker for email queue
-	celery -A backend worker -Q emails --loglevel=info --concurrency=2
+celery-emails: ## Start Celery worker for email queue (auto-starts Redis)
+	@if [ -d '../.tmp_redis' ]; then cd ../.tmp_redis && ./redis-server.exe --port 6379 & sleep 1; fi
+	venv\Scripts\celery -A backend worker -Q emails --loglevel=info --concurrency=2
 
-celery-critical: ## Start Celery worker for critical queue
-	celery -A backend worker -Q critical --loglevel=info --concurrency=2
+celery-critical: ## Start Celery worker for critical queue (auto-starts Redis)
+	@if [ -d '../.tmp_redis' ]; then cd ../.tmp_redis && ./redis-server.exe --port 6379 & sleep 1; fi
+	venv\Scripts\celery -A backend worker -Q critical --loglevel=info --concurrency=2
 
 celery-analytics: ## Start Celery worker for analytics queue
-	celery -A backend worker -Q analytics --loglevel=info --concurrency=1
+	venv\Scripts\celery -A backend worker -Q analytics --loglevel=info --concurrency=1
 
 celery-beat: ## Start Celery Beat scheduler
-	celery -A backend beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+	venv\Scripts\celery -A backend beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
 
 flower: ## Start Flower monitoring dashboard (port 5555)
 	@echo "$(CYAN)Starting Flower at http://localhost:5555$(NC)"
-	celery -A backend flower --port=5555
+	venv\Scripts\celery -A backend flower --port=5555
 
 purge-tasks: ## ⚠️  Purge all queued Celery tasks
 	@echo "$(RED)⚠  Purging all queued tasks...$(NC)"
@@ -293,6 +300,24 @@ infra-down: ## Stop infrastructure containers
 	docker stop fashionistar-redis fashionistar-postgres 2>/dev/null || true
 	docker rm fashionistar-redis fashionistar-postgres 2>/dev/null || true
 	@echo "$(GREEN)✓ Infrastructure stopped$(NC)"
+
+# ═══════════════════════════════════════════════════════════════
+##@ Local Redis (Windows Portable)
+# ═══════════════════════════════════════════════════════════════
+
+start-redis: ## Start local portable Redis server on port 6379 (background)
+	@echo "$(CYAN)Starting local portable Redis server...$(NC)"
+	@if [ -d "../.tmp_redis" ]; then \
+		cd ../.tmp_redis && ./redis-server.exe --port 6379 & \
+		echo "$(GREEN)✓ Redis started on 127.0.0.1:6379$(NC)"; \
+	else \
+		echo "$(RED)✗ Redis not found at ../.tmp_redis$(NC)"; \
+	fi
+
+stop-redis: ## Stop local portable Redis server
+	@echo "$(CYAN)Stopping local portable Redis server...$(NC)"
+	taskkill /F /IM redis-server.exe /T 2>NUL || echo "$(YELLOW)Redis is not running$(NC)"
+	@echo "$(GREEN)✓ Redis stopped$(NC)"
 
 # ═══════════════════════════════════════════════════════════════
 ##@ Health Checks & Monitoring

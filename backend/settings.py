@@ -683,12 +683,12 @@ ZOHO_ZEPTOMAIL_HOSTED_REGION = env('ZOHO_ZEPTOMAIL_HOSTED_REGION', default='zept
 # # Always prefer `rediss://` for encrypted connection
 # # Ensure REDIS_URL, CELERY_BROKER_URL, CELERY_RESULT_BACKEND are set in Render environment variables
 
-# # Get Redis URL from environment variable
-# REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/0")
+# Get Redis URL from environment variable
+REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/1")
 
-# # Celery settings
-# CELERY_BROKER_URL = env('CELERY_BROKER_URL', default=REDIS_URL)
-# CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND', default=REDIS_URL)
+# Celery settings
+CELERY_BROKER_URL = env('CELERY_BROKER_URL', default=REDIS_URL)
+CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND', default=REDIS_URL)
 
 
 # # Core settings
