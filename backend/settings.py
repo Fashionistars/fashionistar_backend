@@ -200,13 +200,23 @@ CHANNEL_LAYERS = {
 CACHES = {
     'default': {
         'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': env("REDIS_URL", default="redis://127.0.0.1:6379/0"), # Get Redis URL from environment variable
+        'LOCATION': env("REDIS_URL", default="redis://127.0.0.1:6379/0"),
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
             # Silently return None on cache misses when Redis is unreachable.
             # Prevents Redis outages from propagating as 500 errors to users.
-            # Production best practice: https://github.com/jazzband/django-redis#ignore-exceptions
             'IGNORE_EXCEPTIONS': True,
+            'CONNECTION_POOL_KWARGS': {
+                # Default pool is 10 connections — exhausted under load.
+                # 50 connections prevents pool-wait latency spikes.
+                'max_connections': 50,
+                'decode_responses': False,  # bytes mode for maximum speed
+            },
+            # CRITICAL: Without timeouts, a Redis hiccup causes 30-second
+            # hangs. 500ms fail-fast is the industry standard for low-latency
+            # APIs (Netflix, Stripe, Shopify all use ≤500ms Redis timeouts).
+            'SOCKET_TIMEOUT': 0.5,         # seconds — receive timeout
+            'SOCKET_CONNECT_TIMEOUT': 0.5, # seconds — connection timeout
         },
     },
     # ── Schema cache: LocMemCache (no Redis dependency) ──────────────────

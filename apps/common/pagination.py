@@ -318,12 +318,13 @@ async def async_ninja_paginate(
     page = max(1, int(page))
 
     total: int
-    if hasattr(queryset, "acount"):
+    if hasattr(queryset, 'acount'):
         total = await queryset.acount()
-    elif hasattr(queryset, "count"):
-        from asgiref.sync import sync_to_async
-        # Fallback if somehow acount is missing
-        total = await sync_to_async(queryset.count)()
+    elif hasattr(queryset, 'count'):
+        # asyncio.to_thread — correct Django 6.0 idiom, no asgiref import
+        import asyncio as _asyncio
+        total = await _asyncio.to_thread(queryset.count)
+
     else:
         total = len(queryset)
 

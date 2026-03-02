@@ -40,6 +40,7 @@ Architecture Notes:
       for cross-process events use Celery/Redis pub/sub
 """
 
+import asyncio
 import logging
 import threading
 from collections import defaultdict
@@ -125,59 +126,88 @@ class EventBus:
 
     def emit(self, event_name: str, **payload: Any) -> int:
         """
-        Fire all handlers registered for ``event_name``.
+        Fire-and-forget: dispatch all handlers in a daemon background thread.
 
-        Dispatches the payload keyword arguments to each
-        handler in subscription order. Exceptions in any
-        handler are caught and logged but do NOT prevent
-        subsequent handlers from executing.
+        PERFORMANCE UPGRADE:
+            The previous implementation called handlers synchronously in the
+            request thread, meaning a slow event handler (e.g. one that does
+            I/O) would delay the HTTP response. This version returns in
+            microseconds regardless of handler count or handler duration.
+
+        Behaviour:
+            • Handlers still receive all payload kwargs.
+            • Exceptions in any handler are caught and logged.
+            • Subscribers are snapshot at emit() call time (thread-safe).
+            • The daemon thread is reaped when the process exits.
 
         Args:
             event_name (str): The event to emit.
-            **payload: Keyword arguments forwarded to each
-                handler.
+            **payload: Keyword arguments forwarded to each handler.
 
         Returns:
-            int: Number of handlers successfully invoked.
-
-        Example::
-
-            event_bus.emit(
-                'user.registered',
-                user_id=str(u.pk),
-                email=u.email,
-            )
+            int: Number of handlers scheduled (not necessarily completed yet).
         """
         with self._lock:
             handlers = list(self._handlers.get(event_name, []))
 
         if not handlers:
-            logger.debug(
-                "EventBus: no handlers for '%s'",
-                event_name,
-            )
+            logger.debug("EventBus: no handlers for '%s'", event_name)
             return 0
 
-        success_count = 0
-        for handler in handlers:
+        def _dispatch():
+            success = 0
+            for handler in handlers:
+                try:
+                    handler(**payload)
+                    success += 1
+                except Exception:
+                    logger.exception(
+                        "EventBus: handler %s raised for event '%s'",
+                        getattr(handler, '__name__', repr(handler)),
+                        event_name,
+                    )
+            logger.debug(
+                "EventBus: emitted '%s' to %d/%d handler(s) [background]",
+                event_name, success, len(handlers),
+            )
+
+        t = threading.Thread(target=_dispatch, daemon=True,
+                             name=f"eventbus-{event_name}")
+        t.start()
+        return len(handlers)
+
+    async def emit_async(self, event_name: str, **payload: Any) -> int:
+        """
+        Async-native emit for use inside async views / middleware.
+
+        Dispatches handlers in a thread pool via ``asyncio.to_thread`` so
+        the event loop is never blocked and no daemon thread is created
+        outside the pool's control.
+
+        Returns:
+            int: Number of handlers scheduled.
+        """
+        with self._lock:
+            handlers = list(self._handlers.get(event_name, []))
+
+        if not handlers:
+            return 0
+
+        async def _run_handler(h):
             try:
-                handler(**payload)
-                success_count += 1
+                await asyncio.to_thread(h, **payload)
             except Exception:
                 logger.exception(
-                    "EventBus: handler %s raised an "
-                    "exception for event '%s'",
-                    getattr(handler, '__name__', repr(handler)),
+                    "EventBus async: handler %s raised for event '%s'",
+                    getattr(h, '__name__', repr(h)),
                     event_name,
                 )
 
-        logger.info(
-            "EventBus: emitted '%s' to %d/%d handler(s)",
-            event_name,
-            success_count,
-            len(handlers),
-        )
-        return success_count
+        import asyncio as _asyncio
+        await _asyncio.gather(*[_run_handler(h) for h in handlers],
+                              return_exceptions=False)
+        return len(handlers)
+
 
     def emit_on_commit(
         self,
