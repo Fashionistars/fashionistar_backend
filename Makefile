@@ -44,10 +44,6 @@ setup: install install-dev migrate static ## Full first-time setup
 
 dev: ## Start Django development server (sync — port 8000)
 	@echo "$(CYAN)Starting Django dev server...$(NC)"
-	python manage.py runserver
-
-vir-dev: ## Start Django development server (sync — port 8000)
-	@echo "$(CYAN)Starting Django dev server...$(NC)"
 	venv\Scripts\python manage.py runserver
 
 # run: dev ## Alias for 'make dev'
@@ -65,10 +61,10 @@ run-daphne: ## Start Daphne ASGI (WebSocket — auto-starts Redis first)
 	venv\Scripts\daphne -b 0.0.0.0 -p 8000 backend.asgi:application
 
 shell: ## Open Django interactive shell
-	python manage.py shell
+	venv\Scripts\python manage.py shell
 
 shell-plus: ## Open enhanced Django shell (requires django-extensions)
-	python manage.py shell_plus --ipython 2>/dev/null || python manage.py shell
+	venv\Scripts\python manage.py shell_plus --ipython 2>/dev/null || python manage.py shell
 
 # ═══════════════════════════════════════════════════════════════
 ##@ Database & Migrations
@@ -76,53 +72,53 @@ shell-plus: ## Open enhanced Django shell (requires django-extensions)
 
 migrate: ## Run makemigrations + migrate
 	@echo "$(CYAN)Running migrations...$(NC)"
-	python manage.py makemigrations
-	python manage.py migrate
+	venv\Scripts\python manage.py makemigrations
+	venv\Scripts\python manage.py migrate
 	@echo "$(GREEN)✓ Migrations applied$(NC)"
 
 mmig: ## Make migrations (optionally for a specific app: make mmig app=authentication)
 	@if [ -z "$(app)" ]; then \
-		python manage.py makemigrations; \
+		venv\Scripts\python manage.py makemigrations; \
 	else \
-		python manage.py makemigrations "$(app)"; \
+		venv\Scripts\python manage.py makemigrations "$(app)"; \
 	fi
 
 mig: ## Apply migrations (optionally for a specific app: make mig app=authentication)
 	@if [ -z "$(app)" ]; then \
-		python manage.py migrate; \
+		venv\Scripts\python manage.py migrate; \
 	else \
-		python manage.py migrate "$(app)"; \
+		venv\Scripts\python manage.py migrate "$(app)"; \
 	fi
 
 showmig: ## Show migration status for all apps
-	python manage.py showmigrations
+	venv\Scripts\python manage.py showmigrations
 
 squash: ## Squash migrations for an app (usage: make squash app=authentication start=0001)
-	python manage.py squashmigrations $(app) $(start)
+	venv\Scripts\python manage.py squashmigrations $(app) $(start)
 
 db-reset: ## ⚠️  Reset SQLite database (destructive — dev only)
 	@echo "$(RED)⚠  Resetting database...$(NC)"
 	rm -f db.sqlite3
-	python manage.py makemigrations
-	python manage.py migrate
+	venv\Scripts\python manage.py makemigrations
+	venv\Scripts\python manage.py migrate
 	@echo "$(GREEN)✓ Database reset complete$(NC)"
 
 db-shell: ## Open database shell (dbshell)
-	python manage.py dbshell
+	venv\Scripts\python manage.py dbshell
 
 # ═══════════════════════════════════════════════════════════════
 ##@ Admin & Users
 # ═══════════════════════════════════════════════════════════════
 
 superuser: ## Create a Django superuser
-	python manage.py createsuperuser
+	venv\Scripts\python manage.py createsuperuser
 
 changepass: ## Change a user's password
-	python manage.py changepassword
+	venv\Scripts\python manage.py changepassword
 
 static: ## Collect static files
 	@echo "$(CYAN)Collecting static files...$(NC)"
-	python manage.py collectstatic --noinput
+	venv\Scripts\python manage.py collectstatic --noinput
 	@echo "$(GREEN)✓ Static files collected$(NC)"
 
 # ═══════════════════════════════════════════════════════════════

@@ -1,20 +1,34 @@
 # apps/common/middleware.py
 """
-Production-grade Django ASGI/WSGI middleware for the Fashionistar backend.
+Production-grade Django ASGI + WSGI dual-mode middleware.
 
-PERFORMANCE ARCHITECTURE (Django 6.0 ASGI-native)
-==================================================
-All three middleware classes implement the Django async middleware protocol:
+DUAL-MODE ARCHITECTURE (Django 6.0 compatible)
+==============================================
+Every middleware class supports BOTH deployment modes simultaneously:
 
-    async_capable = True   → Django ASGI handler runs __call__ in the event
-                             loop directly — NO thread-pool handoff.
-    sync_capable  = True   → Classes still work under WSGI (gunicorn/wsgiref).
+  ASGI (Uvicorn / Daphne)
+  ───────────────────────
+  Django's ASGI handler calls asyncio.iscoroutinefunction(middleware.__call__)
+  which returns True because we use asgiref.sync.markcoroutinefunction().
+  The handler awaits __call__ directly on the event loop — zero thread-pool
+  handoffs, minimum latency.
 
-The ASGI handler checks `asyncio.iscoroutinefunction(middleware.__call__)` and,
-when True, awaits it directly in the event loop — eliminating the 30-60 second
-latency caused by wrapping synchronous middleware in run_in_executor().
+  WSGI (manage.py runserver / gunicorn)
+  ──────────────────────────────────────
+  Django's WSGI handler calls middleware.__call__(request) synchronously.
+  Since async def under a synchronous WSGI handler would return an unawaited
+  coroutine, we define both __call__ (sync) and __acall__ (async) so each
+  handler picks the right entry point automatically.
 
-Middleware stack (register in this order in settings.py)::
+  The pattern:
+      __call__  = sync entry point (WSGI)
+      __acall__ = async entry point (ASGI)
+
+  Django ≥ 3.1 checks for __acall__ before falling back to __call__, so:
+  - ASGI handler: sees __acall__ → awaits it in event loop ✓
+  - WSGI handler: calls __call__ synchronously ✓
+
+MIDDLEWARE STACK (register in this order in settings.py)::
 
     MIDDLEWARE = [
         'apps.common.middleware.RequestIDMiddleware',
@@ -22,12 +36,6 @@ Middleware stack (register in this order in settings.py)::
         'apps.common.middleware.SecurityAuditMiddleware',
         ...
     ]
-
-SecurityAuditMiddleware
------------------------
-IMPORTANT: The session key is read from the signed session cookie
-(request.COOKIES), NOT from request.session — avoiding a synchronous
-database round-trip that was the secondary source of 30-60s hangs.
 """
 
 import asyncio
@@ -36,27 +44,29 @@ import logging
 import time
 import uuid
 
+from asgiref.sync import iscoroutinefunction, markcoroutinefunction
+
 logger = logging.getLogger('application')
 security_logger = logging.getLogger('security')
 
 
 # ================================================================
-# 1. REQUEST ID INJECTION  (fully async)
+# 1. REQUEST ID INJECTION  (dual WSGI + ASGI)
 # ================================================================
 
 class RequestIDMiddleware:
     """
     Inject a unique UUID4 ``X-Request-ID`` into every request / response.
 
-    Async-native: runs directly in the asyncio event loop under ASGI/Uvicorn.
-    Falls back to standard sync execution under WSGI (gunicorn/wsgiref).
+    Works under both WSGI (``manage.py runserver``, gunicorn) and ASGI
+    (Uvicorn, Daphne) without any performance penalty in either mode.
 
     The request ID is:
-        • Read from the incoming ``X-Request-ID`` header if present (distributed
-          tracing — load balancer / API gateway / mobile SDK passes this through).
+        • Read from the incoming ``X-Request-ID`` header if present — allows
+          distributed tracing from load balancers / mobile SDKs.
         • Generated as UUID4 if not present.
-        • Stored on ``request.request_id`` for use in views, serializers, logs.
-        • Written to the response ``X-Request-ID`` header for client correlation.
+        • Stored on ``request.request_id`` for views, serializers, logs.
+        • Added to the response ``X-Request-ID`` header for client correlation.
     """
 
     async_capable = True
@@ -64,32 +74,37 @@ class RequestIDMiddleware:
 
     def __init__(self, get_response):
         self.get_response = get_response
-        if asyncio.iscoroutinefunction(self.get_response):
-            # Signal Django's ASGI handler to call us as a coroutine
-            self._is_coroutine = asyncio.coroutines._is_coroutine
+        # Tell Django's ASGI handler "our __acall__ is the async entry point"
+        if iscoroutinefunction(self.get_response):
+            markcoroutinefunction(self)
 
-    async def __call__(self, request):
+    def __call__(self, request):
+        """Synchronous path — WSGI (manage.py runserver / gunicorn)."""
         request_id = (
             request.headers.get('X-Request-Id')
             or request.headers.get('X-Request-ID')
             or str(uuid.uuid4())
         )
         request.request_id = request_id
-
-        response = await self.get_response(request)
-
+        response = self.get_response(request)
         response['X-Request-ID'] = request_id
         return response
 
-    # ── WSGI compatibility shim ───────────────────────────────────────────────
-    # Django calls __call__ directly for sync middleware. When the server is
-    # WSGI, get_response is NOT a coroutine, so __call__ is the sync path.
-    # We re-use __call__ here: asyncio.iscoroutinefunction(get_response) == False
-    # means Django won't try to await us.
+    async def __acall__(self, request):
+        """Asynchronous path — ASGI (Uvicorn / Daphne). Zero thread overhead."""
+        request_id = (
+            request.headers.get('X-Request-Id')
+            or request.headers.get('X-Request-ID')
+            or str(uuid.uuid4())
+        )
+        request.request_id = request_id
+        response = await self.get_response(request)
+        response['X-Request-ID'] = request_id
+        return response
 
 
 # ================================================================
-# 2. REQUEST TIMING  (fully async)
+# 2. REQUEST TIMING  (dual WSGI + ASGI)
 # ================================================================
 
 class RequestTimingMiddleware:
@@ -100,8 +115,7 @@ class RequestTimingMiddleware:
 
         [GET] /api/v2/products/ → 200 in 12.3ms [req=<uuid>]
 
-    Async-native — uses ``time.monotonic()`` which is safe on all threads and
-    the event loop. Zero blocking I/O.
+    Uses ``time.monotonic()`` which is event-loop-safe and thread-safe.
     """
 
     async_capable = True
@@ -109,43 +123,49 @@ class RequestTimingMiddleware:
 
     def __init__(self, get_response):
         self.get_response = get_response
-        if asyncio.iscoroutinefunction(self.get_response):
-            self._is_coroutine = asyncio.coroutines._is_coroutine
+        if iscoroutinefunction(self.get_response):
+            markcoroutinefunction(self)
 
-    async def __call__(self, request):
+    def __call__(self, request):
+        """Synchronous path — WSGI."""
         start = time.monotonic()
+        response = self.get_response(request)
+        self._emit_log(request, response, start)
+        return response
 
+    async def __acall__(self, request):
+        """Asynchronous path — ASGI."""
+        start = time.monotonic()
         response = await self.get_response(request)
+        self._emit_log(request, response, start)
+        return response
 
+    def _emit_log(self, request, response, start: float) -> None:
         duration_ms = (time.monotonic() - start) * 1000
         request_id = getattr(request, 'request_id', '-')
-
-        # logger.info is non-blocking: the QueueHandler (configured in
-        # settings.py + apps.py) queues the record and returns immediately.
+        # QueueHandler (wired in apps.py) makes this call return in nanoseconds
         logger.info(
-            "[%s] %s → %d in %.1fms [req=%s]",
+            "[%s] %s \u2192 %d in %.1fms [req=%s]",
             request.method,
             request.path,
             response.status_code,
             duration_ms,
             request_id,
         )
-
         response['X-Response-Time'] = f"{duration_ms:.1f}ms"
-        return response
 
 
 # ================================================================
-# 3. SECURITY AUDIT — helpers (pure CPU, no I/O)
+# 3. SECURITY AUDIT — pure helper functions (no I/O)
 # ================================================================
 
 def _get_client_ip(request) -> str:
     """
     Extract the real client IP address.
 
-    Checks ``X-Forwarded-For`` first (Nginx / load balancer / Cloudflare),
-    then falls back to ``REMOTE_ADDR``. Only the leftmost XFF IP is used.
-    Pure header read — zero I/O.
+    Checks ``X-Forwarded-For`` first (Nginx / Cloudflare / load balancer),
+    then falls back to ``REMOTE_ADDR``. Only leftmost XFF IP is used.
+    Pure header read — zero I/O, safe in both sync and async contexts.
     """
     xff = request.META.get('HTTP_X_FORWARDED_FOR', '')
     if xff:
@@ -158,12 +178,13 @@ def _get_device_id(request) -> str:
     Extract or derive a stable device identifier.
 
     Priority:
-    1. ``X-Device-ID`` header  — explicitly sent by mobile / desktop clients.
-    2. ``X-Fingerprint`` header — some SDKs send a pre-computed fingerprint.
-    3. SHA-256 of (User-Agent + IP) — stable for same browser/IP pair. Prefixed
-       with ``fp:`` so log consumers know it is derived, not device-supplied.
+    1. ``X-Device-ID`` header — sent by mobile / desktop clients explicitly.
+    2. ``X-Fingerprint`` header — pre-computed fingerprint from some SDKs.
+    3. SHA-256(User-Agent + IP) — stable for same browser/IP pair.
+       Prefixed with ``fp:`` in logs so consumers know it is derived.
 
-    Pure CPU + header reads — zero I/O.
+    Stores result on ``request.device_id`` for downstream view access.
+    Pure CPU + header reads — zero I/O, safe in any context.
     """
     explicit = (
         request.headers.get('X-Device-ID')
@@ -182,7 +203,7 @@ def _get_device_id(request) -> str:
     return request.device_id
 
 
-def _get_user_context(request) -> tuple[str, str]:
+def _get_user_context(request) -> tuple:
     """
     Safely extract (user_id, role) from the request.
 
@@ -209,26 +230,22 @@ def _get_session_cookie(request) -> str:
     Return the first 16 chars of the session COOKIE — NOT from the DB.
 
     CRITICAL PERFORMANCE NOTE:
-        ``request.session.session_key`` triggers a synchronous database read
-        (Django session backend reads from DB or file to get the key).
-        Under ASGI this would block the event loop for the full DB round-trip.
-
-        Instead, we read the raw ``sessionid`` cookie value from the signed
-        cookie string — this is a pure string operation with zero I/O and
-        delivers the same audit trail value (the opaque session token the
-        client holds).
+        ``request.session.session_key`` triggers a synchronous database read.
+        Under ASGI this would block the event loop. Instead, we read the raw
+        ``sessionid`` cookie — pure string operation, zero I/O, same audit
+        trail value (the opaque session token held by the client).
     """
     raw = request.COOKIES.get('sessionid', '')
     return raw[:16] if raw else '-'
 
 
 # ================================================================
-# 3. SECURITY AUDIT MIDDLEWARE  (fully async)
+# 3. SECURITY AUDIT MIDDLEWARE  (dual WSGI + ASGI)
 # ================================================================
 
 class SecurityAuditMiddleware:
     """
-    Production security audit log — captures every HTTP interaction.
+    Production security audit log — records every HTTP interaction.
 
     Every request through the Fashionistar API is recorded with:
 
@@ -239,27 +256,26 @@ class SecurityAuditMiddleware:
     │ device_id       │ X-Device-ID header or UA+IP fingerprint   │
     │ session_cookie  │ sessionid cookie (first 16 chars, no DB)  │
     │ client_ip       │ X-Forwarded-For → REMOTE_ADDR             │
-    │ method          │ request.method (GET/POST/PUT/DELETE…)     │
+    │ method          │ request.method                            │
     │ path            │ request.get_full_path() (incl. ?query)    │
     │ status          │ HTTP response status code                 │
     │ duration_ms     │ Wall-clock time in milliseconds           │
     │ user_id         │ request.user.pk or 'anonymous'            │
-    │ role            │ user.role or superadmin/staff/anonymous   │
-    │ user_agent      │ HTTP_USER_AGENT header (first 300 chars)  │
+    │ role            │ user.role / superadmin / staff / anon     │
+    │ user_agent      │ HTTP_USER_AGENT (first 300 chars)         │
     │ referrer        │ HTTP_REFERER header                       │
     └─────────────────┴───────────────────────────────────────────┘
 
-    PERFORMANCE GUARANTEES (async-native):
-      • Zero thread-pool handoffs — runs directly in asyncio event loop.
-      • Zero DB reads — session data from cookie, user from request.user
-        (already resolved by AuthenticationMiddleware earlier in the stack).
-      • Log emission via QueueHandler — write returns in nanoseconds, actual
-        file/stream I/O happens in a background QueueListener thread.
+    PERFORMANCE:
+      • ASGI: runs directly on the event loop via __acall__ — zero threads.
+      • WSGI: runs synchronously via __call__ — normal Django runserver path.
+      • All attribute reads are in-memory — zero additional I/O.
+      • Log emission via QueueHandler (apps.py) returns in nanoseconds.
 
     Log levels:
         INFO    — 2xx, 3xx (normal traffic)
         WARNING — 401, 403 (auth/permission failures)
-        ERROR   — 5xx (server errors, alert-worthy)
+        ERROR   — 5xx (server errors)
     """
 
     async_capable = True
@@ -267,28 +283,41 @@ class SecurityAuditMiddleware:
 
     def __init__(self, get_response):
         self.get_response = get_response
-        if asyncio.iscoroutinefunction(self.get_response):
-            self._is_coroutine = asyncio.coroutines._is_coroutine
+        if iscoroutinefunction(self.get_response):
+            markcoroutinefunction(self)
 
-    async def __call__(self, request):
+    def __call__(self, request):
+        """Synchronous path — WSGI (manage.py runserver / gunicorn)."""
+        # Resolve device_id early so views can read request.device_id
+        _get_device_id(request)
+
         start = time.monotonic()
+        response = self.get_response(request)
+        self._emit_audit(request, response, start)
+        return response
 
-        # Resolve device_id early (pure CPU, no I/O) so views can read it
-        device_id = _get_device_id(request)  # also sets request.device_id
+    async def __acall__(self, request):
+        """Asynchronous path — ASGI (Uvicorn / Daphne)."""
+        _get_device_id(request)
 
+        start = time.monotonic()
         response = await self.get_response(request)
+        self._emit_audit(request, response, start)
+        return response
 
+    def _emit_audit(self, request, response, start: float) -> None:
+        """Shared audit log emission — pure CPU + QueueHandler enqueue."""
         duration_ms = (time.monotonic() - start) * 1000
         status_code = response.status_code
 
-        # All attribute reads below are pure in-memory — zero I/O
-        client_ip    = _get_client_ip(request)
+        client_ip = _get_client_ip(request)
         user_id, role = _get_user_context(request)
-        request_id   = getattr(request, 'request_id', '-')
-        session      = _get_session_cookie(request)  # cookie read, NOT DB
-        path         = request.get_full_path()
-        ua           = request.META.get('HTTP_USER_AGENT', '-')[:300]
-        referrer     = request.META.get('HTTP_REFERER', '-')[:200]
+        request_id = getattr(request, 'request_id', '-')
+        session = _get_session_cookie(request)
+        device_id = getattr(request, 'device_id', '-')
+        path = request.get_full_path()
+        ua = request.META.get('HTTP_USER_AGENT', '-')[:300]
+        referrer = request.META.get('HTTP_REFERER', '-')[:200]
 
         if status_code in (401, 403):
             action = 'PERMISSION_DENIED'
@@ -309,13 +338,9 @@ class SecurityAuditMiddleware:
             duration_ms, user_id, role, ua, referrer,
         )
 
-        # QueueHandler: this call returns in nanoseconds — actual write
-        # happens asynchronously in the QueueListener background thread.
         if status_code >= 500:
             security_logger.error(msg)
         elif status_code in (401, 403):
             security_logger.warning(msg)
         else:
             security_logger.info(msg)
-
-        return response
