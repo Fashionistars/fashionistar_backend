@@ -14,7 +14,7 @@ import cloudinary.uploader
 import cloudinary.api
 from django.utils import timezone
 
-application_logger = logging.getLogger('application')
+application_logger = logging.getLogger(__name__)
 
 # ============================================================================
 # INITIALIZATION

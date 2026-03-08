@@ -11,7 +11,7 @@ from apps.authentication.services.otp_service import OTPService
 from apps.common.managers.email import EmailManager
 from apps.common.managers.sms import SMSManager
 
-logger = logging.getLogger('application')
+logger = logging.getLogger(__name__)
 
 class RegistrationService:
     """

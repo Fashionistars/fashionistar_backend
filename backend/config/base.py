@@ -592,92 +592,41 @@ JAZZMIN_UI_TWEAKS = {
 
 
 # =============================================================================
-# LOGGING — imported from logging.py at app startup via apps.common.apps
+# LOGGING — Enterprise Per-App Rotating File Logging
 # =============================================================================
-# Async QueueHandler + QueueListener configured in apps/common/apps.py
-# This dict provides the synchronous fallback (used by Django check, runserver)
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'verbose': {
-            'format': '[{levelname}] {asctime} {module} PID:{process} TID:{thread} — {message}',
-            'style': '{',
-        },
-        'simple': {
-            'format': '[{levelname}] {message}',
-            'style': '{',
-        },
-        'json': {
-            '()': 'logging.Formatter',
-            'format': '{"level":"%(levelname)s","time":"%(asctime)s","module":"%(module)s","msg":"%(message)s"}',
-        },
-    },
-    'filters': {
-        'require_debug_false': {
-            '()': 'django.utils.log.RequireDebugFalse',
-        },
-        'require_debug_true': {
-            '()': 'django.utils.log.RequireDebugTrue',
-        },
-    },
-    'handlers': {
-        'console': {
-            'level': 'DEBUG',
-            'class': 'logging.StreamHandler',
-            'formatter': 'simple',
-            'stream': sys.stdout,
-        },
-        'file': {
-            'level': 'INFO',
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs', 'application.log'),
-            'maxBytes': 10 * 1024 * 1024,  # 10MB
-            'backupCount': 5,
-            'formatter': 'verbose',
-            'encoding': 'utf-8',
-        },
-        'webhook_file': {
-            'level': 'INFO',
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs', 'webhook.log'),
-            'maxBytes': 5 * 1024 * 1024,   # 5MB
-            'backupCount': 3,
-            'formatter': 'verbose',
-            'encoding': 'utf-8',
-        },
-        'mail_admins': {
-            'level': 'ERROR',
-            'class': 'django.utils.log.AdminEmailHandler',
-            'formatter': 'verbose',
-            'filters': ['require_debug_false'],
-        },
-    },
-    'loggers': {
-        'django': {
-            'handlers': ['console', 'file'],
-            'level': 'INFO',
-            'propagate': True,
-        },
-        'application': {
-            'handlers': ['console', 'file'],
-            'level': 'DEBUG',
-            'propagate': False,
-        },
-        'security': {
-            'handlers': ['console', 'file'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-        'webhook': {
-            'handlers': ['console', 'webhook_file'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-        'paystack': {
-            'handlers': ['console', 'file'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-    },
-}
+# Delegates to build_logging_config() in backend/config/logging_config.py.
+# Each app/domain writes to its own RotatingFileHandler log file:
+#
+#   logs/apps/authentication/auth.log   ← apps.authentication.*
+#   logs/apps/common/common.log         ← apps.common.*
+#   logs/apps/store/store.log           ← store, ShopCart, checkout, createOrder
+#   logs/apps/customer/customer.log     ← customer, measurements
+#   logs/apps/vendor/vendor.log         ← vendor
+#   logs/apps/payments/payments.log     ← Paystack_Webhoook_Prod, apps.payments
+#   logs/apps/notifications/notify.log  ← notification, Blog
+#   logs/apps/chat/chat.log             ← chat
+#   logs/apps/admin/admin.log           ← admin_backend, userauths, utilities
+#   logs/system/security.log            ← security, django.security
+#   logs/system/webhook.log             ← webhook
+#   logs/system/paystack.log            ← paystack
+#   logs/system/permissions.log         ← permissions
+#   logs/system/celery.log              ← celery, celery.task, celery.worker
+#   logs/system/django.log              ← django.*
+#   logs/system/application.log         ← catchall 'application' logger (legacy)
+#
+# Rotation: 10 MB per app file (10 backups), 20 MB for system files (20 backups)
+# Production: use_json=True emits structured JSON for Datadog / ELK / Loki.
+# See: backend/config/logging_config.py for full documentation.
+
+from backend.config.logging_config import build_logging_config
+
+# DEBUG is declared at the top of each env-specific settings file (dev/prod).
+# base.py does NOT set DEBUG itself — it is provided by the inheriting module.
+# We use a safe fallback here so Django's check framework can import base alone.
+_debug_mode = locals().get('DEBUG', True)
+
+LOGGING = build_logging_config(
+    debug=_debug_mode,
+    use_json=False,       # Overridden to True in production.py
+    mail_admins=False,    # Overridden to True in production.py
+)

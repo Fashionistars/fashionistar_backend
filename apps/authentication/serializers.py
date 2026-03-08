@@ -12,7 +12,7 @@ from rest_framework import serializers
 User = get_user_model()
 
 # Initialize logger for this module
-logger = logging.getLogger('application')
+logger = logging.getLogger(__name__)
 
 class OTPSerializer(serializers.Serializer):
     """

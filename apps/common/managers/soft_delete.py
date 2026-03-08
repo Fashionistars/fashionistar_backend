@@ -27,7 +27,7 @@ import logging
 from django.db import models
 from django.utils import timezone
 
-logger = logging.getLogger('application')
+logger = logging.getLogger(__name__)
 
 
 # ================================================================

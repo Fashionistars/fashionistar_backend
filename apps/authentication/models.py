@@ -9,7 +9,7 @@ from auditlog.registry import auditlog
 from apps.authentication.managers import CustomUserManager
 import logging
 
-logger = logging.getLogger('application')
+logger = logging.getLogger(__name__)
 
 
 # ================================================================

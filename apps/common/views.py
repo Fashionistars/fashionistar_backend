@@ -59,7 +59,7 @@ from django.db import connection
 from django.views import View
 from django.http import HttpRequest, JsonResponse
 
-logger = logging.getLogger("application")
+logger = logging.getLogger(__name__)
 
 # Track server start time for uptime calculation
 _SERVER_START: float = time.monotonic()

@@ -46,7 +46,7 @@ import uuid
 
 from asgiref.sync import iscoroutinefunction, markcoroutinefunction
 
-logger = logging.getLogger('application')
+logger = logging.getLogger(__name__)
 security_logger = logging.getLogger('security')
 
 

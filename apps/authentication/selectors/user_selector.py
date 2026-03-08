@@ -22,7 +22,7 @@ from django.db.models import Q, QuerySet
 from apps.authentication.models import UnifiedUser
 from apps.common.selectors import BaseSelector
 
-logger = logging.getLogger('application')
+logger = logging.getLogger(__name__)
 
 
 class UserSelector(BaseSelector):

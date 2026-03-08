@@ -10,7 +10,7 @@ from django.conf import settings
 # Logger Configuration
 # -----------------------------------------------------------------------------
 # Initialize application logger for detailed tracking of SMS operations
-logger = logging.getLogger('application')
+logger = logging.getLogger(__name__)
 
 
 class SMSManagerError(Exception):

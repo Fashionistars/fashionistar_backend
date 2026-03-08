@@ -59,7 +59,7 @@ from rest_framework.exceptions import (
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
-logger = logging.getLogger("application")
+logger = logging.getLogger(__name__)
 security_logger = logging.getLogger("security")
 
 # ---------------------------------------------------------------------------

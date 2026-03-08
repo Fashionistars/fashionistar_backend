@@ -65,7 +65,7 @@ from rest_framework.throttling import (
     UserRateThrottle,
 )
 
-logger = logging.getLogger("application")
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Helper: read rate from settings, fall back to class default

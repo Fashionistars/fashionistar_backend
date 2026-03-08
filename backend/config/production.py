@@ -107,12 +107,18 @@ SIMPLE_JWT = {
 
 
 # =============================================================================
-# LOGGING — Production: INFO level, RotatingFileHandler, mail_admins on ERROR
+# LOGGING — Production: JSON structured, INFO level, mail_admins on ERROR
 # =============================================================================
-LOGGING['handlers']['console']['level'] = 'INFO'  # noqa: F405
-LOGGING['loggers']['django']['handlers'] = ['console', 'file', 'mail_admins']  # noqa: F405
-LOGGING['loggers']['application']['handlers'] = ['console', 'file', 'mail_admins']  # noqa: F405
-LOGGING['loggers']['application']['level'] = 'INFO'  # noqa: F405
+# JSON formatter → parse-able by Datadog / ELK / Loki / Grafana Loki
+# mail_admins → AdminEmailHandler fires on every ERROR (Django admin email)
+# All per-app file handlers rotate at 10MB (app-domain) / 20MB (system)
+from backend.config.logging_config import build_logging_config  # noqa: F401
+
+LOGGING = build_logging_config(
+    debug=False,
+    use_json=True,      # Structured JSON lines on all file handlers
+    mail_admins=True,   # Email admins on ERROR (requires EMAIL_BACKEND in prod)
+)
 
 
 # =============================================================================

@@ -40,7 +40,7 @@ import logging
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 
-logger = logging.getLogger('application')
+logger = logging.getLogger(__name__)
 
 # ── Models we deliberately skip to avoid noise / circularity ──────
 _EXCLUDED_MODEL_NAMES = frozenset({

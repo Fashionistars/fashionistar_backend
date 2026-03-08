@@ -28,7 +28,7 @@ from apps.common.models import (
     ModelAnalytics,
 )
 
-logger = logging.getLogger('application')
+logger = logging.getLogger(__name__)
 
 
 @admin.register(DeletedRecords)

@@ -69,11 +69,18 @@ REST_FRAMEWORK = {
 
 
 # =============================================================================
-# LOGGING — Debug level in dev
+# LOGGING — Development: DEBUG level, verbose console, no mail_admins
 # =============================================================================
-LOGGING['handlers']['console']['level'] = 'DEBUG'  # noqa: F405
-LOGGING['loggers']['application']['level'] = 'DEBUG'  # noqa: F405
-LOGGING['loggers']['django']['level'] = 'DEBUG'  # noqa: F405
+# Override base.py's LOGGING with debug=True explicitly.
+# All per-app log files are written at DEBUG level.
+# Console output is also at DEBUG so you see every SQL query, OTP email, etc.
+from backend.config.logging_config import build_logging_config  # noqa: F401
+
+LOGGING = build_logging_config(
+    debug=True,
+    use_json=False,     # Human-readable verbose format in dev
+    mail_admins=False,  # No email on errors in dev
+)
 
 
 # =============================================================================

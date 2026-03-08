@@ -50,7 +50,7 @@ from django.http import JsonResponse
 from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
 
-logger = logging.getLogger("application")
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Envelope builders (framework-agnostic)

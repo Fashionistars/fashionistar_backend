@@ -39,7 +39,7 @@ from django.utils import timezone
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 
-logger = logging.getLogger('application')
+logger = logging.getLogger(__name__)
 
 
 class SoftDeleteAdminMixin:

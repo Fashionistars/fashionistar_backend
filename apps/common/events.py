@@ -48,7 +48,7 @@ from typing import Any, Callable
 
 from django.db import transaction
 
-logger = logging.getLogger('application')
+logger = logging.getLogger(__name__)
 
 
 class EventBus:

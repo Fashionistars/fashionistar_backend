@@ -14,7 +14,7 @@ from django.template import TemplateDoesNotExist
 # -----------------------------------------------------------------------------
 # We initialize the 'application' logger to ensure all email operations are 
 # tracked centrally in the application's log files.
-Logger = logging.getLogger('application')
+logger = logging.getLogger(__name__)
 
 
 class EmailManagerError(Exception):
@@ -102,12 +102,12 @@ class EmailManager:
         # where dependencies exist.
         if (context and template_name is None) or (template_name and context is None):
             error_msg = "Invalid Arguments: You must provide both 'context' and 'template_name' together."
-            Logger.error(error_msg)
+            logger.error(error_msg)
             raise EmailManagerError(error_msg)
             
         if (context is None) and (template_name is None) and (message is None):
             error_msg = "Invalid Arguments: You must provide either a 'message' string OR a 'template_name' with 'context'."
-            Logger.error(error_msg)
+            logger.error(error_msg)
             raise EmailManagerError(error_msg)
 
         html_message: str | None = None
@@ -133,14 +133,14 @@ class EmailManager:
                     # If no .txt template exists, we log a warning but proceed.
                     # Some clients effectively strip HTML tags, but providing a native 
                     # fallback is best practice for spam scores and accessibility.
-                    Logger.warning(f"⚠️ Plain text template missing: {plain_template_name}. Using HTML content as fallback plain text.")
+                    logger.warning(f"⚠️ Plain text template missing: {plain_template_name}. Using HTML content as fallback plain text.")
                     plain_message = html_message 
 
             except TemplateDoesNotExist as error:
-                Logger.error(f"❌ Template not found: {template_name}")
+                logger.error(f"❌ Template not found: {template_name}")
                 raise EmailManagerError(f"Template not found: {template_name}") from error
             except Exception as e:
-                Logger.error(f"❌ Error rendering email template {template_name}: {e}")
+                logger.error(f"❌ Error rendering email template {template_name}: {e}")
                 raise EmailManagerError(f"Error rendering template: {e}") from e
 
         # ---------------------------------------------------------------------
@@ -169,10 +169,10 @@ class EmailManager:
             # backend logic handles the actual protocol (SMTP, API, etc.)
             email.send(fail_silently=fail_silently)
             
-            Logger.info(f"✅ Email sent successfully to {recipients}")
+            logger.info(f"✅ Email sent successfully to {recipients}")
             
         except Exception as error:
-            Logger.error(f"❌ Error sending email to {recipients}: {error}", exc_info=True)
+            logger.error(f"❌ Error sending email to {recipients}: {error}", exc_info=True)
             if not fail_silently:
                 # Re-raise the exception so the caller knows something went wrong
                 raise
@@ -224,7 +224,7 @@ class EmailManager:
             )
         except Exception as e:
             # Catching thread-boundary errors explicitly
-            Logger.error(f"❌ Async Email Send Error to {recipients}: {e}", exc_info=True)
+            logger.error(f"❌ Async Email Send Error to {recipients}: {e}", exc_info=True)
             if not fail_silently:
                 raise
 
@@ -253,18 +253,18 @@ class EmailManager:
         from django.core.mail import send_mass_mail as django_mass_mail
         
         try:
-            Logger.info(f"🚀 Starting bulk email send. Batch size: {len(datatuple)} messages.")
+            logger.info(f"🚀 Starting bulk email send. Batch size: {len(datatuple)} messages.")
             
             # Note on Backend: This call will utilize our globally configured 
             # EMAIL_BACKEND (DatabaseConfiguredEmailBackend).
             # The backend is responsible for handling the connection reuse.
             count = django_mass_mail(datatuple, fail_silently=fail_silently)
             
-            Logger.info(f"✅ Bulk email send completed successfully. Sent: {count}/{len(datatuple)}")
+            logger.info(f"✅ Bulk email send completed successfully. Sent: {count}/{len(datatuple)}")
             return count
             
         except Exception as e:
-            Logger.error(f"❌ Error in send_mass_mail batch: {e}", exc_info=True)
+            logger.error(f"❌ Error in send_mass_mail batch: {e}", exc_info=True)
             if not fail_silently:
                 raise
             return 0
@@ -300,7 +300,7 @@ class EmailManager:
                 fail_silently
             )
         except Exception as e:
-            Logger.error(f"❌ Error in asend_mass_mail: {e}", exc_info=True)
+            logger.error(f"❌ Error in asend_mass_mail: {e}", exc_info=True)
             if not fail_silently:
                 raise
             return 0

@@ -42,7 +42,7 @@ from apps.authentication.throttles import (
 )
 from apps.common.renderers import CustomJSONRenderer
 
-logger = logging.getLogger('application')
+logger = logging.getLogger(__name__)
 
 
 # ═══════════════════════════════════════════════════════════════════════

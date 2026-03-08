@@ -7,7 +7,7 @@ from apps.common.managers.soft_delete import (
     SoftDeleteQuerySet,
 )
 
-logger = logging.getLogger('application')
+logger = logging.getLogger(__name__)
 
 
 class CustomUserManager(BaseUserManager):

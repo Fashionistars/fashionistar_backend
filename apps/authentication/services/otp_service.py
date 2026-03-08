@@ -13,7 +13,7 @@ from apps.authentication.models import UnifiedUser
 from apps.common.managers.email import EmailManager
 from apps.common.managers.sms import SMSManager
 
-logger = logging.getLogger('application')
+logger = logging.getLogger(__name__)
 
 class OTPService:
     """

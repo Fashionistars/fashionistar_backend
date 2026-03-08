@@ -24,7 +24,7 @@ from typing import Any, Optional, Type, TypeVar
 
 from django.db.models import Model, QuerySet
 
-logger = logging.getLogger('application')
+logger = logging.getLogger(__name__)
 
 T = TypeVar('T', bound=Model)
 
