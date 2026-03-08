@@ -17,6 +17,9 @@ class OTPSerializer(serializers.Serializer):
     """
     otp = serializers.CharField(required=True, max_length=6)
 
+    class Meta:
+        ref_name = "LegacyOTP"
+
     def validate(self, attrs):
         """
         Validate the OTP.
@@ -55,6 +58,9 @@ class LoginSerializer(serializers.Serializer):
     """
     email_or_phone = serializers.CharField(write_only=True, required=True, help_text="User's email or phone for login")
     password = serializers.CharField(write_only=True, required=True, help_text="User's password")
+
+    class Meta:
+        ref_name = "LegacyLogin"
 
     def validate(self, data):
         """
@@ -115,6 +121,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ('email', 'phone', 'role', 'password', 'password2')
+        ref_name = "LegacyUserRegistration"
 
     def validate(self, attrs):
         """
@@ -204,6 +211,9 @@ class ResendOTPRequestSerializer(serializers.Serializer):
     """
     email_or_phone = serializers.CharField(write_only=True, required=True, help_text="User's email or phone for RESEND OTP")
 
+    class Meta:
+        ref_name = "LegacyResendOTPRequest"
+
     def validate(self, data):
         """
         Validates that a user with the provided email or phone exists.
@@ -238,6 +248,9 @@ class PasswordResetRequestSerializer(serializers.Serializer):
     Serializer for requesting a password reset, accepting either email or phone.
     """
     email_or_phone = serializers.CharField(write_only=True, required=True, help_text="User's email or phone for password reset")
+
+    class Meta:
+        ref_name = "LegacyPasswordResetRequest"
 
     def validate(self, data):
         """
@@ -275,6 +288,9 @@ class PasswordResetConfirmEmailSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password], help_text="New password")
     password2 = serializers.CharField(write_only=True, required=True, help_text="Confirm new password")
 
+    class Meta:
+        ref_name = "LegacyPasswordResetConfirmEmail"
+
     def validate(self, attrs):
         """
         Validates that passwords match.
@@ -305,6 +321,9 @@ class PasswordResetConfirmPhoneSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password], help_text="New password")
     password2 = serializers.CharField(write_only=True, required=True, help_text="Confirm new password")
     otp = serializers.CharField(required=True, allow_blank=False, max_length=6, help_text="OTP sent to user's phone (if phone reset)")
+
+    class Meta:
+        ref_name = "LegacyPasswordResetConfirmPhone"
 
     def validate(self, attrs):
         """
@@ -344,6 +363,9 @@ class LogoutSerializer(serializers.Serializer):
     """
     refresh_token = serializers.CharField(help_text="Refresh token for logout")
 
+    class Meta:
+        ref_name = "LegacyLogout"
+
 
 class ProtectedUserSerializer(serializers.ModelSerializer):
     """
@@ -352,6 +374,8 @@ class ProtectedUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ('id', 'identifying_info',  'role', 'is_active','verified')  # No password!
+        ref_name = "LegacyProtectedUser"
+
 
 
 

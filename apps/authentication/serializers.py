@@ -24,6 +24,9 @@ class OTPSerializer(serializers.Serializer):
         help_text="One-Time Password (OTP) for verification."
     )
 
+    class Meta:
+        ref_name = "AuthOTP"
+
     def validate(self, attrs):
         """
         Validates the OTP input with strict checks.
@@ -87,6 +90,9 @@ class LoginSerializer(serializers.Serializer):
         required=True, 
         help_text="User's password"
     )
+
+    class Meta:
+        ref_name = "AuthLogin"
 
     def validate(self, data):
         """
@@ -198,6 +204,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             'email', 'phone', 'role', 'password', 'password2', 
             'bio', 'avatar', 'country', 'state', 'city', 'address'
         )
+        ref_name = "AuthUserRegistration"
 
     def validate(self, attrs):
         """
@@ -323,6 +330,9 @@ class ResendOTPRequestSerializer(serializers.Serializer):
         help_text="User's email or phone for resend OTP"
     )
 
+    class Meta:
+        ref_name = "AuthResendOTPRequest"
+
     def validate(self, data):
         """
         Validates that a user exists for the provided email or phone.
@@ -352,6 +362,9 @@ class PasswordResetRequestSerializer(serializers.Serializer):
         required=True, 
         help_text="User's email or phone for password reset"
     )
+
+    class Meta:
+        ref_name = "AuthPasswordResetRequest"
 
     def validate(self, data):
         """
@@ -386,6 +399,9 @@ class PasswordResetConfirmEmailSerializer(serializers.Serializer):
         help_text="Confirm new password"
     )
 
+    class Meta:
+        ref_name = "AuthPasswordResetConfirmEmail"
+
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
             raise serializers.ValidationError({"password": _("Passwords do not match.")})
@@ -414,6 +430,9 @@ class PasswordResetConfirmPhoneSerializer(serializers.Serializer):
         help_text="OTP sent to user's phone"
     )
 
+    class Meta:
+        ref_name = "AuthPasswordResetConfirmPhone"
+
     def validate(self, attrs):
         """
         Validates passwords and OTP.
@@ -439,6 +458,9 @@ class LogoutSerializer(serializers.Serializer):
     Serializer for user logout.
     """
     refresh_token = serializers.CharField(help_text="Refresh token for logout")
+
+    class Meta:
+        ref_name = "AuthLogout"
 
 
 class ProtectedUserSerializer(serializers.ModelSerializer):
@@ -482,6 +504,9 @@ class GoogleAuthSerializer(serializers.Serializer):
         default='client', 
         help_text="User's role"
     )
+
+    class Meta:
+        ref_name = "AuthGoogleAuth"
 
     def validate(self, attrs):
         try:
