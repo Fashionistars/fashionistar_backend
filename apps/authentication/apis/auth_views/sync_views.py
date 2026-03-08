@@ -27,6 +27,7 @@ Why generics over APIView?
 import logging
 from typing import Any, Dict
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from rest_framework import generics, serializers as drf_serializers, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -131,8 +132,30 @@ class RegisterView(generics.CreateAPIView):
             )
 
         except drf_serializers.ValidationError as exc:
-            logger.warning("⚠️ RegisterView validation error: %s", exc)
+            # DRF serializer-level validation errors (from UserRegistrationSerializer)
+            logger.warning("⚠️ RegisterView DRF validation error: %s", exc.detail)
             return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
+
+        except DjangoValidationError as exc:
+            # django.core.exceptions.ValidationError from model.full_clean()
+            # Triggered e.g. when a concurrent request sneaks past the serializer
+            # uniqueness check and the DB unique constraint fires on save().
+            # Convert to a clean 400 with human-readable field errors.
+            transaction.set_rollback(True)
+            if hasattr(exc, 'message_dict'):
+                error_detail = exc.message_dict   # {'email': ['Already exists.']}
+            else:
+                error_detail = {'error': exc.messages}
+            # Flatten single-item lists for cleaner UX
+            flat = {
+                field: msgs[0] if isinstance(msgs, list) and len(msgs) == 1 else msgs
+                for field, msgs in error_detail.items()
+            }
+            logger.warning(
+                "⚠️ RegisterView model validation error (duplicate/race-condition): %s",
+                flat,
+            )
+            return Response(flat, status=status.HTTP_400_BAD_REQUEST)
 
         except Exception as exc:
             transaction.set_rollback(True)

@@ -35,8 +35,10 @@ Architecture:
 import logging
 from typing import Dict, Any
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
+from rest_framework import serializers as drf_serializers
 
 from apps.authentication.models import UnifiedUser
 from apps.authentication.services.otp_service import OTPService
@@ -99,15 +101,25 @@ class RegistrationService:
                     extra_fields.setdefault('auth_provider', 'phone')
 
                 # ── 1. CREATE USER (atomic) ────────────────────────────────
-                user = UnifiedUser.objects.create_user(
-                    email=email,
-                    phone=phone,
-                    password=password,
-                    role=role,
-                    is_active=False,
-                    is_verified=False,
-                    **extra_fields
-                )
+                try:
+                    user = UnifiedUser.objects.create_user(
+                        email=email,
+                        phone=phone,
+                        password=password,
+                        role=role,
+                        is_active=False,
+                        is_verified=False,
+                        **extra_fields
+                    )
+                except DjangoValidationError as exc:
+                    # model.full_clean() fires on save() — catches race-condition
+                    # duplicates that slipped past serializer uniqueness check.
+                    # Re-raise as DRF ValidationError so the view returns 400.
+                    if hasattr(exc, 'message_dict'):
+                        raise drf_serializers.ValidationError(exc.message_dict)
+                    raise drf_serializers.ValidationError(
+                        {'error': exc.messages}
+                    )
                 logger.info(
                     "✅ User created (sync): id=%s identifier=%s role=%s",
                     user.id, email or phone, role
@@ -124,11 +136,19 @@ class RegistrationService:
             # The Celery worker picks it up and sends the email/SMS
             # within milliseconds, WITHOUT blocking the HTTP response.
             if email:
+                from django.conf import settings as _settings
                 context = {
                     'user_id': str(user.id),
                     'otp': otp,
-                    'user_name': getattr(user, 'first_name', None) or email.split('@')[0],
+                    'user_name': (
+                        getattr(user, 'first_name', None)
+                        or email.split('@')[0]
+                    ),
                     'support_email': 'support@fashionistar.io',
+                    # Required by registration_email.html template
+                    'SITE_URL': getattr(
+                        _settings, 'SITE_URL', 'https://fashionistar.io'
+                    ),
                 }
                 send_email_task.delay(
                     subject="🔐 Verify Your Fashionistar Account",

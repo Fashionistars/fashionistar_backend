@@ -18,7 +18,7 @@ from django.conf import settings
 from django.template.exceptions import TemplateDoesNotExist
 
 # ── Corrected import paths (apps.common, not utilities) ─────────────
-from apps.common.managers.email import EmailManager
+from apps.common.managers.email import EmailManager, EmailManagerError
 from apps.common.managers.sms import SMSManager
 
 # Per-module logger — auto-routes to logs/apps/authentication/auth.log
@@ -58,10 +58,12 @@ def send_email_task(self, subject: str, recipients: list[str], template_name: st
         logger.info("✅ [Celery] Email sent → %s", recipients)
         return f"Email sent successfully to {recipients}"
 
-    except TemplateDoesNotExist as exc:
-        logger.error("🚨 [Celery] Template not found: %s — %s",
+    except (TemplateDoesNotExist, EmailManagerError) as exc:
+        # Template missing or invalid args — retrying won't help.
+        # EmailManagerError wraps TemplateDoesNotExist inside EmailManager.
+        logger.error("🚨 [Celery] Template/config error: %s — %s",
                      template_name, exc, exc_info=True)
-        raise  # Don't retry on missing template — it won't fix itself
+        raise  # Fail the task permanently — no retry
 
     except Exception as exc:
         logger.warning(

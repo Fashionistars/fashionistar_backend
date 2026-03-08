@@ -666,9 +666,13 @@ def build_logging_config(
             'level': 'WARNING',
             'propagate': False,
         },
+        # ⚠️ DO NOT suppress celery.app.trace:
+        # This logger emits 'Task received', 'Task succeeded', 'Task FAILED'
+        # messages at INFO. Without it the Celery terminal is silent —
+        # tasks appear to vanish even when they ARE running.
         'celery.app.trace': {
-            'handlers': ['file.celery'],
-            'level': 'WARNING',
+            'handlers': _handlers_for('file.celery'),
+            'level': 'INFO',   # INFO to console — shows task lifecycle
             'propagate': False,
         },
         'celery.utils': {
