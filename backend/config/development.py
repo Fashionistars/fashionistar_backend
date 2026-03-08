@@ -29,6 +29,29 @@ DJANGO_SECRET_ADMIN_URL = env("DJANGO_SECRET_ADMIN_URL", default="admin/")  # no
 
 
 # =============================================================================
+# HOSTS — Accept ALL hostnames in dev (WSGI :8000 + Uvicorn ASGI :8001)
+# =============================================================================
+# In development, Django may be accessed via localhost, 127.0.0.1, your machine
+# hostname (e.g. FASHIONISTAR), or 0.0.0.0. Using ['*'] avoids DisallowedHost
+# errors on any of these — safe ONLY in development.
+# ⚠️  NEVER set ALLOWED_HOSTS = ['*'] in production.py
+ALLOWED_HOSTS = ['*']
+
+# Allow all common local origins for CSRF in dev
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+    'http://localhost:8001',       # Uvicorn ASGI
+    'http://127.0.0.1:8001',      # Uvicorn ASGI
+    'http://0.0.0.0:8000',
+    'http://0.0.0.0:8001',
+    'http://localhost:3000',       # React frontend
+    'http://localhost:3001',       # Next.js frontend
+    'http://localhost:3002',
+]
+
+
+# =============================================================================
 # EMAIL — Console Backend for Testing
 # =============================================================================
 # Emails print to the terminal instead of sending — perfect for development.

@@ -46,9 +46,11 @@ dev: ## Start Django development server (sync WSGI — port 8000, console email)
 # ── ASGI / Uvicorn / Daphne shortcuts ──────────────────────────────────────
 asgi: run-asgi ## Alias: start ASGI server with Uvicorn (same as run-asgi)
 
-uvicorn: ## Start Uvicorn ASGI (production-grade async, port 8000)
-	@echo "$(CYAN)Starting Uvicorn ASGI server (reload)...$(NC)"
-	venv\Scripts\uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto --log-level info
+uvicorn: ## Start Uvicorn ASGI (dev, port 8001, console email, all hosts allowed)
+	@echo "$(CYAN)Starting Uvicorn ASGI server (development settings)...$(NC)"
+	@echo "$(YELLOW)  Settings: backend.config.development (ALLOWED_HOSTS=*)$(NC)"
+	@echo "$(YELLOW)  URL:      http://127.0.0.1:8001/ or http://FASHIONISTAR:8001/$(NC)"
+	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto --log-level info
 
 wsgi: ## Start Gunicorn WSGI (sync production — port 8000)
 	@echo "$(CYAN)Starting Gunicorn WSGI server...$(NC)"
@@ -59,14 +61,14 @@ daphne: run-daphne ## Alias: start Daphne ASGI (same as run-daphne)
 run-asgi: ## Start ASGI + Uvicorn (auto-starts Redis first)
 	@echo "$(CYAN)Ensuring Redis is running ...$(NC)"
 	@if [ -d '../.tmp_redis' ]; then cd ../.tmp_redis && ./redis-server.exe --port 6379 & sleep 1; fi
-	@echo "$(CYAN)Starting Uvicorn ASGI server...$(NC)"
-	venv\Scripts\uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto
+	@echo "$(CYAN)Starting Uvicorn ASGI server (development settings)...$(NC)"
+	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto
 
 run-daphne: ## Start Daphne ASGI (WebSocket — auto-starts Redis first)
 	@echo "$(CYAN)Ensuring Redis is running ...$(NC)"
 	@if [ -d '../.tmp_redis' ]; then cd ../.tmp_redis && ./redis-server.exe --port 6379 & sleep 1; fi
-	@echo "$(CYAN)Starting Daphne ASGI server...$(NC)"
-	venv\Scripts\daphne -b 0.0.0.0 -p 8001 backend.asgi:application
+	@echo "$(CYAN)Starting Daphne ASGI server (development settings)...$(NC)"
+	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/daphne -b 0.0.0.0 -p 8001 backend.asgi:application
 
 shell: ## Open Django interactive shell
 	venv\Scripts\python manage.py shell
