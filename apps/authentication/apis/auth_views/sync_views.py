@@ -417,17 +417,64 @@ class RefreshTokenView(APIView):
 
 class LogoutView(APIView):
     """
-    User Logout.
+    User Logout — Blacklists the refresh token server-side.
 
-    Blacklists the refresh token (if token blacklisting is enabled),
-    otherwise the client simply deletes the token.
+    Mirrors legacy ``userauths.views.LogoutView`` behaviour.
+
+    Requires:
+        - Authorization: Bearer <access_token> (IsAuthenticated)
+        - Body: { "refresh": "<refresh_token>" }
+
+    Success (200):
+        { "message": "Logout Successful. Your session has been terminated." }
+
+    Error (400):
+        Token already blacklisted or invalid token passed.
     """
     permission_classes = [IsAuthenticated]
     renderer_classes = [CustomJSONRenderer]
 
     def post(self, request) -> Response:
-        """Logs out user by blacklisting refresh token."""
-        return Response(
-            {"message": "Logout Successful"},
-            status=status.HTTP_200_OK,
-        )
+        """Blacklists the refresh token, invalidating the session server-side."""
+        from rest_framework_simplejwt.tokens import RefreshToken
+        from rest_framework_simplejwt.exceptions import TokenError
+
+        try:
+            refresh_token = request.data.get("refresh")
+            if not refresh_token:
+                return Response(
+                    {"error": "Refresh token is required to logout."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            token = RefreshToken(refresh_token)
+            token.blacklist()  # Requires token_blacklist in INSTALLED_APPS
+
+            logger.info(
+                "Logout: refresh token blacklisted — user_id=%s",
+                request.user.id,
+            )
+            return Response(
+                {"message": "Logout Successful. Your session has been terminated."},
+                status=status.HTTP_200_OK,
+            )
+
+        except TokenError as exc:
+            logger.warning(
+                "LogoutView TokenError user_id=%s: %s",
+                getattr(request.user, 'id', 'anon'), str(exc)
+            )
+            return Response(
+                {"error": "Invalid or already expired token."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        except Exception as exc:
+            logger.error(
+                "LogoutView unexpected error: %s", str(exc), exc_info=True
+            )
+            return Response(
+                {"error": "An error occurred during logout. Please try again."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+

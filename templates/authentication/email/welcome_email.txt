@@ -1,17 +1,20 @@
-{# Welcome email after successful registration — plain text #}
-{% extends 'authentication/email/base_email.txt' %}
+FASHIONISTAR — Welcome! Your Account is Verified
+================================================================
 
-{% block title %}Welcome to Fashionistar!{% endblock %}
+Hello {{ user_first_name|default:"Fashion Lover" }},
 
-{% block content %}
-Hi {{ user.username }},
+Your Fashionistar account is now fully verified and ready to use!
 
-Thank you for registering with Fashionistar! We're excited to have you as part of our community.
+WHAT YOU CAN DO NOW:
+  → Browse the Shop:       https://fashionistar.net/shop/
+  → Update your Profile:  https://fashionistar.net/profile/
+  → Sell on Fashionistar: https://fashionistar.net/vendor/register/
 
-{{ message }}
+We're excited to have you as part of Nigeria's premier AI-powered
+fashion marketplace.
 
-Start exploring our latest collections and find your perfect style today!
+Start Shopping: https://fashionistar.net
 
-Best Regards,
-The Fashionistar Team
-{% endblock %}
+================================================================
+© 2026 Fashionistar Ltd. | fashionistar.net | Lagos, Nigeria
+================================================================

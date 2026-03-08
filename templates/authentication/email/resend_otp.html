@@ -1,18 +1,60 @@
-{# Resend OTP email — HTML #}
-{% extends 'authentication/email/base_email.html' %}
-
-{% block title %}New OTP for Fashionistar{% endblock %}
-
-{% block header_text %}Fashionistar - New OTP{% endblock %}
+{% extends "authentication/email/base_email.html" %}
 
 {% block content %}
-    <p>Hi there!</p>
-    <p>You requested a new OTP to verify your account.  Here it is:</p>
+<table width="100%" cellpadding="0" cellspacing="0">
+  <tr>
+    <td style="padding: 48px 0 32px 0; text-align:center;">
+      <div style="display:inline-block; width:72px; height:72px; background:linear-gradient(135deg, #F5A623, #FDB835); border-radius:50%; line-height:72px; text-align:center; font-size:28px; margin-bottom:24px;">
+        🔄
+      </div>
+      <h1 style="font-family:'Playfair Display','Georgia',serif; font-size:30px; font-weight:700; color:#1A4D3C; line-height:1.2; margin-bottom:12px;">
+        New OTP Requested
+      </h1>
+      <p style="font-family:'Inter',Arial,sans-serif; font-size:16px; color:#555; line-height:1.6;">
+        You requested a new verification code. Use the updated OTP below.
+      </p>
+    </td>
+  </tr>
 
-    <p style="text-align: center;">
-        <span class="otp">{{ otp }}</span>
-    </p>
-    <p style="text-align: center;">Expires in {{ time }}</p>
+  <!-- OTP BOX -->
+  <tr>
+    <td style="padding: 0 0 32px 0;">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="background: linear-gradient(135deg, #1A4D3C 0%, #0D3327 100%); border-radius:16px; padding: 36px 40px; text-align:center;">
+            <p style="font-family:'Inter',Arial,sans-serif; font-size:12px; color:rgba(255,255,255,0.6); letter-spacing:3px; text-transform:uppercase; margin-bottom:16px;">
+              Your New One-Time Password
+            </p>
+            <div style="background:rgba(245,166,35,0.15); border:2px solid #F5A623; border-radius:12px; padding:20px 32px; display:inline-block;">
+              <span style="font-family:'Courier New',monospace; font-size:42px; font-weight:800; color:#F5A623; letter-spacing:16px; line-height:1;">
+                {{ otp }}
+              </span>
+            </div>
+            <p style="font-family:'Inter',Arial,sans-serif; font-size:12px; color:rgba(255,255,255,0.5); margin-top:20px;">
+              ⏱ Expires in <strong style="color:#F5A623;">5 minutes</strong>{% if time %} at {{ time }}{% endif %}
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
 
-    <p>Best Regards,<br>The Fashionistar Team</p>
+  <!-- Note about old OTP -->
+  <tr>
+    <td style="padding: 0 0 40px 0;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#F9F7F0; border-radius:12px; border-left:4px solid #F5A623;">
+        <tr>
+          <td style="padding:20px 24px;">
+            <p style="font-family:'Inter',Arial,sans-serif; font-size:13px; color:#666; line-height:1.7;">
+              ℹ️ <strong style="color:#1A4D3C;">Important:</strong>
+              Your previously issued OTP is now invalid. Please use only this new code.
+              If you did not request a new OTP, please
+              <a href="{{ SITE_URL }}/support/" style="color:#F5A623; font-weight:600;">contact support immediately</a>.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
 {% endblock %}

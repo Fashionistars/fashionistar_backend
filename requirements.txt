@@ -8,7 +8,7 @@
 # ═══════════════════════════════════════════════════════════
 # 1. CORE FRAMEWORK  (install first — everything depends on these)
 # ═══════════════════════════════════════════════════════════
-Django==6.0.2
+Django==6.0.3
 djangorestframework
 django-ninja
 adrf                            # Async DRF views (used by async_views.py)
@@ -202,7 +202,17 @@ yarl
 
 
 # ============================================================================================
+# 21. TESTING FRAMEWORK
+# ============================================================================================
+pytest
+pytest-django
+pytest-asyncio
+pytest-cov
+factory-boy
+
+
+# ============================================================================================
 # IN ORDER TO MAKE SURE DJANGO==6.0.2 INSTALLS AND PINNED AFTER BULK REQUIREMENTS.TXT INSTALLATION 
 # ============================================================================================
 
-Django==6.0.2
+Django==6.0.3

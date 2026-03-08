@@ -1,17 +1,21 @@
-{# Resend OTP email — plain text #}
-{% extends 'authentication/email/base_email.txt' %}
+FASHIONISTAR — New OTP Code
+================================================================
 
-{% block title %}New OTP for Fashionistar{% endblock %}
+Hello,
 
-{% block content %}
-Hi there!
+You requested a new verification code for your Fashionistar account.
 
-You requested a new OTP to verify your account.  Here it is:
+Your new One-Time Password:
 
-OTP: {{ otp }}
+    {{ otp }}
 
-Expires in {{ time }}
+This code expires in 5 minutes{% if time %} at {{ time }}{% endif %}.
 
-Best Regards,
-The Fashionistar Team
-{% endblock %}
+IMPORTANT: Your previously issued OTP is now invalid. Use only this code.
+
+If you did not request a new OTP, please contact support immediately:
+https://fashionistar.net/support/
+
+================================================================
+© 2026 Fashionistar Ltd. | fashionistar.net | Lagos, Nigeria
+================================================================

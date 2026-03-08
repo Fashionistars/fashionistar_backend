@@ -1,24 +1,86 @@
-{# OTP verification email — HTML #}
-{% extends 'authentication/email/base_email.html' %}
-
-{% block title %}Verify Your Email{% endblock %}
-
-{% block header_text %}Welcome to Fashionistar!{% endblock %}
+{% extends "authentication/email/base_email.html" %}
 
 {% block content %}
-    <p>Hi there!</p>
-    <p>
-        {% if message %}
-            {{ message }}
-        {% else %}
-            To complete your sign-up, please use the following One-Time Password (OTP) to verify your email:
-        {% endif %}
-    </p>
+<!-- HERO -->
+<table width="100%" cellpadding="0" cellspacing="0">
+  <tr>
+    <td style="padding: 48px 0 32px 0; text-align:center;">
+      <!-- Icon -->
+      <div style="display:inline-block; width:72px; height:72px; background:linear-gradient(135deg, #F5A623, #FDB835); border-radius:50%; line-height:72px; text-align:center; font-size:28px; margin-bottom:24px;">
+        🔐
+      </div>
+      <h1 class="hero-heading"
+          style="font-family:'Playfair Display','Georgia',serif; font-size:30px; font-weight:700; color:#1A4D3C; line-height:1.2; margin-bottom:12px;">
+        Verify Your Account
+      </h1>
+      <p style="font-family:'Inter',Arial,sans-serif; font-size:16px; color:#555; line-height:1.6;">
+        Welcome to Fashionistar! Use the code below to verify your account.
+      </p>
+    </td>
+  </tr>
 
-    <p style="text-align: center;">
-        <span class="otp">{{ token }}</span>
-    </p>
-    <p style="text-align: center;">Expires in {{ time }}</p>
+  <!-- OTP BOX -->
+  <tr>
+    <td style="padding: 0 0 32px 0;">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="background: linear-gradient(135deg, #1A4D3C 0%, #0D3327 100%); border-radius:16px; padding: 36px 40px; text-align:center;">
+            <p style="font-family:'Inter',Arial,sans-serif; font-size:12px; color:rgba(255,255,255,0.6); letter-spacing:3px; text-transform:uppercase; margin-bottom:16px;">
+              Your One-Time Password
+            </p>
+            <div style="background: rgba(245,166,35,0.15); border: 2px solid #F5A623; border-radius:12px; padding: 20px 32px; display:inline-block; margin:0 auto;">
+              <span style="font-family:'Courier New', monospace; font-size:42px; font-weight:800; color:#F5A623; letter-spacing:16px; line-height:1;">
+                {{ otp }}
+              </span>
+            </div>
+            <p style="font-family:'Inter',Arial,sans-serif; font-size:12px; color:rgba(255,255,255,0.5); margin-top:20px;">
+              ⏱ This code expires in <strong style="color:#F5A623;">5 minutes</strong>{% if time %} at {{ time }}{% endif %}
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
 
-    <p>Best Regards,<br>The Fashionistar Team</p>
+  <!-- INSTRUCTIONS -->
+  <tr>
+    <td style="padding: 0 0 40px 0;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#F9F7F0; border-radius:12px; border-left: 4px solid #F5A623;">
+        <tr>
+          <td style="padding: 24px 28px;">
+            <p style="font-family:'Inter',Arial,sans-serif; font-size:14px; color:#333; font-weight:600; margin-bottom:12px;">
+              How to use your OTP:
+            </p>
+            <p style="font-family:'Inter',Arial,sans-serif; font-size:14px; color:#555; line-height:1.7; margin-bottom:8px;">
+              1. Return to the Fashionistar app or website
+            </p>
+            <p style="font-family:'Inter',Arial,sans-serif; font-size:14px; color:#555; line-height:1.7; margin-bottom:8px;">
+              2. Enter the 6-digit code above in the verification field
+            </p>
+            <p style="font-family:'Inter',Arial,sans-serif; font-size:14px; color:#555; line-height:1.7;">
+              3. Your account will be instantly verified
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- SECURITY WARNING -->
+  <tr>
+    <td style="padding: 0 0 40px 0;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="border: 1px solid #EBEBEB; border-radius:12px;">
+        <tr>
+          <td style="padding: 20px 24px;">
+            <p style="font-family:'Inter',Arial,sans-serif; font-size:13px; color:#888; line-height:1.6;">
+              🛡️ <strong style="color:#1A4D3C;">Security Notice:</strong>
+              Fashionistar will <strong>never</strong> ask for this code over the phone, chat, or email.
+              Do not share this OTP with anyone.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
 {% endblock %}
