@@ -1,27 +1,36 @@
 # apps/authentication/apis/auth_views/sync_views.py
 """
-Synchronous Authentication Views (DRF / WSGI).
+FASHIONISTAR — Synchronous Authentication Views (DRF / WSGI)
+=============================================================
 
-These views handle auth operations via standard DRF GenericAPIView,
-matching the legacy ``userauths.views`` pattern with enterprise-grade
-error handling, structured logging, and atomic transactions.
+All views use DRF generics pattern (generics.CreateAPIView /
+generics.GenericAPIView) — exactly like the legacy
+``userauths.views.RegisterViewCelery`` pattern the user requires.
 
 Architecture:
-    RegisterView   → UserRegistrationSerializer → RegistrationService.register_sync
-    VerifyOTPView  → OTPSerializer              → OTPService.verify_otp_sync
-    ResendOTPView  → ResendOTPRequestSerializer  → OTPService.resend_otp_sync
-    LoginView      → LoginSerializer             → SyncAuthService.login
+    RegisterView     → generics.CreateAPIView   → RegistrationService.register_sync
+    VerifyOTPView    → generics.GenericAPIView   → OTPService.verify_otp_sync
+    ResendOTPView    → generics.GenericAPIView   → OTPService.resend_otp_sync
+    LoginView        → generics.GenericAPIView   → SyncAuthService.login
+    GoogleAuthView   → generics.CreateAPIView    → SyncGoogleAuthService.verify_and_login
+    RefreshTokenView → generics.GenericAPIView   → SimpleJWT TokenRefreshView
+    LogoutView       → generics.GenericAPIView   → RefreshToken.blacklist()
+
+Why generics over APIView?
+  - get_serializer() / get_serializer_class() hooks work out of the box
+  - Schema generation (drf-spectacular) picks up serializer automatically
+  - Consistent behaviour with the entire rest of the codebase (legacy pattern)
+  - CreateAPIView.create() provides a standardised perform_create() override point
+  - DRF browsable API renders the correct form fields automatically
 """
 
 import logging
 from typing import Any, Dict
 
 from django.db import transaction
-from rest_framework import serializers as drf_serializers
-from rest_framework import status
+from rest_framework import generics, serializers as drf_serializers, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.views import APIView
 
 from apps.authentication.models import UnifiedUser
 from apps.authentication.serializers import (
@@ -33,222 +42,235 @@ from apps.authentication.serializers import (
 from apps.authentication.services.auth_service import SyncAuthService
 from apps.authentication.services.google_service import SyncGoogleAuthService
 from apps.authentication.services.otp_service import OTPService
-from apps.authentication.services.registration_service import (
-    RegistrationService,
-)
-from apps.authentication.throttles import (
-    BurstRateThrottle,
-    SustainedRateThrottle,
-)
+from apps.authentication.services.registration_service import RegistrationService
+from apps.authentication.throttles import BurstRateThrottle, SustainedRateThrottle
 from apps.common.renderers import CustomJSONRenderer
 
 logger = logging.getLogger(__name__)
 
 
-# ═══════════════════════════════════════════════════════════════════════
-#  REGISTER VIEW — Mirrors legacy RegisterViewCelery
-# ═══════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════
+#  REGISTER VIEW — mirrors legacy RegisterViewCelery
+# ═══════════════════════════════════════════════════════════════════════════
 
-class RegisterView(APIView):
+class RegisterView(generics.CreateAPIView):
     """
-    Synchronous User Registration (DRF).
+    POST /api/v1/auth/register/
 
-    Accepts email OR phone + password, creates user inside an
-    atomic transaction, generates OTP, and dispatches notification
-    via Email or SMS.
+    Synchronous User Registration.
 
-    Legacy equivalent: ``userauths.views.RegisterViewCelery``
+    Accepts email OR phone + password + role, creates the user inside an
+    atomic transaction, generates a 6-digit OTP, and dispatches it via
+    Email (if email provided) or SMS (if phone only).
+
+    Mirrors legacy:  ``userauths.views.RegisterViewCelery``
 
     Request Body:
-        - email (str, optional): User email.
-        - phone (str, optional): User phone (E.164).
-        - password (str): Password.
-        - password2 (str): Password confirmation.
-        - role (str): 'vendor' or 'client'.
+        email     (str, optional)  : User email address.
+        phone     (str, optional)  : Phone in E.164 format (+234...).
+        password  (str, required)  : Min 8 chars, must contain upper/lower/digit/special.
+        password2 (str, required)  : Must match password.
+        role      (str, required)  : 'vendor' or 'client'.
 
-    Success Response (201):
-        - message (str): Human-readable success message.
-        - user_id (int): Created user's primary key.
-        - email (str | None): Email if provided.
-        - phone (str | None): Phone if provided.
+    Success Response 201:
+        {
+          "message": "Registration successful. Check your email/phone for OTP.",
+          "user_id": "<uuid>",
+          "email":   "user@example.com",
+          "phone":   null
+        }
 
     Error Responses:
-        - 400: Validation errors (missing fields, weak password, etc.)
-        - 500: Unexpected server errors.
+        400 — Validation error (missing fields, weak password, mismatch, duplicate)
+        500 — Unexpected server error (transaction rolled back)
     """
-    permission_classes = [AllowAny]
-    renderer_classes = [CustomJSONRenderer]
-    throttle_classes = [BurstRateThrottle]
+    serializer_class    = UserRegistrationSerializer
+    permission_classes  = [AllowAny]
+    renderer_classes    = [CustomJSONRenderer]
+    throttle_classes    = [BurstRateThrottle]
+
+    def create(self, request, *args, **kwargs) -> Response:
+        """
+        Override generics.CreateAPIView.create() to:
+          1. Validate via UserRegistrationSerializer
+          2. Delegate to RegistrationService (inside atomic transaction)
+          3. Return a structured 201 response
+        """
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return self.perform_create(serializer)
 
     @transaction.atomic
-    def post(self, request) -> Response:
-        """
-        Creates a new user and sends OTP via email or SMS.
-        """
+    def perform_create(self, serializer) -> Response:  # type: ignore[override]
+        """Atomic user creation + OTP dispatch."""
         try:
-            # ── 1. Validate Input ────────────────────────────────────
-            serializer = UserRegistrationSerializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
-            validated_data: Dict[str, Any] = serializer.validated_data
+            validated_data: Dict[str, Any] = dict(serializer.validated_data)
 
-            # ── Strip validation-only fields ─────────────────────────
+            # Strip validation-only fields (not passed to the service)
             validated_data.pop('password2', None)
             validated_data.pop('password_confirm', None)
 
-            # ── 2. Delegate to Registration Service (Atomic) ────────
             result = RegistrationService.register_sync(**validated_data)
 
             logger.info(
-                "✅ RegisterView: user_id=%s, identifier=%s",
+                "✅ RegisterView: user_id=%s identifier=%s",
                 result.get('user_id'),
                 result.get('email') or result.get('phone'),
             )
 
-            return Response({
-                "message": result['message'],
-                "user_id": result['user_id'],
-                "email": result.get('email'),
-                "phone": result.get('phone'),
-            }, status=status.HTTP_201_CREATED)
-
-        except drf_serializers.ValidationError as e:
-            # ── Serializer validation errors → 400 ──────────────────
-            logger.warning("⚠️ RegisterView validation error: %s", e)
             return Response(
-                e.detail,
-                status=status.HTTP_400_BAD_REQUEST
+                {
+                    "message": result['message'],
+                    "user_id": result['user_id'],
+                    "email":   result.get('email'),
+                    "phone":   result.get('phone'),
+                },
+                status=status.HTTP_201_CREATED,
             )
 
-        except Exception as e:
-            # ── Unexpected error → 500 + explicit rollback ──────────
+        except drf_serializers.ValidationError as exc:
+            logger.warning("⚠️ RegisterView validation error: %s", exc)
+            return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as exc:
             transaction.set_rollback(True)
-            logger.error(
-                "❌ RegisterView unexpected error: %s", str(e),
-                exc_info=True
-            )
+            logger.error("❌ RegisterView error: %s", str(exc), exc_info=True)
             return Response(
                 {
                     "error": (
                         "An error occurred during registration. "
-                        "Please check your input or contact support."
+                        "Please verify your input or contact support."
                     )
                 },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 
-# ═══════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════
 #  LOGIN VIEW
-# ═══════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════
 
-class LoginView(APIView):
+class LoginView(generics.GenericAPIView):
     """
-    Synchronous Login View (DRF).
+    POST /api/v1/auth/login/
 
-    Authenticates user via email/phone + password, returns JWT tokens.
+    Synchronous Login — email/phone + password → JWT tokens.
+
+    Request Body:
+        email_or_phone (str): Registered email or international phone number.
+        password       (str): User password.
+
+    Success Response 200:
+        {
+          "message": "Login Successful",
+          "tokens": {
+            "access":  "<JWT access token>",
+            "refresh": "<JWT refresh token>"
+          }
+        }
+
+    Error Responses:
+        400 — Validation error or wrong credentials
+        403 — User not verified / account inactive
+        500 — Unexpected server error
     """
+    serializer_class   = LoginSerializer
     permission_classes = [AllowAny]
-    renderer_classes = [CustomJSONRenderer]
-    throttle_classes = [BurstRateThrottle]
+    renderer_classes   = [CustomJSONRenderer]
+    throttle_classes   = [BurstRateThrottle, SustainedRateThrottle]
 
-    def post(self, request) -> Response:
-        """Authenticates user and returns JWT tokens."""
+    def post(self, request, *args, **kwargs) -> Response:
+        """Authenticates user and returns JWT access + refresh tokens."""
         try:
-            serializer = LoginSerializer(data=request.data)
+            serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             data: Dict[str, Any] = serializer.validated_data
 
             tokens = SyncAuthService.login(
                 data['email_or_phone'],
                 data['password'],
-                request
+                request,
             )
 
-            return Response({
-                "message": "Login Successful",
-                "tokens": tokens
-            }, status=status.HTTP_200_OK)
+            logger.info(
+                "✅ LoginView: login successful for %s",
+                data['email_or_phone'],
+            )
 
-        except drf_serializers.ValidationError as e:
-            logger.warning("⚠️ LoginView validation error: %s", e)
             return Response(
-                e.detail,
-                status=status.HTTP_400_BAD_REQUEST
+                {"message": "Login Successful", "tokens": tokens},
+                status=status.HTTP_200_OK,
             )
 
-        except Exception as e:
-            logger.error(
-                "❌ LoginView error: %s", str(e), exc_info=True
-            )
+        except drf_serializers.ValidationError as exc:
+            logger.warning("⚠️ LoginView validation error: %s", exc)
+            return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as exc:
+            logger.error("❌ LoginView error: %s", str(exc), exc_info=True)
             return Response(
-                {"error": "An error occurred during login. "
-                 "Please check your credentials."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "Authentication failed. Check credentials."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
 
-# ═══════════════════════════════════════════════════════════════════════
-#  VERIFY OTP VIEW — Mirrors legacy VerifyOTPView
-# ═══════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════
+#  VERIFY OTP VIEW — mirrors legacy VerifyOTPView
+# ═══════════════════════════════════════════════════════════════════════════
 
-class VerifyOTPView(APIView):
+class VerifyOTPView(generics.GenericAPIView):
     """
-    Synchronous OTP Verification (DRF).
+    POST /api/v1/auth/verify-otp/
 
-    Verifies OTP, activates user, and returns JWT tokens.
-    Mirrors legacy ``userauths.views.VerifyOTPView`` behavior:
-    auto-login after successful OTP verification.
+    Synchronous OTP Verification.
+
+    Verifies OTP → activates user → auto-issues JWT tokens (same as legacy).
 
     Request Body:
-        - otp (str): The OTP code.
-        - user_id (str): UUID of the user to verify.
+        otp     (str): 6-digit OTP code.
+        user_id (str): UUID of the user to verify.
 
-    Success Response (200):
-        - message, user_id, role, identifying_info, access, refresh
+    Success Response 200:
+        {
+          "message": "Your account has been successfully verified.",
+          "user_id": "<uuid>",
+          "role":    "client",
+          "identifying_info": "user@example.com",
+          "access":  "<JWT>",
+          "refresh": "<JWT>"
+        }
     """
     permission_classes = [AllowAny]
-    renderer_classes = [CustomJSONRenderer]
-    throttle_classes = [BurstRateThrottle]
+    renderer_classes   = [CustomJSONRenderer]
+    throttle_classes   = [BurstRateThrottle]
 
     @transaction.atomic
-    def post(self, request) -> Response:
-        """Verifies OTP and activates user account."""
+    def post(self, request, *args, **kwargs) -> Response:
+        """Verifies OTP code and returns JWT tokens on success."""
         try:
             otp_code = request.data.get('otp')
-            user_id = request.data.get('user_id')
+            user_id  = request.data.get('user_id')
 
-            # ── Input validation ─────────────────────────────────────
             if not otp_code or not user_id:
                 return Response(
                     {"error": "Both 'otp' and 'user_id' are required."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # ── Verify OTP via service ───────────────────────────────
-            valid = OTPService.verify_otp_sync(
-                user_id, otp_code, purpose="verify"
-            )
-
+            valid = OTPService.verify_otp_sync(user_id, otp_code, purpose="verify")
             if not valid:
-                logger.warning(
-                    "⚠️ Invalid/expired OTP for user_id=%s", user_id
-                )
+                logger.warning("⚠️ Invalid/expired OTP for user_id=%s", user_id)
                 return Response(
-                    {"error": "Invalid or expired OTP. "
-                     "Please request a new one."},
+                    {"error": "Invalid or expired OTP. Please request a new one."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # ── Activate user ────────────────────────────────────────
             try:
                 user = UnifiedUser.objects.only(
-                    "id", "is_active", "is_verified", "role",
-                    "email", "phone"
+                    "id", "is_active", "is_verified", "role", "email", "phone"
                 ).get(pk=user_id)
             except UnifiedUser.DoesNotExist:
-                logger.error(
-                    "❌ User not found after OTP verify: %s", user_id
-                )
+                logger.error("❌ User not found after OTP verify: %s", user_id)
                 return Response(
                     {"error": "User not found."},
                     status=status.HTTP_404_NOT_FOUND,
@@ -260,114 +282,108 @@ class VerifyOTPView(APIView):
             user.save(update_fields=['is_active', 'is_verified'])
 
             logger.info(
-                "✅ User verified: id=%s, identifier=%s",
-                user.id, user.identifying_info
+                "✅ Account verified: id=%s, identifier=%s",
+                user.id, user.identifying_info,
             )
 
-            # ── Auto-login: Generate JWT tokens (legacy pattern) ─────
             from rest_framework_simplejwt.tokens import RefreshToken
             refresh = RefreshToken.for_user(user)
 
-            return Response({
-                "message": "Your account has been successfully verified.",
-                "user_id": user.id,
-                "role": user.role,
-                "identifying_info": user.identifying_info,
-                "access": str(refresh.access_token),
-                "refresh": str(refresh),
-            }, status=status.HTTP_200_OK)
-
-        except drf_serializers.ValidationError as e:
-            logger.warning(
-                "⚠️ VerifyOTPView validation error: %s", e
-            )
             return Response(
-                e.detail, status=status.HTTP_400_BAD_REQUEST
+                {
+                    "message": "Your account has been successfully verified.",
+                    "user_id": str(user.id),
+                    "role":    user.role,
+                    "identifying_info": user.identifying_info,
+                    "access":  str(refresh.access_token),
+                    "refresh": str(refresh),
+                },
+                status=status.HTTP_200_OK,
             )
 
-        except Exception as e:
+        except drf_serializers.ValidationError as exc:
+            logger.warning("⚠️ VerifyOTPView validation error: %s", exc)
+            return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as exc:
             transaction.set_rollback(True)
-            logger.error(
-                "❌ VerifyOTPView error: %s", str(e), exc_info=True
-            )
+            logger.error("❌ VerifyOTPView error: %s", str(exc), exc_info=True)
             return Response(
-                {"error": "An error occurred during verification. "
-                 "Please try again."},
+                {"error": "Verification failed. Please try again."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 
-# ═══════════════════════════════════════════════════════════════════════
-#  RESEND OTP VIEW — Mirrors legacy ResendOTPView
-# ═══════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════
+#  RESEND OTP VIEW — mirrors legacy ResendOTPView
+# ═══════════════════════════════════════════════════════════════════════════
 
-class ResendOTPView(APIView):
+class ResendOTPView(generics.GenericAPIView):
     """
-    Synchronous OTP Resend (DRF).
+    POST /api/v1/auth/resend-otp/
 
-    Regenerates and re-sends OTP to user's email or phone.
+    Regenerates and resends OTP via email or SMS.
 
     Request Body:
-        - email_or_phone (str): User email or phone number.
-    """
-    permission_classes = [AllowAny]
-    renderer_classes = [CustomJSONRenderer]
-    throttle_classes = [BurstRateThrottle]
+        email_or_phone (str): Registered email or phone number.
 
-    def post(self, request) -> Response:
-        """Resends OTP to user's email or phone."""
+    Success Response 200:
+        { "message": "OTP resent successfully." }
+    """
+    serializer_class   = ResendOTPRequestSerializer
+    permission_classes = [AllowAny]
+    renderer_classes   = [CustomJSONRenderer]
+    throttle_classes   = [BurstRateThrottle]
+
+    def post(self, request, *args, **kwargs) -> Response:
+        """Resends OTP to user's verified contact."""
         try:
-            serializer = ResendOTPRequestSerializer(data=request.data)
+            serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
 
-            email_or_phone = serializer.validated_data.get(
-                'email_or_phone'
-            )
+            email_or_phone = serializer.validated_data.get('email_or_phone')
+            message = OTPService.resend_otp_sync(email_or_phone=email_or_phone)
 
-            message = OTPService.resend_otp_sync(
-                email_or_phone=email_or_phone
-            )
+            logger.info("✅ OTP resent for: %s", email_or_phone)
+            return Response({"message": message}, status=status.HTTP_200_OK)
 
-            logger.info(
-                "✅ OTP resent for: %s", email_or_phone
-            )
+        except drf_serializers.ValidationError as exc:
+            logger.warning("⚠️ ResendOTPView validation error: %s", exc)
+            return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
 
+        except Exception as exc:
+            logger.error("❌ ResendOTPView error: %s", str(exc), exc_info=True)
             return Response(
-                {"message": message}, status=status.HTTP_200_OK
-            )
-
-        except drf_serializers.ValidationError as e:
-            logger.warning(
-                "⚠️ ResendOTPView validation error: %s", e
-            )
-            return Response(
-                e.detail, status=status.HTTP_400_BAD_REQUEST
-            )
-
-        except Exception as e:
-            logger.error(
-                "❌ ResendOTPView error: %s", str(e), exc_info=True
-            )
-            return Response(
-                {"error": "An error occurred while resending OTP. "
-                 "Please try again."},
+                {"error": "Failed to resend OTP. Please try again."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 
-# ═══════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════
 #  GOOGLE AUTH VIEW
-# ═══════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════
 
-class GoogleAuthView(APIView):
-    """Google OAuth2 authentication via ID token."""
+class GoogleAuthView(generics.CreateAPIView):
+    """
+    POST /api/v1/auth/google/
+
+    Google OAuth2 sign-in via ID token from the frontend.
+
+    Request Body:
+        id_token (str): Google ID token from frontend OAuth2 flow.
+        role     (str): 'vendor' or 'client' (for new registrations).
+
+    Success Response 200:
+        { "message": "Google Login Successful", "tokens": {...}, "user": {...} }
+    """
+    serializer_class   = GoogleAuthSerializer
     permission_classes = [AllowAny]
-    renderer_classes = [CustomJSONRenderer]
-    throttle_classes = [BurstRateThrottle]
+    renderer_classes   = [CustomJSONRenderer]
+    throttle_classes   = [BurstRateThrottle]
 
-    def post(self, request) -> Response:
-        """Verifies Google ID token and returns JWT tokens."""
-        serializer = GoogleAuthSerializer(data=request.data)
+    def create(self, request, *args, **kwargs) -> Response:
+        """Verifies Google ID token and returns JWT access + refresh tokens."""
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
@@ -378,64 +394,78 @@ class GoogleAuthView(APIView):
         from rest_framework_simplejwt.tokens import RefreshToken
         refresh = RefreshToken.for_user(user)
 
-        return Response({
-            "message": "Google Login Successful",
-            "tokens": {
-                'access': str(refresh.access_token),
-                'refresh': str(refresh),
+        logger.info(
+            "✅ Google login: user_id=%s email=%s", user.id, user.email
+        )
+
+        return Response(
+            {
+                "message": "Google Login Successful",
+                "tokens": {
+                    "access":  str(refresh.access_token),
+                    "refresh": str(refresh),
+                },
+                "user": {
+                    "email": user.email,
+                    "role":  user.role,
+                },
             },
-            "user": {
-                "email": user.email,
-                "role": user.role,
-            },
-        })
+            status=status.HTTP_200_OK,
+        )
 
 
-# ═══════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════
 #  REFRESH TOKEN VIEW
-# ═══════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════
 
-class RefreshTokenView(APIView):
+class RefreshTokenView(generics.GenericAPIView):
     """
-    JWT Token Refresh.
+    POST /api/v1/auth/token/refresh/
 
-    Wraps SimpleJWT's TokenRefreshView for custom renderer
-    compatibility.
+    Refreshes a JWT access token using a valid refresh token.
+
+    Request Body:
+        refresh (str): Valid refresh token.
+
+    Success Response 200:
+        { "access": "<new access token>" }
     """
     permission_classes = [AllowAny]
-    renderer_classes = [CustomJSONRenderer]
+    renderer_classes   = [CustomJSONRenderer]
 
-    def post(self, request) -> Response:
-        """Refreshes JWT access token."""
+    def post(self, request, *args, **kwargs) -> Response:
+        """Delegates to SimpleJWT TokenRefreshView with custom renderer."""
         from rest_framework_simplejwt.views import TokenRefreshView
-        return TokenRefreshView.as_view()(request)
+        return TokenRefreshView.as_view()(request._request)
 
 
-# ═══════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════
 #  LOGOUT VIEW
-# ═══════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════
 
-class LogoutView(APIView):
+class LogoutView(generics.GenericAPIView):
     """
-    User Logout — Blacklists the refresh token server-side.
+    POST /api/v1/auth/logout/
 
-    Mirrors legacy ``userauths.views.LogoutView`` behaviour.
+    Server-side logout — blacklists the refresh token so it cannot be
+    reused even if stolen.  Mirrors legacy ``userauths.views.LogoutView``.
 
     Requires:
-        - Authorization: Bearer <access_token> (IsAuthenticated)
-        - Body: { "refresh": "<refresh_token>" }
+        Authorization: Bearer <access_token>
+        Body: { "refresh": "<refresh_token>" }
 
-    Success (200):
+    Success Response 200:
         { "message": "Logout Successful. Your session has been terminated." }
 
-    Error (400):
-        Token already blacklisted or invalid token passed.
+    Error Responses:
+        400 — Token already blacklisted or missing
+        401 — Not authenticated
     """
     permission_classes = [IsAuthenticated]
-    renderer_classes = [CustomJSONRenderer]
+    renderer_classes   = [CustomJSONRenderer]
 
-    def post(self, request) -> Response:
-        """Blacklists the refresh token, invalidating the session server-side."""
+    def post(self, request, *args, **kwargs) -> Response:
+        """Blacklists refresh token, invalidating the server-side session."""
         from rest_framework_simplejwt.tokens import RefreshToken
         from rest_framework_simplejwt.exceptions import TokenError
 
@@ -448,7 +478,7 @@ class LogoutView(APIView):
                 )
 
             token = RefreshToken(refresh_token)
-            token.blacklist()  # Requires token_blacklist in INSTALLED_APPS
+            token.blacklist()
 
             logger.info(
                 "Logout: refresh token blacklisted — user_id=%s",
@@ -462,10 +492,10 @@ class LogoutView(APIView):
         except TokenError as exc:
             logger.warning(
                 "LogoutView TokenError user_id=%s: %s",
-                getattr(request.user, 'id', 'anon'), str(exc)
+                getattr(request.user, 'id', 'anon'), str(exc),
             )
             return Response(
-                {"error": "Invalid or already expired token."},
+                {"error": "Token is already invalid or has expired."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -477,4 +507,3 @@ class LogoutView(APIView):
                 {"error": "An error occurred during logout. Please try again."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-
