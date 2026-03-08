@@ -46,11 +46,12 @@ dev: ## Start Django development server (sync WSGI — port 8000, console email)
 # ── ASGI / Uvicorn / Daphne shortcuts ──────────────────────────────────────
 asgi: run-asgi ## Alias: start ASGI server with Uvicorn (same as run-asgi)
 
-uvicorn: ## Start Uvicorn ASGI (dev, port 8001, console email, all hosts allowed)
+uvicorn: ## Start Uvicorn ASGI (dev, port 8001, console email, access logs)
 	@echo "$(CYAN)Starting Uvicorn ASGI server (development settings)...$(NC)"
 	@echo "$(YELLOW)  Settings: backend.config.development (ALLOWED_HOSTS=*)$(NC)"
-	@echo "$(YELLOW)  URL:      http://127.0.0.1:8001/ or http://FASHIONISTAR:8001/$(NC)"
-	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto --log-level info
+	@echo "$(YELLOW)  URL:      http://127.0.0.1:8001/ or http://localhost:8001/$(NC)"
+	@echo "$(YELLOW)  Logs:     Access log printed here (like Django runserver)$(NC)"
+	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto --log-level info --access-log
 
 wsgi: ## Start Gunicorn WSGI (sync production — port 8000)
 	@echo "$(CYAN)Starting Gunicorn WSGI server...$(NC)"
@@ -61,8 +62,8 @@ daphne: run-daphne ## Alias: start Daphne ASGI (same as run-daphne)
 run-asgi: ## Start ASGI + Uvicorn (auto-starts Redis first)
 	@echo "$(CYAN)Ensuring Redis is running ...$(NC)"
 	@if [ -d '../.tmp_redis' ]; then cd ../.tmp_redis && ./redis-server.exe --port 6379 & sleep 1; fi
-	@echo "$(CYAN)Starting Uvicorn ASGI server (development settings)...$(NC)"
-	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto
+	@echo "$(CYAN)Starting Uvicorn ASGI server (access logs on)...$(NC)"
+	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto --access-log
 
 run-daphne: ## Start Daphne ASGI (WebSocket — auto-starts Redis first)
 	@echo "$(CYAN)Ensuring Redis is running ...$(NC)"

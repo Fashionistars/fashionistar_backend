@@ -475,9 +475,12 @@ def build_logging_config(
             'propagate': False,
         },
         'django.db.backends': {
-            # SQL query logging — DEBUG only (never in production)
-            'handlers': ['console', 'file.django'],
-            'level': 'DEBUG' if debug else 'WARNING',
+            # SQL query logging — ⚠️ DANGER: DEBUG logs full INSERT with password
+            # hashes (pbkdf2_sha256$...) to the console. Never enable DEBUG here.
+            # Use WARNING in dev to suppress — only WARNING+ SQL errors surface.
+            # To temporarily enable SQL tracing (without passwords), set to INFO.
+            'handlers': ['file.django'],  # FILE only — NEVER console
+            'level': 'WARNING',           # Suppress in dev AND production
             'propagate': False,
         },
 
@@ -653,6 +656,35 @@ def build_logging_config(
         'celery.worker': {
             'handlers': _handlers_for('file.celery'),
             'level': 'INFO',
+            'propagate': False,
+        },
+        # ── Suppress noisy Celery internals (file-only, WARNING+) ─────────────
+        # celery.utils.functional prints task function signatures at DEBUG.
+        # These are internal lazy-object evaluations — NOT errors — pure noise.
+        'celery.utils.functional': {
+            'handlers': ['file.celery'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'celery.app.trace': {
+            'handlers': ['file.celery'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'celery.utils': {
+            'handlers': ['file.celery'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        # Suppress kombu/amqp connection-level noise in dev terminal
+        'kombu': {
+            'handlers': ['file.celery'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'amqp': {
+            'handlers': ['file.celery'],
+            'level': 'WARNING',
             'propagate': False,
         },
 
