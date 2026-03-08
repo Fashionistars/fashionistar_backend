@@ -43,7 +43,24 @@ SECRET_KEY = env(
 
 ALLOWED_HOSTS = env.list(
     "ALLOWED_HOSTS",
-    default=["127.0.0.1", "localhost", "localhost:8000", "localhost:3001"]
+    default=[
+        # WSGI dev server (Django runserver)
+        "127.0.0.1",
+        "localhost",
+        "localhost:8000",
+        "127.0.0.1:8000",
+        # ASGI / Uvicorn / Daphne (port 8001)
+        "localhost:8001",
+        "127.0.0.1:8001",
+        "0.0.0.0",
+        # Local frontend
+        "localhost:3000",
+        "localhost:3001",
+        "localhost:3002",
+        # Windows machine hostname (Uvicorn binds to 0.0.0.0)
+        "FASHIONISTAR",
+        "fashionistar",
+    ]
 )
 
 CSRF_TRUSTED_ORIGINS = env.list(

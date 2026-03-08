@@ -186,12 +186,13 @@ celery: ## Start Celery worker — general queue (dev settings, console email)
 	@echo "$(CYAN)Ensuring Redis is running ...$(NC)"
 	@if [ -d '../.tmp_redis' ]; then cd ../.tmp_redis && ./redis-server.exe --port 6379 & sleep 1; fi
 	@echo "$(CYAN)Starting Celery worker (DJANGO_SETTINGS_MODULE=development)...$(NC)"
-	@echo "$(YELLOW)  Email tasks will use: console.EmailBackend (printed to THIS terminal)$(NC)"
-	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/celery -A backend worker --loglevel=info --concurrency=4 --events
+	@echo "$(YELLOW)  Pool:  solo (Windows-safe: no prefork shared memory)&$(NC)"
+	@echo "$(YELLOW)  Email: console.EmailBackend (OTP printed to THIS terminal)$(NC)"
+	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/celery -A backend worker --loglevel=info --pool=solo --events
 
 celery-emails: ## Start Celery worker for email queue (dev, console email visible)
 	@if [ -d '../.tmp_redis' ]; then cd ../.tmp_redis && ./redis-server.exe --port 6379 & sleep 1; fi
-	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/celery -A backend worker -Q emails --loglevel=info --concurrency=2
+	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/celery -A backend worker -Q emails --loglevel=info --pool=solo
 
 celery-critical: ## Start Celery worker for critical queue (auto-starts Redis)
 	@if [ -d '../.tmp_redis' ]; then cd ../.tmp_redis && ./redis-server.exe --port 6379 & sleep 1; fi
