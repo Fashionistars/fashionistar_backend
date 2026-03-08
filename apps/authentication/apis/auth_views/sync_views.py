@@ -39,6 +39,7 @@ from apps.authentication.serializers import (
     LoginSerializer,
     ResendOTPRequestSerializer,
     UserRegistrationSerializer,
+    OTPSerializer,
 )
 from apps.authentication.services.auth_service import SyncAuthService
 from apps.authentication.services.google_service import SyncGoogleAuthService
@@ -241,6 +242,7 @@ class VerifyOTPView(generics.GenericAPIView):
           "refresh": "<JWT>"
         }
     """
+    serializer_class   = OTPSerializer
     permission_classes = [AllowAny]
     renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
     throttle_classes   = [BurstRateThrottle]

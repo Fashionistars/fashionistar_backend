@@ -36,16 +36,19 @@ install-dev: ## Install dev dependencies (linting, testing, typing)
 setup: install install-dev migrate static ## Full first-time setup
 	@echo "$(GREEN)✓ Setup complete — run 'make dev' to start$(NC)"
 
-dev: ## Start Django development server (sync WSGI — port 8000)
-	@echo "$(CYAN)Starting Django dev server (WSGI)...$(NC)"
-	venv\Scripts\python manage.py runserver
+dev: ## Start Django development server (sync WSGI — port 8000, console email)
+	@echo "$(CYAN)Starting Django dev server (WSGI, DEBUG=True, ConsoleEmail)...$(NC)"
+	@echo "$(YELLOW)  Settings: backend.config.development$(NC)"
+	@echo "$(YELLOW)  Email:    console (OTP printed to this terminal)$(NC)"
+	@echo "$(YELLOW)  URL:      http://127.0.0.1:8000/$(NC)"
+	DJANGO_SETTINGS_MODULE=backend.config.development venv\Scripts\python manage.py runserver --settings=backend.config.development
 
 # ── ASGI / Uvicorn / Daphne shortcuts ──────────────────────────────────────
 asgi: run-asgi ## Alias: start ASGI server with Uvicorn (same as run-asgi)
 
 uvicorn: ## Start Uvicorn ASGI (production-grade async, port 8000)
 	@echo "$(CYAN)Starting Uvicorn ASGI server (reload)...$(NC)"
-	venv\Scripts\uvicorn backend.asgi:application --host 0.0.0.0 --port 8000 --reload --ws auto --log-level info
+	venv\Scripts\uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto --log-level info
 
 wsgi: ## Start Gunicorn WSGI (sync production — port 8000)
 	@echo "$(CYAN)Starting Gunicorn WSGI server...$(NC)"
@@ -57,13 +60,13 @@ run-asgi: ## Start ASGI + Uvicorn (auto-starts Redis first)
 	@echo "$(CYAN)Ensuring Redis is running ...$(NC)"
 	@if [ -d '../.tmp_redis' ]; then cd ../.tmp_redis && ./redis-server.exe --port 6379 & sleep 1; fi
 	@echo "$(CYAN)Starting Uvicorn ASGI server...$(NC)"
-	venv\Scripts\uvicorn backend.asgi:application --host 0.0.0.0 --port 8000 --reload --ws auto
+	venv\Scripts\uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto
 
 run-daphne: ## Start Daphne ASGI (WebSocket — auto-starts Redis first)
 	@echo "$(CYAN)Ensuring Redis is running ...$(NC)"
 	@if [ -d '../.tmp_redis' ]; then cd ../.tmp_redis && ./redis-server.exe --port 6379 & sleep 1; fi
 	@echo "$(CYAN)Starting Daphne ASGI server...$(NC)"
-	venv\Scripts\daphne -b 0.0.0.0 -p 8000 backend.asgi:application
+	venv\Scripts\daphne -b 0.0.0.0 -p 8001 backend.asgi:application
 
 shell: ## Open Django interactive shell
 	venv\Scripts\python manage.py shell
@@ -179,15 +182,16 @@ test-watch: ## Run tests in watch mode (requires pytest-watch)
 ##@ Celery & Background Tasks
 # ═══════════════════════════════════════════════════════════════
 
-celery: ## Start Celery worker — general queue (auto-starts Redis)
+celery: ## Start Celery worker — general queue (dev settings, console email)
 	@echo "$(CYAN)Ensuring Redis is running ...$(NC)"
 	@if [ -d '../.tmp_redis' ]; then cd ../.tmp_redis && ./redis-server.exe --port 6379 & sleep 1; fi
-	@echo "$(CYAN)Starting Celery worker...$(NC)"
-	venv\Scripts\celery -A backend worker --loglevel=info --concurrency=4
+	@echo "$(CYAN)Starting Celery worker (DJANGO_SETTINGS_MODULE=development)...$(NC)"
+	@echo "$(YELLOW)  Email tasks will use: console.EmailBackend (printed to THIS terminal)$(NC)"
+	DJANGO_SETTINGS_MODULE=backend.config.development venv\Scripts\celery -A backend worker --loglevel=info --concurrency=4 --events
 
-celery-emails: ## Start Celery worker for email queue (auto-starts Redis)
+celery-emails: ## Start Celery worker for email queue (dev, console email visible)
 	@if [ -d '../.tmp_redis' ]; then cd ../.tmp_redis && ./redis-server.exe --port 6379 & sleep 1; fi
-	venv\Scripts\celery -A backend worker -Q emails --loglevel=info --concurrency=2
+	DJANGO_SETTINGS_MODULE=backend.config.development venv\Scripts\celery -A backend worker -Q emails --loglevel=info --concurrency=2
 
 celery-critical: ## Start Celery worker for critical queue (auto-starts Redis)
 	@if [ -d '../.tmp_redis' ]; then cd ../.tmp_redis && ./redis-server.exe --port 6379 & sleep 1; fi

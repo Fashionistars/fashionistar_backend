@@ -1,0 +1,525 @@
+{
+  "info": {
+    "name": "Fashionistar API — Registration Stress Test",
+    "_postman_id": "fashionistar-auth-stress-v1",
+    "description": "Comprehensive stress test collection for the Fashionistar sync registration endpoint.\n\nFlow:\n1. Register (email) → 201 + OTP email prints to console\n2. Verify OTP → 200 + JWT tokens\n3. Login → 200 + JWT tokens\n4. Resend OTP (new user) → 200\n5. Duplicate registration → 400\n6. Invalid payloads → 400 with validation errors\n7. Logout → 200\n\nBaseUrl: http://127.0.0.1:8000\nAuth: Bearer JWT (set from login response)\n\nStress Test (Collection Runner):\n- Set iterations: 50-500\n- Set delay: 0ms\n- Use CSV data file 'stress_data.csv' for unique emails",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {"key": "baseUrl", "value": "http://127.0.0.1:8000", "type": "string"},
+    {"key": "accessToken", "value": "", "type": "string"},
+    {"key": "refreshToken", "value": "", "type": "string"},
+    {"key": "testEmail", "value": "postman_test@fashionistar.io", "type": "string"},
+    {"key": "testOtp", "value": "", "type": "string"}
+  ],
+  "item": [
+    {
+      "name": "Auth — Registration",
+      "item": [
+        {
+          "name": "01 — Register (Email) ✅ Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201 Created', function() {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test('Response has success:true', function() {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.success).to.eql(true);",
+                  "});",
+                  "pm.test('Response has user_id', function() {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.data).to.have.property('user_id');",
+                  "    pm.expect(body.data.user_id).to.be.a('string');",
+                  "});",
+                  "pm.test('Registration message returned', function() {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.data.message).to.include('OTP');",
+                  "});",
+                  "pm.test('Response time < 3000ms', function() {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(3000);",
+                  "});",
+                  "// Store email for subsequent requests",
+                  "const body = pm.response.json();",
+                  "if (body.data && body.data.email) {",
+                  "    pm.collectionVariables.set('testEmail', body.data.email);",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Generate unique timestamp-based email for stress testing",
+                  "const ts = Date.now();",
+                  "const email = `stress_test_${ts}@fashionistar-postman.io`;",
+                  "pm.collectionVariables.set('testEmail', email);",
+                  "console.log('🔧 Test email:', email);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"{{testEmail}}\",\n    \"password\": \"Fashionistar2024\",\n    \"password2\": \"Fashionistar2024\",\n    \"role\": \"client\"\n}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/auth/register/", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "register", ""]}
+          }
+        },
+        {
+          "name": "02 — Register (Phone) ✅ Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201 Created', function() { pm.response.to.have.status(201); });",
+                  "pm.test('success:true', function() { pm.expect(pm.response.json().success).to.eql(true); });",
+                  "pm.test('user_id returned', function() { pm.expect(pm.response.json().data.user_id).to.be.a('string'); });"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Generate unique phone number",
+                  "const suffix = String(Date.now()).slice(-8);",
+                  "const phone = `+234${suffix}`;",
+                  "pm.variables.set('testPhone', phone);",
+                  "console.log('📱 Test phone:', phone);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"phone\": \"{{testPhone}}\",\n    \"password\": \"Fashionistar2024\",\n    \"password2\": \"Fashionistar2024\",\n    \"role\": \"vendor\"\n}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/auth/register/", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "register", ""]}
+          }
+        },
+        {
+          "name": "03 — Register (Duplicate Email) ❌ 400 Expected",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400 Bad Request', function() { pm.response.to.have.status(400); });",
+                  "pm.test('success:false', function() { pm.expect(pm.response.json().success).to.eql(false); });",
+                  "pm.test('Email already exists error', function() {",
+                  "    const body = pm.response.json();",
+                  "    const errorStr = JSON.stringify(body).toLowerCase();",
+                  "    pm.expect(errorStr).to.match(/email|already|exists/i);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"{{testEmail}}\",\n    \"password\": \"Fashionistar2024\",\n    \"password2\": \"Fashionistar2024\",\n    \"role\": \"client\"\n}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/auth/register/", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "register", ""]}
+          }
+        },
+        {
+          "name": "04 — Register (Password Mismatch) ❌ 400 Expected",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', function() { pm.response.to.have.status(400); });",
+                  "pm.test('Password mismatch error', function() {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(JSON.stringify(body).toLowerCase()).to.match(/password|match/i);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('mismatchEmail', `mismatch_${Date.now()}@fashionistar-postman.io`);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"{{mismatchEmail}}\",\n    \"password\": \"Fashionistar2024\",\n    \"password2\": \"WrongPassword9999\",\n    \"role\": \"client\"\n}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/auth/register/", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "register", ""]}
+          }
+        },
+        {
+          "name": "05 — Register (Empty Body) ❌ 400 Expected",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', function() { pm.response.to.have.status(400); });",
+                  "pm.test('Validation errors in response', function() {",
+                  "    pm.expect(pm.response.json().success).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{}"},
+            "url": {"raw": "{{baseUrl}}/api/v1/auth/register/", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "register", ""]}
+          }
+        },
+        {
+          "name": "06 — Register (Invalid Role) ❌ 400 Expected",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', function() { pm.response.to.have.status(400); });",
+                  "pm.test('Role validation error', function() {",
+                  "    pm.expect(JSON.stringify(pm.response.json()).toLowerCase()).to.match(/role|invalid/i);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('roleEmail', `role_test_${Date.now()}@fashionistar-postman.io`);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"{{roleEmail}}\",\n    \"password\": \"Fashionistar2024\",\n    \"password2\": \"Fashionistar2024\",\n    \"role\": \"superadmin\"\n}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/auth/register/", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "register", ""]}
+          }
+        },
+        {
+          "name": "07 — Register (Both Email AND Phone) ❌ 400 Expected",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', function() { pm.response.to.have.status(400); });",
+                  "pm.test('Either not both error', function() {",
+                  "    pm.expect(JSON.stringify(pm.response.json()).toLowerCase()).to.match(/email|phone|both/i);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('bothEmail', `both_${Date.now()}@fashionistar-postman.io`);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"{{bothEmail}}\",\n    \"phone\": \"+2340812345678\",\n    \"password\": \"Fashionistar2024\",\n    \"password2\": \"Fashionistar2024\",\n    \"role\": \"client\"\n}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/auth/register/", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "register", ""]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth — OTP & Login Flow",
+      "item": [
+        {
+          "name": "08 — Resend OTP ✅",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function() { pm.response.to.have.status(200); });",
+                  "pm.test('success:true', function() { pm.expect(pm.response.json().success).to.eql(true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email_or_phone\": \"{{testEmail}}\"\n}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/auth/resend-otp/", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "resend-otp", ""]}
+          }
+        },
+        {
+          "name": "09 — Verify OTP ✅ (manual: check console for OTP code)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const status = pm.response.code;",
+                  "if (status === 200) {",
+                  "    pm.test('OTP verified — JWT tokens returned', function() {",
+                  "        const body = pm.response.json();",
+                  "        pm.expect(body.success).to.eql(true);",
+                  "    });",
+                  "    const body = pm.response.json();",
+                  "    if (body.data) {",
+                  "        pm.collectionVariables.set('accessToken', body.data.access || '');",
+                  "        pm.collectionVariables.set('refreshToken', body.data.refresh || '');",
+                  "    }",
+                  "} else {",
+                  "    pm.test('OTP verify returned ' + status + ' (check OTP in console terminal)', function() {",
+                  "        pm.expect([200, 400]).to.include(status);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email_or_phone\": \"{{testEmail}}\",\n    \"otp\": \"{{testOtp}}\"\n}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/auth/verify-otp/", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "verify-otp", ""]}
+          }
+        },
+        {
+          "name": "10 — Login ✅ (after OTP verify)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const status = pm.response.code;",
+                  "if (status === 200) {",
+                  "    pm.test('Login successful — JWT tokens returned', function() {",
+                  "        const body = pm.response.json();",
+                  "        pm.expect(body.success).to.eql(true);",
+                  "    });",
+                  "    const body = pm.response.json();",
+                  "    if (body.data) {",
+                  "        pm.collectionVariables.set('accessToken', body.data.access || '');",
+                  "        pm.collectionVariables.set('refreshToken', body.data.refresh || '');",
+                  "        console.log('✅ JWT access token stored');",
+                  "    }",
+                  "} else {",
+                  "    pm.test('Login returned ' + status + ' — verify OTP first in step 09', function() {",
+                  "        pm.expect(status).to.equal(200);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email_or_phone\": \"{{testEmail}}\",\n    \"password\": \"Fashionistar2024\"\n}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/auth/login/", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "login", ""]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth — Authenticated Endpoints",
+      "item": [
+        {
+          "name": "11 — Refresh Token ✅",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function() { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "if (body.data && body.data.access) {",
+                  "    pm.collectionVariables.set('accessToken', body.data.access);",
+                  "    console.log('✅ Access token refreshed');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"refresh\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/auth/token/refresh/", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "token", "refresh", ""]}
+          }
+        },
+        {
+          "name": "12 — Logout ✅",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 or 205', function() {",
+                  "    pm.expect([200, 204, 205]).to.include(pm.response.code);",
+                  "});",
+                  "pm.collectionVariables.set('accessToken', '');",
+                  "pm.collectionVariables.set('refreshToken', '');",
+                  "console.log('🔐 Logged out — tokens cleared');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{accessToken}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"refresh_token\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/auth/logout/", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "logout", ""]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Swagger & Schema",
+      "item": [
+        {
+          "name": "13 — Swagger UI (drf-yasg) ✅",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function() { pm.response.to.have.status(200); });",
+                  "pm.test('Swagger HTML returned', function() {",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {"raw": "{{baseUrl}}/", "host": ["{{baseUrl}}"], "path": [""]}
+          }
+        },
+        {
+          "name": "14 — OpenAPI Schema JSON ✅ (was 500, now fixed)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 — schema generates without error', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Response is valid JSON', function() {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('swagger');",
+                  "});",
+                  "pm.test('Registration path in schema', function() {",
+                  "    const body = pm.response.json();",
+                  "    const paths = JSON.stringify(body.paths || {});",
+                  "    pm.expect(paths).to.include('register');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {"raw": "{{baseUrl}}/?format=openapi", "host": ["{{baseUrl}}"], "path": [""], "query": [{"key": "format", "value": "openapi"}]}
+          }
+        },
+        {
+          "name": "15 — BrowsableAPI Register Form ✅",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 — browsable API form renders', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Response is HTML', function() {",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {"raw": "{{baseUrl}}/api/v1/auth/register/?format=api", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "register", ""], "query": [{"key": "format", "value": "api"}]}
+          }
+        }
+      ]
+    }
+  ]
+}

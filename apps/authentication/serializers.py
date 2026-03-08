@@ -201,8 +201,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     class Meta:
         model = UnifiedUser
         fields = (
-            'email', 'phone', 'role', 'password', 'password2', 
-            'bio', 'avatar', 'country', 'state', 'city', 'address'
+            'email', 'phone', 'role', 'password', 'password2'
         )
         ref_name = "AuthUserRegistration"
 
@@ -242,11 +241,11 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
                 )
 
             # 5. Uniqueness Check
-            if email and User.objects.filter(email=email).exists():
+            if email and UnifiedUser.objects.filter(email=email).exists():
                 logger.warning(f"Registration failed: Email {email} already exists.")
                 raise serializers.ValidationError({"email": _("A user with this email already exists.")})
 
-            if phone and User.objects.filter(phone=phone).exists():
+            if phone and UnifiedUser.objects.filter(phone=phone).exists():
                 logger.warning(f"Registration failed: Phone {phone} already exists.")
                 raise serializers.ValidationError({"phone": _("A user with this phone number already exists.")})
 
