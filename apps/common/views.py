@@ -89,23 +89,28 @@ async def _acheck_database() -> dict[str, Any]:
 
 
 async def _acheck_redis() -> dict[str, Any]:
-    """Verify Redis connection and measure PING latency (Async)."""
+    """Verify Redis PING latency (Async, fast-fail at 300ms)."""
     def _do_check():
+        import redis as redis_lib
+        t0 = time.monotonic()
         try:
-            from apps.common.utils import get_redis_connection_safe
-            t0 = time.monotonic()
-            conn = get_redis_connection_safe(max_retries=1, retry_delay=0)
-            if conn is None:
-                return {
-                    "status": "error",
-                    "error": "Unable to connect to Redis"
-                }
+            from django.conf import settings
+            redis_url = getattr(settings, 'REDIS_URL', 'redis://127.0.0.1:6379/0')
+            # 300ms hard timeout — never hang for more than 300ms
+            conn = redis_lib.from_url(
+                redis_url,
+                socket_connect_timeout=0.3,
+                socket_timeout=0.3,
+                decode_responses=True,
+            )
             conn.ping()
             latency_ms = round((time.monotonic() - t0) * 1000, 2)
             return {"status": "ok", "latency_ms": latency_ms}
         except Exception as exc:  # noqa: BLE001
-            logger.error("Health check — redis error: %s", exc)
-            return {"status": "error", "error": str(exc)}
+            latency_ms = round((time.monotonic() - t0) * 1000, 2)
+            logger.warning("Health check — redis error: %s", exc)
+            return {"status": "error", "error": str(exc),
+                    "latency_ms": latency_ms}
     return await asyncio.to_thread(_do_check)
 
 
@@ -117,7 +122,7 @@ async def _acheck_celery() -> dict[str, Any]:
     def _do_check():
         try:
             from backend.celery import app as celery_app
-            inspector = celery_app.control.inspect(timeout=1.0)
+            inspector = celery_app.control.inspect(timeout=0.3)
             stats = inspector.stats()
             if stats:
                 worker_count = len(stats)
