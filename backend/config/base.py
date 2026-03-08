@@ -372,21 +372,46 @@ SIMPLE_JWT = {
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Fashionistar API',
     'DESCRIPTION': (
-        'Nigeria\'s Premier AI-Powered Fashion E-Commerce Platform API.\n\n'
-        '**V1 (DRF/Sync):** Standard REST endpoints, WSGI-safe.\n'
-        '**V2 (Ninja/Async):** High-concurrency async endpoints, ASGI-native.'
+        "Nigeria's Premier AI-Powered Fashion E-Commerce Platform API.\n\n"
+        "**V1 (DRF/Sync):** Standard REST endpoints, WSGI-safe, Celery-backed.\n"
+        "**V2 (Ninja/Async):** High-concurrency async endpoints, ASGI-native.\n\n"
+        "**Authentication:** Bearer JWT (SimpleJWT). Get tokens via `/api/v1/auth/login/`.\n"
+        "**Register first:** `POST /api/v1/auth/register/` → verify OTP → login."
     ),
     'VERSION': '2.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
     'COMPONENT_SPLIT_REQUEST': True,
-    'SECURITY': [{'Bearer': []}],
+    'SORT_OPERATIONS': True,
+
+    # ── Security ────────────────────────────────────────────────────────────
+    'SECURITY': [{'BearerAuth': []}],
     'SECURITY_DEFINITIONS': {
-        'Bearer': {
+        'BearerAuth': {
             'type': 'http',
             'scheme': 'bearer',
             'bearerFormat': 'JWT',
+            'description': 'Enter your JWT access token prefixed with Bearer',
         },
     },
+
+    # ── Schema Generation Robustness ────────────────────────────────────────
+    # ENUM_GENERATE_CHOICE_DESCRIPTION prevents crashes on complex enum types
+    'ENUM_GENERATE_CHOICE_DESCRIPTION': False,
+    # Suppress non-fatal warnings from legacy app URL patterns
+    'DISABLE_ERRORS_AND_WARNINGS': True,
+    # Don't fail on warnings (legacy app URL collisions)
+    'FAIL_ON_WARN': False,
+    # Auto-handle operationId collisions (pluralise duplicates automatically)
+    'OPERATION_ID': None,
+    'SERVERS': [
+        {'url': 'http://127.0.0.1:8000', 'description': 'Development (WSGI)'},
+        {'url': 'http://127.0.0.1:8001', 'description': 'Development (ASGI/Uvicorn)'},
+    ],
+    # ── Filter: Only expose /api/v1/auth/ in schema ──────────────────────
+    # Prevents legacy store/vendor/admin_backend URLs from triggering 500s
+    'PREPROCESSING_HOOKS': [
+        'apps.common.schema_hooks.filter_auth_endpoints_only',
+    ],
 }
 
 SWAGGER_SETTINGS = {

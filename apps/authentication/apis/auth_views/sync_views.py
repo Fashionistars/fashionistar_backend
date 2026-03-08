@@ -30,6 +30,7 @@ from typing import Any, Dict
 from django.db import transaction
 from rest_framework import generics, serializers as drf_serializers, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.renderers import BrowsableAPIRenderer
 from rest_framework.response import Response
 
 from apps.authentication.models import UnifiedUser
@@ -86,7 +87,7 @@ class RegisterView(generics.CreateAPIView):
     """
     serializer_class    = UserRegistrationSerializer
     permission_classes  = [AllowAny]
-    renderer_classes    = [CustomJSONRenderer]
+    renderer_classes    = [CustomJSONRenderer, BrowsableAPIRenderer]
     throttle_classes    = [BurstRateThrottle]
 
     def create(self, request, *args, **kwargs) -> Response:
@@ -176,7 +177,7 @@ class LoginView(generics.GenericAPIView):
     """
     serializer_class   = LoginSerializer
     permission_classes = [AllowAny]
-    renderer_classes   = [CustomJSONRenderer]
+    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
     throttle_classes   = [BurstRateThrottle, SustainedRateThrottle]
 
     def post(self, request, *args, **kwargs) -> Response:
@@ -241,7 +242,7 @@ class VerifyOTPView(generics.GenericAPIView):
         }
     """
     permission_classes = [AllowAny]
-    renderer_classes   = [CustomJSONRenderer]
+    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
     throttle_classes   = [BurstRateThrottle]
 
     @transaction.atomic
@@ -332,7 +333,7 @@ class ResendOTPView(generics.GenericAPIView):
     """
     serializer_class   = ResendOTPRequestSerializer
     permission_classes = [AllowAny]
-    renderer_classes   = [CustomJSONRenderer]
+    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
     throttle_classes   = [BurstRateThrottle]
 
     def post(self, request, *args, **kwargs) -> Response:
@@ -378,7 +379,7 @@ class GoogleAuthView(generics.CreateAPIView):
     """
     serializer_class   = GoogleAuthSerializer
     permission_classes = [AllowAny]
-    renderer_classes   = [CustomJSONRenderer]
+    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
     throttle_classes   = [BurstRateThrottle]
 
     def create(self, request, *args, **kwargs) -> Response:
@@ -462,7 +463,7 @@ class LogoutView(generics.GenericAPIView):
         401 — Not authenticated
     """
     permission_classes = [IsAuthenticated]
-    renderer_classes   = [CustomJSONRenderer]
+    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     def post(self, request, *args, **kwargs) -> Response:
         """Blacklists refresh token, invalidating the server-side session."""

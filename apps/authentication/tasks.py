@@ -21,8 +21,8 @@ from django.template.exceptions import TemplateDoesNotExist
 from apps.common.managers.email import EmailManager
 from apps.common.managers.sms import SMSManager
 
-# Get logger for application
-application_logger = logging.getLogger('application')
+# Per-module logger — auto-routes to logs/apps/authentication/auth.log
+logger = logging.getLogger(__name__)
 
 @shared_task(bind=True, retry_backoff=True, max_retries=3)
 def send_email_task(self, subject: str, recipients: list[str], template_name: str, context: dict, attachments: list[tuple] | None = None) -> str:
@@ -46,7 +46,8 @@ def send_email_task(self, subject: str, recipients: list[str], template_name: st
         Exception: If an error occurs during email sending, the task will be retried with exponential backoff.
     """
     try:
-        application_logger.info(f"📧 Sending email to {recipients} using template {template_name}")
+        logger.info("📧 [Celery] Sending email → recipients=%s template=%s",
+                    recipients, template_name)
         EmailManager.send_mail(
             subject=subject,
             recipients=recipients,
@@ -54,17 +55,20 @@ def send_email_task(self, subject: str, recipients: list[str], template_name: st
             context=context,
             attachments=attachments,
         )
-        application_logger.info(f"✅ Email sent successfully to {recipients}")
+        logger.info("✅ [Celery] Email sent → %s", recipients)
         return f"Email sent successfully to {recipients}"
 
-    except TemplateDoesNotExist as e:
-        application_logger.error(f"🚨 Template missing / not found: {template_name} - {e}", exc_info=True)
-        raise  # Re-raise to prevent retry for missing templates
+    except TemplateDoesNotExist as exc:
+        logger.error("🚨 [Celery] Template not found: %s — %s",
+                     template_name, exc, exc_info=True)
+        raise  # Don't retry on missing template — it won't fix itself
 
     except Exception as exc:
-        application_logger.exception(f"❌ Error sending email to {recipients}, retrying... Error: {exc}")
-        # Retry the task with exponential backoff.
-        raise self.retry(exc=exc, countdown=60)
+        logger.warning(
+            "⚠️ [Celery] Email send failed (attempt %s/%s) → %s: %s",
+            self.request.retries + 1, self.max_retries + 1, recipients, exc
+        )
+        raise self.retry(exc=exc, countdown=30 * (2 ** self.request.retries))
 
 
 @shared_task(bind=True, retry_backoff=True, max_retries=3)
@@ -84,9 +88,13 @@ def send_sms_task(self, to: str, body: str) -> str:
         Exception: If an error occurs during SMS sending, the task will be retried with exponential backoff.
     """
     try:
+        logger.info("📱 [Celery] Sending SMS → to=%s", to)
         message_sid = SMSManager.send_sms(to=to, body=body)
-        application_logger.info(f"SMS sent successfully to {to} with SID: {message_sid}")
+        logger.info("✅ [Celery] SMS sent → %s (SID: %s)", to, message_sid)
         return message_sid
     except Exception as exc:
-        application_logger.error(f"Error sending SMS to {to}: {exc}", exc_info=True)
-        raise self.retry(exc=exc, countdown=60)
+        logger.warning(
+            "⚠️ [Celery] SMS send failed (attempt %s/%s) → %s: %s",
+            self.request.retries + 1, self.max_retries + 1, to, exc
+        )
+        raise self.retry(exc=exc, countdown=30 * (2 ** self.request.retries))
