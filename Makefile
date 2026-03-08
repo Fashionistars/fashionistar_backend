@@ -41,7 +41,7 @@ dev: ## Start Django development server (sync WSGI — port 8000, console email)
 	@echo "$(YELLOW)  Settings: backend.config.development$(NC)"
 	@echo "$(YELLOW)  Email:    console (OTP printed to this terminal)$(NC)"
 	@echo "$(YELLOW)  URL:      http://127.0.0.1:8000/$(NC)"
-	DJANGO_SETTINGS_MODULE=backend.config.development venv\Scripts\python manage.py runserver --settings=backend.config.development
+	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/python manage.py runserver --settings=backend.config.development
 
 # ── ASGI / Uvicorn / Daphne shortcuts ──────────────────────────────────────
 asgi: run-asgi ## Alias: start ASGI server with Uvicorn (same as run-asgi)
@@ -187,11 +187,11 @@ celery: ## Start Celery worker — general queue (dev settings, console email)
 	@if [ -d '../.tmp_redis' ]; then cd ../.tmp_redis && ./redis-server.exe --port 6379 & sleep 1; fi
 	@echo "$(CYAN)Starting Celery worker (DJANGO_SETTINGS_MODULE=development)...$(NC)"
 	@echo "$(YELLOW)  Email tasks will use: console.EmailBackend (printed to THIS terminal)$(NC)"
-	DJANGO_SETTINGS_MODULE=backend.config.development venv\Scripts\celery -A backend worker --loglevel=info --concurrency=4 --events
+	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/celery -A backend worker --loglevel=info --concurrency=4 --events
 
 celery-emails: ## Start Celery worker for email queue (dev, console email visible)
 	@if [ -d '../.tmp_redis' ]; then cd ../.tmp_redis && ./redis-server.exe --port 6379 & sleep 1; fi
-	DJANGO_SETTINGS_MODULE=backend.config.development venv\Scripts\celery -A backend worker -Q emails --loglevel=info --concurrency=2
+	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/celery -A backend worker -Q emails --loglevel=info --concurrency=2
 
 celery-critical: ## Start Celery worker for critical queue (auto-starts Redis)
 	@if [ -d '../.tmp_redis' ]; then cd ../.tmp_redis && ./redis-server.exe --port 6379 & sleep 1; fi
