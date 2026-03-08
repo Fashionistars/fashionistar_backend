@@ -1,10 +1,4 @@
-ifneq (,$(wildcard ./.env))
-include .env
-export
-ENV_FILE_PARAM = --env-file .env
-endif
-
-.PHONY: help install dev run run-asgi run-daphne migrate test lint clean shell docker-build docker-up docker-down start-redis stop-redis stress-redis stress-health
+.PHONY: help install install-dev dev run run-asgi run-daphne asgi wsgi uvicorn daphne migrate test lint clean shell docker-build docker-up docker-down start-redis stop-redis stress-redis stress-health test-auth test-common test-store test-vendor test-customer test-payments test-async test-unit test-integration test-smoke test-cov cov-html
 .DEFAULT_GOAL := help
 
 # ─── Colors ───
@@ -23,7 +17,7 @@ help: ## Display this help message
 	@echo "$(CYAN)  Django 6.0 · Python 3.12+ · Dual-Engine (DRF + Ninja)$(NC)"
 	@echo "$(BOLD)$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"
 	@echo ""
-	@awk 'BEGIN {FS = ":.*##"; printf "Usage:\n  make $(CYAN)<target>$(NC)\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  $(CYAN)%-22s$(NC) %s\n", $$1, $$2 } /^##@/ { printf "\n$(YELLOW)%s$(NC)\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*##"; printf "Usage:\n  make $(CYAN)<target>$(NC)\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  $(CYAN)%-26s$(NC) %s\n", $$1, $$2 } /^##@/ { printf "\n$(YELLOW)%s$(NC)\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
 # ═══════════════════════════════════════════════════════════════
 ##@ Development
@@ -36,17 +30,28 @@ install: ## Install Python dependencies from requirements.txt
 
 install-dev: ## Install dev dependencies (linting, testing, typing)
 	@echo "$(CYAN)Installing dev dependencies...$(NC)"
-	pip install ruff mypy pytest pytest-django pytest-asyncio pytest-cov
+	venv\Scripts\pip install ruff mypy pytest pytest-django pytest-asyncio pytest-cov pytest-mock factory-boy
 	@echo "$(GREEN)✓ Dev dependencies installed$(NC)"
 
 setup: install install-dev migrate static ## Full first-time setup
 	@echo "$(GREEN)✓ Setup complete — run 'make dev' to start$(NC)"
 
-dev: ## Start Django development server (sync — port 8000)
-	@echo "$(CYAN)Starting Django dev server...$(NC)"
+dev: ## Start Django development server (sync WSGI — port 8000)
+	@echo "$(CYAN)Starting Django dev server (WSGI)...$(NC)"
 	venv\Scripts\python manage.py runserver
 
-# run: dev ## Alias for 'make dev'
+# ── ASGI / Uvicorn / Daphne shortcuts ──────────────────────────────────────
+asgi: run-asgi ## Alias: start ASGI server with Uvicorn (same as run-asgi)
+
+uvicorn: ## Start Uvicorn ASGI (production-grade async, port 8000)
+	@echo "$(CYAN)Starting Uvicorn ASGI server (reload)...$(NC)"
+	venv\Scripts\uvicorn backend.asgi:application --host 0.0.0.0 --port 8000 --reload --ws auto --log-level info
+
+wsgi: ## Start Gunicorn WSGI (sync production — port 8000)
+	@echo "$(CYAN)Starting Gunicorn WSGI server...$(NC)"
+	venv\Scripts\gunicorn backend.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 120
+
+daphne: run-daphne ## Alias: start Daphne ASGI (same as run-daphne)
 
 run-asgi: ## Start ASGI + Uvicorn (auto-starts Redis first)
 	@echo "$(CYAN)Ensuring Redis is running ...$(NC)"
@@ -65,6 +70,10 @@ shell: ## Open Django interactive shell
 
 shell-plus: ## Open enhanced Django shell (requires django-extensions)
 	venv\Scripts\python manage.py shell_plus --ipython 2>/dev/null || python manage.py shell
+
+# ═══════════════════════════════════════════════════════════════
+##@ Database & Migrations
+# ═══════════════════════════════════════════════════════════════
 
 # ═══════════════════════════════════════════════════════════════
 ##@ Database & Migrations
