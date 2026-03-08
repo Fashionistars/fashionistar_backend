@@ -191,11 +191,12 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         help_text="User's phone number"
     )
     
-    # Use explicit choices from UnifiedUser if available, else fallback
-    ROLE_CHOICES = getattr(UnifiedUser, 'ROLE_CHOICES', [('vendor', 'Vendor'), ('client', 'Client')])
+    # Public registration only allows vendor or client roles.
+    # Admin / staff / editor are internal roles assigned via admin panel.
+    ROLE_CHOICES = [('vendor', 'Vendor'), ('client', 'Client')]
     role = serializers.ChoiceField(
-        choices=ROLE_CHOICES, 
-        help_text="User's role"
+        choices=ROLE_CHOICES,
+        help_text="User's role: 'vendor' or 'client'"
     )
 
     class Meta:
@@ -208,46 +209,76 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         """
         Validates registration data with strict checks.
+
+        KEY FIX: Normalises empty-string email/phone to None BEFORE any
+        downstream check. DRF inserts '' for optional fields not in the
+        payload (because allow_blank=True). Without this normalisation,
+        email='' is forwarded to the service and ultimately to the DB
+        unique constraint — causing a false "Email already exists" error
+        on every second phone-only registration.
         """
         try:
             # 1. Password Match
             if attrs['password'] != attrs['password2']:
                 logger.warning("Registration failed: Passwords do not match.")
-                raise serializers.ValidationError({"password": _("Passwords do not match.")})
+                raise serializers.ValidationError(
+                    {"password": _("Passwords do not match.")}
+                )
 
-            email = attrs.get('email')
-            phone = attrs.get('phone')
+            # ── CRITICAL: Normalise empty strings → None ──────────────────
+            # If the client omits 'email' entirely, DRF sets email='' due
+            # to allow_blank=True. '' passed to create_user() hits the DB
+            # unique constraint on email as if a real duplicate was sent.
+            # Converting '' → None here prevents the false "email exists" error
+            # that was firing on every phone-only registration.
+            attrs['email'] = attrs.get('email') or None
+            attrs['phone'] = attrs.get('phone') or None
+
+            email = attrs['email']
+            phone = attrs['phone']
             role = attrs.get('role')
 
             # 2. Strict Role Validation
             valid_roles = [c[0] for c in self.ROLE_CHOICES]
             if role not in valid_roles:
-                logger.warning(f"Registration failed: Invalid role {role}.")
-                raise serializers.ValidationError({'role': _("Invalid role value.")})
+                logger.warning("Registration failed: Invalid role %s.", role)
+                raise serializers.ValidationError(
+                    {'role': _("Invalid role. Must be 'vendor' or 'client'.")}
+                )
 
-            # 3. Exclusivity Check (Email XOR Phone)
-            # "Please provide either an email address or a phone number, not both."
+            # 3. Exclusivity Check — Email XOR Phone (not both)
             if email and phone:
                 logger.warning("Registration failed: Both email and phone provided.")
-                raise serializers.ValidationError(
-                    {'non_field_errors': [_('Please provide either an email address or a phone number, not both.')]}
-                )
-            
-            # 4. Existence Check (At least one)
+                raise serializers.ValidationError({
+                    'non_field_errors': [_(
+                        'Please provide either an email address or a '
+                        'phone number, not both.'
+                    )]
+                })
+
+            # 4. Presence Check — at least one identifier required
             if not email and not phone:
                 logger.warning("Registration failed: Neither email nor phone provided.")
+                raise serializers.ValidationError({
+                    'non_field_errors': [_(
+                        'Please provide either an email address or a '
+                        'phone number; one is required.'
+                    )]
+                })
+
+            # 5. Uniqueness Check (DB-level guard; model.clean() also checks
+            #    but earlier feedback here gives a cleaner UX error message)
+            if email and UnifiedUser.objects.filter(email=email).exists():
+                logger.warning("Registration failed: Email %s already exists.", email)
                 raise serializers.ValidationError(
-                    {'non_field_errors': [_('Please provide either an email address or a phone number, one is required.')]}
+                    {"email": _("A user with this email address already exists.")}
                 )
 
-            # 5. Uniqueness Check
-            if email and UnifiedUser.objects.filter(email=email).exists():
-                logger.warning(f"Registration failed: Email {email} already exists.")
-                raise serializers.ValidationError({"email": _("A user with this email already exists.")})
-
             if phone and UnifiedUser.objects.filter(phone=phone).exists():
-                logger.warning(f"Registration failed: Phone {phone} already exists.")
-                raise serializers.ValidationError({"phone": _("A user with this phone number already exists.")})
+                logger.warning("Registration failed: Phone %s already exists.", phone)
+                raise serializers.ValidationError(
+                    {"phone": _("A user with this phone number already exists.")}
+                )
 
             logger.info("Registration validation successful.")
             return attrs
@@ -455,11 +486,34 @@ class PasswordResetConfirmPhoneSerializer(serializers.Serializer):
 class LogoutSerializer(serializers.Serializer):
     """
     Serializer for user logout.
+    Accepts the refresh token body so the server can blacklist it.
+
+    Note: The field is named 'refresh' (not 'refresh_token') to match
+    the SimpleJWT convention used in LogoutView.post().
     """
-    refresh_token = serializers.CharField(help_text="Refresh token for logout")
+    refresh = serializers.CharField(
+        required=True,
+        help_text="Refresh token to blacklist on logout.",
+    )
 
     class Meta:
         ref_name = "AuthLogout"
+
+
+class TokenRefreshSerializer(serializers.Serializer):
+    """
+    Serializer for JWT token refresh.
+
+    Wraps SimpleJWT's token refresh so drf-yasg can generate the correct
+    Swagger schema for RefreshTokenView (field: refresh → returns access).
+    """
+    refresh = serializers.CharField(
+        required=True,
+        help_text="A valid refresh token previously issued by the login endpoint.",
+    )
+
+    class Meta:
+        ref_name = "AuthTokenRefresh"
 
 
 class ProtectedUserSerializer(serializers.ModelSerializer):

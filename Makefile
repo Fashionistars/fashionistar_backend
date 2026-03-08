@@ -50,8 +50,8 @@ uvicorn: ## Start Uvicorn ASGI (dev, port 8001, console email, access logs)
 	@echo "$(CYAN)Starting Uvicorn ASGI server (development settings)...$(NC)"
 	@echo "$(YELLOW)  Settings: backend.config.development (ALLOWED_HOSTS=*)$(NC)"
 	@echo "$(YELLOW)  URL:      http://127.0.0.1:8001/ or http://localhost:8001/$(NC)"
-	@echo "$(YELLOW)  Logs:     Access log printed here (like Django runserver)$(NC)"
-	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto --log-level info --access-log
+	@echo "$(YELLOW)  Logs:     Access log printed here (ALL requests — 2xx, 4xx, 5xx)$(NC)"
+	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto --log-config uvicorn_log_config.json
 
 wsgi: ## Start Gunicorn WSGI (sync production — port 8000)
 	@echo "$(CYAN)Starting Gunicorn WSGI server...$(NC)"
@@ -63,7 +63,7 @@ run-asgi: ## Start ASGI + Uvicorn (auto-starts Redis first)
 	@echo "$(CYAN)Ensuring Redis is running ...$(NC)"
 	@if [ -d '../.tmp_redis' ]; then cd ../.tmp_redis && ./redis-server.exe --port 6379 & sleep 1; fi
 	@echo "$(CYAN)Starting Uvicorn ASGI server (access logs on)...$(NC)"
-	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto --access-log
+	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto --log-config uvicorn_log_config.json
 
 run-daphne: ## Start Daphne ASGI (WebSocket — auto-starts Redis first)
 	@echo "$(CYAN)Ensuring Redis is running ...$(NC)"

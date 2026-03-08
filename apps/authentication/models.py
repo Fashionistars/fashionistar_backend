@@ -345,8 +345,28 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
 
         - New users: mutual-exclusivity, uniqueness, role check.
         - Existing users: immutability guards on identity fields.
+
+        IMPORTANT — NULL re-normalisation after super().clean():
+        ``AbstractUser.clean()`` calls ``BaseUserManager.normalize_email()``
+        which converts ``None`` → ``''`` (empty string).
+        Example: ``normalize_email(None)`` → ``email or ''`` → ``''``
+        This OVERWRITES the ``email = None`` we set in ``save()`` just
+        before calling ``full_clean()``, causing Django's
+        ``validate_unique()`` to treat ``email=''`` as a real duplicate
+        and raise "Unified User with this Email address already exists."
+        for every second phone-only registration.
+
+        We re-apply None normalisation here to reverse that silently.
         """
         super().clean()
+
+        # ── Re-apply NULL normalisation (undoes AbstractUser.clean() side-effect)
+        # Must happen BEFORE validate_unique() which is called by full_clean()
+        # after clean() returns.
+        if not self.email:
+            self.email = None
+        if not self.phone:
+            self.phone = None
 
         if self._state.adding:
             # ── NEW USER VALIDATION ──────────────────────────

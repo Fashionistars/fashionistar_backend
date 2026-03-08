@@ -38,7 +38,9 @@ from apps.authentication.models import UnifiedUser
 from apps.authentication.serializers import (
     GoogleAuthSerializer,
     LoginSerializer,
+    LogoutSerializer,
     ResendOTPRequestSerializer,
+    TokenRefreshSerializer,
     UserRegistrationSerializer,
     OTPSerializer,
 )
@@ -456,6 +458,7 @@ class RefreshTokenView(generics.GenericAPIView):
     Success Response 200:
         { "access": "<new access token>" }
     """
+    serializer_class   = TokenRefreshSerializer  # Needed for drf-yasg schema
     permission_classes = [AllowAny]
     renderer_classes   = [CustomJSONRenderer]
 
@@ -487,6 +490,7 @@ class LogoutView(generics.GenericAPIView):
         400 — Token already blacklisted or missing
         401 — Not authenticated
     """
+    serializer_class   = LogoutSerializer   # Needed for drf-yasg schema
     permission_classes = [IsAuthenticated]
     renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
 

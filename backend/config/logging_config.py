@@ -700,6 +700,39 @@ def build_logging_config(
             'level': 'DEBUG' if debug else 'INFO',
             'propagate': False,
         },
+
+        # ── Uvicorn ASGI server loggers ────────────────────────────────────────
+        # Uvicorn uses its own internal loggers ('uvicorn.access', 'uvicorn.error')
+        # and does NOT call Django's 'django.server' logger.
+        #
+        # CRITICAL: Uvicorn's access log records use OLD-STYLE % formatting:
+        #   logger.info('%s - "%s %s HTTP/%s" %d', client, method, path, ver, status)
+        # Our 'console' handler uses brace-style (style='{') for the formatter
+        # template, but calls record.getMessage() which handles %-style args
+        # correctly. The handler itself works fine.
+        #
+        # However, Uvicorn by default configures its own StreamHandler on
+        # 'uvicorn' and 'uvicorn.access'. With propagate=False, our handlers
+        # take over. With propagate=True and our handler ALSO added, we'd
+        # get duplicate lines.
+        #
+        # Solution: override uvicorn.access with our console handler and no
+        # propagation, which gives us the Uvicorn access format on stdout.
+        'uvicorn': {
+            'handlers': _handlers_for('console'),
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'uvicorn.error': {
+            'handlers': _handlers_for('console'),
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'uvicorn.access': {
+            'handlers': _handlers_for('console'),
+            'level': 'INFO',
+            'propagate': False,
+        },
     }
 
     return {

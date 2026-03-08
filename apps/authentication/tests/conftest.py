@@ -16,6 +16,43 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 
+# ─── Global throttle bypass for ALL authentication tests ──────────────────────
+# BurstRateThrottle reads from a Redis-backed store (not Django's cache),
+# so setting CACHES=DummyCache doesn't prevent 429s.
+# This autouse fixture patches allow_request() at the class level, ensuring
+# every endpoint test sees no throttle limits regardless of prior requests.
+@pytest.fixture(autouse=True)
+def no_throttle(mocker):
+    """Disable all throttle classes for every test in this package."""
+    mocker.patch(
+        'apps.authentication.throttles.BurstRateThrottle.allow_request',
+        return_value=True,
+    )
+    mocker.patch(
+        'apps.authentication.throttles.SustainedRateThrottle.allow_request',
+        return_value=True,
+    )
+
+
+@pytest.fixture(autouse=True)
+def mock_otp_sync(mocker):
+    """
+    Patch OTPService.generate_otp_sync to avoid Redis in tests.
+
+    OTPService stores OTPs in Redis. The test environment uses DummyCache
+    (no Redis), so generate_otp_sync() raises 'Service unavailable' and
+    every registration test gets 500 without this patch.
+
+    Returns a fixed 6-digit OTP string so downstream code (email context,
+    SMS body) still gets a realistic value.
+    """
+    mocker.patch(
+        'apps.authentication.services.otp_service.OTPService.generate_otp_sync',
+        return_value='123456',
+    )
+
+
+
 @pytest.fixture
 @pytest.mark.django_db
 def otp_user(db):

@@ -37,7 +37,7 @@ from typing import Dict, Any
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
-from django.utils.translation import gettext_lazy as _
+from django.db.utils import IntegrityError
 from rest_framework import serializers as drf_serializers
 
 from apps.authentication.models import UnifiedUser
@@ -88,6 +88,13 @@ class RegistrationService:
         # ── Lazily import Celery tasks to avoid circular imports ──────────
         from apps.authentication.tasks import send_email_task, send_sms_task
 
+        # ── Defence-in-depth: Normalise empty strings → None ─────────────
+        # The serializer already does this, but we guard here too in case
+        # register_sync() is called directly (e.g. from admin commands,
+        # management scripts, or async wrappers).
+        email = email or None
+        phone = str(phone) if phone else None  # PhoneNumber object → str
+
         try:
             with transaction.atomic():
                 # ── Strip validation-only fields (not stored on model) ────
@@ -120,6 +127,33 @@ class RegistrationService:
                     raise drf_serializers.ValidationError(
                         {'error': exc.messages}
                     )
+                except IntegrityError as exc:
+                    # ── DB-level unique constraint fired (bypassed full_clean)
+                    # This happens on Uvicorn/ASGI because the ASGI event loop
+                    # can interleave coroutines — full_clean() runs OK but
+                    # between clean() and save() another request inserts the row.
+                    # Also happens when create_user() is called without full_clean
+                    # in some edge paths.
+                    # Convert to a DRF 400 with a field-specific error message.
+                    err_str = str(exc).lower()
+                    if 'email' in err_str:
+                        raise drf_serializers.ValidationError(
+                            {'email': [
+                                'A user with this email address already exists.'
+                            ]}
+                        )
+                    if 'phone' in err_str:
+                        raise drf_serializers.ValidationError(
+                            {'phone': [
+                                'A user with this phone number already exists.'
+                            ]}
+                        )
+                    # Unknown constraint — generic 400 (better than 500)
+                    raise drf_serializers.ValidationError(
+                        {'error': [
+                            'A user with these details already exists.'
+                        ]}
+                    )
                 logger.info(
                     "✅ User created (sync): id=%s identifier=%s role=%s",
                     user.id, email or phone, role
@@ -131,52 +165,71 @@ class RegistrationService:
                     "🔐 OTP generated for user_id=%s", user.id
                 )
 
-            # ── 3. FIRE CELERY TASK (outside atomic block) ────────────────
-            # The .delay() call puts the job on the Redis queue immediately.
-            # The Celery worker picks it up and sends the email/SMS
-            # within milliseconds, WITHOUT blocking the HTTP response.
+            # ── 3. FIRE CELERY TASK via transaction.on_commit() ───────────
+            # WHY on_commit():
+            #   .delay() puts a message on the Redis queue immediately.
+            #   If called *inside* atomic() (or any outer atomic), the DB
+            #   row may not yet be visible to the Celery worker when it
+            #   tries to load the user — especially on Uvicorn (ASGI) where
+            #   the event loop may interleave coroutines between the DB write
+            #   and the Redis publish.
+            #
+            #   transaction.on_commit() fires the closure ONLY after the
+            #   outermost transaction commits successfully.  If the atomic
+            #   block rolls back (duplicate, constraint, etc.) the task is
+            #   never queued — correct behaviour.
+            #
+            #   This is the Django-recommended enterprise pattern for
+            #   coupling async side-effects to DB transactions.
+
+            _user_id  = str(user.id)   # capture before closure
+            _otp      = otp
+
             if email:
                 from django.conf import settings as _settings
-                context = {
-                    'user_id': str(user.id),
-                    'otp': otp,
+                _email_context = {
+                    'user_id': _user_id,
+                    'otp': _otp,
                     'user_name': (
                         getattr(user, 'first_name', None)
                         or email.split('@')[0]
                     ),
                     'support_email': 'support@fashionistar.io',
-                    # Required by registration_email.html template
                     'SITE_URL': getattr(
                         _settings, 'SITE_URL', 'https://fashionistar.io'
                     ),
                 }
-                send_email_task.delay(
+                transaction.on_commit(lambda: send_email_task.delay(
                     subject="🔐 Verify Your Fashionistar Account",
                     recipients=[email],
                     template_name='authentication/email/registration_email.html',
-                    context=context,
-                )
+                    context=_email_context,
+                ))
                 logger.info(
-                    "📧 OTP email task queued → Celery [user_id=%s, email=%s]",
-                    user.id, email
+                    "📧 OTP email task scheduled on_commit → Celery "
+                    "[user_id=%s email=%s]",
+                    _user_id, email,
                 )
 
             elif phone:
-                body = (
+                _phone_body = (
                     f"Welcome to Fashionistar!\n"
-                    f"Your verification OTP is: {otp}\n"
+                    f"Your verification OTP is: {_otp}\n"
                     f"Valid for 10 minutes. Do not share this code."
                 )
-                send_sms_task.delay(to=str(phone), body=body)
+                transaction.on_commit(lambda: send_sms_task.delay(
+                    to=phone, body=_phone_body
+                ))
                 logger.info(
-                    "📱 OTP SMS task queued → Celery [user_id=%s, phone=%s]",
-                    user.id, phone
+                    "📱 OTP SMS task scheduled on_commit → Celery "
+                    "[user_id=%s phone=%s]",
+                    _user_id, phone,
                 )
 
             else:
                 logger.warning(
                     "⚠️ User %s created without email or phone — no OTP dispatched",
-                    user.id
+                    _user_id,
                 )
 
             return {
@@ -184,9 +237,9 @@ class RegistrationService:
                     'Registration successful. '
                     'Check your email or phone for your OTP verification code.'
                 ),
-                'user_id': str(user.id),
-                'email': email,
-                'phone': str(phone) if phone else None,
+                'user_id': _user_id,
+                'email': email,          # None for phone-only users
+                'phone': phone,          # None for email-only users (already str or None)
             }
 
         except Exception as exc:
