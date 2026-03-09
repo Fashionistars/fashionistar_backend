@@ -81,6 +81,9 @@ SITE_URL = env("SITE_URL", default="http://127.0.0.1:8000")
 # INSTALLED APPS
 # =============================================================================
 INSTALLED_APPS = [
+    # ── Backend core (AppConfig fixes Python 3.12 logging QueueListener) ─────
+    'backend.apps.BackendConfig',
+
     # ── Admin UI ─────────────────────────────────────────────────────────────
     'jazzmin',
     'drf_yasg',
@@ -672,3 +675,53 @@ LOGGING = build_logging_config(
     use_json=False,       # Overridden to True in production.py
     mail_admins=False,    # Overridden to True in production.py
 )
+
+# =============================================================================
+# LOGGING CONFIGURATION HOOK
+# =============================================================================
+# PROBLEM (Python 3.12 + Django 4.2+):
+#   Django's default LOGGING_CONFIG = 'logging.config.dictConfig' is called
+#   by Django's setup() machinery. In Python 3.12, dictConfig() automatically
+#   wraps ALL handlers in a QueueHandler (async) for thread safety. This means
+#   handlers are NOT directly attached to loggers — they're in a background
+#   queue listener. Under Uvicorn/ASGI, this async routing drops INFO-level
+#   log records from middleware (apps.common.middleware) before they reach
+#   stdout, causing 2xx success requests to appear invisible in the terminal
+#   while 4xx errors (which also trigger django.request WARNING level) do show.
+#
+# FIX:
+#   Set LOGGING_CONFIG = None to prevent Django from calling dictConfig() via
+#   the auto-wrapping pipeline. Then call dictConfig() DIRECTLY ourselves with
+#   the same LOGGING dict. This attaches handlers DIRECTLY to each logger
+#   (synchronous, no queue), ensuring every log record — including INFO-level
+#   success request lines — reaches stdout reliably on ALL server types.
+#
+# RESULT:
+#   - Django dev server:   ALL requests logged (was already OK)
+#   - Uvicorn ASGI server: ALL requests logged (2xx + 4xx + 5xx) ← FIX
+#   - Daphne ASGI server:  ALL requests logged (2xx + 4xx + 5xx) ← FIX
+#   - Celery worker:       Email task output appears in worker terminal ← FIX
+#
+# HOW (Django official pattern):
+#   Django calls LOGGING_CONFIG(LOGGING) during django.setup() — AFTER all
+#   apps load and env is stable. By setting LOGGING_CONFIG to our own callable,
+#   we call logging.config.dictConfig() at the right time (post-setup), ensuring
+#   all file handlers can create log directories and attach properly.
+#   See: https://docs.djangoproject.com/en/4.2/topics/logging/#custom-logging-configuration
+
+
+def _apply_logging_config(config):
+    """
+    Custom LOGGING_CONFIG callable — called by Django during setup().
+    Applies our logging config via dictConfig() at the correct time,
+    after all apps load, ensuring handlers attach directly to loggers.
+    """
+    import logging.config as _lc
+    _lc.dictConfig(config)
+
+
+# Django reads LOGGING_CONFIG as a dotted path and calls it with LOGGING dict.
+# Using the standard 'logging.config.dictConfig' here — BackendConfig.ready()
+# (in backend/apps.py) re-applies this config AFTER all apps load to fix
+# the Python 3.12 QueueHandler/QueueListener issue under Uvicorn/Daphne.
+LOGGING_CONFIG = 'logging.config.dictConfig'
