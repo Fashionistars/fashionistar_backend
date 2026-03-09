@@ -190,10 +190,11 @@ class LoginView(generics.GenericAPIView):
     Success Response 200:
         {
           "message": "Login Successful",
-          "tokens": {
-            "access":  "<JWT access token>",
-            "refresh": "<JWT refresh token>"
-          }
+          "user_id": "<uuid>",
+          "role":    "client",
+          "identifying_info": "user@example.com",
+          "access":  "<JWT access token>",
+          "refresh": "<JWT refresh token>"
         }
 
     Error Responses:
@@ -207,37 +208,57 @@ class LoginView(generics.GenericAPIView):
     throttle_classes   = [BurstRateThrottle, SustainedRateThrottle]
 
     def post(self, request, *args, **kwargs) -> Response:
-        """Authenticates user and returns JWT access + refresh tokens."""
+        """
+        Validates credentials via LoginSerializer, issues JWT tokens.
+
+        LoginSerializer.validate() checks: user exists, password correct,
+        is_active=True (account must be OTP-verified). The validated User
+        object is used directly — no redundant authenticate() call.
+        Mirrors legacy userauths.LoginView pattern exactly.
+        """
         try:
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
-            data: Dict[str, Any] = serializer.validated_data
 
-            tokens = SyncAuthService.login(
-                data['email_or_phone'],
-                data['password'],
-                request,
-            )
+            # Use validated user from serializer (no double-authenticate)
+            user = serializer.validated_data['user']
+
+            # Update last login timestamp
+            from django.contrib.auth.models import update_last_login
+            update_last_login(None, user)
+
+            # Issue JWT tokens
+            from rest_framework_simplejwt.tokens import RefreshToken
+            refresh = RefreshToken.for_user(user)
 
             logger.info(
-                "✅ LoginView: login successful for %s",
-                data['email_or_phone'],
+                "✅ LoginView: login successful for %s (id=%s role=%s)",
+                user.identifying_info, user.id, user.role,
             )
 
             return Response(
-                {"message": "Login Successful", "tokens": tokens},
+                {
+                    "message":          "Login successful.",
+                    "user_id":          str(user.id),
+                    "role":             user.role,
+                    "identifying_info": user.identifying_info,
+                    "access":           str(refresh.access_token),
+                    "refresh":          str(refresh),
+                },
                 status=status.HTTP_200_OK,
             )
 
         except drf_serializers.ValidationError as exc:
-            logger.warning("⚠️ LoginView validation error: %s", exc)
+            logger.warning("⚠️ LoginView validation error: %s", exc.detail)
             return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
 
         except Exception as exc:
-            logger.error("❌ LoginView error: %s", str(exc), exc_info=True)
+            logger.error(
+                "❌ LoginView unexpected error: %s", str(exc), exc_info=True
+            )
             return Response(
-                {"error": "Authentication failed. Check credentials."},
-                status=status.HTTP_400_BAD_REQUEST,
+                {"error": "An error occurred during login. Please try again."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 
