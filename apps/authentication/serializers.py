@@ -1,15 +1,11 @@
 import logging
 
 from apps.authentication.models import UnifiedUser  # Explicit import for choices if needed
-from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
 from phonenumber_field.serializerfields import PhoneNumberField
 from rest_framework import serializers
-
-# Get the User model dynamically (should be UnifiedUser)
-User = get_user_model()
 
 # Initialize logger for this module
 logger = logging.getLogger(__name__)
@@ -118,9 +114,9 @@ class LoginSerializer(serializers.Serializer):
             # Using Q objects or simple if/else for email/phone
             user = None
             if '@' in email_or_phone:
-                user = User.objects.filter(email=email_or_phone).first()
+                user = UnifiedUser.objects.filter(email=email_or_phone).first()
             else:
-                user = User.objects.filter(phone=email_or_phone).first()
+                user = UnifiedUser.objects.filter(phone=email_or_phone).first()
             
             if not user:
                 # Check 'is_deleted' if strictly required, but usually filter excludes them automatically if manager is set

@@ -272,11 +272,14 @@ class VerifyOTPView(generics.GenericAPIView):
 
     Synchronous OTP Verification.
 
-    Verifies OTP → activates user → auto-issues JWT tokens (same as legacy).
+    Mirrors the legacy VerifyOTPView pattern exactly:
+      - Client sends ONLY the 6-digit OTP code (no user_id in request).
+      - Server discovers the user via O(1) SHA-256 hash index in Redis.
+      - Activates the account (is_active=True, is_verified=True).
+      - Auto-issues JWT access + refresh tokens on success.
 
     Request Body:
-        otp     (str): 6-digit OTP code.
-        user_id (str): UUID of the user to verify.
+        otp (str): 6-digit OTP code received via email or SMS.
 
     Success Response 200:
         {
@@ -287,6 +290,12 @@ class VerifyOTPView(generics.GenericAPIView):
           "access":  "<JWT>",
           "refresh": "<JWT>"
         }
+
+    Error Responses:
+        400 — Missing OTP, invalid / expired OTP
+        404 — User not found (OTP valid but user deleted mid-flow)
+        503 — Redis unavailable
+        500 — Unexpected server error
     """
     serializer_class   = OTPSerializer
     permission_classes = [AllowAny]
@@ -295,72 +304,103 @@ class VerifyOTPView(generics.GenericAPIView):
 
     @transaction.atomic
     def post(self, request, *args, **kwargs) -> Response:
-        """Verifies OTP code and returns JWT tokens on success."""
+        """
+        Verifies OTP (OTP-only, no user_id in request) and issues JWT tokens.
+
+        Flow:
+          1. Validate OTP format via OTPSerializer (6-digit numeric).
+          2. OTPService.verify_by_otp_sync():
+               - SHA-256 hash the submitted OTP.
+               - O(1) Redis GET otp_hash:{hash} → primary_key.
+               - Parse user_id from primary_key.
+               - TTL-guard: verify primary key still alive.
+               - Atomic DEL both keys (one-time use).
+               - Returns {'user_id': ..., 'purpose': ...} or None.
+          3. Fetch User from DB using discovered user_id.
+          4. Activate account: is_active=True, is_verified=True.
+          5. Issue JWT tokens → return full response.
+
+        Mirrors legacy VerifyOTPView — client only needs the OTP code.
+        """
         try:
-            otp_code = request.data.get('otp')
-            user_id  = request.data.get('user_id')
+            # Step 1 — Validate OTP format via serializer
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            otp_code = serializer.validated_data['otp']
 
-            if not otp_code or not user_id:
-                return Response(
-                    {"error": "Both 'otp' and 'user_id' are required."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            valid = OTPService.verify_otp_sync(user_id, otp_code, purpose="verify")
-            if not valid:
-                logger.warning("⚠️ Invalid/expired OTP for user_id=%s", user_id)
+            # Step 2 — O(1) Redis lookup: OTP → user_id (no scan, no user_id needed)
+            result = OTPService.verify_by_otp_sync(otp_code, purpose='verify')
+            if not result:
+                logger.warning("⚠️ VerifyOTPView: invalid/expired OTP submitted")
                 return Response(
                     {"error": "Invalid or expired OTP. Please request a new one."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+            user_id = result['user_id']
+
+            # Step 3 — Fetch User from DB
             try:
                 user = UnifiedUser.objects.only(
                     "id", "is_active", "is_verified", "role", "email", "phone"
                 ).get(pk=user_id)
             except UnifiedUser.DoesNotExist:
-                logger.error("❌ User not found after OTP verify: %s", user_id)
+                logger.error(
+                    "❌ VerifyOTPView: user not found after OTP verify: %s", user_id
+                )
                 return Response(
                     {"error": "User not found."},
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
+            # Step 4 — Activate account
+            changed = []
             if not user.is_active:
-                user.is_active = True
-            user.is_verified = True
-            user.save(update_fields=['is_active', 'is_verified'])
+                user.is_active   = True
+                changed.append('is_active')
+            if not user.is_verified:
+                user.is_verified = True
+                changed.append('is_verified')
+            if changed:
+                user.save(update_fields=changed)
 
             logger.info(
-                "✅ Account verified: id=%s, identifier=%s",
+                "✅ Account verified: id=%s identifier=%s",
                 user.id, user.identifying_info,
             )
 
+            # Step 5 — Issue JWT tokens
             from rest_framework_simplejwt.tokens import RefreshToken
+            from django.contrib.auth.models import update_last_login
             refresh = RefreshToken.for_user(user)
+            update_last_login(None, user)
 
             return Response(
                 {
-                    "message": "Your account has been successfully verified.",
-                    "user_id": str(user.id),
-                    "role":    user.role,
+                    "message":          "Your account has been successfully verified.",
+                    "user_id":          str(user.id),
+                    "role":             user.role,
                     "identifying_info": user.identifying_info,
-                    "access":  str(refresh.access_token),
-                    "refresh": str(refresh),
+                    "access":           str(refresh.access_token),
+                    "refresh":          str(refresh),
                 },
                 status=status.HTTP_200_OK,
             )
 
         except drf_serializers.ValidationError as exc:
-            logger.warning("⚠️ VerifyOTPView validation error: %s", exc)
+            logger.warning("⚠️ VerifyOTPView validation error: %s", exc.detail)
             return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
 
         except Exception as exc:
             transaction.set_rollback(True)
-            logger.error("❌ VerifyOTPView error: %s", str(exc), exc_info=True)
+            logger.error(
+                "❌ VerifyOTPView unexpected error: %s", str(exc), exc_info=True
+            )
             return Response(
                 {"error": "Verification failed. Please try again."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════
