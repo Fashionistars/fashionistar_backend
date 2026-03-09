@@ -1,4 +1,4 @@
-# apps/authentication/services/registration_service.py
+# apps/authentication/services/registration/sync_service.py
 """
 FASHIONISTAR — Registration Service (Sync + Async)
 ===================================================
@@ -41,7 +41,7 @@ from django.db.utils import IntegrityError
 from rest_framework import serializers as drf_serializers
 
 from apps.authentication.models import UnifiedUser
-from apps.authentication.services.otp_service import OTPService
+from apps.authentication.services.otp import OTPService
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ class RegistrationService:
 
         Steps:
             1. atomic transaction: create user
-            2. generate OTP (stored in DB)
+            2. generate OTP (stored in Redis)
             3. .delay() → Celery task → Redis queue → worker sends email/SMS
             4. return 201 payload to client
 
@@ -89,9 +89,6 @@ class RegistrationService:
         from apps.authentication.tasks import send_email_task, send_sms_task
 
         # ── Defence-in-depth: Normalise empty strings → None ─────────────
-        # The serializer already does this, but we guard here too in case
-        # register_sync() is called directly (e.g. from admin commands,
-        # management scripts, or async wrappers).
         email = email or None
         phone = str(phone) if phone else None  # PhoneNumber object → str
 
@@ -119,71 +116,37 @@ class RegistrationService:
                         **extra_fields
                     )
                 except DjangoValidationError as exc:
-                    # model.full_clean() fires on save() — catches race-condition
-                    # duplicates that slipped past serializer uniqueness check.
-                    # Re-raise as DRF ValidationError so the view returns 400.
                     if hasattr(exc, 'message_dict'):
                         raise drf_serializers.ValidationError(exc.message_dict)
-                    raise drf_serializers.ValidationError(
-                        {'error': exc.messages}
-                    )
+                    raise drf_serializers.ValidationError({'error': exc.messages})
                 except IntegrityError as exc:
-                    # ── DB-level unique constraint fired (bypassed full_clean)
-                    # This happens on Uvicorn/ASGI because the ASGI event loop
-                    # can interleave coroutines — full_clean() runs OK but
-                    # between clean() and save() another request inserts the row.
-                    # Also happens when create_user() is called without full_clean
-                    # in some edge paths.
-                    # Convert to a DRF 400 with a field-specific error message.
                     err_str = str(exc).lower()
                     if 'email' in err_str:
                         raise drf_serializers.ValidationError(
-                            {'email': [
-                                'A user with this email address already exists.'
-                            ]}
+                            {'email': ['A user with this email address already exists.']}
                         )
                     if 'phone' in err_str:
                         raise drf_serializers.ValidationError(
-                            {'phone': [
-                                'A user with this phone number already exists.'
-                            ]}
+                            {'phone': ['A user with this phone number already exists.']}
                         )
-                    # Unknown constraint — generic 400 (better than 500)
                     raise drf_serializers.ValidationError(
-                        {'error': [
-                            'A user with these details already exists.'
-                        ]}
+                        {'error': ['A user with these details already exists.']}
                     )
+
                 logger.info(
                     "✅ User created (sync): id=%s identifier=%s role=%s",
                     user.id, email or phone, role
                 )
 
-                # ── 2. GENERATE OTP (stored in DB, atomic) ────────────────
+                # ── 2. GENERATE OTP (stored in Redis, atomic) ─────────────
                 otp = OTPService.generate_otp_sync(user.id, purpose='verify')
-                logger.info(
-                    "🔐 OTP generated for user_id=%s", user.id
-                )
+                logger.info("🔐 OTP generated for user_id=%s", user.id)
 
             # ── 3. FIRE CELERY TASK via transaction.on_commit() ───────────
-            # WHY on_commit():
-            #   .delay() puts a message on the Redis queue immediately.
-            #   If called *inside* atomic() (or any outer atomic), the DB
-            #   row may not yet be visible to the Celery worker when it
-            #   tries to load the user — especially on Uvicorn (ASGI) where
-            #   the event loop may interleave coroutines between the DB write
-            #   and the Redis publish.
-            #
-            #   transaction.on_commit() fires the closure ONLY after the
-            #   outermost transaction commits successfully.  If the atomic
-            #   block rolls back (duplicate, constraint, etc.) the task is
-            #   never queued — correct behaviour.
-            #
-            #   This is the Django-recommended enterprise pattern for
-            #   coupling async side-effects to DB transactions.
-
-            _user_id  = str(user.id)   # capture before closure
-            _otp      = otp
+            # on_commit() fires ONLY after the outermost transaction commits
+            # successfully — ensuring the user row is visible to the worker.
+            _user_id = str(user.id)
+            _otp = otp
 
             if email:
                 from django.conf import settings as _settings
@@ -195,9 +158,7 @@ class RegistrationService:
                         or email.split('@')[0]
                     ),
                     'support_email': 'support@fashionistar.io',
-                    'SITE_URL': getattr(
-                        _settings, 'SITE_URL', 'https://fashionistar.io'
-                    ),
+                    'SITE_URL': getattr(_settings, 'SITE_URL', 'https://fashionistar.io'),
                 }
                 transaction.on_commit(lambda: send_email_task.delay(
                     subject="🔐 Verify Your Fashionistar Account",
@@ -225,7 +186,6 @@ class RegistrationService:
                     "[user_id=%s phone=%s]",
                     _user_id, phone,
                 )
-
             else:
                 logger.warning(
                     "⚠️ User %s created without email or phone — no OTP dispatched",
@@ -238,48 +198,13 @@ class RegistrationService:
                     'Check your email or phone for your OTP verification code.'
                 ),
                 'user_id': _user_id,
-                'email': email,          # None for phone-only users
-                'phone': phone,          # None for email-only users (already str or None)
+                'email': email,
+                'phone': phone,
             }
 
         except Exception as exc:
             logger.error(
                 "❌ RegistrationService.register_sync failed: %s", str(exc),
-                exc_info=True
-            )
-            raise
-
-    # ─────────────────────────────────────────────────────────────────────────
-    #  ASYNC WRAPPER (for Ninja / ASGI views)
-    # ─────────────────────────────────────────────────────────────────────────
-
-    @staticmethod
-    async def register_async(
-        email: str = None,
-        phone: str = None,
-        password: str = None,
-        role: str = 'client',
-        request: Any = None,
-        **extra_fields
-    ) -> Dict[str, Any]:
-        """
-        Async wrapper around register_sync for Django Ninja / ASGI endpoints.
-        Celery .delay() is I/O-safe (just drops a message to Redis) so no
-        special async handling is needed.
-        """
-        from asgiref.sync import sync_to_async
-        try:
-            return await sync_to_async(RegistrationService.register_sync)(
-                email=email,
-                phone=phone,
-                password=password,
-                role=role,
-                request=request,
-                **extra_fields
-            )
-        except Exception as exc:
-            logger.error(
-                "❌ RegistrationService.register_async failed: %s", str(exc),
                 exc_info=True
             )
             raise

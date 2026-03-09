@@ -6,7 +6,7 @@ from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.conf import settings
 from apps.authentication.models import UnifiedUser
-from apps.authentication.services.otp_service import OTPService
+from apps.authentication.services.otp import OTPService
 from apps.common.managers.email import EmailManager
 from apps.common.managers.sms import SMSManager
 

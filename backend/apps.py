@@ -52,7 +52,7 @@ class BackendConfig(AppConfig):
         """
         _BASE = Path(__file__).resolve().parent.parent
 
-        # ── Guard: StatReloader calls ready() in parent AND child process ─────
+        # ── Guard: StatReloader calls ready() in parent AND child process ────
         # We use an env var so the guard persists across the os.exec() call
         # that the autoreloader uses to restart the child process.
         already_ran = os.environ.get(_BACKEND_LOGGING_READY_ENV)
@@ -60,7 +60,7 @@ class BackendConfig(AppConfig):
 
         in_celery_worker = _is_celery_worker()
 
-        # ── Step 1: Wipe all existing root handlers ───────────────────────────
+        # ── Step 1: Wipe all existing root handlers ──────────────────────────
         # dictConfig() placed a QueueHandler (with no listener) on root.
         # Clear it before we install our own handler to avoid duplicates.
         root = logging.getLogger()
@@ -72,13 +72,13 @@ class BackendConfig(AppConfig):
                 pass
             root.removeHandler(handler)
 
-        # ── Step 2: Silence django.utils.autoreload DEBUG spam ────────────────
+        # ── Step 2: Silence django.utils.autoreload DEBUG spam ───────────────
         # The autoreloader logs a DEBUG line for EVERY template/locale dir it
         # watches (including hundreds of venv/site-packages dirs). Set it to
         # WARNING so only real problems appear.
         logging.getLogger('django.utils.autoreload').setLevel(logging.WARNING)
 
-        # ── Step 3: Console StreamHandler — skip in Celery worker mode ────────
+        # ── Step 3: Console StreamHandler — skip in Celery worker mode ───────
         # In Celery worker mode, Celery's own signal handler
         # (celeryd_hijack_root_logger) adds its `[timestamp: LEVEL/Process]`
         # format handler to root AFTER ready() runs. If we also add our
@@ -98,7 +98,7 @@ class BackendConfig(AppConfig):
             # Celery worker: let Celery control root. Just set the level.
             root.setLevel(logging.DEBUG)
 
-        # ── Step 4: Per-app RotatingFileHandler + propagation ─────────────────
+        # ── Step 4: Per-app RotatingFileHandler + propagation ────────────────
         file_fmt = logging.Formatter(
             '[%(levelname)-8s] %(asctime)s | %(name)s:%(lineno)d | '
             '%(funcName)s() | %(message)s',
@@ -142,7 +142,7 @@ class BackendConfig(AppConfig):
             lg.propagate = True
             lg.setLevel(logging.DEBUG)
 
-        # ── Step 5: Print startup message — only ONCE, only in non-Celery ─────
+        # ── Step 5: Print startup message — only ONCE, only in non-Celery ────
         if not already_ran and not in_celery_worker:
             server = 'ASGI' if 'uvicorn' in argv_str() else 'Django dev'
             print(

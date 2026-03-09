@@ -266,16 +266,34 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
                     )]
                 })
 
-            # 5. Uniqueness Check (DB-level guard; model.clean() also checks
-            #    but earlier feedback here gives a cleaner UX error message)
-            if email and UnifiedUser.objects.filter(email=email).exists():
-                logger.warning("Registration failed: Email %s already exists.", email)
+            # ── Normalise email to match manager's normalize_email() ─────────
+            # BaseUserManager.normalize_email() lowercases the domain part.
+            # Without this, 'user@EXAMPLE.COM' passes the serializer's
+            # filter(email='user@EXAMPLE.COM') check (→ not found, because
+            # the DB stores 'user@example.com') and only fails at
+            # model.full_clean() — causing the noisy 1900ms WSGI path.
+            # Normalizing here ensures the serializer check matches the DB.
+            from django.contrib.auth.base_user import BaseUserManager as _BUM
+            if email:
+                email = _BUM.normalize_email(email)
+                attrs['email'] = email
+
+            # 5. Uniqueness Check — catches duplicates BEFORE model.save()
+            #    Uses iexact for full case-insensitive safety on both WSGI+ASGI.
+            if email and UnifiedUser.objects.filter(
+                email__iexact=email
+            ).exists():
+                logger.warning(
+                    "Registration failed: Email %s already exists.", email
+                )
                 raise serializers.ValidationError(
                     {"email": _("A user with this email address already exists.")}
                 )
 
             if phone and UnifiedUser.objects.filter(phone=phone).exists():
-                logger.warning("Registration failed: Phone %s already exists.", phone)
+                logger.warning(
+                    "Registration failed: Phone %s already exists.", phone
+                )
                 raise serializers.ValidationError(
                     {"phone": _("A user with this phone number already exists.")}
                 )

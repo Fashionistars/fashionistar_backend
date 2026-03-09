@@ -46,8 +46,8 @@ from apps.authentication.serializers import (
 )
 from apps.authentication.services.auth_service import SyncAuthService
 from apps.authentication.services.google_service import SyncGoogleAuthService
-from apps.authentication.services.otp_service import OTPService
-from apps.authentication.services.registration_service import RegistrationService
+from apps.authentication.services.otp import OTPService
+from apps.authentication.services.registration import RegistrationService
 from apps.authentication.throttles import BurstRateThrottle, SustainedRateThrottle
 from apps.common.renderers import CustomJSONRenderer
 

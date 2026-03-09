@@ -14,8 +14,8 @@ from apps.authentication.types.auth_schemas import (
     VerifyOTPSchema, 
     ResendOTPSchema
 )
-from apps.authentication.services.registration_service import RegistrationService
-from apps.authentication.services.otp_service import OTPService
+from apps.authentication.services.registration import RegistrationService
+from apps.authentication.services.otp import OTPService
 from apps.authentication.serializers import (
     AsyncUserRegistrationSerializer,
     AsyncLoginSerializer,
