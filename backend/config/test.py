@@ -79,3 +79,25 @@ LOGGING = {
         'level': 'CRITICAL',
     },
 }
+
+# ─── SimpleJWT — disable token blacklisting in tests ─────────────────────────
+# Problem: simplejwt's token_blacklist app has OutstandingToken.user FK pointing
+# to AUTH_USER_MODEL = 'userauths.User'. But our new views use UnifiedUser
+# instances in RefreshToken.for_user(user). Until AUTH_USER_MODEL is migrated
+# to 'authentication.UnifiedUser', token blacklisting crashes in tests.
+#
+# Fix: Remove token_blacklist from INSTALLED_APPS in tests.
+# RefreshToken.for_user() skips OutstandingToken.create() when the app is absent.
+INSTALLED_APPS = [
+    app for app in INSTALLED_APPS   # type: ignore[name-defined]
+    if app != 'rest_framework_simplejwt.token_blacklist'
+]
+
+SIMPLE_JWT = {
+    **SIMPLE_JWT,           # type: ignore[name-defined]
+    'ROTATE_REFRESH_TOKENS': False,
+    'BLACKLIST_AFTER_ROTATION': False,
+    'UPDATE_LAST_LOGIN': False,
+}
+
+
