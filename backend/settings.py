@@ -337,12 +337,19 @@ STORAGES = {
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField' # Keep this as BigAutoField for new projects
 
-AUTH_USER_MODEL = 'userauths.User'
+# ─────────────────────────────────────────────────────────────────────────────
+# AUTH_USER_MODEL — March 2026 Migration
+# authentication.UnifiedUser is now the single source of truth.
+# backend/config/base.py is also set identically.
+# This file (settings.py) is the fallback used by management commands
+# when DJANGO_SETTINGS_MODULE is not explicitly set.
+# ─────────────────────────────────────────────────────────────────────────────
+AUTH_USER_MODEL = 'authentication.UnifiedUser'
 
-# Authentication backends - include our new UnifiedUser backend
+# Authentication backends — UnifiedUser backend is PRIMARY
 AUTHENTICATION_BACKENDS = [
-    'django.contrib.auth.backends.ModelBackend',  # Default backend for old system
-    'apps.authentication.backends.UnifiedUserBackend',  # New backend for UnifiedUser
+    'apps.authentication.backends.UnifiedUserBackend',
+    'django.contrib.auth.backends.ModelBackend',  # fallback
 ]
 
 
@@ -491,10 +498,11 @@ JAZZMIN_SETTINGS = {
     # It correctly points to the `avatar` property on your custom User model.
     "user_avatar": "avatar",
     
-    # This maps the `avatar` property for displaying avatars in user list views.
+    # Jazzmin uses AUTH_USER_MODEL for avatar display.
+    # Now that AUTH_USER_MODEL = 'authentication.UnifiedUser',
+    # the avatar is the UnifiedUser.avatar ImageField.
     "usermodel_field_mappings": {
-        # Replace 'users.User' with your actual custom User model
-        "userauths.User": "avatar", 
+        "authentication.UnifiedUser": "avatar",
     },
 
     "site_title": "Fashionistar",

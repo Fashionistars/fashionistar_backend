@@ -71,11 +71,12 @@ run-daphne: ## Start Daphne ASGI (WebSocket — auto-starts Redis first)
 	@echo "$(CYAN)Starting Daphne ASGI server (development settings)...$(NC)"
 	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/daphne -b 0.0.0.0 -p 8001 backend.asgi:application
 
-shell: ## Open Django interactive shell
-	venv\Scripts\python manage.py shell
+shell: ## Open Django interactive shell (development settings)
+	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/python manage.py shell
 
 shell-plus: ## Open enhanced Django shell (requires django-extensions)
-	venv\Scripts\python manage.py shell_plus --ipython 2>/dev/null || python manage.py shell
+	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/python manage.py shell_plus --ipython 2>/dev/null || \
+		DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/python manage.py shell
 
 # ═══════════════════════════════════════════════════════════════
 ##@ Database & Migrations
@@ -125,11 +126,23 @@ db-shell: ## Open database shell (dbshell)
 ##@ Admin & Users
 # ═══════════════════════════════════════════════════════════════
 
-superuser: ## Create a Django superuser
-	venv\Scripts\python manage.py createsuperuser
+superuser: ## Create a Django superuser (interactive — uses UnifiedUser via correct settings)
+	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/python manage.py createsuperuser
 
-changepass: ## Change a user's password
-	venv\Scripts\python manage.py changepassword
+su: ## Create UnifiedUser superuser non-interactively (usage: make su EMAIL=admin@example.com PASS=secret)
+	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/python manage.py shell -c "
+from apps.authentication.models import UnifiedUser
+email = '$(EMAIL)' or 'admin@fashionistar.io'
+passwd = '$(PASS)' or 'FashionAdmin2026!'
+if UnifiedUser.objects.filter(email=email).exists():
+    print(f'Superuser already exists: {email}')
+else:
+    u = UnifiedUser.objects.create_superuser(email=email, password=passwd, role='admin')
+    print(f'\n\033[0;32m✓ UnifiedUser superuser created: {u.email} | member_id={u.member_id}\033[0m')
+"
+
+changepass: ## Change a UnifiedUser password (uses correct settings)
+	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/python manage.py changepassword
 
 static: ## Collect static files
 	@echo "$(CYAN)Collecting static files...$(NC)"
