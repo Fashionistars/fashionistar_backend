@@ -1,14 +1,19 @@
 from rest_framework import serializers
 from django.utils.translation import gettext_lazy as _
 from django.db.models import Q
-from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from phonenumber_field.serializerfields import PhoneNumberField
 from django.contrib.auth import authenticate
 from django.shortcuts import get_object_or_404
 from userauths.models import Profile
 
-User = get_user_model()
+# — Import the legacy userauths.User directly —
+# DO NOT use get_user_model() here. AUTH_USER_MODEL is now
+# 'authentication.UnifiedUser' (Phase 3, March 2026).
+# The userauths app retains its own legacy User model for
+# backward-compatible API routes. Direct import ensures
+# these serializers always reference the correct model.
+from userauths.models import User
 
 
 class OTPSerializer(serializers.Serializer):
@@ -370,10 +375,11 @@ class LogoutSerializer(serializers.Serializer):
 class ProtectedUserSerializer(serializers.ModelSerializer):
     """
     Serializer to expose only safe user information.
+    Uses the legacy userauths.User model directly.
     """
     class Meta:
         model = User
-        fields = ('id', 'identifying_info',  'role', 'is_active','verified')  # No password!
+        fields = ('id', 'identifying_info', 'role', 'is_active', 'verified')  # No password!
         ref_name = "LegacyProtectedUser"
 
 

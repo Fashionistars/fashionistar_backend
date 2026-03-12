@@ -214,18 +214,10 @@ class TestLoginFailures:
 class TestLogout:
     """
     Logout relies on simplejwt token_blacklist app.
-    In test settings, token_blacklist is excluded from INSTALLED_APPS because
-    OutstandingToken.user FK points to userauths.User (legacy), not UnifiedUser.
-    These tests are skipped until AUTH_USER_MODEL is migrated to UnifiedUser.
+    AUTH_USER_MODEL migrated to 'authentication.UnifiedUser' (March 2026).
+    token_blacklist is now ENABLED in test settings — skip markers removed.
     """
 
-    @pytest.mark.skip(
-        reason=(
-            "token_blacklist app excluded from test INSTALLED_APPS "
-            "(OutstandingToken FK → userauths.User, not UnifiedUser). "
-            "Re-enable after AUTH_USER_MODEL migration."
-        )
-    )
     def test_logout_blacklists_token(self, auth_api_client, registered_verified_user):
         from rest_framework_simplejwt.tokens import RefreshToken
         refresh = RefreshToken.for_user(registered_verified_user)
@@ -234,12 +226,10 @@ class TestLogout:
         )
         assert r.status_code == status.HTTP_200_OK
 
-    @pytest.mark.skip(reason="Requires token_blacklist app — see class docstring.")
     def test_logout_without_refresh_token_returns_400(self, auth_api_client):
         r = auth_api_client.post(LOGOUT_URL, {}, format='json')
         assert r.status_code == status.HTTP_400_BAD_REQUEST
 
-    @pytest.mark.skip(reason="Requires token_blacklist app — see class docstring.")
     def test_double_logout_returns_400(self, auth_api_client, registered_verified_user):
         from rest_framework_simplejwt.tokens import RefreshToken
         refresh = str(RefreshToken.for_user(registered_verified_user))

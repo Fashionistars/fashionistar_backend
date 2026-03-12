@@ -212,11 +212,20 @@ if 'sqlite' in DATABASES['default']['ENGINE']:
 # =============================================================================
 # AUTHENTICATION
 # =============================================================================
-AUTH_USER_MODEL = 'userauths.User'  # NOTE: Will migrate to authentication.UnifiedUser in Phase 3
+# ─────────────────────────────────────────────────────────────────────────────
+# AUTH_USER_MODEL Migration — Phase 3 (March 2026)
+# UnifiedUser is now the SINGLE source of truth for all authentication.
+# Legacy `userauths.User` remains in the codebase for reference ONLY.
+# All Django auth machinery (admin, JWT, permissions, groups) now uses
+# `authentication.UnifiedUser` exclusively.
+# ─────────────────────────────────────────────────────────────────────────────
+AUTH_USER_MODEL = 'authentication.UnifiedUser'
 
 AUTHENTICATION_BACKENDS = [
-    'django.contrib.auth.backends.ModelBackend',       # Legacy userauths
-    'apps.authentication.backends.UnifiedUserBackend', # New UnifiedUser
+    # UnifiedUserBackend handles email + phone + Google OAuth
+    'apps.authentication.backends.UnifiedUserBackend',
+    # Django's ModelBackend kept as session/admin fallback
+    'django.contrib.auth.backends.ModelBackend',
 ]
 
 AUTH_PASSWORD_VALIDATORS = [

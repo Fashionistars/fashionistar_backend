@@ -46,9 +46,14 @@ class TestLoginHappyPath:
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
-        assert 'tokens' in data
-        assert 'access' in data['tokens']
-        assert 'refresh' in data['tokens']
+        # Flat response format (Phase 3, March 2026)
+        # access + refresh are at the top level or inside 'data' key
+        payload = data.get('data', data)
+        assert 'access' in payload, (
+            f"'access' missing from response. Keys: {list(payload.keys())}. "
+            "Response format must be flat (not nested under 'tokens')."
+        )
+        assert 'refresh' in payload
 
     def test_login_access_token_is_non_empty(
         self, api_client, registered_verified_user
@@ -59,8 +64,9 @@ class TestLoginHappyPath:
             'password': 'SecurePass123!@#',
         }
         response = api_client.post(LOGIN_URL, payload, format='json')
-        access_token = response.json().get('tokens', {}).get('access', '')
-        assert access_token
+        payload = response.json().get('data', response.json())
+        access_token = payload.get('access', '')
+        assert access_token, "access token must not be empty"
         # JWT format: header.payload.signature — 3 dot-separated segments
         assert len(access_token.split('.')) == 3
 
