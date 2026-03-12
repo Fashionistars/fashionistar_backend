@@ -832,7 +832,7 @@ class UnifiedUserAdmin(
             str: Safe HTML ``<span>`` with member_id.
         """
         if not obj.member_id:
-            return format_html('<span style="color:#999;">—</span>')
+            return mark_safe('<span style="color:#999;">—</span>')
         return format_html(
             '<span style="'
             'font-family:monospace;'
@@ -910,11 +910,11 @@ class UnifiedUserAdmin(
             str: Safe HTML checkmark or cross.
         """
         if obj.is_verified:
-            return format_html(
+            return mark_safe(
                 '<span style="color:#2ecc71;font-weight:bold;">'
                 '✓ Verified</span>'
             )
-        return format_html(
+        return mark_safe(
             '<span style="color:#e74c3c;font-weight:bold;">'
             '✗ Unverified</span>'
         )
@@ -933,14 +933,14 @@ class UnifiedUserAdmin(
             str: Safe HTML status pill.
         """
         if obj.is_active:
-            return format_html(
+            return mark_safe(
                 '<span style="'
                 'background:#2ecc71;color:#fff;'
                 'padding:2px 8px;border-radius:12px;'
                 'font-size:11px;font-weight:600;">'
                 'Active</span>'
             )
-        return format_html(
+        return mark_safe(
             '<span style="'
             'background:#bdc3c7;color:#fff;'
             'padding:2px 8px;border-radius:12px;'
@@ -975,7 +975,7 @@ class UnifiedUserAdmin(
                 )
             except Exception:
                 pass
-        return format_html(
+        return mark_safe(
             '<span style="'
             'display:inline-flex;'
             'align-items:center;'
