@@ -9,7 +9,7 @@ You requested a new OTP to verify your account.  Here it is:
 
 OTP: {{ otp }}
 
-Expires in {{ time }}
+Expires in {{ otp_expiry|default:"5 minutes" }}
 
 Best Regards,
 The Fashionistar Team

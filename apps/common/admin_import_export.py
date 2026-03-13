@@ -62,7 +62,21 @@ from django.utils.translation import gettext_lazy as _
 
 from import_export import resources, fields as ie_fields
 from import_export.admin import ImportExportModelAdmin
-from import_export.formats.base_formats import CSV, XLSX, JSON
+from import_export.formats.base_formats import CSV, JSON
+
+# XLSX requires openpyxl — include it only if the package is installed.
+# This prevents UnsupportedFormat crashes when openpyxl is absent.
+try:
+    import openpyxl  # noqa: F401
+    from import_export.formats.base_formats import XLSX as _XLSX
+    _XLSX_FORMATS = [_XLSX]
+except ImportError:
+    _XLSX_FORMATS = []
+    logger_temp = __import__('logging').getLogger('application')
+    logger_temp.warning(
+        "openpyxl not installed — XLSX export/import disabled. "
+        "Run: pip install openpyxl>=3.1.0"
+    )
 
 logger = logging.getLogger('application')
 
@@ -235,7 +249,8 @@ class EnterpriseImportExportMixin(ImportExportModelAdmin):
 
     Supported formats
     -----------------
-    CSV (default), XLSX, JSON — configure via formats attribute.
+    CSV (default), XLSX (requires openpyxl), JSON — XLSX is only available
+    when openpyxl is installed; otherwise only CSV + JSON are offered.
     """
 
     # Show Import + Export buttons
@@ -243,8 +258,8 @@ class EnterpriseImportExportMixin(ImportExportModelAdmin):
         'admin/import_export/change_list_export.html'
     )
 
-    # Available file formats for import/export dialog
-    formats = [CSV, XLSX, JSON]
+    # Available file formats — XLSX only if openpyxl is installed
+    formats = [CSV, *_XLSX_FORMATS, JSON]
 
     # Streaming chunk size for the custom stream_export_csv action
     EXPORT_CHUNK_SIZE: int = 500

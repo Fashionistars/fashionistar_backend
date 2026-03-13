@@ -55,7 +55,7 @@
                 <br>
                 <span class="highlight"><b>{{ otp }}</b></span>
                 <br>
-                Expires in {{ time }} minutes.
+                Expires in {{ otp_expiry|default:"5 minutes" }} minutes.
             </p>
             <br>
 

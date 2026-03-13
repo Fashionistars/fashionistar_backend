@@ -13,7 +13,7 @@ To complete your sign-up, please use the following One-Time Password (OTP) to ve
 
 OTP: {{ token }}
 
-Expires in {{ time }}
+Expires in {{ otp_expiry|default:"5 minutes" }}
 
 Best Regards,
 The Fashionistar Team
