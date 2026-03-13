@@ -48,7 +48,7 @@ from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 
-from import_export import resources, fields
+from import_export import fields
 from import_export.admin import ImportExportModelAdmin
 from import_export.formats.base_formats import CSV, XLSX, JSON
 
@@ -56,6 +56,10 @@ from auditlog.admin import LogEntryAdmin
 from auditlog.models import LogEntry
 
 from apps.common.admin_mixins import SoftDeleteAdminMixin
+from apps.common.admin_import_export import (
+    EnterpriseImportExportMixin,
+    EnterpriseModelResource,
+)
 from apps.authentication.models import UnifiedUser, BiometricCredential
 
 logger = logging.getLogger('application')
@@ -65,7 +69,7 @@ logger = logging.getLogger('application')
 # 1.  IMPORT/EXPORT RESOURCE  — Enterprise Streaming + Idempotent UPSERT
 # ═══════════════════════════════════════════════════════════════════════════
 
-class UnifiedUserResource(resources.ModelResource):
+class UnifiedUserResource(EnterpriseModelResource):
     """
     Enterprise import/export resource for UnifiedUser.
 
@@ -128,8 +132,12 @@ class UnifiedUserResource(resources.ModelResource):
         # django-import-export passes this to queryset.iterator(chunk_size=…)
         chunk_size = 500
 
-    # ─── Computed fields ────────────────────────────────────────────────
+    # Fields that trigger "changed" detection in skip_row (inherited from EnterpriseModelResource)
+    CHANGE_DETECTION_FIELDS: tuple[str, ...] = (
+        'email', 'phone', 'role', 'is_active', 'is_verified', 'is_deleted',
+    )
 
+    # Export-only computed field: combined full name
     def dehydrate_full_name(self, obj: UnifiedUser) -> str:
         """Export: combine first_name + last_name into a single column."""
         parts = [obj.first_name or '', obj.last_name or '']
@@ -702,7 +710,7 @@ class UnifiedUserAdmin(
         'provider_badge',
         'verified_badge',
         'active_badge',
-        'is_deleted',
+        'deleted_badge',   # ✅ Active / 🗑 Deleted pill — replaces raw bool X icon
         'last_login',
         'created_at',
     )
@@ -740,7 +748,7 @@ class UnifiedUserAdmin(
         'soft_delete_selected',
         'restore_selected',
         'hard_delete_selected',       # Superuser-only permanent delete
-        'export_as_streaming_csv',    # High-throughput streaming CSV export
+        'stream_export_csv',          # Global streaming CSV (from EnterpriseImportExportMixin)
         'bulk_verify_users',          # Mark users as verified
         'bulk_activate_users',        # Mark users as active
         'bulk_deactivate_users',      # Mark users as inactive
@@ -988,6 +996,31 @@ class UnifiedUserAdmin(
         )
 
     avatar_thumbnail.short_description = _('Avatar')
+
+    def deleted_badge(self, obj: UnifiedUser) -> str:
+        """
+        Render ``is_deleted`` as a colour-coded enterprise pill badge.
+
+        Replaces the raw boolean column (which renders as ✗/✓ or an 'X'
+        icon) with a clear, accessible, hover-title pill:
+          - 🗑 Deleted (red)   when is_deleted=True
+          - ✅ Active (green)  when is_deleted=False
+
+        Uses the global ``EnterpriseImportExportMixin.deleted_badge()``
+        helper so the visual language is consistent across all app admins
+        (Vendors, Products, Categories, etc.).
+
+        Args:
+            obj: UnifiedUser instance.
+
+        Returns:
+            Safe HTML string — a coloured pill badge.
+        """
+        return EnterpriseImportExportMixin.deleted_badge(obj.is_deleted)
+
+    deleted_badge.short_description = _('Deleted?')
+    deleted_badge.admin_order_field = 'is_deleted'
+    deleted_badge.allow_tags = True          # Django < 4.0 compat
 
     # ════════════════════════════════════════════════════════════════════
     # FIELD LOCKING

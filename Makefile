@@ -129,17 +129,8 @@ db-shell: ## Open database shell (dbshell)
 superuser: ## Create a Django superuser (interactive — uses UnifiedUser via correct settings)
 	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/python manage.py createsuperuser
 
-su: ## Create UnifiedUser superuser non-interactively (usage: make su EMAIL=admin@example.com PASS=secret)
-	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/python manage.py shell -c "
-from apps.authentication.models import UnifiedUser
-email = '$(EMAIL)' or 'admin@fashionistar.io'
-passwd = '$(PASS)' or 'FashionAdmin2026!'
-if UnifiedUser.objects.filter(email=email).exists():
-    print(f'Superuser already exists: {email}')
-else:
-    u = UnifiedUser.objects.create_superuser(email=email, password=passwd, role='admin')
-    print(f'\n\033[0;32m✓ UnifiedUser superuser created: {u.email} | member_id={u.member_id}\033[0m')
-"
+su: ## Create UnifiedUser superuser non-interactively (make su EMAIL=x PASS=y)
+	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/python scripts/create_superuser.py "$(EMAIL)" "$(PASS)"
 
 changepass: ## Change a UnifiedUser password (uses correct settings)
 	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/python manage.py changepassword

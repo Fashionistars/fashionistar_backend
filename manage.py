@@ -22,7 +22,32 @@ if sys.stderr.encoding and sys.stderr.encoding.lower() != "utf-8":
 
 def main():
     """Run administrative tasks."""
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
+    # ── Settings Module Resolution ─────────────────────────────────────────
+    # Priority order (highest → lowest):
+    #   1. DJANGO_SETTINGS_MODULE already set in shell/CI env — wins outright.
+    #   2. WORKING_ENVIRONMENT from .env → auto-maps to config submodule.
+    #   3. Fallback: backend.config.development (NEVER legacy backend.settings)
+    #
+    # WORKING_ENVIRONMENT values:
+    #   development → backend.config.development
+    #   staging     → backend.config.production   (prod settings on staging host)
+    #   testing     → backend.config.test
+    #   production  → backend.config.production
+    _env_map = {
+        'development': 'backend.config.development',
+        'staging':     'backend.config.production',
+        'testing':     'backend.config.test',
+        'production':  'backend.config.production',
+    }
+    # If DJANGO_SETTINGS_MODULE is already set (by CI, Makefile, or shell),
+    # leave it alone — it takes the highest priority.
+    if not os.environ.get('DJANGO_SETTINGS_MODULE'):
+        _working_env = os.environ.get('WORKING_ENVIRONMENT', 'development').lower()
+        _settings_module = _env_map.get(
+            _working_env,
+            'backend.config.development',   # Safe fallback (NEVER legacy settings)
+        )
+        os.environ['DJANGO_SETTINGS_MODULE'] = _settings_module
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:
