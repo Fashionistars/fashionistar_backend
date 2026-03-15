@@ -137,8 +137,10 @@ def send_email_task(self, subject: str, recipients: list[str], template_name: st
 
 
 
+from utilities.managers.sms import SMSClientError  # Import your SMSClientError
+
 @shared_task(bind=True, retry_backoff=True, max_retries=3)
-def send_sms_task(self, to: str, body: str) -> str:
+def send_sms_task(self, to: str, body: str) -> str | None:
     """
     Sends an SMS asynchronously using Celery, leveraging the SMSManager.
 
@@ -155,8 +157,20 @@ def send_sms_task(self, to: str, body: str) -> str:
     """
     try:
         message_sid = SMSManager.send_sms(to=to, body=body)
-        application_logger.info(f"SMS sent successfully to {to} with SID: {message_sid}")
         return message_sid
+    
+    except SMSClientError as exc:
+        application_logger.warning(
+            f"🚫 SMS permanently rejected by provider for {to}: {exc}. "
+            f"Task will NOT be retried to prevent log pollution."
+        )
+        # We return None instead of raising, so Celery marks the task as SUCCESS 
+        # (or ignored) rather than polluting the logs with retries for a 400 error.
+        return None
+        
     except Exception as exc:
-        application_logger.error(f"Error sending SMS to {to}: {exc}", exc_info=True)
+        application_logger.error(
+            f"❌ Temporary or unexpected error sending SMS to {to}: {exc}. Retrying...", 
+            exc_info=False
+        )
         raise self.retry(exc=exc, countdown=60)  # Retry with exponential backoff

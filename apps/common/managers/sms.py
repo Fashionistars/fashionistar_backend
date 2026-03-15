@@ -17,9 +17,23 @@ class SMSManagerError(Exception):
     """
     Custom Exception for SMS Manager.
     
-    raised when critical known errors occur during SMS dispatch or provider 
-    configuration loading. This helps segregate SMS failures from other 
-    system exceptions.
+    raised when unexpected critical errors occur during SMS dispatch or provider 
+    configuration loading. This helps segregate SMS failures from other system exceptions.
+    """
+    pass
+
+class SMSClientError(SMSManagerError):
+    """
+    Raised when the SMS provider explicitly rejects the request due to user/input error 
+    (e.g., Unverified number on a Twilio trial account, Invalid E.164 formatting). 
+    These errors are permanent and SHOULD NOT be retried by task queues like Celery.
+    """
+    pass
+
+class SMSServerError(SMSManagerError):
+    """
+    Raised when the SMS provider experiences an internal server error (500) or timeout.
+    These errors are transient and SHOULD be retried by Celery with exponential backoff.
     """
     pass
 
