@@ -179,10 +179,22 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
     )
 
     # Profile Data (Merged from legacy Profile)
-    avatar = models.ImageField(
-        upload_to="avatars/%Y/%m/",
-        default="default/default-user.jpg",
-        help_text="User's profile picture.",
+    # --- ARCHITECTURE NOTE ---
+    # avatar is now a plain URLField that stores the Cloudinary HTTPS secure_url.
+    # Uploads go through the two-phase direct-upload pattern:
+    #   1. Frontend calls POST /api/v2/upload/presign/ → gets a signed upload token
+    #   2. Frontend POSTs file DIRECTLY to Cloudinary (bypasses Django server)
+    #   3. Cloudinary calls our webhook → Celery task saves the secure_url here
+    # This eliminates all synchronous cloudinary.uploader.upload() inside save().
+    avatar = models.URLField(
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text=(
+            "Cloudinary HTTPS secure_url for user avatar. "
+            "Set via the /api/v2/upload/presign/ → direct upload → webhook flow. "
+            "Paste a Cloudinary URL directly in the admin if needed."
+        ),
     )
     bio = models.TextField(
         blank=True,

@@ -1,10 +1,11 @@
 # apps/common/views.py
 """
-Enterprise Health-Check endpoint for the Fashionistar backend.
+Enterprise views for the Fashionistar common app.
 
-Endpoint:   GET /api/health/
-Auth:       None required (used by load balancers & uptime monitors)
-Caching:    Max 10 seconds (avoid hammering DB on every LB heartbeat)
+Endpoints:
+    GET  /api/health/                          — Health check (no auth)
+    POST /api/v2/upload/presign/               — Cloudinary presign token (JWT auth)
+    POST /api/v2/upload/webhook/cloudinary/    — Cloudinary notification receiver (no auth, HMAC validated)
 
 Response structure:
 
@@ -48,6 +49,7 @@ Metrics compatible with:
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from datetime import datetime, timezone
@@ -56,8 +58,14 @@ import asyncio
 
 from django.conf import settings
 from django.db import connection
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.csrf import csrf_exempt
 from django.http import HttpRequest, JsonResponse
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
 
 logger = logging.getLogger(__name__)
 
@@ -276,3 +284,158 @@ class HealthCheckView(View):
             )
 
         return JsonResponse(payload, status=http_status)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 2. Cloudinary Pre-sign Endpoint
+# POST /api/v2/upload/presign/
+# ─────────────────────────────────────────────────────────────────────────────
+
+VALID_ASSET_TYPES = frozenset(["avatar", "product_image", "product_video", "measurement"])
+
+
+class CloudinaryPresignView(APIView):
+    """
+    POST /api/v2/upload/presign/
+
+    Generate a time-limited, HMAC-SHA256–signed Cloudinary upload token.
+    The frontend uses this to POST a file DIRECTLY to Cloudinary without
+    routing the upload data through the Django server.
+
+    Authentication: Bearer JWT (IsAuthenticated).
+
+    Request body:
+        { "asset_type": "avatar" | "product_image" | "product_video" | "measurement" }
+
+    Response 200:
+        {
+            "success":        true,
+            "cloud_name":     "your_cloud",
+            "api_key":        "...",
+            "signature":      "hex-sha256",
+            "timestamp":      1712345678,
+            "folder":         "fashionistar/users/avatars/user_UUID",
+            "upload_preset":  "fashionistar_avatars",
+            "resource_type":  "image",
+            "eager":          [...],
+            "eager_async":    true
+        }
+
+    Response 400 — invalid asset_type.
+    Response 500 — signature generation failed.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: HttpRequest) -> Response:
+        from apps.common.utils.cloudinary import generate_cloudinary_upload_params
+
+        asset_type = request.data.get("asset_type", "avatar")  # type: ignore[attr-defined]
+
+        if asset_type not in VALID_ASSET_TYPES:
+            return Response(
+                {
+                    "success": False,
+                    "message": f"Invalid asset_type '{asset_type}'. Must be one of: {sorted(VALID_ASSET_TYPES)}.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        result = generate_cloudinary_upload_params(
+            user_id=str(request.user.pk),
+            asset_type=asset_type,
+        )
+
+        if not result.success:
+            logger.error(
+                "Presign generation failed for user=%s asset=%s: %s",
+                request.user.pk, asset_type, result.error,
+            )
+            return Response(
+                {"success": False, "message": "Could not generate upload token. Please try again."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        logger.info(
+            "Presign issued: user=%s asset=%s folder=%s",
+            request.user.pk, asset_type, result.folder,
+        )
+        return Response({"success": True, **result.to_dict()}, status=status.HTTP_200_OK)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3. Cloudinary Webhook Receiver
+# POST /api/v2/upload/webhook/cloudinary/
+# ─────────────────────────────────────────────────────────────────────────────
+
+@method_decorator(csrf_exempt, name="dispatch")
+class CloudinaryWebhookView(View):
+    """
+    POST /api/v2/upload/webhook/cloudinary/
+
+    Receives Cloudinary notification_url callbacks after a successful upload
+    (or eager transformation completion).  The payload contains the full asset
+    metadata including ``public_id``, ``secure_url``, ``width``, ``height``,
+    and ``eager`` transformation results.
+
+    Security:
+        - HMAC-SHA256 signature validated against ``X-Cld-Signature`` +
+          ``X-Cld-Timestamp`` headers before any processing.
+        - CSRF exempt — Cloudinary is an external service; no CSRF cookie.
+        - Always returns 200 to Cloudinary even on validation failure (to
+          prevent Cloudinary from endlessly retrying).
+
+    On valid payload:
+        Dispatches a Celery task to update the appropriate model field with
+        the ``secure_url`` from Cloudinary.
+    """
+
+    http_method_names = ["post", "head"]
+
+    def post(self, request: HttpRequest) -> JsonResponse:  # type: ignore[override]
+        from apps.common.utils.cloudinary import validate_cloudinary_webhook
+        from apps.common.tasks import process_cloudinary_upload_webhook
+
+        body       = request.body
+        timestamp  = request.headers.get("X-Cld-Timestamp", "")
+        signature  = request.headers.get("X-Cld-Signature", "")
+
+        # ── Validate signature ────────────────────────────────────────────
+        if not validate_cloudinary_webhook(body, timestamp, signature):
+            logger.warning(
+                "Cloudinary webhook: invalid signature — rejected. "
+                "timestamp=%s sig=%s",
+                timestamp, signature[:16] if signature else "(none)",
+            )
+            # Return 200 to prevent Cloudinary retry storms
+            return JsonResponse({"status": "rejected"}, status=200)
+
+        # ── Parse payload ─────────────────────────────────────────────────
+        try:
+            payload = json.loads(body)
+        except (json.JSONDecodeError, ValueError) as exc:
+            logger.error("Cloudinary webhook: JSON parse error: %s", exc)
+            return JsonResponse({"status": "parse_error"}, status=200)
+
+        notification_type = payload.get("notification_type", "")
+        public_id         = payload.get("public_id", "")
+        secure_url        = payload.get("secure_url", "")
+
+        logger.info(
+            "Cloudinary webhook received: type=%s public_id=%s url=%s",
+            notification_type, public_id, secure_url[:60] if secure_url else "(none)",
+        )
+
+        # ── Dispatch background task ──────────────────────────────────────
+        if notification_type in ("upload", "eager") and secure_url:
+            try:
+                process_cloudinary_upload_webhook.apply_async(
+                    kwargs={"payload": payload},
+                    ignore_result=True,
+                )
+            except Exception as exc:
+                logger.error(
+                    "Cloudinary webhook: failed to dispatch Celery task: %s", exc,
+                )
+                # Still return 200 — we log it, but don't want Cloudinary to retry
+
+        return JsonResponse({"status": "received"}, status=200)

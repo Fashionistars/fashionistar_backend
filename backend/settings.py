@@ -308,21 +308,44 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')  # Used for local development only.
 
 
-# Cloudinary Configuration
+# Cloudinary Configuration — SDK-level only (NOT used as Django storage backend)
+# The media storage backend is FileSystemStorage. Cloudinary is used via
+# apps.common.utils.cloudinary — direct uploads from client using presigned tokens.
 CLOUDINARY_STORAGE = {
-    "CLOUD_NAME": env("CLOUDINARY_CLOUD_NAME", default="your_cloud_name"),
-    "API_KEY" : env("CLOUDINARY_API_KEY", default="your_api_key"),
-    "API_SECRET" : env("CLOUDINARY_API_SECRET", default="your_api_secret"),
+    "CLOUD_NAME":  env("CLOUDINARY_CLOUD_NAME",  default="your_cloud_name"),
+    "API_KEY":     env("CLOUDINARY_API_KEY",      default="your_api_key"),
+    "API_SECRET":  env("CLOUDINARY_API_SECRET",   default="your_api_secret"),
+    "SECURE":      True,  # Always HTTPS
 }
 
-# Storages for media and static files
+# Upload presets — configure these in your Cloudinary Dashboard
+# (Settings → Upload → Upload presets → Add upload preset)
+CLOUDINARY_UPLOAD_PRESET_AVATAR   = env("CLOUDINARY_UPLOAD_PRESET_AVATAR",    default="fashionistar_avatars")
+CLOUDINARY_UPLOAD_PRESET_PRODUCT  = env("CLOUDINARY_UPLOAD_PRESET_PRODUCT",   default="fashionistar_products")
+CLOUDINARY_UPLOAD_PRESET_MEASURE  = env("CLOUDINARY_UPLOAD_PRESET_MEASURE",   default="fashionistar_measurements")
+CLOUDINARY_UPLOAD_PRESET_VIDEO    = env("CLOUDINARY_UPLOAD_PRESET_VIDEO",     default="fashionistar_videos")
+
+# Presigned upload token TTL in seconds (cached in Redis).
+# Must be ≤ 3600 (Cloudinary 1-hour max). We use 3300 (55 min) for safety.
+CLOUDINARY_SIGNATURE_TTL = int(env("CLOUDINARY_SIGNATURE_TTL", default=3300))
+
+# ── Storages ────────────────────────────────────────────────────────────────
+# IMPORTANT: default backend is local FileSystemStorage.
+# Model ImageField / FileField values are now Cloudinary URLs stored as plain
+# URLField/CharField strings. Django never calls cloudinary.uploader.upload()
+# synchronously inside model.save() — that was the cause of the DNS-blocking 500.
 STORAGES = {
     "default": {
-        "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
+        # Local filesystem — model fields store Cloudinary HTTPS URLs, not files.
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
     },
     "staticfiles": {
-        # Use whitenoise CompressedManifestStaticFilesStorage in production, Django's default for local DEBUG
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage" if not DEBUG else "django.contrib.staticfiles.storage.StaticFilesStorage",
+        # Whitenoise for static files in production, default for dev.
+        "BACKEND": (
+            "whitenoise.storage.CompressedManifestStaticFilesStorage"
+            if not DEBUG
+            else "django.contrib.staticfiles.storage.StaticFilesStorage"
+        ),
     },
 }
 
@@ -330,6 +353,7 @@ STORAGES = {
 # ====================================================================================
 # END OF STATIC & MEDIA CONFIGURATION
 # ====================================================================================
+
 
 
 # Default primary key field type

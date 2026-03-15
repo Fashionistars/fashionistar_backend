@@ -319,7 +319,191 @@ def delete_cloudinary_asset_task(self, public_id, resource_type="image"):
 
 
 # ================================================================
-# 5. USER LIFECYCLE REGISTRY — Background Task
+# 5. CLOUDINARY WEBHOOK PROCESSING — Background Tasks
+# ================================================================
+
+@shared_task(
+    name="process_cloudinary_upload_webhook",
+    bind=True,
+    max_retries=3,
+    default_retry_delay=10,
+    ignore_result=True,
+)
+def process_cloudinary_upload_webhook(self, payload: dict):
+    """
+    Process a validated Cloudinary webhook notification and persist the
+    ``secure_url`` to the correct model field.
+
+    Called ONLY after HMAC-SHA256 signature validation in the webhook view,
+    so ``payload`` is guaranteed to be authentic Cloudinary data.
+
+    Payload analysed:
+        - ``public_id``   — e.g. ``fashionistar/users/avatars/user_UUID/filename``
+        - ``secure_url``  — Cloudinary HTTPS delivery URL
+        - ``resource_type`` — ``image`` | ``video``
+        - ``width``, ``height``, ``bytes``, ``format``
+
+    Routing logic:
+        URL folder prefix → model field
+        avatars/         → UnifiedUser.avatar (keyed by UUID in path)
+    """
+    import uuid
+
+    public_id  = payload.get("public_id", "")
+    secure_url = payload.get("secure_url", "")
+
+    if not public_id or not secure_url:
+        logger.warning(
+            "process_cloudinary_upload_webhook: missing public_id or secure_url in payload"
+        )
+        return
+
+    try:
+        # ── Route by folder prefix ────────────────────────────────────────
+        if "/avatars/user_" in public_id:
+            # Extract user UUID from path: fashionistar/users/avatars/user_{uuid}/...
+            parts = public_id.split("/")
+            user_segment = next((p for p in parts if p.startswith("user_")), None)
+            if not user_segment:
+                logger.warning(
+                    "process_cloudinary_upload_webhook: cannot extract user_uuid from public_id=%s",
+                    public_id,
+                )
+                return
+
+            user_uuid_str = user_segment.removeprefix("user_")
+            try:
+                user_uuid = uuid.UUID(user_uuid_str)
+            except ValueError:
+                logger.warning(
+                    "process_cloudinary_upload_webhook: invalid UUID in public_id=%s", public_id
+                )
+                return
+
+            from apps.authentication.models import UnifiedUser
+            updated = UnifiedUser.objects.filter(id=user_uuid).update(avatar=secure_url)
+            if updated:
+                logger.info(
+                    "Avatar updated for user_uuid=%s → %s",
+                    user_uuid, secure_url[:60],
+                )
+            else:
+                logger.warning(
+                    "process_cloudinary_upload_webhook: no user found for uuid=%s", user_uuid
+                )
+
+        elif "/products/" in public_id:
+            logger.info(
+                "process_cloudinary_upload_webhook: product image upload confirmed [%s] — "
+                "store.Product field update not yet wired; URL=%s",
+                public_id, secure_url[:60],
+            )
+
+        else:
+            logger.info(
+                "process_cloudinary_upload_webhook: unrouted asset public_id=%s — "
+                "secure_url=%s (no model updated)",
+                public_id, secure_url[:60],
+            )
+
+    except Exception as exc:
+        logger.exception(
+            "process_cloudinary_upload_webhook FAILED for public_id=%s: %s",
+            public_id, exc,
+        )
+        raise self.retry(exc=exc)
+
+
+@shared_task(
+    name="generate_eager_transformations",
+    bind=True,
+    max_retries=2,
+    default_retry_delay=30,
+    ignore_result=True,
+)
+def generate_eager_transformations(self, public_id: str, asset_type: str = "product_image"):
+    """
+    Trigger (or re-trigger) eager server-side image transformations on an
+    existing Cloudinary asset.  Used to generate 2K / 4K / 8K responsive
+    variants and WebP / AVIF derivatives for Next.js ``<Image>`` optimisation.
+
+    Cloudinary ``explicit()`` re-applies eager transformations on an already-
+    uploaded asset without re-uploading the file — very fast (< 200ms).
+
+    Args:
+        public_id:  Cloudinary public_id.
+        asset_type: One of the keys in ``_ASSET_CONFIGS`` (cloudinary.py).
+    """
+    import cloudinary.uploader
+    from apps.common.utils.cloudinary import _ASSET_CONFIGS
+
+    config = _ASSET_CONFIGS.get(asset_type, _ASSET_CONFIGS["product_image"])
+    eager  = config.get("eager", [])
+
+    try:
+        result = cloudinary.uploader.explicit(
+            public_id,
+            type="upload",
+            eager=eager,
+            eager_async=True,
+        )
+        logger.info(
+            "generate_eager_transformations: triggered for public_id=%s asset=%s",
+            public_id, asset_type,
+        )
+        return result
+    except Exception as exc:
+        logger.error(
+            "generate_eager_transformations FAILED for public_id=%s: %s",
+            public_id, exc,
+        )
+        raise self.retry(exc=exc)
+
+
+@shared_task(
+    name="purge_cloudinary_cache",
+    bind=True,
+    max_retries=2,
+    default_retry_delay=15,
+    ignore_result=True,
+)
+def purge_cloudinary_cache(self, public_ids: list, resource_type: str = "image"):
+    """
+    Trigger Cloudinary CDN cache invalidation for the given public_ids.
+
+    Call this when a user replaces an avatar or product image so that the
+    old CDN-cached asset is flushed and the new one is served globally
+    within seconds (not minutes).
+
+    Args:
+        public_ids:    List of Cloudinary public_ids to invalidate.
+        resource_type: ``image`` | ``video`` | ``raw``.
+    """
+    import cloudinary.api
+
+    try:
+        if not public_ids:
+            return
+        result = cloudinary.api.delete_resources(
+            public_ids,
+            resource_type=resource_type,
+            invalidate=True,         # trigger CDN edge purge
+            keep_original=True,      # do NOT delete, just invalidate cache
+        )
+        logger.info(
+            "purge_cloudinary_cache: CDN invalidated for %d assets: %s",
+            len(public_ids), result,
+        )
+    except Exception as exc:
+        logger.error(
+            "purge_cloudinary_cache FAILED for public_ids=%s: %s",
+            public_ids, exc,
+        )
+        raise self.retry(exc=exc)
+
+
+# ================================================================
+# 6. USER LIFECYCLE REGISTRY — Background Task
 # ================================================================
 
 @shared_task(
