@@ -92,56 +92,110 @@ class LoginSerializer(serializers.Serializer):
 
     def validate(self, data):
         """
-        Authenticates the user based on either email or phone and password, with robust error handling.
+        Authenticate the user based on email or phone + password.
+
+        Enterprise-grade auth flow (priority order):
+
+        1. Lookup in alive-only manager (is_deleted=False):
+           » If found → proceed to password check.
+        2. If NOT found in alive-only → lookup in all_with_deleted():
+           » If found there AND is_deleted=True → SoftDeletedUserError (403)
+           » Else → InvalidCredentialsError (401)
+        3. Password check:
+           » Wrong password → InvalidCredentialsError (401)
+        4. is_active check:
+           » is_active=False → AccountInactiveError (403)
+
+        All raised exceptions are DRF APIExceptions (typed), so
+        ``LoginView.post()`` catches them individually and returns
+        the appropriate HTTP status code.
 
         Args:
-            data (dict): Input data containing 'email_or_phone' and 'password'.
+            data (dict): Input containing 'email_or_phone' & 'password'.
 
         Returns:
-            dict: Validated data with the 'user' object.
+            dict: Same data dict with 'user' key added.
 
         Raises:
-            serializers.ValidationError: On authentication failure.
+            SoftDeletedUserError (403)   — account exists but deactivated.
+            AccountInactiveError  (403)  — account exists but not verified.
+            InvalidCredentialsError (401)— wrong password or unknown user.
         """
-        try:
-            email_or_phone = data.get('email_or_phone')
-            password = data.get('password')
+        from apps.authentication.exceptions import (
+            SoftDeletedUserError,
+            AccountInactiveError,
+            InvalidCredentialsError,
+        )
 
-            # Efficient lookup using specific fields rather than full scan
-            # Note: We filter by is_active=True/False depending on logic, but checking existence first
-            # We assume soft delete 'is_deleted' might exist if SoftDeleteModel is used, otherwise ignore
-            
-            # Using Q objects or simple if/else for email/phone
+        email_or_phone = data.get('email_or_phone')
+        password = data.get('password')
+
+        try:
+            # ── Step 1: Alive-only lookup ─────────────────────────────────────
             user = None
             if '@' in email_or_phone:
                 user = UnifiedUser.objects.filter(email=email_or_phone).first()
             else:
                 user = UnifiedUser.objects.filter(phone=email_or_phone).first()
-            
-            if not user:
-                # Check 'is_deleted' if strictly required, but usually filter excludes them automatically if manager is set
-                logger.warning(f"Login failed: User not found for {email_or_phone}")
-                raise serializers.ValidationError({'email_or_phone': [_('User with this email or phone not found.')]})
 
+            if user is None:
+                # ── Step 2: Check soft-deleted pool before giving up ──────────
+                if '@' in email_or_phone:
+                    deleted_user = UnifiedUser.objects.all_with_deleted().filter(
+                        email=email_or_phone, is_deleted=True,
+                    ).first()
+                else:
+                    deleted_user = UnifiedUser.objects.all_with_deleted().filter(
+                        phone=email_or_phone, is_deleted=True,
+                    ).first()
+
+                if deleted_user:
+                    logger.warning(
+                        "⛔ Login rejected: soft-deleted account '%s'",
+                        email_or_phone,
+                    )
+                    raise SoftDeletedUserError()
+
+                # Truly unknown user — generic 401 (no enumeration)
+                logger.warning(
+                    "⛔ Login failed: user not found '%s'", email_or_phone,
+                )
+                raise InvalidCredentialsError()
+
+            # ── Step 3: Password check ────────────────────────────────────────
             if not user.check_password(password):
-                logger.warning(f"Login failed: Incorrect password for {email_or_phone}")
-                raise serializers.ValidationError({'password': [_('Incorrect password.')]})
+                logger.warning(
+                    "⛔ Login failed: wrong password for '%s'", email_or_phone,
+                )
+                raise InvalidCredentialsError()
 
-            # Check for verification status instead of just is_active if that's the business rule
-            # Assuming 'is_active' means they are allowed to login generally
+            # ── Step 4: Account active check ──────────────────────────────────
             if not user.is_active:
-                logger.warning(f"Login failed: Account not activated for {email_or_phone}")
-                raise serializers.ValidationError({'non_field_errors': [_('Account not activated!!!. Check email/phone for OTP.')]})
+                logger.warning(
+                    "⛔ Login rejected: inactive account '%s'", email_or_phone,
+                )
+                raise AccountInactiveError()
 
-            logger.info(f"Login validation successful for {email_or_phone}")
+            logger.info(
+                "✅ LoginSerializer: valid credentials for '%s'", email_or_phone,
+            )
             data['user'] = user
             return data
 
-        except serializers.ValidationError as e:
-            raise e
-        except Exception as e:
-            logger.error(f"Unexpected error in login validation: {str(e)}")
-            raise serializers.ValidationError({'non_field_errors': [_('An unexpected error occurred during login.')]})
+        except (SoftDeletedUserError, AccountInactiveError, InvalidCredentialsError):
+            # Typed business exceptions — re-raise so LogicView returns correct HTTP code
+            raise
+
+        except Exception as exc:
+            logger.error(
+                "❌ Unexpected error in LoginSerializer.validate(): %s", exc,
+                exc_info=True,
+            )
+            raise serializers.ValidationError(
+                {'non_field_errors': [_('An unexpected error occurred during login.')]}
+            )
+
+
 
 
 class AsyncLoginSerializer(LoginSerializer):

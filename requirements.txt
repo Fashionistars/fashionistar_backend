@@ -25,7 +25,7 @@ python-decouple                 # settings.py: from decouple import config
 # ═══════════════════════════════════════════════════════════
 # 3. DATABASE
 # ═══════════════════════════════════════════════════════════
-psycopg2-binary                 # PostgreSQL adapter
+psycopg[binary,pool]                 # PostgreSQL adapter
 dj-database-url                 # DATABASE_URL parsing
 
 

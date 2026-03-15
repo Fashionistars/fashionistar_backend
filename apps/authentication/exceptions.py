@@ -1,301 +1,335 @@
 # apps/authentication/exceptions.py
 """
-Advanced Exception Handling Framework for Authentication API.
+Advanced Exception Handling Framework for the Authentication Domain.
 
 This module provides:
-1. Custom Exception Classes: Tailored for authentication-specific errors.
-2. Global Exception Handler: Intercepts DRF, Django, and Python exceptions.
-3. Standardized JSON Responses: All errors return {success, message, errors, data} structure.
-4. Audit Logging: Full context logging for security events (4xx/5xx errors).
-5. Rate Limit Handling: Custom response for throttled requests.
+
+1. **Typed Exception Classes** — fine-grained exceptions carry their own
+   HTTP status code and machine-readable ``default_code``, so views,
+   serializers, and global exception handlers can all act on them without
+   string parsing.
+
+2. **Legacy Compatibility Aliases** — the original ``AuthenticationException``
+   and its sub-classes (``InvalidCredentialsException``, ``OTPExpiredException``,
+   ``RateLimitExceededException``, etc.) are preserved so that any existing
+   import throughout the codebase continues to work without modification.
+
+3. **Shared Helper Utilities** — ``_get_client_ip`` and ``_log_error`` are
+   re-exported here for modules that import them from this file.
+
+Exception Hierarchy
+-------------------
+AuthenticationError (400)                 ← New enterprise base
+  ├─ DuplicateUserError (409)             ← Active duplicate on registration
+  ├─ SoftDeletedUserExistsError (409)     ← Soft-deleted duplicate on registration
+  ├─ SoftDeletedUserError (403)           ← Login: account is deactivated
+  ├─ AccountInactiveError (403)           ← Login: is_active=False (unverified)
+  ├─ InvalidCredentialsError (401)        ← Login: wrong password / unknown user
+  ├─ AccountDeactivatedError (403)        ← Admin-disabled, not soft-delete
+  └─ AccountSuspendedError (403)          ← Suspension workflow
+
+AuthenticationException (401)             ← Legacy base (compatibility)
+  ├─ InvalidCredentialsException (401)    ← Legacy alias
+  ├─ AccountNotVerifiedException (403)    ← Legacy: unverified account on login
+  ├─ OTPExpiredException (401)            ← OTP flow: expired token
+  └─ InvalidOTPException (401)            ← OTP flow: wrong token
+
+RateLimitExceededException (429)          ← Standalone rate-limit
+
+Usage
+-----
+    # New-style (preferred)
+    from apps.authentication.exceptions import SoftDeletedUserError
+    raise SoftDeletedUserError()
+
+    # Legacy-style (still works)
+    from apps.authentication.exceptions import InvalidCredentialsException
+    raise InvalidCredentialsException()
 """
 
 import logging
 import traceback
+
 from django.conf import settings
-from django.core.exceptions import PermissionDenied, ValidationError as DjangoValidationError
+from django.core.exceptions import (
+    PermissionDenied,
+    ValidationError as DjangoValidationError,
+)
 from django.http import Http404
-from rest_framework.views import exception_handler as drf_exception_handler
-from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import (
-    ValidationError as DRFValidationError,
+    APIException,
     AuthenticationFailed,
-    NotAuthenticated,
-    PermissionDenied as DRFPermissionDenied,
-    NotFound,
     MethodNotAllowed,
     NotAcceptable,
-    Throttled,
+    NotAuthenticated,
+    NotFound,
     ParseError,
+    PermissionDenied as DRFPermissionDenied,
+    Throttled,
     UnsupportedMediaType,
-    APIException
+    ValidationError as DRFValidationError,
 )
+from rest_framework.response import Response
+from rest_framework.views import exception_handler as drf_exception_handler
 
-# Initialize Logger for Authentication Events
+# Separate logger for the auth domain (maps to 'authentication' log file)
 logger = logging.getLogger('application')
 
 
-# ============================================================================
-# CUSTOM EXCEPTION CLASSES
-# ============================================================================
+# =============================================================================
+# NEW ENTERPRISE TYPED EXCEPTIONS
+# =============================================================================
+
+class AuthenticationError(APIException):
+    """
+    Base class for all Fashionistar authentication exceptions.
+
+    HTTP 400 by default; sub-classes override ``status_code`` as needed.
+    All sub-classes carry a machine-readable ``default_code`` so the
+    global exception handler can distinguish them without isinstance checks.
+    """
+    status_code    = status.HTTP_400_BAD_REQUEST
+    default_detail = "Authentication error."
+    default_code   = "authentication_error"
+
+
+# ---------------------------------------------------------------------------
+# Registration errors
+# ---------------------------------------------------------------------------
+
+class DuplicateUserError(AuthenticationError):
+    """
+    Raised when a registration attempt is made with an email or phone
+    that already belongs to an *active* (non-deleted) user account.
+
+    HTTP 409 Conflict — the resource already exists.
+    """
+    status_code    = status.HTTP_409_CONFLICT
+    default_detail = (
+        "An account with this email or phone already exists. "
+        "Please log in or use a different identifier."
+    )
+    default_code   = "duplicate_user"
+
+
+class SoftDeletedUserExistsError(AuthenticationError):
+    """
+    Raised when a registration attempt is made with an email or phone
+    that belongs to a *soft-deleted* (deactivated) user account.
+
+    HTTP 409 Conflict — the resource exists but is deactivated.
+
+    The message intentionally does NOT reveal whether the account is
+    permanently deleted or just deactivated, to prevent user enumeration.
+    Contact-support language guides the user to the right resolution path.
+    """
+    status_code    = status.HTTP_409_CONFLICT
+    default_detail = (
+        "An account associated with this email or phone was previously "
+        "deactivated on our platform. Please contact our support team "
+        "to restore access or use a different identifier."
+    )
+    default_code   = "deactivated_user_exists"
+
+
+# ---------------------------------------------------------------------------
+# Login errors
+# ---------------------------------------------------------------------------
+
+class SoftDeletedUserError(AuthenticationError):
+    """
+    Raised during *login* when the authenticated user's account has been
+    soft-deleted (is_deleted=True).
+
+    HTTP 403 Forbidden — the user is known but access is revoked.
+
+    The response message is intentionally explicit here (post-authentication
+    context) so the user understands why they cannot log in and what to do.
+    """
+    status_code    = status.HTTP_403_FORBIDDEN
+    default_detail = (
+        "Your account has been deactivated. "
+        "Please contact our support team to restore access."
+    )
+    default_code   = "account_deactivated"
+
+
+class AccountInactiveError(AuthenticationError):
+    """
+    Raised when a user's account is found, password is correct, but
+    ``is_active=False`` (admin-disabled, not a soft-delete).
+
+    HTTP 403 Forbidden.
+    """
+    status_code    = status.HTTP_403_FORBIDDEN
+    default_detail = (
+        "Your account is currently inactive. "
+        "Please verify your email/phone or contact support."
+    )
+    default_code   = "account_inactive"
+
+
+class InvalidCredentialsError(AuthenticationError):
+    """
+    Raised when login fails due to incorrect password or unknown identifier.
+
+    HTTP 401 Unauthorized.
+
+    NOTE: The message is kept intentionally vague (does not distinguish
+    'wrong password' vs 'unknown user') to prevent user enumeration attacks.
+    """
+    status_code    = status.HTTP_401_UNAUTHORIZED
+    default_detail = (
+        "Invalid credentials. "
+        "Please check your email/phone and password and try again."
+    )
+    default_code   = "invalid_credentials"
+
+
+class AccountDeactivatedError(AuthenticationError):
+    """
+    Raised when ``is_active=False`` AND ``is_deleted=False`` — meaning an
+    admin has explicitly deactivated the account via the Django admin panel
+    (not via the soft-delete workflow).
+
+    HTTP 403 Forbidden.
+    """
+    status_code    = status.HTTP_403_FORBIDDEN
+    default_detail = (
+        "Your account has been disabled by an administrator. "
+        "Contact our support team for assistance."
+    )
+    default_code   = "account_disabled"
+
+
+class AccountSuspendedError(AuthenticationError):
+    """
+    Raised when an account is suspended (is_active=False due to suspension).
+
+    HTTP 403 Forbidden.
+    """
+    status_code    = status.HTTP_403_FORBIDDEN
+    default_detail = (
+        "Your account has been suspended. "
+        "Please contact support for more information."
+    )
+    default_code   = "account_suspended"
+
+
+# =============================================================================
+# LEGACY EXCEPTION CLASSES  (backward-compatibility aliases)
+# =============================================================================
 
 class AuthenticationException(APIException):
     """
-    Base exception for authentication-related errors.
-    HTTP Status: 401 Unauthorized
+    **Legacy base** — preserved so that existing imports continue to work.
+
+    New code should raise ``AuthenticationError`` (or a typed sub-class) instead.
+    HTTP 401 Unauthorized.
     """
-    status_code = status.HTTP_401_UNAUTHORIZED
+    status_code    = status.HTTP_401_UNAUTHORIZED
     default_detail = "Authentication failed."
-    default_code = "authentication_failed"
+    default_code   = "authentication_failed"
 
 
 class InvalidCredentialsException(AuthenticationException):
     """
-    Raised when email/phone and password do not match.
+    **Legacy alias** for ``InvalidCredentialsError``.
+    HTTP 401 Unauthorized.
     """
     default_detail = "Invalid email/phone or password."
-    default_code = "invalid_credentials"
+    default_code   = "invalid_credentials"
 
 
 class AccountNotVerifiedException(AuthenticationException):
     """
-    Raised when user attempts to login but account is not verified.
+    **Legacy** — raised when user attempts to login but account is not verified.
+    HTTP 403 Forbidden.
     """
-    status_code = status.HTTP_403_FORBIDDEN
+    status_code    = status.HTTP_403_FORBIDDEN
     default_detail = "Account not verified. Please verify your email/phone."
-    default_code = "account_not_verified"
+    default_code   = "account_not_verified"
 
 
 class OTPExpiredException(AuthenticationException):
     """
-    Raised when user provides expired OTP.
+    Raised when user provides an expired OTP.
+    HTTP 401 Unauthorized.
     """
     default_detail = "OTP has expired. Please request a new one."
-    default_code = "otp_expired"
+    default_code   = "otp_expired"
 
 
 class InvalidOTPException(AuthenticationException):
     """
     Raised when OTP doesn't match.
+    HTTP 401 Unauthorized.
     """
     default_detail = "Incorrect OTP. Please try again."
-    default_code = "invalid_otp"
+    default_code   = "invalid_otp"
 
 
 class RateLimitExceededException(APIException):
     """
-    Custom Rate Limit Exception (replaces default Throttled).
-    HTTP Status: 429 Too Many Requests
+    Custom Rate Limit Exception (replaces default ``Throttled`` where needed).
+    HTTP 429 Too Many Requests.
     """
-    status_code = status.HTTP_429_TOO_MANY_REQUESTS
+    status_code    = status.HTTP_429_TOO_MANY_REQUESTS
     default_detail = "Too many requests. Please try again later."
-    default_code = "rate_limit_exceeded"
+    default_code   = "rate_limit_exceeded"
 
 
-# ============================================================================
-# GLOBAL EXCEPTION HANDLER
-# ============================================================================
+# =============================================================================
+# HELPER UTILITIES  (importable from this module for backwards-compat)
+# =============================================================================
 
-def custom_exception_handler(exc, context):
+def _get_client_ip(request) -> str:
     """
-    Industrial-Grade Exception Handler.
+    Extract the client's real IP address from a Django request object,
+    accounting for reverse proxies (nginx, CloudFlare, AWS ELB).
 
-    Intercepts and standardizes all exceptions (DRF, Django, Python) into:
-    {
-        "success": false,
-        "message": "Human-readable summary",
-        "errors": { ... detailed error data ... },
-        "data": null
-    }
-    """
-    try:
-        # ====================================================================
-        # 1. GET CONTEXT INFORMATION FOR LOGGING
-        # ====================================================================
-        view = context.get('view')
-        request = context.get('request')
-        
-        view_name = view.__class__.__name__ if view else 'UnknownView'
-        method = request.method if request else 'UNKNOWN'
-        path = request.path if request else 'UNKNOWN'
-        user_id = request.user.id if request and request.user and request.user.is_authenticated else 'ANONYMOUS'
-        ip_address = _get_client_ip(request) if request else 'UNKNOWN'
-
-        # ====================================================================
-        # 2. CALL DRF'S DEFAULT EXCEPTION HANDLER
-        # ====================================================================
-        # This handles DRF-specific exceptions (ValidationError, PermissionDenied, etc.)
-        response = drf_exception_handler(exc, context)
-
-        # ====================================================================
-        # 3. BUILD STANDARDIZED ERROR RESPONSE
-        # ====================================================================
-        if response is not None:
-            # DRF handled the exception, now standardize the format
-            error_data = response.data if isinstance(response.data, dict) else {"detail": response.data}
-            
-            # Extract message or use default
-            message = error_data.get("detail", error_data.get("non_field_errors", "An error occurred."))
-            if isinstance(message, list):
-                message = message[0] if message else "An error occurred."
-
-            # Special handling for Throttled exceptions
-            if isinstance(exc, Throttled):
-                response.data = {
-                    "success": False,
-                    "message": "Rate limit exceeded. Please try again later.",
-                    "errors": {
-                        "detail": str(exc.detail),
-                        "retry_after": exc.wait() if hasattr(exc, 'wait') and callable(exc.wait) else 60
-                    },
-                    "data": None
-                }
-                _log_error(
-                    f"⛔ RATE LIMIT EXCEEDED: {view_name} | IP: {ip_address} | User: {user_id}",
-                    level=logging.WARNING,
-                    status_code=response.status_code,
-                    exception=exc
-                )
-                return response
-
-            # Standardize response format
-            response.data = {
-                "success": False,
-                "message": str(message),
-                "errors": error_data,
-                "data": None
-            }
-
-            # ================================================================
-            # LOG THE ERROR (DRF handled)
-            # ================================================================
-            log_message = f"⚠️  DRF Exception in {view_name} [{method} {path}] | User: {user_id} | IP: {ip_address}"
-            
-            if response.status_code >= 500:
-                _log_error(log_message, level=logging.ERROR, status_code=response.status_code, exception=exc)
-            else:
-                _log_error(log_message, level=logging.WARNING, status_code=response.status_code, exception=exc)
-
-            return response
-
-        # ====================================================================
-        # 4. HANDLE EXCEPTIONS NOT CAUGHT BY DRF
-        # ====================================================================
-        # Django or Python exceptions
-
-        error_response = {
-            "success": False,
-            "message": "An error occurred.",
-            "errors": {},
-            "data": None
-        }
-        http_status = status.HTTP_500_INTERNAL_SERVER_ERROR
-        log_level = logging.ERROR
-
-        # Specific exception types
-        if isinstance(exc, Http404):
-            error_response["message"] = "Resource not found."
-            http_status = status.HTTP_404_NOT_FOUND
-            log_level = logging.WARNING
-
-        elif isinstance(exc, (PermissionDenied, DRFPermissionDenied)):
-            error_response["message"] = "You do not have permission to access this resource."
-            http_status = status.HTTP_403_FORBIDDEN
-            log_level = logging.WARNING
-
-        elif isinstance(exc, (InvalidCredentialsException, AuthenticationException)):
-            error_response["message"] = str(exc.detail) if hasattr(exc, 'detail') else "Authentication failed."
-            http_status = status.HTTP_401_UNAUTHORIZED
-            log_level = logging.WARNING
-
-        elif isinstance(exc, DjangoValidationError):
-            error_response["message"] = "Validation failed."
-            error_response["errors"] = exc.message_dict if hasattr(exc, 'message_dict') else {"detail": str(exc)}
-            http_status = status.HTTP_400_BAD_REQUEST
-            log_level = logging.WARNING
-
-        elif isinstance(exc, ValueError):
-            error_response["message"] = str(exc)
-            http_status = status.HTTP_400_BAD_REQUEST
-            log_level = logging.WARNING
-
-        else:
-            # Generic 500 error
-            error_response["message"] = "Internal server error."
-            http_status = status.HTTP_500_INTERNAL_SERVER_ERROR
-
-        # Include traceback in DEBUG mode
-        if settings.DEBUG:
-            error_response["debug_traceback"] = traceback.format_exc()
-
-        # ====================================================================
-        # LOG THE ERROR (Unhandled)
-        # ====================================================================
-        log_message = f"❌ Unhandled Exception in {view_name} [{method} {path}] | User: {user_id} | IP: {ip_address} | Type: {type(exc).__name__}"
-        _log_error(log_message, level=log_level, status_code=http_status, exception=exc)
-
-        # Return standardized response
-        response = Response(error_response, status=http_status)
-        return response
-
-    except Exception as handler_exc:
-        """
-        Fallback: If the exception handler itself fails, return a safe 500 response.
-        This prevents cascading failures.
-        """
-        logger.critical(
-            f"🔥 CRITICAL: Exception handler itself failed! Original: {type(exc).__name__}: {str(exc)} | Handler Error: {str(handler_exc)}",
-            exc_info=True
-        )
-        
-        safe_response = {
-            "success": False,
-            "message": "An unexpected error occurred. Please contact support.",
-            "errors": {},
-            "data": None
-        }
-        return Response(safe_response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-# ============================================================================
-# HELPER FUNCTIONS
-# ============================================================================
-
-def _get_client_ip(request):
-    """
-    Extract client IP from request, accounting for proxies.
+    Priority order:
+        1. ``HTTP_X_FORWARDED_FOR`` header (first IP in chain)
+        2. ``HTTP_X_REAL_IP`` header
+        3. ``REMOTE_ADDR`` (direct connection)
     """
     try:
         if request is None:
             return 'UNKNOWN'
 
-        # Check for X-Forwarded-For (first IP in chain is original client)
         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
         if x_forwarded_for:
             return x_forwarded_for.split(',')[0].strip()
 
-        # Check for X-Real-IP
         x_real_ip = request.META.get('HTTP_X_REAL_IP')
         if x_real_ip:
             return x_real_ip
 
-        # Direct connection
         remote_addr = request.META.get('REMOTE_ADDR')
         return remote_addr if remote_addr else 'UNKNOWN'
 
-    except Exception as e:
-        logger.warning(f"Error extracting client IP: {str(e)}")
+    except Exception as exc:
+        logger.warning("Error extracting client IP: %s", exc)
         return 'UNKNOWN'
 
 
-def _log_error(message, level=logging.ERROR, status_code=500, exception=None):
+def _log_error(message: str, level: int = logging.ERROR,
+               status_code: int = 500, exception=None) -> None:
     """
-    Logs error with structured context for audit trail.
+    Emit a structured log entry for security/audit trail purposes.
+
+    Args:
+        message:     Human-readable description of the event.
+        level:       Python ``logging`` level constant (default ERROR).
+        status_code: HTTP status code associated with this event.
+        exception:   The original exception object (used for exc_info).
     """
     try:
-        # Include exception type and message
-        exc_context = f" | Exception: {type(exception).__name__}: {str(exception)}" if exception else ""
+        exc_context = (
+            f" | Exception: {type(exception).__name__}: {exception}"
+            if exception else ""
+        )
         full_message = f"[{status_code}] {message}{exc_context}"
 
         if level == logging.ERROR:
@@ -307,6 +341,174 @@ def _log_error(message, level=logging.ERROR, status_code=500, exception=None):
         else:
             logger.log(level, full_message)
 
-    except Exception as e:
-        # Safeguard: If logging fails, don't crash
-        logger.critical(f"Error during exception logging: {str(e)}")
+    except Exception as log_exc:
+        # Safeguard: never crash because of a logging failure
+        logger.critical("Error during exception logging: %s", log_exc)
+
+
+# =============================================================================
+# LOCAL EXCEPTION HANDLER  (kept for backwards-compat; DRF REST_FRAMEWORK
+# EXCEPTION_HANDLER setting should point to apps.common.exceptions instead)
+# =============================================================================
+
+def custom_exception_handler(exc, context):
+    """
+    Authentication-domain exception handler.
+
+    .. important::
+
+        The project-wide exception handler is configured in
+        ``apps.common.exceptions.custom_exception_handler`` which already
+        handles all auth exception types.  This function is preserved here
+        so that any legacy ``REST_FRAMEWORK['EXCEPTION_HANDLER']`` pointer
+        to this module continues to work.
+
+    Intercepts and standardizes all exceptions into:
+
+    .. code-block:: json
+
+        {
+            "success": false,
+            "message": "Human-readable summary",
+            "errors": { "...": "detailed error data" },
+            "data": null
+        }
+    """
+    try:
+        view        = context.get('view')
+        request     = context.get('request')
+        view_name   = view.__class__.__name__ if view else 'UnknownView'
+        method      = request.method if request else 'UNKNOWN'
+        path        = request.path  if request else 'UNKNOWN'
+        user_id     = (
+            request.user.id
+            if request and request.user and request.user.is_authenticated
+            else 'ANONYMOUS'
+        )
+        ip_address  = _get_client_ip(request)
+
+        # -- Call DRF's default handler first ----------------------------------
+        response = drf_exception_handler(exc, context)
+
+        if response is not None:
+            error_data = (
+                response.data
+                if isinstance(response.data, dict)
+                else {"detail": response.data}
+            )
+            message = error_data.get(
+                "detail",
+                error_data.get("non_field_errors", "An error occurred.")
+            )
+            if isinstance(message, list):
+                message = message[0] if message else "An error occurred."
+
+            # Special handling for Throttled
+            if isinstance(exc, Throttled):
+                response.data = {
+                    "success": False,
+                    "message": "Rate limit exceeded. Please try again later.",
+                    "errors": {
+                        "detail": str(exc.detail),
+                        "retry_after": (
+                            exc.wait() if hasattr(exc, 'wait') and callable(exc.wait) else 60
+                        ),
+                    },
+                    "data": None,
+                }
+                _log_error(
+                    f"⛔ RATE LIMIT EXCEEDED: {view_name} | IP: {ip_address} | User: {user_id}",
+                    level=logging.WARNING,
+                    status_code=response.status_code,
+                    exception=exc,
+                )
+                return response
+
+            response.data = {
+                "success": False,
+                "message": str(message),
+                "errors": error_data,
+                "data": None,
+            }
+
+            log_message = (
+                f"⚠️  DRF Exception in {view_name} [{method} {path}] "
+                f"| User: {user_id} | IP: {ip_address}"
+            )
+            level = logging.ERROR if response.status_code >= 500 else logging.WARNING
+            _log_error(log_message, level=level, status_code=response.status_code, exception=exc)
+            return response
+
+        # -- Django / Python exceptions not handled by DRF --------------------
+        error_response = {
+            "success": False,
+            "message": "An error occurred.",
+            "errors": {},
+            "data": None,
+        }
+        http_status = status.HTTP_500_INTERNAL_SERVER_ERROR
+        log_level   = logging.ERROR
+
+        if isinstance(exc, Http404):
+            error_response["message"] = "Resource not found."
+            http_status = status.HTTP_404_NOT_FOUND
+            log_level   = logging.WARNING
+
+        elif isinstance(exc, (PermissionDenied, DRFPermissionDenied)):
+            error_response["message"] = "You do not have permission to access this resource."
+            http_status = status.HTTP_403_FORBIDDEN
+            log_level   = logging.WARNING
+
+        elif isinstance(exc, (
+            SoftDeletedUserError, AccountInactiveError, AccountDeactivatedError,
+            AccountSuspendedError, InvalidCredentialsError, AuthenticationError,
+            InvalidCredentialsException, AuthenticationException,
+        )):
+            error_response["message"] = (
+                str(exc.detail) if hasattr(exc, 'detail') else "Authentication failed."
+            )
+            http_status = getattr(exc, 'status_code', status.HTTP_401_UNAUTHORIZED)
+            log_level   = logging.WARNING
+
+        elif isinstance(exc, DjangoValidationError):
+            error_response["message"] = "Validation failed."
+            error_response["errors"]  = (
+                exc.message_dict if hasattr(exc, 'message_dict') else {"detail": str(exc)}
+            )
+            http_status = status.HTTP_400_BAD_REQUEST
+            log_level   = logging.WARNING
+
+        elif isinstance(exc, ValueError):
+            error_response["message"] = str(exc)
+            http_status = status.HTTP_400_BAD_REQUEST
+            log_level   = logging.WARNING
+
+        else:
+            error_response["message"] = "Internal server error."
+
+        if settings.DEBUG:
+            error_response["debug_traceback"] = traceback.format_exc()
+
+        log_message = (
+            f"❌ Unhandled Exception in {view_name} [{method} {path}] "
+            f"| User: {user_id} | IP: {ip_address} | Type: {type(exc).__name__}"
+        )
+        _log_error(log_message, level=log_level, status_code=http_status, exception=exc)
+        return Response(error_response, status=http_status)
+
+    except Exception as handler_exc:
+        logger.critical(
+            "🔥 CRITICAL: Auth exception handler failed! "
+            "Original: %s: %s | Handler Error: %s",
+            type(exc).__name__, exc, handler_exc,
+            exc_info=True,
+        )
+        return Response(
+            {
+                "success": False,
+                "message": "An unexpected error occurred. Please contact support.",
+                "errors": {},
+                "data": None,
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )

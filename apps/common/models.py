@@ -1187,3 +1187,350 @@ class HardDeleteMixin:
         Override in subclasses for model-specific logic.
         """
         return False
+
+
+# ================================================================
+# 6. USER LIFECYCLE REGISTRY
+#    Permanent, append-only audit table for every user identity
+#    ever created on the Fashionistar platform.
+#    NEVER soft-deleted, NEVER hard-deleted.
+#    Persists even after a UnifiedUser is hard-purged from the DB.
+# ================================================================
+
+class UserLifecycleRegistry(models.Model):
+    """
+    Permanent, delete-proof audit log for every user identity ever
+    created on the Fashionistar platform.
+
+    Design Goals
+    ------------
+    1. **Permanence** — This table uses ``models.Manager()`` (NOT the
+       soft-delete manager). Rows are NEVER deleted, even when the
+       corresponding ``UnifiedUser`` record is hard-purged.
+
+    2. **Analytics** — Tracks total signups, countries, login counts,
+       and lifecycle events for financial decisions and marketing.
+
+    3. **Audit compliance** — Provides a complete record of who was on
+       the platform, even after GDPR hard-delete of the live account.
+
+    4. **Background-only writes** — All mutations go through the
+       ``update_user_lifecycle_registry`` Celery task so the HTTP
+       request path is never blocked. Written via post-save signal after
+       transaction commit.
+
+    Identity equation (always true)
+    --------------------------------
+        total_users_ever = active + soft_deleted + hard_deleted
+
+    Usage (read-only in admin)
+    --------------------------
+        UserLifecycleRegistry.objects.filter(country='NG').count()
+        UserLifecycleRegistry.objects.filter(status='hard_deleted').count()
+
+    Note: ``objects`` intentionally uses the DEFAULT Django manager
+    (not SoftDeleteManager) so every row is always visible.
+    """
+
+    # ── Status choices ──────────────────────────────────────────────
+    STATUS_ACTIVE       = 'active'
+    STATUS_SOFT_DELETED = 'soft_deleted'
+    STATUS_HARD_DELETED = 'hard_deleted'
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE,       'Active'),
+        (STATUS_SOFT_DELETED, 'Soft Deleted (Recoverable)'),
+        (STATUS_HARD_DELETED, 'Hard Deleted (Permanent)'),
+    ]
+
+    # ── Source choices ──────────────────────────────────────────────
+    SOURCE_WEB            = 'web'
+    SOURCE_MOBILE_IOS     = 'mobile_ios'
+    SOURCE_MOBILE_ANDROID = 'mobile_android'
+    SOURCE_API            = 'api'
+    SOURCE_CHOICES = [
+        (SOURCE_WEB,            'Web Browser'),
+        (SOURCE_MOBILE_IOS,     'Mobile (iOS)'),
+        (SOURCE_MOBILE_ANDROID, 'Mobile (Android)'),
+        (SOURCE_API,            'Direct API'),
+    ]
+
+    # ── Primary key ─────────────────────────────────────────────────
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid6.uuid7,
+        editable=False,
+        help_text="UUID7 — globally unique, time-ordered.",
+    )
+
+    # ── Identity — snapshot at registration time ─────────────────────
+    user_uuid = models.UUIDField(
+        db_index=True,
+        help_text=(
+            "UnifiedUser.pk at time of registration. "
+            "Preserved even after the live account is hard-deleted."
+        ),
+    )
+    member_id = models.CharField(
+        max_length=20,
+        blank=True,
+        default='',
+        db_index=True,
+        help_text="Fashionistar member ID (e.g. FASTAR000001).",
+    )
+    email = models.EmailField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Email address captured at registration. NOT unique — may be reused after hard-delete.",
+    )
+    phone = models.CharField(
+        max_length=30,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Phone (E.164 format) captured at registration.",
+    )
+    role = models.CharField(
+        max_length=20,
+        blank=True,
+        default='',
+        help_text="User role at registration: admin, vendor, client.",
+    )
+    auth_provider = models.CharField(
+        max_length=30,
+        blank=True,
+        default='email',
+        help_text="Auth provider: email, google, facebook, apple, etc.",
+    )
+
+    # ── Geo at registration ──────────────────────────────────────────
+    country = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        db_index=True,
+        help_text=(
+            "Country at registration (from profile or IP geo-detection). "
+            "Use for regional analytics and marketing campaigns."
+        ),
+    )
+    state = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="State/Province at registration.",
+    )
+    city = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="City at registration.",
+    )
+    ip_address = models.GenericIPAddressField(
+        null=True,
+        blank=True,
+        help_text="IP address at registration (for geo-detection if user didn't set location).",
+    )
+    source = models.CharField(
+        max_length=20,
+        choices=SOURCE_CHOICES,
+        default=SOURCE_WEB,
+        help_text="Registration channel: web, mobile_ios, mobile_android, api.",
+    )
+
+    # ── Timestamps ───────────────────────────────────────────────────
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="When this registry entry was created (~ user registration time).",
+    )
+    soft_deleted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the live account was soft-deleted. Null if never soft-deleted.",
+    )
+    hard_deleted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "When the live account was permanently purged. "
+            "Null if still in DB. Set even if account was previously soft-deleted."
+        ),
+    )
+    restored_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Most recent restore timestamp (soft-delete reversed).",
+    )
+    last_login_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp of the most recent successful login.",
+    )
+
+    # ── Lifecycle state ──────────────────────────────────────────────
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_ACTIVE,
+        db_index=True,
+        help_text="Current lifecycle state of the user account.",
+    )
+
+    # ── Engagement metrics ───────────────────────────────────────────
+    total_logins = models.PositiveBigIntegerField(
+        default=0,
+        help_text="Cumulative successful login count. Never decrements.",
+    )
+
+    # ── Manager: plain Django manager — NO soft-delete filtering ─────
+    objects = models.Manager()
+
+    class Meta:
+        verbose_name = "User Lifecycle Registry"
+        verbose_name_plural = "User Lifecycle Registry"
+        indexes = [
+            models.Index(fields=['user_uuid'],      name='idx_ulr_user_uuid'),
+            models.Index(fields=['email'],           name='idx_ulr_email'),
+            models.Index(fields=['phone'],           name='idx_ulr_phone'),
+            models.Index(fields=['country'],         name='idx_ulr_country'),
+            models.Index(fields=['status'],          name='idx_ulr_status'),
+            models.Index(fields=['created_at'],      name='idx_ulr_created'),
+        ]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return (
+            f"UserLifecycleRegistry("
+            f"{self.email or self.phone or self.member_id} | "
+            f"status={self.status} | "
+            f"logins={self.total_logins})"
+        )
+
+
+# ================================================================
+# 7. ENTITY LIFECYCLE REGISTRY (Abstract mixin)
+#    Reusable pattern for Vendor, Product, Order, Category,
+#    Collection, Payment, and any other critical platform entity.
+# ================================================================
+
+class EntityLifecycleRegistry(models.Model):
+    """
+    Abstract, permanent lifecycle registry for any major platform entity.
+
+    Extend this for:
+        - VendorLifecycleRegistry  (apps/vendors or apps/common)
+        - ProductLifecycleRegistry (apps/products)
+        - OrderLifecycleRegistry   (apps/orders)
+        - CategoryLifecycleRegistry
+        - CollectionLifecycleRegistry
+        - PaymentLifecycleRegistry
+
+    Design
+    ------
+    * One row per entity identity, NEVER deleted.
+    * FK-free: stores entity_uuid + entity_type as strings so the
+      row survives even after hard-delete of the source row.
+    * Source maps to the source model: 'Vendor', 'Product', 'Order',
+      'Category', 'Collection', 'Payment', etc.
+    * All mutations go through Celery background tasks.
+
+    Usage example (for Vendor)
+    --------------------------
+        class VendorLifecycleRegistry(EntityLifecycleRegistry):
+            class Meta(EntityLifecycleRegistry.Meta):
+                verbose_name = "Vendor Lifecycle Registry"
+
+    Then wire post-save signal in apps/vendors/signals.py:
+        @receiver(post_save, sender=Vendor)
+        def on_vendor_saved(sender, instance, created, **kwargs):
+            if created:
+                transaction.on_commit(
+                    lambda: upsert_entity_lifecycle_registry.delay(
+                        entity_type='Vendor',
+                        entity_uuid=str(instance.pk),
+                        ...
+                    )
+                )
+    """
+
+    # ── Status choices (shared with UserLifecycleRegistry) ──────────
+    STATUS_ACTIVE       = 'active'
+    STATUS_SOFT_DELETED = 'soft_deleted'
+    STATUS_HARD_DELETED = 'hard_deleted'
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE,       'Active'),
+        (STATUS_SOFT_DELETED, 'Soft Deleted (Recoverable)'),
+        (STATUS_HARD_DELETED, 'Hard Deleted (Permanent)'),
+    ]
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid6.uuid7,
+        editable=False,
+    )
+    entity_type = models.CharField(
+        max_length=50,
+        db_index=True,
+        help_text="Model class name: 'Vendor', 'Product', 'Order', etc.",
+    )
+    entity_uuid = models.UUIDField(
+        db_index=True,
+        help_text="PK of the original entity at creation time.",
+    )
+    owner_user_uuid = models.UUIDField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="UnifiedUser.pk of the entity owner/creator.",
+    )
+
+    # ── Geo at creation ──────────────────────────────────────────────
+    country = models.CharField(max_length=100, blank=True, null=True, db_index=True)
+    state   = models.CharField(max_length=100, blank=True, null=True)
+    city    = models.CharField(max_length=100, blank=True, null=True)
+
+    # ── Timestamps ───────────────────────────────────────────────────
+    created_at      = models.DateTimeField(auto_now_add=True)
+    soft_deleted_at = models.DateTimeField(null=True, blank=True)
+    hard_deleted_at = models.DateTimeField(null=True, blank=True)
+    restored_at     = models.DateTimeField(null=True, blank=True)
+
+    # ── State ────────────────────────────────────────────────────────
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_ACTIVE,
+        db_index=True,
+    )
+
+    # ── Extra metadata (flexible JSON for any entity-specific data) ──
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            "Flexible entity-specific snapshot data. "
+            "E.g. for Product: {'sku': '...', 'price': '...', 'category': '...'}"
+        ),
+    )
+
+    # ── Manager: permanent, no soft-delete filtering ─────────────────
+    objects = models.Manager()
+
+    class Meta:
+        abstract = True
+        indexes = [
+            models.Index(fields=['entity_type', 'entity_uuid'], name='idx_elr_entity'),
+            models.Index(fields=['owner_user_uuid'],             name='idx_elr_owner'),
+            models.Index(fields=['country'],                     name='idx_elr_country'),
+            models.Index(fields=['status'],                      name='idx_elr_status'),
+        ]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return (
+            f"EntityLifecycleRegistry("
+            f"type={self.entity_type} | "
+            f"uuid={str(self.entity_uuid)[:8]}... | "
+            f"status={self.status})"
+        )
+

@@ -199,11 +199,39 @@ class SoftDeleteAdminMixin:
         deleted at once — dramatically faster than N individual
         ``save()`` calls for large selections.
 
+        Superuser Guard
+        ---------------
+        Superuser accounts are NEVER soft-deleted via bulk action.
+        If the selection contains superusers, they are excluded and
+        the admin sees a warning message listing each protected account.
+        This prevents accidental lockout of the last admin.
+
         Only processes records where ``is_deleted=False``. Already-
         deleted records in the selection are silently skipped.
         """
         from apps.common.models import DeletedRecords
         from django.forms.models import model_to_dict
+
+        # ── Superuser guard (only applies to UnifiedUser / any model with is_superuser) ──
+        skipped_superusers = []
+        if hasattr(queryset.model, 'is_superuser'):
+            superuser_qs = queryset.filter(is_superuser=True)
+            for su in superuser_qs:
+                label = getattr(su, 'email', None) or getattr(su, 'username', None) or str(su.pk)
+                skipped_superusers.append(label)
+            # Exclude superusers from the operation
+            queryset = queryset.filter(is_superuser=False)
+
+        if skipped_superusers:
+            self.message_user(
+                request,
+                _(
+                    "⛔ The following superuser account(s) were PROTECTED and "
+                    "NOT soft-deleted: %(accounts)s. "
+                    "Superusers cannot be removed via bulk action to prevent lockout."
+                ) % {'accounts': ', '.join(skipped_superusers)},
+                level='warning',
+            )
 
         alive_qs = queryset.filter(is_deleted=False)
         pks = list(alive_qs.values_list('pk', flat=True))
@@ -257,15 +285,33 @@ class SoftDeleteAdminMixin:
             klass_name,
         )
 
-        # 3. Fire-and-forget notification PER RECORD
-        #    (best-effort — never blocks the response)
-        #    We re-fetch from DB so each obj has accurate state.
+        # 3. Fire-and-forget notification PER RECORD + lifecycle registry
         for obj in klass.objects.all_with_deleted().filter(
             pk__in=pks,
             is_deleted=True,
         ):
             if hasattr(obj, '_fire_and_forget_notification'):
                 obj._fire_and_forget_notification('soft_deleted')
+
+            # ── Lifecycle registry hook (UnifiedUser only) ──────────────────
+            if klass_name == 'UnifiedUser':
+                try:
+                    from django.db import transaction as _tx
+                    from apps.common.tasks import upsert_user_lifecycle_registry
+                    _uuid = str(obj.pk)
+
+                    def _fire_lifecycle(_uid=_uuid):
+                        try:
+                            upsert_user_lifecycle_registry.apply_async(
+                                kwargs={'user_uuid': _uid, 'action': 'soft_deleted'},
+                                retry=False,
+                                ignore_result=True,
+                            )
+                        except Exception:
+                            pass
+                    _tx.on_commit(_fire_lifecycle)
+                except Exception:
+                    pass  # Never block admin actions for analytics
 
         # 4. Increment audit counter
         try:
@@ -293,6 +339,7 @@ class SoftDeleteAdminMixin:
         description=_("Restore selected records")
     )
     def restore_selected(self, request, queryset):
+
         """
         Bulk restore action.
 

@@ -2,33 +2,46 @@
 """
 Global exception handling for the entire Fashionistar API surface.
 
-Covers:
-  - Django REST Framework exceptions (ValidationError, AuthenticationFailed, etc.)
-  - Django core exceptions (Http404, PermissionDenied, ValidationError)
-  - Django Ninja exceptions (via Ninja's own exception_handler decorator)
-  - Completely unhandled Python exceptions (500)
+Architecture
+────────────
+This module has TWO responsibilities:
 
-All errors produce the same JSON envelope:
+1. **Global error envelope** — every API error (DRF, Django, Ninja, or
+   unhandled) is normalized into the same JSON shape:
 
-    {
-        "success": false,
-        "message": "Human-readable summary.",
-        "code":    "machine_readable_code",
-        "errors":  { "field": ["msg"] } | ["msg"] | null,
-        "meta":    { "request_id": "...", "status": 422 }   ← optional
-    }
+       {
+           "success": false,
+           "message": "Human-readable summary.",
+           "code":    "machine_readable_code",
+           "errors":  { "field": ["msg"] } | ["msg"] | null,
+           "meta":    { "request_id": "...", "status": 422 }
+       }
+
+2. **Auth-domain exception awareness** — the global DRF handler and
+   Ninja handler are auth-exception-aware. They check for
+   ``apps.authentication.exceptions.AuthenticationError`` subclasses
+   BEFORE falling through to generic error mapping, so that typed
+   errors like ``SoftDeletedUserError`` (403), ``DuplicateUserError``
+   (409), and ``InvalidCredentialsError`` (401) produce the correct
+   HTTP status codes and messages without any view-level boiler-plate.
+
+Auth exceptions live in ``apps.authentication.exceptions``.
+This file only *handles* them — it does not define them — keeping the
+dependency direction clean (common ← authentication, not ← →).
 
 Registration
 ────────────
-DRF (in settings.py):
+DRF (settings.py):
     REST_FRAMEWORK = {
         'EXCEPTION_HANDLER': 'apps.common.exceptions.custom_exception_handler',
     }
 
 Django Ninja (in api router setup):
     from apps.common.exceptions import ninja_exception_handler
-    api = NinjaAPI(...)
-    api.exception_handler(Exception)(ninja_exception_handler)
+
+    @api.exception_handler(Exception)
+    def handle_all(request, exc):
+        return ninja_exception_handler(request, exc)
 """
 
 from __future__ import annotations
@@ -62,10 +75,13 @@ from rest_framework.views import exception_handler
 logger = logging.getLogger(__name__)
 security_logger = logging.getLogger("security")
 
-# ---------------------------------------------------------------------------
-# Error code mappings
-# ---------------------------------------------------------------------------
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Error code mappings
+# ─────────────────────────────────────────────────────────────────────────────
+
+#: Maps DRF exception types → (code, human-readable message).
+#: Checked in order; first match wins.
 _EXCEPTION_CODE_MAP: dict[type, tuple[str, str]] = {
     ValidationError:       ("validation_error",        "Validation failed."),
     ParseError:            ("parse_error",             "Malformed request body."),
@@ -79,6 +95,10 @@ _EXCEPTION_CODE_MAP: dict[type, tuple[str, str]] = {
 }
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Internal helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
 def _build_error_payload(
     message: str,
     code: str,
@@ -87,6 +107,7 @@ def _build_error_payload(
     request_id: Optional[str] = None,
     http_status: Optional[int] = None,
 ) -> dict:
+    """Build the standard Fashionistar error envelope."""
     payload: dict = {
         "success": False,
         "message": message,
@@ -112,35 +133,140 @@ def _get_request_id(context: Optional[dict]) -> Optional[str]:
         return None
 
 
-# ---------------------------------------------------------------------------
-# DRF exception handler
-# ---------------------------------------------------------------------------
+def _load_auth_exception_base() -> Optional[type]:
+    """
+    Lazily import ``AuthenticationError`` from the authentication app.
+
+    Returns None (instead of raising) if the auth app is not installed
+    or during early boot — so this module stays importable everywhere.
+    """
+    try:
+        from apps.authentication.exceptions import AuthenticationError
+        return AuthenticationError
+    except ImportError:
+        return None
+
+
+def _handle_auth_exception(
+    exc: Exception,
+    request_id: Optional[str],
+) -> Optional[Response]:
+    """
+    Handle auth-domain exceptions (``AuthenticationError`` subclasses)
+    and produce a properly-typed DRF Response.
+
+    Returns None if ``exc`` is not an auth-domain exception.
+
+    Auth exceptions (DuplicateUserError, SoftDeletedUserError, etc.) all
+    inherit from DRF ``APIException`` via ``AuthenticationError``, so they
+    carry their own ``status_code``, ``default_detail``, and
+    ``default_code``.  We trust those values here.
+    """
+    AuthErr = _load_auth_exception_base()
+    if AuthErr is None or not isinstance(exc, AuthErr):
+        return None
+
+    api_exc: APIException = exc  # type: ignore[assignment]
+    http_status_code: int = api_exc.status_code
+    code: str  = api_exc.default_code
+    message: str = (
+        api_exc.detail
+        if isinstance(api_exc.detail, str)
+        else str(api_exc.detail)
+    )
+
+    # Security logging for 401/403 events
+    if http_status_code in (401, 403):
+        security_logger.warning(
+            "SECURITY_AUDIT action=AUTH_ERROR code=%s req=%s",
+            code, request_id or "-",
+        )
+
+    payload = _build_error_payload(
+        message, code, request_id=request_id, http_status=http_status_code,
+    )
+    return Response(payload, status=http_status_code)
+
+
+def _handle_auth_exception_json(
+    exc: Exception,
+    request_id: Optional[str],
+) -> Optional[JsonResponse]:
+    """
+    Same as ``_handle_auth_exception`` but returns ``JsonResponse``
+    for use in the Django Ninja handler.
+    """
+    AuthErr = _load_auth_exception_base()
+    if AuthErr is None or not isinstance(exc, AuthErr):
+        return None
+
+    api_exc: APIException = exc  # type: ignore[assignment]
+    http_status_code: int = api_exc.status_code
+    code: str = api_exc.default_code
+    message: str = (
+        api_exc.detail
+        if isinstance(api_exc.detail, str)
+        else str(api_exc.detail)
+    )
+
+    if http_status_code in (401, 403):
+        security_logger.warning(
+            "SECURITY_AUDIT action=AUTH_ERROR code=%s req=%s",
+            code, request_id or "-",
+        )
+
+    payload = _build_error_payload(
+        message, code, request_id=request_id, http_status=http_status_code,
+    )
+    return JsonResponse(payload, status=http_status_code)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DRF global exception handler
+# ─────────────────────────────────────────────────────────────────────────────
 
 def custom_exception_handler(exc: Exception, context: dict) -> Optional[Response]:
     """
-    Global exception handler registered in REST_FRAMEWORK['EXCEPTION_HANDLER'].
+    Global exception handler for Django REST Framework.
 
-    Handles:
-    • All DRF APIException subclasses
-    • Django Http404
-    • Django PermissionDenied
-    • Django ValidationError
-    • Unhandled exceptions (→ 500)
+    Register in settings.py::
+
+        REST_FRAMEWORK = {
+            'EXCEPTION_HANDLER': 'apps.common.exceptions.custom_exception_handler',
+        }
+
+    Handles (in priority order):
+    ①  Auth-domain exceptions (``AuthenticationError`` subclasses):
+        DuplicateUserError, SoftDeletedUserError, AccountInactiveError,
+        InvalidCredentialsError, SoftDeletedUserExistsError, etc.
+        → Translated using the exception's own status_code / default_code.
+
+    ②  All DRF ``APIException`` subclasses (ValidationError, NotFound, etc.)
+        → Normalized via ``_EXCEPTION_CODE_MAP``.
+
+    ③  Django core exceptions (Http404, PermissionDenied, ValidationError)
+        → Manually translated.
+
+    ④  Truly unhandled Python exceptions → 500 Server Error.
 
     Args:
-        exc:     The exception raised.
-        context: DRF context dict containing 'request', 'view', etc.
+        exc:     The exception raised inside a DRF view or serializer.
+        context: DRF context dict (contains 'request', 'view', etc.).
 
     Returns:
-        DRF Response with standardised Fashionistar error envelope,
-        or None if the exception is not recognised (should not happen).
+        Standardized Fashionistar error Response, never None.
     """
     request_id = _get_request_id(context)
 
-    # ── 1. Let DRF handle its own exceptions first ──────────────────────────
+    # ── ① Auth-domain exception (highest priority) ───────────────────────────
+    auth_response = _handle_auth_exception(exc, request_id)
+    if auth_response is not None:
+        return auth_response
+
+    # ── ② Standard DRF exception handling ───────────────────────────────────
     response = exception_handler(exc, context)
 
-    # ── 2. Django exceptions DRF does not handle ────────────────────────────
+    # ── ③ Django exceptions DRF does not convert ────────────────────────────
     if response is None:
         if isinstance(exc, DjangoValidationError):
             errors = (
@@ -162,6 +288,10 @@ def custom_exception_handler(exc: Exception, context: dict) -> Optional[Response
             return Response(payload, status=status.HTTP_404_NOT_FOUND)
 
         if isinstance(exc, DjangoPermissionDenied):
+            security_logger.warning(
+                "SECURITY_AUDIT action=PERMISSION_DENIED req=%s",
+                request_id or "-",
+            )
             payload = _build_error_payload(
                 "You do not have permission to perform this action.",
                 "permission_denied",
@@ -169,7 +299,7 @@ def custom_exception_handler(exc: Exception, context: dict) -> Optional[Response
             )
             return Response(payload, status=status.HTTP_403_FORBIDDEN)
 
-        # ── Truly unhandled: 500 ─────────────────────────────────────────
+        # ── ④ Truly unhandled: 500 ────────────────────────────────────────
         logger.error(
             "Unhandled exception in API: %s", exc,
             exc_info=True, extra={"request_id": request_id},
@@ -185,7 +315,7 @@ def custom_exception_handler(exc: Exception, context: dict) -> Optional[Response
         )
         return Response(payload, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    # ── 3. Standardise DRF response ─────────────────────────────────────────
+    # ── Normalize the DRF response into the standard envelope ────────────────
     if response is not None:
         http_status_code: int = response.status_code
 
@@ -207,7 +337,7 @@ def custom_exception_handler(exc: Exception, context: dict) -> Optional[Response
             wait_secs = int(exc.wait) + 1
             message = f"Too many requests. Retry after {wait_secs} seconds."
 
-        # Log 4xx/5xx security events
+        # Security event logging
         if http_status_code in (401, 403):
             security_logger.warning(
                 "SECURITY_AUDIT action=PERMISSION_DENIED req=%s code=%s",
@@ -227,9 +357,9 @@ def custom_exception_handler(exc: Exception, context: dict) -> Optional[Response
     return response
 
 
-# ---------------------------------------------------------------------------
-# Django Ninja exception handler
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# Django Ninja global exception handler
+# ─────────────────────────────────────────────────────────────────────────────
 
 def ninja_exception_handler(request: HttpRequest, exc: Exception) -> JsonResponse:
     """
@@ -245,16 +375,28 @@ def ninja_exception_handler(request: HttpRequest, exc: Exception) -> JsonRespons
         def handle_all(request, exc):
             return ninja_exception_handler(request, exc)
 
+    Handles (in priority order):
+    ①  Auth-domain exceptions → typed HTTP status from exception.status_code
+    ②  Http404              → 404
+    ③  Django PermissionDenied → 403
+    ④  Django ValidationError  → 400
+    ⑤  Catch-all              → 500
+
     Args:
         request: Django HttpRequest.
         exc:     The exception raised inside a Ninja endpoint.
 
     Returns:
-        JsonResponse with Fashionistar error envelope.
+        JsonResponse with the Fashionistar error envelope.
     """
     request_id: Optional[str] = getattr(request, "request_id", None)
 
-    # ── Http404 ──────────────────────────────────────────────────────────────
+    # ── ① Auth-domain exception ──────────────────────────────────────────────
+    auth_json = _handle_auth_exception_json(exc, request_id)
+    if auth_json is not None:
+        return auth_json
+
+    # ── ② Http404 ────────────────────────────────────────────────────────────
     if isinstance(exc, Http404):
         payload = _build_error_payload(
             "The requested resource was not found.", "not_found",
@@ -262,7 +404,7 @@ def ninja_exception_handler(request: HttpRequest, exc: Exception) -> JsonRespons
         )
         return JsonResponse(payload, status=404)
 
-    # ── Django PermissionDenied ───────────────────────────────────────────────
+    # ── ③ Django PermissionDenied ────────────────────────────────────────────
     if isinstance(exc, DjangoPermissionDenied):
         security_logger.warning(
             "SECURITY_AUDIT action=PERMISSION_DENIED req=%s",
@@ -275,7 +417,7 @@ def ninja_exception_handler(request: HttpRequest, exc: Exception) -> JsonRespons
         )
         return JsonResponse(payload, status=403)
 
-    # ── Django ValidationError ────────────────────────────────────────────────
+    # ── ④ Django ValidationError ─────────────────────────────────────────────
     if isinstance(exc, DjangoValidationError):
         errors = (
             exc.message_dict if hasattr(exc, "message_dict") else exc.messages
@@ -286,7 +428,7 @@ def ninja_exception_handler(request: HttpRequest, exc: Exception) -> JsonRespons
         )
         return JsonResponse(payload, status=400)
 
-    # ── Catch-all 500 ─────────────────────────────────────────────────────────
+    # ── ⑤ Catch-all 500 ──────────────────────────────────────────────────────
     logger.error(
         "Unhandled Ninja exception: %s", exc,
         exc_info=True, extra={"request_id": request_id},

@@ -212,16 +212,37 @@ class LoginView(generics.GenericAPIView):
         Validates credentials via LoginSerializer, issues JWT tokens.
 
         LoginSerializer.validate() checks: user exists, password correct,
-        is_active=True (account must be OTP-verified). The validated User
-        object is used directly — no redundant authenticate() call.
-        Mirrors legacy userauths.LoginView pattern exactly.
+        is_active=True (account must be OTP-verified).
+
+        Error mapping (enterprise-grade):
+          SoftDeletedUserError  → 403  (account deactivated, contact support)
+          AccountInactiveError  → 403  (account not yet verified / disabled)
+          InvalidCredentialsError → 401 (wrong password or unknown user)
+          ValidationError       → 400  (missing fields)
         """
+        from apps.authentication.exceptions import (
+            SoftDeletedUserError,
+            AccountInactiveError,
+            InvalidCredentialsError,
+        )
         try:
             serializer = self.get_serializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
 
-            # Use validated user from serializer (no double-authenticate)
-            user = serializer.validated_data['user']
+            # ── Step 1: Field-level validation (required, format) ────────────
+            # We do NOT use raise_exception=True here because DRF's is_valid()
+            # swallows ALL exceptions from validate() — including our typed auth
+            # exceptions (SoftDeletedUserError, InvalidCredentialsError) — and
+            # re-raises them as generic ValidationError, losing the HTTP status
+            # code. Instead we validate fields first, then call validate() directly.
+            if not serializer.is_valid():
+                raise drf_serializers.ValidationError(serializer.errors)
+
+            # ── Step 2: Business-logic validation (direct call) ───────────────
+            # This allows SoftDeletedUserError (403), InvalidCredentialsError (401)
+            # and AccountInactiveError (403) to propagate to the handlers below.
+            validated_data = serializer.validate(serializer.initial_data)
+            user = validated_data['user']
+
 
             # Update last login timestamp
             from django.contrib.auth.models import update_last_login
@@ -230,6 +251,26 @@ class LoginView(generics.GenericAPIView):
             # Issue JWT tokens
             from rest_framework_simplejwt.tokens import RefreshToken
             refresh = RefreshToken.for_user(user)
+
+            # Fire lifecycle login counter (non-blocking, after commit)
+            try:
+                from django.db import transaction as _tx
+                from apps.common.tasks import increment_lifecycle_login_counter
+                from django.utils import timezone
+                login_ts = timezone.now().isoformat()
+
+                def _fire():
+                    try:
+                        increment_lifecycle_login_counter.apply_async(
+                            kwargs={'user_uuid': str(user.pk), 'login_at': login_ts},
+                            retry=False,
+                            ignore_result=True,
+                        )
+                    except Exception:
+                        pass
+                _tx.on_commit(_fire)
+            except Exception:
+                pass  # Never block login on analytics
 
             logger.info(
                 "✅ LoginView: login successful for %s (id=%s role=%s)",
@@ -248,6 +289,41 @@ class LoginView(generics.GenericAPIView):
                 status=status.HTTP_200_OK,
             )
 
+        except SoftDeletedUserError as exc:
+            logger.warning(
+                "⛔ LoginView: soft-deleted account attempt for %s",
+                request.data.get('email_or_phone', ''),
+            )
+            return Response(
+                {
+                    "error": str(exc.detail),
+                    "code":  exc.default_code,
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        except AccountInactiveError as exc:
+            logger.warning(
+                "⛔ LoginView: inactive account attempt for %s",
+                request.data.get('email_or_phone', ''),
+            )
+            return Response(
+                {
+                    "error": str(exc.detail),
+                    "code":  exc.default_code,
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        except InvalidCredentialsError as exc:
+            return Response(
+                {
+                    "error": str(exc.detail),
+                    "code":  exc.default_code,
+                },
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
         except drf_serializers.ValidationError as exc:
             logger.warning("⚠️ LoginView validation error: %s", exc.detail)
             return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
@@ -260,6 +336,7 @@ class LoginView(generics.GenericAPIView):
                 {"error": "An error occurred during login. Please try again."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════

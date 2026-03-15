@@ -532,3 +532,136 @@ class ModelAnalyticsAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return request.user.is_superuser
 
+
+# ================================================================
+# USER LIFECYCLE REGISTRY ADMIN (Superadmin read-only)
+# ================================================================
+
+from apps.common.models import UserLifecycleRegistry
+
+
+@admin.register(UserLifecycleRegistry)
+class UserLifecycleRegistryAdmin(admin.ModelAdmin):
+    """
+    Permanent, read-only audit view for every user identity ever
+    created on the Fashionistar platform.
+
+    Design
+    ------
+    * Completely read-only — no add / edit / delete permitted from
+      this admin. Rows are created only by the lifecycle Celery task.
+    * Superadmin access only — this contains PII (email, phone, IP).
+    * Rich list display: status, geo, login counts, lifecycle dates.
+    * Full-text search: email, phone, member_id, country.
+    * Filters: status, country, auth_provider, source.
+
+    Data Analytics
+    --------------
+    Use the list view filters + search to answer:
+      • "How many users signed up from Nigeria this month?"
+      • "How many accounts have been permanently purged?"
+      • "What is the active vs deactivated ratio?"
+      • "How many logins did our top 10 users have?"
+    """
+
+    list_display = (
+        'status_badge',
+        'email',
+        'phone',
+        'member_id',
+        'role',
+        'auth_provider',
+        'country',
+        'city',
+        'source',
+        'total_logins',
+        'created_at',
+        'soft_deleted_at',
+        'hard_deleted_at',
+        'last_login_at',
+    )
+    list_filter = (
+        'status',
+        'country',
+        'auth_provider',
+        'source',
+        'role',
+    )
+    search_fields = (
+        'email',
+        'phone',
+        'member_id',
+        'country',
+        'city',
+        'state',
+    )
+    readonly_fields = (
+        'id',
+        'user_uuid',
+        'member_id',
+        'email',
+        'phone',
+        'role',
+        'auth_provider',
+        'country',
+        'state',
+        'city',
+        'ip_address',
+        'source',
+        'status',
+        'total_logins',
+        'created_at',
+        'soft_deleted_at',
+        'hard_deleted_at',
+        'restored_at',
+        'last_login_at',
+    )
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)
+
+    # ── Status badge ──────────────────────────────────────────────
+
+    def status_badge(self, obj):
+        """Render a colour-coded status pill."""
+        COLORS = {
+            'active':       ('#28a745', '🟢 ACTIVE'),
+            'soft_deleted': ('#fd7e14', '🟠 DEACTIVATED'),
+            'hard_deleted': ('#dc3545', '🔴 PURGED'),
+        }
+        color, label = COLORS.get(obj.status, ('#6c757d', '⚪ UNKNOWN'))
+        from django.utils.html import format_html
+        return format_html(
+            '<span style="'
+            'background:{};color:#fff;'
+            'padding:2px 10px;border-radius:12px;'
+            'font-size:11px;font-weight:700;'
+            'letter-spacing:.4px;">'
+            '{}</span>',
+            color,
+            label,
+        )
+
+    status_badge.short_description = _('Status')
+    status_badge.admin_order_field = 'status'
+
+    # ── Permissions: superadmin read-only ─────────────────────────
+
+    def has_module_perms(self, request, app_label=None):
+        return request.user.is_superuser
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_add_permission(self, request):
+        """Registry rows are created only by the lifecycle Celery task."""
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        """Registry is immutable from the admin UI — audit integrity."""
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        """Registry rows are NEVER deleted — they are permanent by design."""
+        return False
+
+

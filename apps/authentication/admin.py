@@ -49,8 +49,17 @@ from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 
 from import_export import fields
-from import_export.admin import ImportExportModelAdmin
-from import_export.formats.base_formats import CSV, XLSX, JSON
+from import_export.formats.base_formats import CSV, JSON
+
+# XLSX requires openpyxl — only included when installed
+try:
+    import openpyxl as _openpyxl  # noqa: F401
+    from import_export.formats.base_formats import XLSX as _XLSX
+    _XLSX_FORMATS: list = [_XLSX]
+except ImportError:
+    _XLSX_FORMATS = []
+    _log = __import__('logging').getLogger('application')
+    _log.warning("admin.py: openpyxl not installed — XLSX disabled. Run: pip install openpyxl>=3.1.0")
 
 from auditlog.admin import LogEntryAdmin
 from auditlog.models import LogEntry
@@ -562,7 +571,7 @@ class BiometricInline(admin.TabularInline):
 @admin.register(UnifiedUser)
 class UnifiedUserAdmin(
     SoftDeleteAdminMixin,
-    ImportExportModelAdmin,
+    EnterpriseImportExportMixin,  # Provides stream_export_csv, export guards, MRO fix
     BaseUserAdmin,
 ):
     """
@@ -603,8 +612,8 @@ class UnifiedUserAdmin(
     add_form = UnifiedUserCreationForm
     resource_class = UnifiedUserResource
 
-    # ── Supported export formats ─────────────────────────────────────────
-    formats = [CSV, XLSX, JSON]
+    # ── Supported export formats (XLSX only when openpyxl installed) ────────
+    formats = [CSV, *_XLSX_FORMATS, JSON]
 
     # ── Inlines ─────────────────────────────────────────────────────────
     inlines = [BiometricInline]
