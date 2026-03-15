@@ -25,12 +25,12 @@ help: ## Display this help message
 
 install: ## Install Python dependencies from requirements.txt
 	@echo "$(CYAN)Installing dependencies...$(NC)"
-	pip install -r requirements.txt
+	uv sync
 	@echo "$(GREEN)✓ Dependencies installed$(NC)"
 
 install-dev: ## Install dev dependencies (linting, testing, typing)
 	@echo "$(CYAN)Installing dev dependencies...$(NC)"
-	venv\Scripts\pip install ruff mypy pytest pytest-django pytest-asyncio pytest-cov pytest-mock factory-boy
+	uv sync
 	@echo "$(GREEN)✓ Dev dependencies installed$(NC)"
 
 setup: install install-dev migrate static ## Full first-time setup
@@ -41,7 +41,7 @@ dev: ## Start Django development server (sync WSGI — port 8000, console email)
 	@echo "$(YELLOW)  Settings: backend.config.development$(NC)"
 	@echo "$(YELLOW)  Email:    console (OTP printed to this terminal)$(NC)"
 	@echo "$(YELLOW)  URL:      http://127.0.0.1:8000/$(NC)"
-	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/python manage.py runserver --settings=backend.config.development
+	DJANGO_SETTINGS_MODULE=backend.config.development uv run manage.py runserver --settings=backend.config.development
 
 # ── ASGI / Uvicorn / Daphne shortcuts ──────────────────────────────────────
 asgi: run-asgi ## Alias: start ASGI server with Uvicorn (same as run-asgi)
@@ -51,11 +51,11 @@ uvicorn: ## Start Uvicorn ASGI (dev, port 8001, console email, access logs)
 	@echo "$(YELLOW)  Settings: backend.config.development (ALLOWED_HOSTS=*)$(NC)"
 	@echo "$(YELLOW)  URL:      http://127.0.0.1:8001/ or http://localhost:8001/$(NC)"
 	@echo "$(YELLOW)  Logs:     Access log printed here (ALL requests — 2xx, 4xx, 5xx)$(NC)"
-	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto --log-config uvicorn_log_config.json
+	DJANGO_SETTINGS_MODULE=backend.config.development uv run uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto --log-config uvicorn_log_config.json
 
 wsgi: ## Start Gunicorn WSGI (sync production — port 8000)
 	@echo "$(CYAN)Starting Gunicorn WSGI server...$(NC)"
-	venv\Scripts\gunicorn backend.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 120
+	uv run gunicorn backend.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 120
 
 daphne: run-daphne ## Alias: start Daphne ASGI (same as run-daphne)
 
@@ -63,24 +63,20 @@ run-asgi: ## Start ASGI + Uvicorn (auto-starts Redis first)
 	@echo "$(CYAN)Ensuring Redis is running ...$(NC)"
 	@if [ -d '../.tmp_redis' ]; then cd ../.tmp_redis && ./redis-server.exe --port 6379 & sleep 1; fi
 	@echo "$(CYAN)Starting Uvicorn ASGI server (access logs on)...$(NC)"
-	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto --log-config uvicorn_log_config.json
+	DJANGO_SETTINGS_MODULE=backend.config.development uv run uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto --log-config uvicorn_log_config.json
 
 run-daphne: ## Start Daphne ASGI (WebSocket — auto-starts Redis first)
 	@echo "$(CYAN)Ensuring Redis is running ...$(NC)"
 	@if [ -d '../.tmp_redis' ]; then cd ../.tmp_redis && ./redis-server.exe --port 6379 & sleep 1; fi
 	@echo "$(CYAN)Starting Daphne ASGI server (development settings)...$(NC)"
-	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/daphne -b 0.0.0.0 -p 8001 backend.asgi:application
+	DJANGO_SETTINGS_MODULE=backend.config.development uv run daphne -b 0.0.0.0 -p 8001 backend.asgi:application
 
 shell: ## Open Django interactive shell (development settings)
-	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/python manage.py shell
+	DJANGO_SETTINGS_MODULE=backend.config.development uv run manage.py shell
 
 shell-plus: ## Open enhanced Django shell (requires django-extensions)
-	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/python manage.py shell_plus --ipython 2>/dev/null || \
-		DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/python manage.py shell
-
-# ═══════════════════════════════════════════════════════════════
-##@ Database & Migrations
-# ═══════════════════════════════════════════════════════════════
+	DJANGO_SETTINGS_MODULE=backend.config.development uv run manage.py shell_plus --ipython 2>/dev/null || \
+		DJANGO_SETTINGS_MODULE=backend.config.development uv run manage.py shell
 
 # ═══════════════════════════════════════════════════════════════
 ##@ Database & Migrations
@@ -88,56 +84,56 @@ shell-plus: ## Open enhanced Django shell (requires django-extensions)
 
 migrate: ## Run makemigrations + migrate
 	@echo "$(CYAN)Running migrations...$(NC)"
-	venv\Scripts\python manage.py makemigrations
-	venv\Scripts\python manage.py migrate
+	uv run manage.py makemigrations
+	uv run manage.py migrate
 	@echo "$(GREEN)✓ Migrations applied$(NC)"
 
 mmig: ## Make migrations (optionally for a specific app: make mmig app=authentication)
 	@if [ -z "$(app)" ]; then \
-		venv\Scripts\python manage.py makemigrations; \
+		uv run manage.py makemigrations; \
 	else \
-		venv\Scripts\python manage.py makemigrations "$(app)"; \
+		uv run manage.py makemigrations "$(app)"; \
 	fi
 
 mig: ## Apply migrations (optionally for a specific app: make mig app=authentication)
 	@if [ -z "$(app)" ]; then \
-		venv\Scripts\python manage.py migrate; \
+		uv run manage.py migrate; \
 	else \
-		venv\Scripts\python manage.py migrate "$(app)"; \
+		uv run manage.py migrate "$(app)"; \
 	fi
 
 showmig: ## Show migration status for all apps
-	venv\Scripts\python manage.py showmigrations
+	uv run manage.py showmigrations
 
 squash: ## Squash migrations for an app (usage: make squash app=authentication start=0001)
-	venv\Scripts\python manage.py squashmigrations $(app) $(start)
+	uv run manage.py squashmigrations $(app) $(start)
 
 db-reset: ## ⚠️  Reset SQLite database (destructive — dev only)
 	@echo "$(RED)⚠  Resetting database...$(NC)"
 	rm -f db.sqlite3
-	venv\Scripts\python manage.py makemigrations
-	venv\Scripts\python manage.py migrate
+	uv run manage.py makemigrations
+	uv run manage.py migrate
 	@echo "$(GREEN)✓ Database reset complete$(NC)"
 
 db-shell: ## Open database shell (dbshell)
-	venv\Scripts\python manage.py dbshell
+	uv run manage.py dbshell
 
 # ═══════════════════════════════════════════════════════════════
 ##@ Admin & Users
 # ═══════════════════════════════════════════════════════════════
 
 superuser: ## Create a Django superuser (interactive — uses UnifiedUser via correct settings)
-	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/python manage.py createsuperuser
+	DJANGO_SETTINGS_MODULE=backend.config.development uv run manage.py createsuperuser
 
 su: ## Create UnifiedUser superuser non-interactively (make su EMAIL=x PASS=y)
-	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/python scripts/create_superuser.py "$(EMAIL)" "$(PASS)"
+	DJANGO_SETTINGS_MODULE=backend.config.development uv run scripts/create_superuser.py "$(EMAIL)" "$(PASS)"
 
 changepass: ## Change a UnifiedUser password (uses correct settings)
-	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/python manage.py changepassword
+	DJANGO_SETTINGS_MODULE=backend.config.development uv run manage.py changepassword
 
 static: ## Collect static files
 	@echo "$(CYAN)Collecting static files...$(NC)"
-	venv\Scripts\python manage.py collectstatic --noinput
+	uv run manage.py collectstatic --noinput
 	@echo "$(GREEN)✓ Static files collected$(NC)"
 
 # ═══════════════════════════════════════════════════════════════
@@ -146,17 +142,17 @@ static: ## Collect static files
 
 lint: ## Run Ruff linter on the entire project
 	@echo "$(CYAN)Running Ruff linter...$(NC)"
-	ruff check . --fix
+	uv run ruff check . --fix
 	@echo "$(GREEN)✓ Linting complete$(NC)"
 
 format: ## Format code with Ruff formatter
 	@echo "$(CYAN)Formatting code...$(NC)"
-	ruff format .
+	uv run ruff format .
 	@echo "$(GREEN)✓ Code formatted$(NC)"
 
 type-check: ## Run mypy static type checking
 	@echo "$(CYAN)Running mypy type check...$(NC)"
-	mypy apps/ --ignore-missing-imports
+	uv run mypy apps/ --ignore-missing-imports
 	@echo "$(GREEN)✓ Type check passed$(NC)"
 
 quality: lint format type-check ## Run all code quality checks (lint + format + types)
@@ -168,22 +164,22 @@ quality: lint format type-check ## Run all code quality checks (lint + format + 
 
 test: ## Run full test suite with pytest
 	@echo "$(CYAN)Running tests...$(NC)"
-	pytest --disable-warnings -vv -x
+	uv run pytest --disable-warnings -vv -x
 	@echo "$(GREEN)✓ Tests passed$(NC)"
 
 test-cov: ## Run tests with HTML coverage report
 	@echo "$(CYAN)Running tests with coverage...$(NC)"
-	pytest --cov=apps --cov-report=html --cov-report=term-missing -vv
+	uv run pytest --cov=apps --cov-report=html --cov-report=term-missing -vv
 	@echo "$(GREEN)✓ Coverage report generated → htmlcov/index.html$(NC)"
 
 test-fast: ## Run tests without warnings (fast mode)
-	pytest --disable-warnings -q
+	uv run pytest --disable-warnings -q
 
 test-app: ## Run tests for a specific app (usage: make test-app app=authentication)
-	pytest apps/$(app)/ -vv
+	uv run pytest apps/$(app)/ -vv
 
 test-watch: ## Run tests in watch mode (requires pytest-watch)
-	ptw -- --disable-warnings -vv
+	uv run ptw -- --disable-warnings -vv
 
 # ═══════════════════════════════════════════════════════════════
 ##@ Celery & Background Tasks
@@ -195,35 +191,35 @@ celery: ## Start Celery worker — general queue (dev settings, console email)
 	@echo "$(CYAN)Starting Celery worker (DJANGO_SETTINGS_MODULE=development)...$(NC)"
 	@echo "$(YELLOW)  Pool:  solo (Windows-safe: no prefork shared memory)&$(NC)"
 	@echo "$(YELLOW)  Email: console.EmailBackend (OTP printed to THIS terminal)$(NC)"
-	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/celery -A backend worker --loglevel=info --pool=solo --events
+	DJANGO_SETTINGS_MODULE=backend.config.development uv run celery -A backend worker --loglevel=info --pool=solo --events
 
 celery-emails: ## Start Celery worker for email queue (dev, console email visible)
 	@if [ -d '../.tmp_redis' ]; then cd ../.tmp_redis && ./redis-server.exe --port 6379 & sleep 1; fi
-	DJANGO_SETTINGS_MODULE=backend.config.development venv/Scripts/celery -A backend worker -Q emails --loglevel=info --pool=solo
+	DJANGO_SETTINGS_MODULE=backend.config.development uv run celery -A backend worker -Q emails --loglevel=info --pool=solo
 
 celery-critical: ## Start Celery worker for critical queue (auto-starts Redis)
 	@if [ -d '../.tmp_redis' ]; then cd ../.tmp_redis && ./redis-server.exe --port 6379 & sleep 1; fi
-	venv\Scripts\celery -A backend worker -Q critical --loglevel=info --concurrency=2
+	uv run celery -A backend worker -Q critical --loglevel=info --concurrency=2
 
 celery-analytics: ## Start Celery worker for analytics queue
-	venv\Scripts\celery -A backend worker -Q analytics --loglevel=info --concurrency=1
+	uv run celery -A backend worker -Q analytics --loglevel=info --concurrency=1
 
 celery-beat: ## Start Celery Beat scheduler
-	venv\Scripts\celery -A backend beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+	uv run celery -A backend beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
 
 flower: ## Start Flower monitoring dashboard (port 5555)
 	@echo "$(CYAN)Starting Flower at http://localhost:5555$(NC)"
-	venv\Scripts\celery -A backend flower --port=5555
+	uv run celery -A backend flower --port=5555
 
 purge-tasks: ## ⚠️  Purge all queued Celery tasks
 	@echo "$(RED)⚠  Purging all queued tasks...$(NC)"
-	celery -A backend purge -f
+	uv run celery -A backend purge -f
 
 inspect-active: ## Inspect currently active Celery tasks
-	celery -A backend inspect active
+	uv run celery -A backend inspect active
 
 inspect-stats: ## Show Celery worker statistics
-	celery -A backend inspect stats
+	uv run celery -A backend inspect stats
 
 start-workers: ## Display instructions to start all workers
 	@echo "$(BOLD)$(CYAN)Start each in a separate terminal:$(NC)"
@@ -342,11 +338,11 @@ stop-redis: ## Stop local portable Redis server
 
 health: ## Check API health endpoint
 	@echo "$(CYAN)Checking system health...$(NC)"
-	@curl -sf http://localhost:8000/health/ | python -m json.tool 2>/dev/null || echo "$(RED)✗ API not running on port 8000$(NC)"
+	@curl -sf http://localhost:8000/health/ | uv run python -m json.tool 2>/dev/null || echo "$(RED)✗ API not running on port 8000$(NC)"
 
 health-redis: ## Check Redis connectivity
 	@echo "$(CYAN)Checking Redis...$(NC)"
-	@python -c "import redis; r = redis.from_url('$${REDIS_URL:-redis://localhost:6379/0}'); r.ping(); print('\033[0;32m✓ Redis connected\033[0m')" 2>/dev/null || echo "$(RED)✗ Redis not available$(NC)"
+	@uv run python -c "import redis; r = redis.from_url('$${REDIS_URL:-redis://localhost:6379/0}'); r.ping(); print('\033[0;32m✓ Redis connected\033[0m')" 2>/dev/null || echo "$(RED)✗ Redis not available$(NC)"
 
 test-metrics: ## Check Prometheus metrics endpoint
 	@echo "$(CYAN)Testing metrics...$(NC)"
@@ -415,8 +411,8 @@ info: ## Display project information
 	@echo "$(BOLD)$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"
 	@echo "$(BOLD)  FASHIONISTAR AI — Backend$(NC)"
 	@echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"
-	@echo "  Python:       $$(python --version 2>&1)"
-	@echo "  Django:       $$(python -c 'import django; print(django.VERSION)' 2>/dev/null || echo 'not installed')"
+	@echo "  Python:       $$(uv run python --version 2>&1)"
+	@echo "  Django:       $$(uv run python -c 'import django; print(django.VERSION)' 2>/dev/null || echo 'not installed')"
 	@echo "  Architecture: Dual-Engine (DRF Sync + Ninja Async)"
 	@echo "  Database:     PostgreSQL 17 / SQLite (dev)"
 	@echo "  Cache:        Redis"
@@ -433,14 +429,14 @@ urls: ## Display key API endpoints
 	@echo "  $(CYAN)Ninja Async:$(NC)  http://localhost:8000/api/v2/"
 
 deps: ## List installed Python packages
-	pip list --format=columns
+	uv pip list --format=columns
 
 outdated: ## Check for outdated Python packages
-	pip list --outdated
+	uv pip list --outdated
 
 req-update: ## Freeze current packages to requirements.txt
 	@echo "$(YELLOW)⚠  Updating requirements.txt from installed packages...$(NC)"
-	pip freeze > requirements.txt
+	uv pip freeze > requirements.txt
 	@echo "$(GREEN)✓ requirements.txt updated$(NC)"
 
 # ═══════════════════════════════════════════════════════════════

@@ -1,0 +1,126 @@
+[project]
+name = "fashionistar-backend"
+version = "0.1.0"
+description = "FASHIONISTAR AI E-Commerce Backend"
+requires-python = ">=3.12"
+dependencies = [
+    # Core
+    "djangorestframework",
+    "django-ninja",
+    "adrf",
+    # Config
+    "django-environ",
+    "environs",
+    "python-decouple",
+    # Database
+    "psycopg[binary,pool]",
+    "dj-database-url",
+    # Auth & Security
+    "djangorestframework-simplejwt",
+    "PyJWT",
+    "cryptography",
+    "pycryptodome",
+    "django-encrypted-model-fields",
+    "django-ratelimit",
+    "fido2",
+    "google-auth",
+    "google-auth-oauthlib",
+    "google-auth-httplib2",
+    "django-axes",
+    "django-csp",
+    # Cache & Redis
+    "django-redis",
+    "redis",
+    "hiredis",
+    # Tasks
+    "celery",
+    "flower",
+    # Servers
+    "uvicorn",
+    "daphne",
+    "gunicorn",
+    "channels",
+    "channels-redis",
+    # CORS & Media
+    "django-cors-headers",
+    "whitenoise",
+    "django-storages",
+    "django-cloudinary-storage",
+    "cloudinary",
+    "pillow",
+    # Communication
+    "django-phonenumber-field[phonenumbers]",
+    "phonenumbers",
+    "twilio",
+    "django-phone-verify",
+    "django-anymail",
+    "django-zoho-zeptomail",
+    "email-validator",
+    # Admin, Tools, Utils
+    "drf-spectacular",
+    "drf-yasg",
+    "django-jazzmin",
+    "django-import-export",
+    "django-auditlog",
+    "openpyxl>=3.1.0",
+    "drf-api-logger",
+    "prometheus-client",
+    "sentry-sdk[django]",
+    "django-silk",
+    "django-health-check",
+    "django-structlog",
+    "pydantic",
+    "django-filter",
+    "marshmallow",
+    "tablib",
+    "requests",
+    "httpx",
+    "aiohttp",
+    "aiohttp-retry",
+    "certifi",
+    "charset-normalizer",
+    "idna",
+    "urllib3",
+    "asgiref",
+    "attrs",
+    "click",
+    "colorama",
+    "humanize",
+    "jsonschema",
+    "packaging",
+    "python-dateutil",
+    "pytz",
+    "PyYAML",
+    "setuptools",
+    "shortuuid",
+    "six",
+    "sqlparse",
+    "typing-extensions",
+    "tzdata",
+    "uritemplate",
+    "uuid6",
+    "wrapt",
+    "aiohappyeyeballs",
+    "aiosignal",
+    "async-timeout",
+    "frozenlist",
+    "multidict",
+    "propcache",
+    "yarl",
+
+    # Make sure we keep the correct versions of django and django-celery-beat, order matters slightly:
+    "django-celery-beat",
+    "Django==6.0.3"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-django",
+    "pytest-asyncio",
+    "pytest-cov",
+    "pytest-mock",
+    "factory-boy",
+    "ruff",
+    "mypy",
+]
