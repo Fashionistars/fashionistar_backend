@@ -42,6 +42,7 @@ from rest_framework import serializers as drf_serializers
 
 from apps.authentication.models import UnifiedUser
 from apps.authentication.services.otp import OTPService
+from apps.common.events import event_bus  # EventBus singleton
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +143,28 @@ class RegistrationService:
                 otp = OTPService.generate_otp_sync(user.id, purpose='verify')
                 logger.info("🔐 OTP generated for user_id=%s", user.id)
 
-            # ── 3. FIRE CELERY TASK via transaction.on_commit() ───────────
+            # ── 3. EMIT 'user.registered' EVENT (replaces Django signal) ──
+            # emit_on_commit() fires ONLY after the transaction commits.
+            # The handler (apps.common.event_handlers.on_user_registered)
+            # dispatches the Celery task upsert_user_lifecycle_registry.
+            event_bus.emit_on_commit(
+                'user.registered',
+                user_uuid=str(user.id),
+                email=str(user.email) if user.email else None,
+                phone=str(user.phone) if user.phone else None,
+                member_id=str(user.member_id) if user.member_id else '',
+                role=str(user.role) if user.role else '',
+                auth_provider=str(user.auth_provider) if user.auth_provider else 'email',
+                country=str(user.country) if user.country else None,
+                state=str(user.state) if user.state else None,
+                city=str(user.city) if user.city else None,
+            )
+            logger.info(
+                "📡 EventBus: 'user.registered' scheduled on_commit [user_id=%s]",
+                str(user.id),
+            )
+
+            # ── 4. FIRE OTP CELERY TASK via transaction.on_commit() ──────
             # on_commit() fires ONLY after the outermost transaction commits
             # successfully — ensuring the user row is visible to the worker.
             _user_id = str(user.id)

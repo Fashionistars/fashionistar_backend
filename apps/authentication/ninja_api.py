@@ -1,6 +1,9 @@
 # apps/authentication/ninja_api.py
 """
-Django Ninja API Instance — Async V2 Authentication.
+Django Ninja API Instance — Async V1 Authentication.
+
+All Ninja endpoints live under /api/v1/ninja/ to stay on uniform v1 versioning
+and avoid URL collisions with DRF endpoints at /api/v1/auth/.
 
 Guards against Django's double-import during ``auto_reload``, which
 triggers ``ConfigError("Looks like you created multiple NinjaAPIs")``.
@@ -33,13 +36,13 @@ def _get_api() -> NinjaAPI:
     )
 
     _api_instance = NinjaAPI(
-        title="Fashionistar Auth API V2",
-        version="2.0.0",
-        description="Asynchronous Authentication API using Django Ninja",
-        urls_namespace='authentication_v2',
+        title="Fashionistar Auth API V1",
+        version="1.0.0",
+        description="Asynchronous Authentication API using Django Ninja — served at /api/v1/ninja/auth/",
+        urls_namespace='authentication_v1',
     )
     _api_instance.add_router("", auth_router)
-    logger.info("✅ NinjaAPI V2 initialized (namespace=authentication_v2)")
+    logger.info("✅ NinjaAPI V1 initialized (namespace=authentication_v1, path=/api/v1/ninja/auth/)")
     return _api_instance
 
 

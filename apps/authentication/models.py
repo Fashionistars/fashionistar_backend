@@ -182,7 +182,7 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
     # --- ARCHITECTURE NOTE ---
     # avatar is now a plain URLField that stores the Cloudinary HTTPS secure_url.
     # Uploads go through the two-phase direct-upload pattern:
-    #   1. Frontend calls POST /api/v2/upload/presign/ → gets a signed upload token
+    #   1. Frontend calls POST /api/v1/upload/presign/ → gets a signed upload token
     #   2. Frontend POSTs file DIRECTLY to Cloudinary (bypasses Django server)
     #   3. Cloudinary calls our webhook → Celery task saves the secure_url here
     # This eliminates all synchronous cloudinary.uploader.upload() inside save().
@@ -192,7 +192,7 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
         null=True,
         help_text=(
             "Cloudinary HTTPS secure_url for user avatar. "
-            "Set via the /api/v2/upload/presign/ → direct upload → webhook flow. "
+            "Set via the /api/v1/upload/presign/ → direct upload → webhook flow. "
             "Paste a Cloudinary URL directly in the admin if needed."
         ),
     )
@@ -610,98 +610,4 @@ class BiometricCredential(TimeStampedModel):
     def __str__(self):
         return f"{self.user.email} - {self.device_name or 'Key'}"
 
-
-# ================================================================
-# SIGNALS — UnifiedUser Lifecycle Registry hooks
-# ================================================================
-
-from django.db.models.signals import post_save
-from django.dispatch import receiver
-
-
-@receiver(post_save, sender=UnifiedUser)
-def on_unified_user_saved(sender, instance, created, **kwargs):
-    """
-    Post-save signal for UnifiedUser.
-
-    On new user creation: registers a permanent audit entry in
-    ``UserLifecycleRegistry`` via a fire-and-forget Celery task
-    dispatched after the DB transaction commits.
-
-    Why on_commit?
-    --------------
-    If the outer transaction rolls back (e.g., during registration),
-    we do NOT want a dangling registry row. ``on_commit`` ensures the
-    task only fires when the user row is guaranteed to be in the DB.
-
-    Geo data (country/state/city) is pulled from the user profile
-    at save time if available. IP is not available in signals —
-    it should be passed explicitly from the view when calling
-    ``upsert_user_lifecycle_registry`` for the 'created' event.
-    """
-    if not created:
-        return  # Only handle new user creation here
-
-    try:
-        from apps.common.tasks import upsert_user_lifecycle_registry
-        from django.db import transaction as _tx
-
-        # Snapshot geo from user profile (may be None)
-        country = getattr(instance, 'country', None)
-        state   = getattr(instance, 'state', None)
-        city    = getattr(instance, 'city', None)
-
-        def _fire():
-            try:
-                upsert_user_lifecycle_registry.apply_async(
-                    kwargs=dict(
-                        user_uuid=str(instance.pk),
-                        action='created',
-                        email=str(instance.email) if instance.email else None,
-                        phone=str(instance.phone) if instance.phone else None,
-                        member_id=str(instance.member_id) if instance.member_id else '',
-                        role=str(instance.role) if instance.role else '',
-                        auth_provider=str(instance.auth_provider) if instance.auth_provider else 'email',
-                        country=str(country) if country else None,
-                        state=str(state) if state else None,
-                        city=str(city) if city else None,
-                    ),
-                    retry=False,
-                    ignore_result=True,
-                )
-            except Exception:
-                # Celery/Redis unavailable — best-effort sync fallback
-                try:
-                    from apps.common.models import UserLifecycleRegistry
-                    UserLifecycleRegistry.objects.get_or_create(
-                        user_uuid=instance.pk,
-                        defaults=dict(
-                            email=instance.email,
-                            phone=str(instance.phone) if instance.phone else None,
-                            member_id=instance.member_id or '',
-                            role=instance.role or '',
-                            auth_provider=instance.auth_provider or 'email',
-                            country=country,
-                            state=state,
-                            city=city,
-                            status='active',
-                        ),
-                    )
-                    logger.info(
-                        "UserLifecycleRegistry: sync fallback entry created for %s",
-                        instance.pk,
-                    )
-                except Exception as inner_exc:  # noqa: BLE001
-                    logger.warning(
-                        "UserLifecycleRegistry fallback also failed for user %s: %s",
-                        instance.pk, inner_exc,
-                    )
-
-        _tx.on_commit(_fire)
-
-    except Exception as exc:  # noqa: BLE001
-        logger.warning(
-            "on_unified_user_saved signal failed for user %s: %s",
-            instance.pk, exc,
-        )
 

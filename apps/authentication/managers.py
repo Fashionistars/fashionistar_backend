@@ -8,12 +8,18 @@ Enterprise-grade custom user manager with:
                                  and raises SoftDeletedUserError so login views
                                  can return 403 instead of 404
   ● Async parity              — every method ships a native async twin
+  ● Savepoint-safe UNIQUE guard — user.save() runs inside a nested
+                                   transaction.atomic() (savepoint) so that
+                                   an IntegrityError never aborts the outer
+                                   transaction. This allows the except handler
+                                   to safely run a SELECT without triggering
+                                   TransactionManagementError.
 """
 
 import logging
 
 from django.contrib.auth.base_user import BaseUserManager
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 
@@ -126,14 +132,24 @@ class CustomUserManager(BaseUserManager):
         try:
             user = self.model(email=email, phone=phone, **extra_fields)
             user.set_password(password)
-            user.save(using=self._db)
+
+            # ── Savepoint guard ───────────────────────────────────────────
+            # Wrapping save() in a nested transaction.atomic() creates a DB
+            # savepoint (not a full transaction). If save() raises an
+            # IntegrityError (e.g. UNIQUE constraint), only the savepoint is
+            # rolled back — the OUTER transaction (owned by sync_service) stays
+            # healthy. This means the except block can safely run a SELECT
+            # without Django raising TransactionManagementError.
+            with transaction.atomic():
+                user.save(using=self._db)
+
             logger.info("✅ Created user: email=%s", email or phone)
             return user
 
         except IntegrityError as exc:
             exc_str = str(exc).upper()
             if 'UNIQUE' in exc_str or 'ALREADY EXISTS' in exc_str:
-                # Secondary lookup: is this a soft-deleted account?
+                # Savepoint already rolled back — outer TX is clean, safe to SELECT.
                 existing = self.all_with_deleted().filter(
                     Q(email=email) | Q(phone=phone)
                 ).first()
@@ -181,15 +197,21 @@ class CustomUserManager(BaseUserManager):
         try:
             user = self.model(email=email, phone=phone, **extra_fields)
             user.set_password(password)
-            
-            # Using native async save
-            await user.asave(using=self._db)
+
+            # ── Savepoint guard (async) ───────────────────────────────────
+            # Django's async ORM uses the same savepoint mechanism as sync.
+            # Wrapping asave() ensures an IntegrityError only kills the
+            # savepoint, not the entire outer transaction.
+            async with transaction.atomic():  # type: ignore[attr-defined]
+                await user.asave(using=self._db)
+
             logger.info("✅ Created user (async): email=%s", email or phone)
             return user
 
         except IntegrityError as exc:
             exc_str = str(exc).upper()
             if 'UNIQUE' in exc_str or 'ALREADY EXISTS' in exc_str:
+                # Savepoint rolled back — outer TX clean, safe to SELECT.
                 existing = await self.all_with_deleted().filter(
                     Q(email=email) | Q(phone=phone)
                 ).afirst()

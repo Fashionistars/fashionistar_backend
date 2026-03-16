@@ -323,8 +323,12 @@ class EnterpriseImportExportMixin(ImportExportModelAdmin):
             )
             return
 
-        # Determine field names from the resource
-        resource_class = self.get_export_resource_class()
+        # Determine field names from the resource.
+        # NOTE: django-import-export ≥4.0 changed the API:
+        #   get_export_resource_class()  → removed (singular)
+        #   get_export_resource_classes() → added (plural, returns a list)
+        resource_classes = self.get_export_resource_classes()
+        resource_class = resource_classes[0] if resource_classes else None
         if resource_class:
             resource = resource_class()
             field_names = list(resource.get_export_headers())

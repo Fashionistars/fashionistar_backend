@@ -9,10 +9,10 @@ urlpatterns = [
     # Used by: AWS ELB, Render.com, Kubernetes probes, Uptime Robot
     path("health/", HealthCheckView.as_view(), name="health-check"),
 
-    # POST /api/v2/upload/presign/ — Cloudinary presign token (JWT required)
+    # POST /api/v1/upload/presign/ — Cloudinary presign token (JWT required)
     path("upload/presign/", CloudinaryPresignView.as_view(), name="cloudinary-presign"),
 
-    # POST /api/v2/upload/webhook/cloudinary/ — Cloudinary notification receiver
+    # POST /api/v1/upload/webhook/cloudinary/ — Cloudinary notification receiver
     # CSRF-exempt, HMAC-SHA256 validated, no user auth required
     path("upload/webhook/cloudinary/", CloudinaryWebhookView.as_view(), name="cloudinary-webhook"),
 ]

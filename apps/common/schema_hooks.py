@@ -15,7 +15,7 @@ WHY THIS IS NEEDED:
   cause ValueError: 'Related model cannot be resolved' during schema
   generation — making Swagger/ReDoc return HTTP 500.
 
-  By filtering to only expose /api/v1/ and /api/v2/ routes in the schema,
+  By filtering to only expose /api/v1/ and /api/v1/ninja/ routes in the schema,
   we:
     1. Keep Swagger/ReDoc working for the NEW enterprise endpoints
     2. Hide legacy URL patterns that aren't fully migrated yet
@@ -44,18 +44,19 @@ def filter_auth_endpoints_only(
 ) -> List[Any]:
     """
     Preprocessing hook that filters the endpoint list to only include
-    endpoints under /api/v1/ and /api/v2/ (new enterprise endpoints).
+    endpoints under /api/v1/ and /api/v1/ninja/ (new enterprise endpoints).
 
     Filters OUT:
       - All legacy store/vendor/customer/payment routes
       - Any URL that triggers Django FK model resolution errors
 
     Keeps IN:
-      - /api/v1/auth/*          (sync DRF registration, login, OTP)
-      - /api/v2/*               (async Ninja endpoints, future)
-      - /api/schema/swagger-ui/ (Swagger UI itself)
-      - /api/schema/redoc/      (ReDoc)
-      - /admin/                 (Django admin)
+      - /api/v1/auth/*            (sync DRF: registration, login, OTP)
+      - /api/v1/ninja/auth/*      (async Ninja: high-concurrency endpoints)
+      - /api/v1/upload/*          (Cloudinary presign + webhook)
+      - /api/schema/swagger-ui/   (Swagger UI itself)
+      - /api/schema/redoc/        (ReDoc)
+      - /admin/                   (Django admin)
 
     Args:
         endpoints: List of (path, path_regex, method, callback) tuples

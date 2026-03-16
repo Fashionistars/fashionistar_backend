@@ -1,10 +1,15 @@
 # apps/authentication/urls.py
 """
-Authentication URLs - Synchronous & Asynchronous Routes
+Authentication URLs — Synchronous & Asynchronous Routes
 
 Architecture:
-    v1/ - Synchronous endpoints (DRF GenericAPIView, WSGI-safe)
-    v2/ - Asynchronous endpoints (Django Ninja, ASGI, high-concurrency)
+    /api/v1/auth/         — Synchronous DRF endpoints (WSGI-safe, production)
+    /api/v1/ninja/auth/   — Asynchronous Django Ninja endpoints (ASGI, high-concurrency)
+
+Versioning Rule:
+    All endpoints — both DRF and Ninja — are version 1 (v1).
+    Future versions will be added under /api/v2/ when breaking changes are needed.
+    Ninja uses the dedicated /api/v1/ninja/ prefix to avoid URL collisions with DRF.
 """
 
 import logging
@@ -52,18 +57,19 @@ v1_password_patterns = [
 ]
 
 # ========================================================================
-# V2 API - Asynchronous Endpoints (High-Concurrency, ASGI-Ready)
+# V1 Ninja API — Asynchronous Endpoints (High-Concurrency, ASGI-Ready)
 # ========================================================================
-
-# Ninja manages its own routing tree.
-# Mount the singleton NinjaAPI instance at v2/auth/.
-v2_auth_patterns = [
-    path('v2/auth/', api.urls),
+# All Ninja endpoints MUST be mounted under /api/v1/ninja/ to:
+#   1. Stay on v1 (uniform versioning across the whole API)
+#   2. Avoid URL collisions with DRF v1 endpoints at /api/v1/auth/
+#   3. Make versioning explicit: /api/v1/ninja/auth/*, /api/v1/ninja/products/*, etc.
+v1_ninja_patterns = [
+    path('v1/ninja/auth/', api.urls),
 ]
 
 urlpatterns = (
     v1_auth_patterns
     + v1_password_patterns
-    + v2_auth_patterns
+    + v1_ninja_patterns
 )
 

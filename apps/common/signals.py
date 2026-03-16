@@ -55,6 +55,12 @@ _EXCLUDED_MODEL_NAMES = frozenset({
     # Celery Beat
     'CrontabSchedule', 'IntervalSchedule', 'PeriodicTask',
     'SolarSchedule', 'ClockedSchedule',
+    # Member ID counter — write-once atomic counter, NEVER track its saves.
+    # Tracking it would create a feedback loop: each user registration
+    # increments the counter → on_model_updated fires → ModelAnalytics.record_updated()
+    # → another Celery task → another save → infinite chain.
+    # The counter is implementation infrastructure, not a business record.
+    'MemberIDCounter',
 })
 
 # ── Apps we skip entirely ─────────────────────────────────────────
