@@ -291,7 +291,15 @@ class HealthCheckView(View):
 # POST /api/v2/upload/presign/
 # ─────────────────────────────────────────────────────────────────────────────
 
-VALID_ASSET_TYPES = frozenset(["avatar", "product_image", "product_video", "measurement"])
+
+def _get_valid_asset_types() -> frozenset:
+    """Derive valid asset types from _ASSET_CONFIGS at import time."""
+    from apps.common.utils.cloudinary import _ASSET_CONFIGS
+    return frozenset(_ASSET_CONFIGS.keys())
+
+
+VALID_ASSET_TYPES = _get_valid_asset_types()
+
 
 
 class CloudinaryPresignView(APIView):

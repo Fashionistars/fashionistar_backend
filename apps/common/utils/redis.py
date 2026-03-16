@@ -222,3 +222,135 @@ def redis_incr(key: str, ttl: int = 60) -> Optional[int]:
     except Exception as exc:
         logger.warning("redis_incr failed for key=%s: %s", key, exc)
         return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 4. API Endpoint Caching  ← SINGLE-TRY (no retry loop for API responses)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Design decision (vs OTP / presign caching above)
+# ─────────────────────────────────────────────────
+# For API endpoint caching we use Django's built-in ``django.core.cache``
+# framework backed by ``django_redis.cache.RedisCache``.
+#
+# Key behaviour:
+#   - IGNORE_EXCEPTIONS=True in settings.CACHES['default']['OPTIONS']
+#     means a Redis outage silently returns None — NO exception, NO retry.
+#   - This is the industry-standard pattern (Stripe, Shopify, Netflix):
+#     cache miss → go straight to DB, return result, never block the user.
+#   - We do NOT use ``get_redis_connection_safe()`` here (which has a 3-retry
+#     loop) because that defeats the purpose — 3 × 500ms hangs = 1.5s delay.
+#   - The 3-retry loop is intentionally kept for background tasks (presign
+#     caching, OTP) where the small delay is acceptable and consistency matters.
+#
+# Usage in DRF / Django-Ninja views:
+#   from apps.common.utils.redis import api_cache_get, api_cache_set
+#
+#   def my_view(request):
+#       data = api_cache_get("products:featured")
+#       if data is None:
+#           data = list(Product.objects.filter(featured=True).values())
+#           api_cache_set("products:featured", data, ttl=300)
+#       return Response(data)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def api_cache_get(key: str) -> Any:
+    """
+    Retrieve a cached API response from Django's default cache (Redis).
+
+    On Redis miss OR Redis unavailability → returns ``None`` immediately.
+    No retry, no delay.  Caller must then query the DB.
+
+    Args:
+        key: Cache key string. Use a consistent prefix scheme, e.g.
+             ``"products:featured"`` or ``"vendor:{vid}:stats"``.
+
+    Returns:
+        Deserialized Python value, or ``None``.
+    """
+    from django.core.cache import cache
+    try:
+        return cache.get(key)
+    except Exception as exc:
+        # Should never reach here with IGNORE_EXCEPTIONS=True, but guard anyway
+        logger.debug("api_cache_get: unexpected error for key=%s: %s", key, exc)
+        return None
+
+
+def api_cache_set(key: str, value: Any, ttl: int = 300) -> bool:
+    """
+    Store an API response in Django's default cache (Redis).
+
+    On Redis unavailability → returns ``False`` silently.
+    The API response has already been returned; the cache is best-effort.
+
+    Args:
+        key:   Cache key string.
+        value: Any Django-cache-serializable Python object.
+        ttl:   Time-to-live in seconds (default 5 minutes).
+
+    Returns:
+        ``True`` on success, ``False`` on Redis unavailability.
+    """
+    from django.core.cache import cache
+    try:
+        cache.set(key, value, timeout=ttl)
+        return True
+    except Exception as exc:
+        logger.debug("api_cache_set: unexpected error for key=%s: %s", key, exc)
+        return False
+
+
+def api_cache_delete(key: str) -> bool:
+    """
+    Invalidate a cached API response.
+
+    Call this after a write operation (POST/PUT/PATCH/DELETE) that mutates
+    the data the cached key represents.
+
+    Args:
+        key: Cache key to delete.
+
+    Returns:
+        ``True`` on success, ``False`` on Redis unavailability.
+    """
+    from django.core.cache import cache
+    try:
+        cache.delete(key)
+        return True
+    except Exception as exc:
+        logger.debug("api_cache_delete: unexpected error for key=%s: %s", key, exc)
+        return False
+
+
+def api_cache_delete_pattern(pattern: str) -> int:
+    """
+    Delete all Redis keys matching a glob pattern.
+
+    Use for cache invalidation when a change affects multiple related keys,
+    e.g. ``"products:*"`` after a product bulk-update.
+
+    Implemented via ``django_redis``'s ``delete_pattern()`` extension,
+    which is NOT available in the base Django cache API — falls back to 0
+    if the backend does not support it.
+
+    Args:
+        pattern: Redis glob pattern, e.g. ``"vendor:abc123:*"``.
+
+    Returns:
+        Number of keys deleted (0 on failure or no matches).
+    """
+    try:
+        from django.core.cache import cache
+        return cache.delete_pattern(pattern)  # type: ignore[attr-defined]
+    except AttributeError:
+        # Non-Redis backend or older django-redis version
+        logger.debug(
+            "api_cache_delete_pattern: backend does not support delete_pattern()"
+        )
+        return 0
+    except Exception as exc:
+        logger.debug(
+            "api_cache_delete_pattern: error for pattern=%s: %s", pattern, exc
+        )
+        return 0

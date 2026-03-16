@@ -336,6 +336,8 @@ CLOUDINARY_SIGNATURE_TTL = int(env("CLOUDINARY_SIGNATURE_TTL", default=3300))
 # synchronously inside model.save() — that was the cause of the DNS-blocking 500.
 STORAGES = {
     "default": {
+        # "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
+
         # Local filesystem — model fields store Cloudinary HTTPS URLs, not files.
         "BACKEND": "django.core.files.storage.FileSystemStorage",
     },

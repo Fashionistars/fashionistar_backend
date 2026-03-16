@@ -26,6 +26,11 @@ from apps.common.utils.redis import (       # noqa: F401
     redis_incr,
     REDIS_MAX_RETRIES,
     REDIS_RETRY_DELAY,
+    # Single-try API endpoint caching (no retry loop)
+    api_cache_get,
+    api_cache_set,
+    api_cache_delete,
+    api_cache_delete_pattern,
 )
 
 # ── Cloudinary utilities ──────────────────────────────────────────────────────
@@ -77,6 +82,11 @@ __all__ = [
     "redis_incr",
     "REDIS_MAX_RETRIES",
     "REDIS_RETRY_DELAY",
+    # API endpoint cache (single-try)
+    "api_cache_get",
+    "api_cache_set",
+    "api_cache_delete",
+    "api_cache_delete_pattern",
     # Cloudinary
     "CloudinaryUploadResult",
     "CloudinaryDeleteResult",

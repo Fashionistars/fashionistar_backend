@@ -54,50 +54,192 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-# ─── Asset type → folder/preset mapping ──────────────────────────────────────
+# ─── Asset type → folder/preset/eager mapping ────────────────────────────────
+# One entry per upload use-case discovered across the codebase:
+#   admin_backend: Category.image, Brand.image, Collections.image / background_image
+#   userauths:     Profile.image
+#   store:         Product.image, Gallery.image, Color.image
+#   vendor:        Vendor.image
+#   Blog:          Blog.image, BlogGallery.image
+#   chat:          Message.files
+#   measurements:  Measurements.image
+#   apps/auth:     UnifiedUser.avatar
+#
+# EXTENSIBILITY:
+#   For any future model that has an image, just supply
+#   ``asset_type="generic_image"`` (or add a new key below).
+#   The presign endpoint accepts ANY key that exists here.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_STANDARD_THUMBNAIL = [
+    {"width": 800,  "crop": "scale", "quality": "auto", "fetch_format": "auto"},
+    {"width": 400,  "crop": "scale", "quality": "auto", "fetch_format": "auto"},
+    {"width": 150,  "crop": "fill",  "quality": "auto", "fetch_format": "auto"},
+]
+
 _ASSET_CONFIGS: dict[str, dict] = {
+    # ── UnifiedUser avatar ─────────────────────────────────────────────────
     "avatar": {
-        "folder_prefix": "fashionistar/users/avatars",
-        "preset_setting": "CLOUDINARY_UPLOAD_PRESET_AVATAR",
-        "resource_type": "image",
+        "folder_prefix":   "fashionistar/users/avatars",
+        "preset_setting":  "CLOUDINARY_UPLOAD_PRESET_AVATAR",
+        "resource_type":   "image",
         "eager": [
-            {"width": 400,  "height": 400,  "crop": "fill", "quality": "auto", "fetch_format": "auto"},
-            {"width": 150,  "height": 150,  "crop": "fill", "quality": "auto", "fetch_format": "auto"},
+            {"width": 400, "height": 400, "crop": "fill",  "quality": "auto", "fetch_format": "auto"},
+            {"width": 150, "height": 150, "crop": "fill",  "quality": "auto", "fetch_format": "auto"},
         ],
     },
+
+    # ── Product main image ─────────────────────────────────────────────────
     "product_image": {
-        "folder_prefix": "fashionistar/products/images",
-        "preset_setting": "CLOUDINARY_UPLOAD_PRESET_PRODUCT",
-        "resource_type": "image",
+        "folder_prefix":   "fashionistar/products/images",
+        "preset_setting":  "CLOUDINARY_UPLOAD_PRESET_PRODUCT",
+        "resource_type":   "image",
         "eager": [
-            {"width": 1200, "height": 1200, "crop": "fill", "quality": "auto", "fetch_format": "auto"},
-            {"width": 800,  "height": 800,  "crop": "fill", "quality": "auto", "fetch_format": "auto"},
-            {"width": 400,  "height": 400,  "crop": "fill", "quality": "auto", "fetch_format": "auto"},
+            {"width": 1200, "height": 1200, "crop": "fill",  "quality": "auto", "fetch_format": "auto"},
+            {"width": 800,  "height": 800,  "crop": "fill",  "quality": "auto", "fetch_format": "auto"},
+            {"width": 400,  "height": 400,  "crop": "fill",  "quality": "auto", "fetch_format": "auto"},
+            # 4K / high-res variant
+            {"width": 3840, "crop": "scale", "quality": "auto", "fetch_format": "auto"},
+        ],
+    },
+
+    # ── Product gallery (3-5 images per product) ───────────────────────────
+    "product_gallery": {
+        "folder_prefix":   "fashionistar/products/gallery",
+        "preset_setting":  "CLOUDINARY_UPLOAD_PRESET_PRODUCT",
+        "resource_type":   "image",
+        "eager": [
+            {"width": 1200, "height": 1200, "crop": "fill",  "quality": "auto", "fetch_format": "auto"},
+            {"width": 800,  "height": 800,  "crop": "fill",  "quality": "auto", "fetch_format": "auto"},
+            {"width": 400,  "height": 400,  "crop": "fill",  "quality": "auto", "fetch_format": "auto"},
             # 4K variant
             {"width": 3840, "crop": "scale", "quality": "auto", "fetch_format": "auto"},
         ],
     },
+
+    # ── Product color swatch image ─────────────────────────────────────────
+    "product_color": {
+        "folder_prefix":   "fashionistar/products/colors",
+        "preset_setting":  "CLOUDINARY_UPLOAD_PRESET_PRODUCT",
+        "resource_type":   "image",
+        "eager": [
+            {"width": 100, "height": 100, "crop": "fill", "quality": "auto", "fetch_format": "auto"},
+        ],
+    },
+
+    # ── Product video (unique HD video per product) ────────────────────────
     "product_video": {
-        "folder_prefix": "fashionistar/products/videos",
-        "preset_setting": "CLOUDINARY_UPLOAD_PRESET_VIDEO",
-        "resource_type": "video",
+        "folder_prefix":   "fashionistar/products/videos",
+        "preset_setting":  "CLOUDINARY_UPLOAD_PRESET_VIDEO",
+        "resource_type":   "video",
         "eager": [
             {"format": "mp4",  "quality": "auto", "width": 1920},
             {"format": "webm", "quality": "auto", "width": 1920},
             {"format": "mp4",  "quality": "auto", "width": 1280},  # 720p fallback
         ],
     },
+
+    # ── Vendor / Shop image ────────────────────────────────────────────────
+    "vendor_shop": {
+        "folder_prefix":   "fashionistar/vendors/shops",
+        "preset_setting":  "CLOUDINARY_UPLOAD_PRESET_PRODUCT",
+        "resource_type":   "image",
+        "eager": _STANDARD_THUMBNAIL,
+    },
+
+    # ── Category image ─────────────────────────────────────────────────────
+    "category": {
+        "folder_prefix":   "fashionistar/categories/images",
+        "preset_setting":  "CLOUDINARY_UPLOAD_PRESET_PRODUCT",
+        "resource_type":   "image",
+        "eager": _STANDARD_THUMBNAIL,
+    },
+
+    # ── Brand image ────────────────────────────────────────────────────────
+    "brand": {
+        "folder_prefix":   "fashionistar/brands/images",
+        "preset_setting":  "CLOUDINARY_UPLOAD_PRESET_PRODUCT",
+        "resource_type":   "image",
+        "eager": _STANDARD_THUMBNAIL,
+    },
+
+    # ── Collection hero + background  ──────────────────────────────────────
+    "collection": {
+        "folder_prefix":   "fashionistar/collections/images",
+        "preset_setting":  "CLOUDINARY_UPLOAD_PRESET_PRODUCT",
+        "resource_type":   "image",
+        "eager": [
+            {"width": 2560, "crop": "scale", "quality": "auto", "fetch_format": "auto"},  # 2K desktop hero
+            {"width": 1920, "crop": "scale", "quality": "auto", "fetch_format": "auto"},  # FHD
+            {"width": 800,  "crop": "scale", "quality": "auto", "fetch_format": "auto"},  # tablet
+            {"width": 400,  "crop": "scale", "quality": "auto", "fetch_format": "auto"},  # mobile
+        ],
+    },
+
+    # ── Legacy userauths Profile image ────────────────────────────────────
+    "profile": {
+        "folder_prefix":   "fashionistar/profiles/images",
+        "preset_setting":  "CLOUDINARY_UPLOAD_PRESET_AVATAR",
+        "resource_type":   "image",
+        "eager": [
+            {"width": 400, "height": 400, "crop": "fill", "quality": "auto", "fetch_format": "auto"},
+            {"width": 150, "height": 150, "crop": "fill", "quality": "auto", "fetch_format": "auto"},
+        ],
+    },
+
+    # ── Blog / Article cover + gallery ────────────────────────────────────
+    "blog": {
+        "folder_prefix":   "fashionistar/blogs/images",
+        "preset_setting":  "CLOUDINARY_UPLOAD_PRESET_PRODUCT",
+        "resource_type":   "image",
+        "eager": [
+            {"width": 1200, "crop": "scale", "quality": "auto", "fetch_format": "auto"},  # OG image
+            {"width": 800,  "crop": "scale", "quality": "auto", "fetch_format": "auto"},
+            {"width": 400,  "crop": "scale", "quality": "auto", "fetch_format": "auto"},
+        ],
+    },
+
+    # ── Chat / Message attachments (any file type) ────────────────────────
+    "chat_file": {
+        "folder_prefix":   "fashionistar/chat/files",
+        "preset_setting":  "CLOUDINARY_UPLOAD_PRESET_PRODUCT",
+        "resource_type":   "auto",   # auto-detect image/video/raw
+        "eager": [],                 # no eager transforms for raw files
+    },
+
+    # ── Customer measurement images ───────────────────────────────────────
     "measurement": {
-        "folder_prefix": "fashionistar/measurements",
-        "preset_setting": "CLOUDINARY_UPLOAD_PRESET_MEASURE",
-        "resource_type": "image",
+        "folder_prefix":   "fashionistar/measurements",
+        "preset_setting":  "CLOUDINARY_UPLOAD_PRESET_MEASURE",
+        "resource_type":   "image",
         "eager": [
             {"width": 2560, "crop": "scale", "quality": "auto", "fetch_format": "auto"},  # 2K
             {"width": 1920, "crop": "scale", "quality": "auto", "fetch_format": "auto"},  # FHD
             {"width": 800,  "crop": "scale", "quality": "auto", "fetch_format": "auto"},  # thumbnail
         ],
     },
+
+    # ── Generic / future models ─────────────────────────────────────────
+    # Any future model that has an image can use asset_type="generic_image"
+    # without any code change in the presign view or webhook router.
+    "generic_image": {
+        "folder_prefix":   "fashionistar/general",
+        "preset_setting":  "CLOUDINARY_UPLOAD_PRESET_PRODUCT",
+        "resource_type":   "image",
+        "eager": _STANDARD_THUMBNAIL,
+    },
+
+    "generic_video": {
+        "folder_prefix":   "fashionistar/general/videos",
+        "preset_setting":  "CLOUDINARY_UPLOAD_PRESET_VIDEO",
+        "resource_type":   "video",
+        "eager": [
+            {"format": "mp4",  "quality": "auto", "width": 1920},
+            {"format": "webm", "quality": "auto", "width": 1920},
+        ],
+    },
 }
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
