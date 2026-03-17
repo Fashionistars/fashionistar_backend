@@ -171,6 +171,23 @@ class SyncAuthService:
                     failure_reason='account_deleted',
                     is_successful=False,
                 )
+                # AuditEventLog — structured high-value event
+                try:
+                    from apps.audit_logs.services import AuditService
+                    from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
+                    AuditService.log(
+                        event_type=EventType.LOGIN_BLOCKED,
+                        event_category=EventCategory.SECURITY,
+                        severity=SeverityLevel.WARNING,
+                        action=f"Login blocked — account soft-deleted: {email_or_phone}",
+                        request=request,
+                        ip_address=ip,
+                        user_agent=ua,
+                        metadata={"reason": "account_deleted", "identifier": email_or_phone},
+                        is_compliance=True,
+                    )
+                except Exception:
+                    pass
                 raise
             except UnifiedUser.DoesNotExist:
                 candidate = None  # Completely unknown identifier
@@ -204,6 +221,27 @@ class SyncAuthService:
                         failure_reason='account_inactive',
                         is_successful=False,
                     )
+                    # AuditEventLog
+                    try:
+                        from apps.audit_logs.services import AuditService
+                        from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
+                        AuditService.log(
+                            event_type=EventType.LOGIN_BLOCKED,
+                            event_category=EventCategory.SECURITY,
+                            severity=SeverityLevel.WARNING,
+                            action=f"Login blocked — account inactive: {email_or_phone}",
+                            request=request,
+                            actor=candidate,
+                            actor_email=getattr(candidate, 'email', None),
+                            ip_address=ip,
+                            user_agent=ua,
+                            resource_type="UnifiedUser",
+                            resource_id=str(candidate.pk) if candidate else None,
+                            metadata={"reason": "account_inactive"},
+                            is_compliance=True,
+                        )
+                    except Exception:
+                        pass
                     raise AccountInactiveError()
 
                 logger.warning(
@@ -218,6 +256,23 @@ class SyncAuthService:
                     failure_reason='invalid_credentials',
                     is_successful=False,
                 )
+                # AuditEventLog
+                try:
+                    from apps.audit_logs.services import AuditService
+                    from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
+                    AuditService.log(
+                        event_type=EventType.LOGIN_FAILED,
+                        event_category=EventCategory.AUTHENTICATION,
+                        severity=SeverityLevel.WARNING,
+                        action=f"Login failed — invalid credentials: {email_or_phone}",
+                        request=request,
+                        ip_address=ip,
+                        user_agent=ua,
+                        metadata={"reason": "invalid_credentials"},
+                        is_compliance=False,
+                    )
+                except Exception:
+                    pass
                 raise InvalidCredentialsError()
 
             # ── 4. Update Django last_login ──────────────────────────────────
@@ -236,6 +291,28 @@ class SyncAuthService:
                 failure_reason='',
                 is_successful=True,
             )
+
+            # AuditEventLog — async via transaction.on_commit() → Celery
+            try:
+                from apps.audit_logs.services import AuditService
+                from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
+                AuditService.log(
+                    event_type=EventType.LOGIN_SUCCESS,
+                    event_category=EventCategory.AUTHENTICATION,
+                    severity=SeverityLevel.INFO,
+                    action=f"Successful login: {user.email or user.phone}",
+                    request=request,
+                    actor=user,
+                    actor_email=user.email,
+                    ip_address=ip,
+                    user_agent=ua,
+                    resource_type="UnifiedUser",
+                    resource_id=str(user.pk),
+                    metadata={"auth_method": auth_method, "member_id": user.member_id or ""},
+                    is_compliance=True,
+                )
+            except Exception:
+                pass
 
             # ── 7. Create UserSession on_commit (Telegram-style active devices) ─
             try:

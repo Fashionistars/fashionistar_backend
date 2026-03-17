@@ -106,6 +106,7 @@ INSTALLED_APPS = [
     # ── Fashionistar New Architecture ────────────────────────────────────────
     "apps.common",
     "apps.authentication",
+    "apps.audit_logs",           # Enterprise audit log — AuditEventLog
     # ── Legacy Apps (pending migration to apps/) ─────────────────────────────
     "admin_backend",
     "userauths",
@@ -153,6 +154,8 @@ MIDDLEWARE = [
     "apps.common.middleware.RequestTimingMiddleware",
     # SIEM audit log: captures IP, UA, URL, method, role for all 7 roles
     "apps.common.middleware.SecurityAuditMiddleware",
+    # Structured audit-log context (IP, UA, actor) for AuditService
+    "apps.audit_logs.middleware.AuditContextMiddleware",
     # ── Django Security & CORS ───────────────────────────────────────────────
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",  # serve static in prod
@@ -449,6 +452,23 @@ SWAGGER_SETTINGS = {
 # =============================================================================
 # Overridden per-environment in development.py / production.py
 CORS_ALLOW_ALL_ORIGINS = True  # Dev default — MUST be False in production
+
+
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "content-disposition",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+    "access-control-allow-origin",
+]
+
+CORS_ALLOW_METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
 
 
 # =============================================================================

@@ -1264,10 +1264,12 @@ class UserLifecycleRegistry(models.Model):
 
     # ── Identity — snapshot at registration time ─────────────────────
     user_uuid = models.UUIDField(
+        unique=True,          # DB-level uniqueness — prevents concurrent Celery duplicates
         db_index=True,
         help_text=(
             "UnifiedUser.pk at time of registration. "
-            "Preserved even after the live account is hard-deleted."
+            "Preserved even after the live account is hard-deleted. "
+            "UNIQUE: one registry row per user ever created."
         ),
     )
     member_id = models.CharField(

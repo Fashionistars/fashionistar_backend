@@ -70,6 +70,30 @@ CORS_ALLOWED_ORIGINS = env.list(  # noqa: F405
 )
 CORS_ALLOW_CREDENTIALS = True
 
+CORS_ALLOW_HEADERS = [
+    "x-requested-with",
+    "content-type",
+    "accept",
+    "origin",
+    "authorization",
+    "accept-encoding",
+    "access-control-allow-origin",
+    "content-disposition",
+
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+CORS_ALLOW_METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+
+
 
 # =============================================================================
 # STATIC FILES — Compressed & manifest in production

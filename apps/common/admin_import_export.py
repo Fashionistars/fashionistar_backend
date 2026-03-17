@@ -91,10 +91,31 @@ class _EchoBuf:
         return value
 
 
+def _get_db_field_names(model) -> frozenset:
+    """
+    Return the set of actual DB column names for a model.
+
+    Includes concrete fields (CharField, UUIDField, etc.) but
+    excludes:
+    - Relation fields (ForeignKey, ManyToMany) — not flat values
+    - Reverse relations (related managers)
+    - Dehydrated / computed fields from import-export resources
+
+    Using this to guard against FieldError when a resource defines
+    a dehydrated field (e.g. ``full_name``) that is not a DB column.
+    """
+    return frozenset(
+        f.attname if hasattr(f, 'attname') else f.name
+        for f in model._meta.get_fields()
+        if hasattr(f, 'column') and f.column is not None
+    )
+
+
 def _stream_queryset_as_csv(
     queryset,
     field_names: Sequence[str],
     filename: str,
+    resource=None,
 ) -> StreamingHttpResponse:
     """
     Stream a queryset as a CSV file using chunked iteration.
@@ -102,10 +123,16 @@ def _stream_queryset_as_csv(
     Yields rows in chunks of 500 — memory usage is O(chunk_size),
     not O(total_rows). Works for 1 M+ records.
 
+    Handles dehydrated/computed fields (e.g. ``full_name``) from
+    import-export Resources gracefully: DB columns are fetched via
+    ``values_list``; computed fields are evaluated per-row in Python
+    and appended as extra columns.
+
     Args:
-        queryset:    Django queryset (flat values_list compatible).
-        field_names: Column headers + values_list field names.
+        queryset:    Django queryset.
+        field_names: Column headers from resource.get_export_headers().
         filename:    Suggested filename for the Content-Disposition header.
+        resource:    Optional resource instance for dehydrating computed fields.
 
     Returns:
         StreamingHttpResponse with MIME type text/csv.
@@ -113,12 +140,54 @@ def _stream_queryset_as_csv(
     buf = _EchoBuf()
     writer = csv.writer(buf)
 
+    model = queryset.model
+    db_names = _get_db_field_names(model)
+
+    # Separate the headers into DB-native vs computed
+    db_fields = [f for f in field_names if f in db_names]
+    computed_fields = [f for f in field_names if f not in db_names]
+
+    # Final CSV header order: db fields first, then computed
+    csv_headers = db_fields + computed_fields
+
+    def _dehydrate_computed(instance, computed_field_names):
+        """
+        Evaluate computed/dehydrated field values from the resource or model.
+        Falls back to getattr on the model instance.
+        """
+        values = []
+        for fname in computed_field_names:
+            try:
+                if resource is not None:
+                    method = getattr(resource, f'dehydrate_{fname}', None)
+                    if method:
+                        values.append(method(instance))
+                        continue
+                # Fallback: try property or method on the model instance
+                val = getattr(instance, fname, '')
+                if callable(val):
+                    val = val()
+                values.append(val if val is not None else '')
+            except Exception:
+                values.append('')
+        return values
+
     def _generate():
-        yield writer.writerow(field_names)
+        yield writer.writerow(csv_headers)
+
         for chunk_start in range(0, queryset.count(), 500):
-            chunk = queryset.values_list(*field_names)[chunk_start:chunk_start + 500]
-            for row in chunk:
-                yield writer.writerow(row)
+            if computed_fields:
+                # Need full model instances to evaluate computed fields
+                chunk_qs = queryset[chunk_start:chunk_start + 500]
+                for instance in chunk_qs:
+                    db_vals = [getattr(instance, f, '') for f in db_fields]
+                    comp_vals = _dehydrate_computed(instance, computed_fields)
+                    yield writer.writerow(db_vals + comp_vals)
+            else:
+                # Pure DB fields — fast path via values_list
+                chunk = queryset.values_list(*db_fields)[chunk_start:chunk_start + 500]
+                for row in chunk:
+                    yield writer.writerow(row)
 
     response = StreamingHttpResponse(
         _generate(),
@@ -333,11 +402,13 @@ class EnterpriseImportExportMixin(ImportExportModelAdmin):
             resource = resource_class()
             field_names = list(resource.get_export_headers())
         else:
-            # Fallback: use model's own field names
+            # Fallback: use model's own concrete field names (no computed fields)
+            resource = None
             field_names = [
                 f.name for f in self.model._meta.get_fields()
-                if not f.is_relation
+                if not f.is_relation and hasattr(f, 'column') and f.column
             ]
+
 
         model_name = self.model._meta.model_name
         ts = time.strftime('%Y%m%d_%H%M%S')
@@ -350,7 +421,12 @@ class EnterpriseImportExportMixin(ImportExportModelAdmin):
             queryset.count(),
         )
 
-        return _stream_queryset_as_csv(queryset, field_names, filename)
+        return _stream_queryset_as_csv(
+            queryset,
+            field_names,
+            filename,
+            resource=resource,
+        )
 
     stream_export_csv.short_description = _(
         "📥 Stream export selected as CSV (large dataset safe)"

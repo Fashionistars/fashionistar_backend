@@ -65,26 +65,47 @@ def upsert_user_lifecycle_registry(
         uid = uuid.UUID(str(user_uuid))
 
         if action == "created":
-            UserLifecycleRegistry.objects.get_or_create(
-                user_uuid=uid,
-                defaults=dict(
-                    email=email,
-                    phone=phone,
-                    member_id=member_id or "",
-                    role=role or "",
-                    auth_provider=auth_provider or "email",
-                    country=country,
-                    state=state,
-                    city=city,
-                    ip_address=ip_address,
-                    source=source or "web",
-                    status=UserLifecycleRegistry.STATUS_ACTIVE,
-                ),
-            )
-            logger.info(
-                "UserLifecycleRegistry: created entry for user_uuid=%s (%s)",
-                user_uuid, email or phone,
-            )
+            try:
+                obj, was_created = UserLifecycleRegistry.objects.get_or_create(
+                    user_uuid=uid,
+                    defaults=dict(
+                        email=email,
+                        phone=phone,
+                        member_id=member_id or "",
+                        role=role or "",
+                        auth_provider=auth_provider or "email",
+                        country=country,
+                        state=state,
+                        city=city,
+                        ip_address=ip_address,
+                        source=source or "web",
+                        status=UserLifecycleRegistry.STATUS_ACTIVE,
+                    ),
+                )
+                if was_created:
+                    logger.info(
+                        "UserLifecycleRegistry: created entry for user_uuid=%s (%s)",
+                        user_uuid, email or phone,
+                    )
+                else:
+                    logger.debug(
+                        "UserLifecycleRegistry: row already exists for user_uuid=%s "
+                        "(concurrent task or retry — no-op)",
+                        user_uuid,
+                    )
+            except Exception as race_exc:
+                # Unique constraint violation — another Celery worker inserted first.
+                # This is expected and safe to ignore; the row exists.
+                from django.db import IntegrityError as _IE
+                if isinstance(race_exc, _IE):
+                    logger.info(
+                        "UserLifecycleRegistry: IntegrityError on user_uuid=%s "
+                        "— concurrent insert, row already exists. Skipping.",
+                        user_uuid,
+                    )
+                else:
+                    raise
+
 
         elif action == "soft_deleted":
             updated = UserLifecycleRegistry.objects.filter(user_uuid=uid).update(
