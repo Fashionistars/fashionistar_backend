@@ -684,6 +684,7 @@ class LogoutView(generics.GenericAPIView):
         """Blacklists refresh token, invalidating the server-side session."""
         from rest_framework_simplejwt.tokens import RefreshToken
         from rest_framework_simplejwt.exceptions import TokenError
+        from django.db import OperationalError as DbOperationalError
 
         try:
             refresh_token = request.data.get("refresh")
@@ -693,8 +694,9 @@ class LogoutView(generics.GenericAPIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            token = RefreshToken(refresh_token)
-            token.blacklist()
+            with transaction.atomic():
+                token = RefreshToken(refresh_token)
+                token.blacklist()
 
             logger.info(
                 "Logout: refresh token blacklisted — user_id=%s",
@@ -714,6 +716,21 @@ class LogoutView(generics.GenericAPIView):
                 {"error": "Token is already invalid or has expired."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        except DbOperationalError as exc:
+            # Handle DB table lock (can occur under extreme concurrent load on
+            # SQLite dev environments; PostgreSQL in production uses row-level
+            # locks, so this is an extremely rare edge case in prod).
+            logger.warning(
+                "LogoutView DB lock on blacklist (concurrent request) user_id=%s: %s",
+                getattr(request.user, 'id', 'anon'), str(exc),
+            )
+            resp = Response(
+                {"error": "Server busy. Please retry logout in a moment."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+            resp["Retry-After"] = "1"
+            return resp
 
         except Exception as exc:
             logger.error(

@@ -2,6 +2,7 @@
 
 import logging
 from django.contrib.auth.tokens import default_token_generator
+from django.db import transaction
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.conf import settings
@@ -105,18 +106,25 @@ class SyncPasswordService:
             else:
                 raise Exception("Invalid request data.")
 
-            user.set_password(data['new_password'])
-            user.save()
-            
-            if user.email:
-                EmailManager.send_mail(
-                    subject="Password Changed",
-                    recipients=[user.email],
-                    template_name="authentication/email/password_changed.html",
+            # ── Atomic: save password + fire on_commit email ──────────────
+            with transaction.atomic():
+                user.set_password(data['new_password'])
+                user.save(update_fields=['password', 'updated_at'])
 
-                    context={"user": user}
-                )
-                
+                if user.email:
+                    def _send_changed_email():
+                        try:
+                            EmailManager.send_mail(
+                                subject="Password Changed",
+                                recipients=[user.email],
+                                template_name="authentication/email/password_changed.html",
+                                context={"user": user},
+                                fail_silently=True,
+                            )
+                        except Exception as mail_exc:
+                            logger.error(f"❌ Password reset email failed: {mail_exc}")
+                    transaction.on_commit(_send_changed_email)
+
             logger.info(f"✅ Password reset successful for User {user.id}")
             return "Password has been reset successfully."
 
