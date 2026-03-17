@@ -4,8 +4,8 @@ Enterprise views for the Fashionistar common app.
 
 Endpoints:
     GET  /api/health/                          — Health check (no auth)
-    POST /api/v2/upload/presign/               — Cloudinary presign token (JWT auth)
-    POST /api/v2/upload/webhook/cloudinary/    — Cloudinary notification receiver (no auth, HMAC validated)
+    POST /api/v1/upload/presign/               — Cloudinary presign token (JWT auth)
+    POST /api/v1/upload/webhook/cloudinary/    — Cloudinary notification receiver (no auth, HMAC validated)
 
 Response structure:
 
@@ -73,7 +73,7 @@ logger = logging.getLogger(__name__)
 _SERVER_START: float = time.monotonic()
 
 # Simple version tag — update when you cut a release
-API_VERSION: str = getattr(settings, "API_VERSION", "2.0.0")
+API_VERSION: str = getattr(settings, "API_VERSION", "1.0.0")
 
 
 # ---------------------------------------------------------------------------
@@ -288,7 +288,7 @@ class HealthCheckView(View):
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. Cloudinary Pre-sign Endpoint
-# POST /api/v2/upload/presign/
+# POST /api/v1/upload/presign/
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -304,7 +304,7 @@ VALID_ASSET_TYPES = _get_valid_asset_types()
 
 class CloudinaryPresignView(APIView):
     """
-    POST /api/v2/upload/presign/
+    POST /api/v1/upload/presign/
 
     Generate a time-limited, HMAC-SHA256–signed Cloudinary upload token.
     The frontend uses this to POST a file DIRECTLY to Cloudinary without
@@ -372,13 +372,13 @@ class CloudinaryPresignView(APIView):
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 3. Cloudinary Webhook Receiver
-# POST /api/v2/upload/webhook/cloudinary/
+# POST /api/v1/upload/webhook/cloudinary/
 # ─────────────────────────────────────────────────────────────────────────────
 
 @method_decorator(csrf_exempt, name="dispatch")
 class CloudinaryWebhookView(View):
     """
-    POST /api/v2/upload/webhook/cloudinary/
+    POST /api/v1/upload/webhook/cloudinary/
 
     Receives Cloudinary notification_url callbacks after a successful upload
     (or eager transformation completion).  The payload contains the full asset

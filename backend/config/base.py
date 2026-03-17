@@ -38,7 +38,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 # =============================================================================
 SECRET_KEY = env(
     "SECRET_KEY",
-    default='django-insecure-b*tuoe%^o+=^35$0fufrm=oamh^(o0tabn39(7ni12(i-oup+4'
+    default="django-insecure-b*tuoe%^o+=^35$0fufrm=oamh^(o0tabn39(7ni12(i-oup+4",
 )
 
 ALLOWED_HOSTS = env.list(
@@ -60,21 +60,28 @@ ALLOWED_HOSTS = env.list(
         # Windows machine hostname (Uvicorn binds to 0.0.0.0)
         "FASHIONISTAR",
         "fashionistar",
-    ]
+    ],
 )
 
 CSRF_TRUSTED_ORIGINS = env.list(
     "CSRF_TRUSTED_ORIGINS",
-    default=['http://localhost:3000', 'http://localhost:8000']
+    default=[
+        "http://localhost:3000",
+        "http://localhost:8000",
+        "http://localhost:8001",
+    ],  # Add other origins as needed
 )
 
-SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
+SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin-allow-popups"
 
 # Admin URL (secret to prevent enumeration)
 DJANGO_SECRET_ADMIN_URL = env("DJANGO_SECRET_ADMIN_URL", default="admin/")
 
 # Site URL for email links, OTP callbacks, etc.
-SITE_URL = env("SITE_URL", default="http://127.0.0.1:8000")
+FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3000")
+BACKEND_URL = env("BACKEND_URL", default="http://localhost:8000")
+
+
 
 
 # =============================================================================
@@ -82,63 +89,57 @@ SITE_URL = env("SITE_URL", default="http://127.0.0.1:8000")
 # =============================================================================
 INSTALLED_APPS = [
     # ── Backend core (AppConfig fixes Python 3.12 logging QueueListener) ─────
-    'backend.apps.BackendConfig',
-
+    "backend.apps.BackendConfig",
     # ── Admin UI ─────────────────────────────────────────────────────────────
-    'jazzmin',
-    'drf_yasg',
-    'drf_spectacular',
-
+    "jazzmin",
+    "drf_yasg",
+    "drf_spectacular",
     # ── Django Core ──────────────────────────────────────────────────────────
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
     # Whitenoise MUST be before staticfiles
-    'whitenoise.runserver_nostatic',
-    'django.contrib.staticfiles',
-
+    "whitenoise.runserver_nostatic",
+    "django.contrib.staticfiles",
     # ── Fashionistar New Architecture ────────────────────────────────────────
-    'apps.common',
-    'apps.authentication',
-
+    "apps.common",
+    "apps.authentication",
     # ── Legacy Apps (pending migration to apps/) ─────────────────────────────
-    'admin_backend',
-    'userauths',
-    'store',
-    'vendor',
-    'customer',
-    'addon',
-    'api',
-    'ShopCart',
-    'checkout',
-    'notification',
-    'createOrder',
-    'chat',
-    'measurements',
-    'Blog',
-    'Homepage',
-    'Paystack_Webhoook_Prod',
-    'utilities',
-
+    "admin_backend",
+    "userauths",
+    "store",
+    "vendor",
+    "customer",
+    "addon",
+    "api",
+    "ShopCart",
+    "checkout",
+    "notification",
+    "createOrder",
+    "chat",
+    "measurements",
+    "Blog",
+    "Homepage",
+    "Paystack_Webhoook_Prod",
+    "utilities",
     # ── Third Party ──────────────────────────────────────────────────────────
-    'rest_framework',
-    'rest_framework_simplejwt.token_blacklist',  # JWT logout blacklisting
-    'corsheaders',
-    'import_export',
-    'anymail',
-    'storages',
-    'auditlog',
-    'phone_verify',
-    'channels',
-    'django_filters',
-    'phonenumber_field',
-    'django_redis',
-    'django_celery_beat',
-    'cloudinary',
-    'cloudinary_storage',
+    "rest_framework",
+    "rest_framework_simplejwt.token_blacklist",  # JWT logout blacklisting
+    "corsheaders",
+    "import_export",
+    "anymail",
+    "storages",
+    "auditlog",
+    "phone_verify",
+    "channels",
+    "django_filters",
+    "phonenumber_field",
+    "django_redis",
+    "django_celery_beat",
+    "cloudinary",
+    "cloudinary_storage",
 ]
 
 
@@ -148,24 +149,23 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     # ── Fashionistar Observability (must be FIRST) ───────────────────────────
     # Every subsequent middleware & view gets request.request_id + timing
-    'apps.common.middleware.RequestIDMiddleware',
-    'apps.common.middleware.RequestTimingMiddleware',
+    "apps.common.middleware.RequestIDMiddleware",
+    "apps.common.middleware.RequestTimingMiddleware",
     # SIEM audit log: captures IP, UA, URL, method, role for all 7 roles
-    'apps.common.middleware.SecurityAuditMiddleware',
-
+    "apps.common.middleware.SecurityAuditMiddleware",
     # ── Django Security & CORS ───────────────────────────────────────────────
-    'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',     # serve static in prod
-    'corsheaders.middleware.CorsMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # serve static in prod
+    "corsheaders.middleware.CorsMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-ROOT_URLCONF = 'backend.urls'
+ROOT_URLCONF = "backend.urls"
 
 
 # =============================================================================
@@ -173,22 +173,22 @@ ROOT_URLCONF = 'backend.urls'
 # =============================================================================
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.debug',
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / "templates"],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.debug",
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
             ],
         },
     },
 ]
 
-WSGI_APPLICATION = 'backend.wsgi.application'
-ASGI_APPLICATION = 'backend.asgi.application'
+WSGI_APPLICATION = "backend.wsgi.application"
+ASGI_APPLICATION = "backend.asgi.application"
 
 
 # =============================================================================
@@ -197,16 +197,16 @@ ASGI_APPLICATION = 'backend.asgi.application'
 # Defaults to SQLite for local dev if DATABASE_URL not set in .env.
 # Production uses PostgreSQL via DATABASE_URL.
 DATABASES = {
-    'default': dj_database_url.config(
-        default=env("DATABASE_URL", default='sqlite:///db.sqlite3'),
+    "default": dj_database_url.config(
+        default=env("DATABASE_URL", default="sqlite:///db.sqlite3"),
         conn_max_age=600,
         ssl_require=False,
     )
 }
 
 # SQLite-specific options (ignored for PostgreSQL)
-if 'sqlite' in DATABASES['default']['ENGINE']:
-    DATABASES['default'].setdefault('OPTIONS', {})['timeout'] = 20
+if "sqlite" in DATABASES["default"]["ENGINE"]:
+    DATABASES["default"].setdefault("OPTIONS", {})["timeout"] = 20
 
 
 # =============================================================================
@@ -219,28 +219,30 @@ if 'sqlite' in DATABASES['default']['ENGINE']:
 # All Django auth machinery (admin, JWT, permissions, groups) now uses
 # `authentication.UnifiedUser` exclusively.
 # ─────────────────────────────────────────────────────────────────────────────
-AUTH_USER_MODEL = 'authentication.UnifiedUser'
+AUTH_USER_MODEL = "authentication.UnifiedUser"
 
 AUTHENTICATION_BACKENDS = [
     # UnifiedUserBackend handles email + phone + Google OAuth
-    'apps.authentication.backends.UnifiedUserBackend',
+    "apps.authentication.backends.UnifiedUserBackend",
     # Django's ModelBackend kept as session/admin fallback
-    'django.contrib.auth.backends.ModelBackend',
+    "django.contrib.auth.backends.ModelBackend",
 ]
 
 AUTH_PASSWORD_VALIDATORS = [
-    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
+    },
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
 
 # =============================================================================
 # INTERNATIONALISATION
 # =============================================================================
-LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'Africa/Lagos'
+LANGUAGE_CODE = "en-us"
+TIME_ZONE = "Africa/Lagos"
 USE_I18N = True
 USE_TZ = True
 
@@ -248,12 +250,12 @@ USE_TZ = True
 # =============================================================================
 # STATIC & MEDIA FILES
 # =============================================================================
-STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
+STATIC_URL = "/static/"
+STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
+STATICFILES_DIRS = [os.path.join(BASE_DIR, "static")]
 
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_URL = "/media/"
+MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
 CLOUDINARY_STORAGE = {
     "CLOUD_NAME": env("CLOUDINARY_CLOUD_NAME", default="your_cloud_name"),
@@ -271,31 +273,31 @@ STORAGES = {
     },
 }
 
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
 # =============================================================================
 # CACHING (Redis)
 # =============================================================================
 CACHES = {
-    'default': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': env("REDIS_URL", default="redis://127.0.0.1:6379/0"),
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-            'IGNORE_EXCEPTIONS': True,   # Redis outage ≠ 500 error
-            'CONNECTION_POOL_KWARGS': {
-                'max_connections': 50,
-                'decode_responses': False,
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": env("REDIS_URL", default="redis://127.0.0.1:6379/0"),
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "IGNORE_EXCEPTIONS": True,  # Redis outage ≠ 500 error
+            "CONNECTION_POOL_KWARGS": {
+                "max_connections": 50,
+                "decode_responses": False,
             },
-            'SOCKET_TIMEOUT': 0.5,
-            'SOCKET_CONNECT_TIMEOUT': 0.5,
+            "SOCKET_TIMEOUT": 0.5,
+            "SOCKET_CONNECT_TIMEOUT": 0.5,
         },
     },
     # LocMemCache for OpenAPI schema (no Redis dependency)
-    'schema': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'fashionistar-schema-cache',
+    "schema": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "fashionistar-schema-cache",
     },
 }
 
@@ -304,10 +306,10 @@ CACHES = {
 # CHANNELS (WebSocket / Real-time)
 # =============================================================================
 CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            'hosts': [env("REDIS_URL", default='redis://127.0.0.1:6379/0')],
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [env("REDIS_URL", default="redis://127.0.0.1:6379/0")],
         },
     },
 }
@@ -317,51 +319,42 @@ CHANNEL_LAYERS = {
 # REST FRAMEWORK — Enterprise Configuration
 # =============================================================================
 REST_FRAMEWORK = {
-    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
-
-    'DEFAULT_PERMISSION_CLASSES': (
-        'rest_framework.permissions.IsAuthenticated',
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "rest_framework.authentication.TokenAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
+        "rest_framework.authentication.BasicAuthentication",
     ),
-
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'rest_framework.authentication.TokenAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
-        'rest_framework.authentication.BasicAuthentication',
-    ),
-
-    'DEFAULT_RENDERER_CLASSES': [
-        'apps.common.renderers.FashionistarRenderer',
-        'rest_framework.renderers.BrowsableAPIRenderer',
+    "DEFAULT_RENDERER_CLASSES": [
+        "apps.common.renderers.FashionistarRenderer",
+        "rest_framework.renderers.BrowsableAPIRenderer",
     ],
-
-    'DEFAULT_PARSER_CLASSES': [
-        'rest_framework.parsers.JSONParser',
-        'rest_framework.parsers.FormParser',
-        'rest_framework.parsers.MultiPartParser',
+    "DEFAULT_PARSER_CLASSES": [
+        "rest_framework.parsers.JSONParser",
+        "rest_framework.parsers.FormParser",
+        "rest_framework.parsers.MultiPartParser",
     ],
-
-    'DEFAULT_THROTTLE_CLASSES': [
-        'apps.common.throttling.AnonBurstThrottle',
-        'apps.common.throttling.AnonSustainedThrottle',
-        'apps.common.throttling.UserBurstThrottle',
-        'apps.common.throttling.UserSustainedThrottle',
+    "DEFAULT_THROTTLE_CLASSES": [
+        "apps.common.throttling.AnonBurstThrottle",
+        "apps.common.throttling.AnonSustainedThrottle",
+        "apps.common.throttling.UserBurstThrottle",
+        "apps.common.throttling.UserSustainedThrottle",
     ],
-    'DEFAULT_THROTTLE_RATES': {
-        'anon_burst':  '30/minute',
-        'anon_day':    '500/day',
-        'user_burst':  '120/minute',
-        'user_day':    '5000/day',
-        'auth':        '5/minute',
-        'otp':         '3/minute',
-        'upload':      '20/hour',
-        'vendor':      '200/minute',
+    "DEFAULT_THROTTLE_RATES": {
+        "anon_burst": "30/minute",
+        "anon_day": "500/day",
+        "user_burst": "120/minute",
+        "user_day": "5000/day",
+        "auth": "5/minute",
+        "otp": "3/minute",
+        "upload": "20/hour",
+        "vendor": "200/minute",
     },
-
-    'DEFAULT_PAGINATION_CLASS': 'apps.common.pagination.DefaultPagination',
-    'PAGE_SIZE': 20,
-
-    'EXCEPTION_HANDLER': 'apps.common.exceptions.custom_exception_handler',
+    "DEFAULT_PAGINATION_CLASS": "apps.common.pagination.DefaultPagination",
+    "PAGE_SIZE": 20,
+    "EXCEPTION_HANDLER": "apps.common.exceptions.custom_exception_handler",
 }
 
 
@@ -369,29 +362,29 @@ REST_FRAMEWORK = {
 # SIMPLE JWT
 # =============================================================================
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),     # 1 hour for security
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),    # 30 days (not 50!)
-    'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': True,
-    'UPDATE_LAST_LOGIN': True,
-    'ALGORITHM': 'HS256',
-    'VERIFYING_KEY': None,
-    'AUDIENCE': None,
-    'ISSUER': None,
-    'JWK_URL': None,
-    'LEEWAY': 0,
-    'AUTH_HEADER_TYPES': ('Bearer',),
-    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
-    'USER_ID_FIELD': 'id',
-    'USER_ID_CLAIM': 'user_id',
-    'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule',
-    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
-    'TOKEN_TYPE_CLAIM': 'token_type',
-    'TOKEN_USER_CLASS': 'rest_framework_simplejwt.models.TokenUser',
-    'JTI_CLAIM': 'jti',
-    'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
-    'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5),
-    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=1),  # 1 hour for security
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),  # 30 days (not 50!)
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": True,
+    "ALGORITHM": "HS256",
+    "VERIFYING_KEY": None,
+    "AUDIENCE": None,
+    "ISSUER": None,
+    "JWK_URL": None,
+    "LEEWAY": 0,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "AUTH_HEADER_NAME": "HTTP_AUTHORIZATION",
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
+    "USER_AUTHENTICATION_RULE": "rest_framework_simplejwt.authentication.default_user_authentication_rule",
+    "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
+    "TOKEN_TYPE_CLAIM": "token_type",
+    "TOKEN_USER_CLASS": "rest_framework_simplejwt.models.TokenUser",
+    "JTI_CLAIM": "jti",
+    "SLIDING_TOKEN_REFRESH_EXP_CLAIM": "refresh_exp",
+    "SLIDING_TOKEN_LIFETIME": timedelta(minutes=5),
+    "SLIDING_TOKEN_REFRESH_LIFETIME": timedelta(days=1),
 }
 
 
@@ -399,47 +392,45 @@ SIMPLE_JWT = {
 # API DOCUMENTATION
 # =============================================================================
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'Fashionistar API',
-    'DESCRIPTION': (
+    "TITLE": "Fashionistar API",
+    "DESCRIPTION": (
         "Nigeria's Premier AI-Powered Fashion E-Commerce Platform API.\n\n"
-        "**V1 (DRF/Sync):** Standard REST endpoints, WSGI-safe, Celery-backed.\n"
-        "**V2 (Ninja/Async):** High-concurrency async endpoints, ASGI-native.\n\n"
+        "**v1 (DRF/Sync):** Standard REST endpoints, WSGI-safe, Celery-backed.\n"
+        "**v1 (Ninja/Async):** High-concurrency async endpoints, ASGI-native.\n\n"
         "**Authentication:** Bearer JWT (SimpleJWT). Get tokens via `/api/v1/auth/login/`.\n"
         "**Register first:** `POST /api/v1/auth/register/` → verify OTP → login."
     ),
-    'VERSION': '2.0.0',
-    'SERVE_INCLUDE_SCHEMA': False,
-    'COMPONENT_SPLIT_REQUEST': True,
-    'SORT_OPERATIONS': True,
-
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
+    "SORT_OPERATIONS": True,
     # ── Security ────────────────────────────────────────────────────────────
-    'SECURITY': [{'BearerAuth': []}],
-    'SECURITY_DEFINITIONS': {
-        'BearerAuth': {
-            'type': 'http',
-            'scheme': 'bearer',
-            'bearerFormat': 'JWT',
-            'description': 'Enter your JWT access token prefixed with Bearer',
+    "SECURITY": [{"BearerAuth": []}],
+    "SECURITY_DEFINITIONS": {
+        "BearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+            "description": "Enter your JWT access token prefixed with Bearer",
         },
     },
-
     # ── Schema Generation Robustness ────────────────────────────────────────
     # ENUM_GENERATE_CHOICE_DESCRIPTION prevents crashes on complex enum types
-    'ENUM_GENERATE_CHOICE_DESCRIPTION': False,
+    "ENUM_GENERATE_CHOICE_DESCRIPTION": False,
     # Suppress non-fatal warnings from legacy app URL patterns
-    'DISABLE_ERRORS_AND_WARNINGS': True,
+    "DISABLE_ERRORS_AND_WARNINGS": True,
     # Don't fail on warnings (legacy app URL collisions)
-    'FAIL_ON_WARN': False,
+    "FAIL_ON_WARN": False,
     # Auto-handle operationId collisions (pluralise duplicates automatically)
-    'OPERATION_ID': None,
-    'SERVERS': [
-        {'url': 'http://127.0.0.1:8000', 'description': 'Development (WSGI)'},
-        {'url': 'http://127.0.0.1:8001', 'description': 'Development (ASGI/Uvicorn)'},
+    "OPERATION_ID": None,
+    "SERVERS": [
+        {"url": "http://127.0.0.1:8000", "description": "Development (WSGI)"},
+        {"url": "http://127.0.0.1:8001", "description": "Development (ASGI/Uvicorn)"},
     ],
     # ── Filter: Only expose /api/v1/auth/ in schema ──────────────────────
     # Prevents legacy store/vendor/admin_backend URLs from triggering 500s
-    'PREPROCESSING_HOOKS': [
-        'apps.common.schema_hooks.filter_auth_endpoints_only',
+    "PREPROCESSING_HOOKS": [
+        "apps.common.schema_hooks.filter_auth_endpoints_only",
     ],
 }
 
@@ -457,7 +448,7 @@ SWAGGER_SETTINGS = {
 # CORS
 # =============================================================================
 # Overridden per-environment in development.py / production.py
-CORS_ALLOW_ALL_ORIGINS = True   # Dev default — MUST be False in production
+CORS_ALLOW_ALL_ORIGINS = True  # Dev default — MUST be False in production
 
 
 # =============================================================================
@@ -474,22 +465,22 @@ PHONENUMBER_DB_FORMAT = "INTERNATIONAL"
 PHONENUMBER_DEFAULT_REGION = "NG"
 PHONENUMBER_DEFAULT_FORMAT = "INTERNATIONAL"
 
-TWILIO_ACCOUNT_SID = config('TWILIO_ACCOUNT_SID', default='AC_PLACEHOLDER_SID')
-TWILIO_AUTH_TOKEN = config('TWILIO_AUTH_TOKEN', default='PLACEHOLDER_AUTH_TOKEN')
-TWILIO_PHONE_NUMBER = config('TWILIO_PHONE_NUMBER', default='+15005550006')
+TWILIO_ACCOUNT_SID = config("TWILIO_ACCOUNT_SID", default="AC_PLACEHOLDER_SID")
+TWILIO_AUTH_TOKEN = config("TWILIO_AUTH_TOKEN", default="PLACEHOLDER_AUTH_TOKEN")
+TWILIO_PHONE_NUMBER = config("TWILIO_PHONE_NUMBER", default="+15005550006")
 
 PHONE_VERIFICATION = {
-    'BACKEND': 'phone_verify.backends.twilio.TwilioBackend',
-    'OPTIONS': {
-        'SID': env('TWILIO_ACCOUNT_SID', default='fake'),
-        'SECRET': env('TWILIO_AUTH_TOKEN', default='fake'),
-        'FROM': env('TWILIO_PHONE_NUMBER', default='+14755292729'),
+    "BACKEND": "phone_verify.backends.twilio.TwilioBackend",
+    "OPTIONS": {
+        "SID": env("TWILIO_ACCOUNT_SID", default="fake"),
+        "SECRET": env("TWILIO_AUTH_TOKEN", default="fake"),
+        "FROM": env("TWILIO_PHONE_NUMBER", default="+14755292729"),
     },
-    'TOKEN_LENGTH': 6,
-    'MESSAGE': 'Fashionistar verification code: {security_code}',
-    'APP_NAME': 'Fashionistar',
-    'SECURITY_CODE_EXPIRATION_TIME': 300,  # 5 minutes
-    'VERIFY_SECURITY_CODE_ONLY_ONCE': True,
+    "TOKEN_LENGTH": 6,
+    "MESSAGE": "Fashionistar verification code: {security_code}",
+    "APP_NAME": "Fashionistar",
+    "SECURITY_CODE_EXPIRATION_TIME": 300,  # 5 minutes
+    "VERIFY_SECURITY_CODE_ONLY_ONCE": True,
 }
 
 
@@ -497,13 +488,15 @@ PHONE_VERIFICATION = {
 # EMAIL
 # =============================================================================
 # NOTE: Override EMAIL_BACKEND in development.py (console) or production.py (SMTP/Mailgun)
-DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@fashionistar.net')
-SERVER_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@fashionistar.net')
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="noreply@fashionistar.net")
+SERVER_EMAIL = config("DEFAULT_FROM_EMAIL", default="noreply@fashionistar.net")
 
 # Gmail SMTP (used in production or via DatabaseConfiguredEmailBackend)
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='fashionistar.home.beauty@gmail.com')
-EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+EMAIL_HOST = "smtp.gmail.com"
+EMAIL_HOST_USER = config(
+    "EMAIL_HOST_USER", default="fashionistar.home.beauty@gmail.com"
+)
+EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
 EMAIL_PORT = 465
 EMAIL_USE_TLS = False
 EMAIL_USE_SSL = True
@@ -515,8 +508,10 @@ ANYMAIL = {
 }
 
 # Zoho ZeptoMail
-ZOHO_ZEPTOMAIL_API_KEY_TOKEN = env('ZOHO_ZEPTOMAIL_API_KEY_TOKEN', default='')
-ZOHO_ZEPTOMAIL_HOSTED_REGION = env('ZOHO_ZEPTOMAIL_HOSTED_REGION', default='zeptomail.zoho.com')
+ZOHO_ZEPTOMAIL_API_KEY_TOKEN = env("ZOHO_ZEPTOMAIL_API_KEY_TOKEN", default="")
+ZOHO_ZEPTOMAIL_HOSTED_REGION = env(
+    "ZOHO_ZEPTOMAIL_HOSTED_REGION", default="zeptomail.zoho.com"
+)
 
 
 # =============================================================================
@@ -524,21 +519,21 @@ ZOHO_ZEPTOMAIL_HOSTED_REGION = env('ZOHO_ZEPTOMAIL_HOSTED_REGION', default='zept
 # =============================================================================
 REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/1")
 
-CELERY_BROKER_URL = env('CELERY_BROKER_URL', default=REDIS_URL)
-CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND', default=REDIS_URL)
+CELERY_BROKER_URL = env("CELERY_BROKER_URL", default=REDIS_URL)
+CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default=REDIS_URL)
 
 # Fast-fail: 1s timeouts so dead Redis fails immediately, not after 60s
 CELERY_BROKER_TRANSPORT_OPTIONS = {
-    'socket_connect_timeout': 1,
-    'socket_timeout': 1,
-    'socket_keepalive': True,
+    "socket_connect_timeout": 1,
+    "socket_timeout": 1,
+    "socket_keepalive": True,
 }
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = False
 
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TIMEZONE = 'UTC'
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TIMEZONE = "UTC"
 CELERY_ENABLE_UTC = True
 
 CELERY_WORKER_MAX_TASKS_PER_CHILD = 200
@@ -576,10 +571,20 @@ JAZZMIN_SETTINGS = {
     "show_sidebar": True,
     "navigation_expanded": True,
     "order_with_respect_to": [
-        "store", "store.product", "store.cartorder", "store.cartorderitem",
-        "store.cart", "store.category", "store.brand", "store.productfaq",
-        "store.review", "store.Coupon", "store.DeliveryCouriers",
-        "userauths", "userauths.user", "userauths.profile",
+        "store",
+        "store.product",
+        "store.cartorder",
+        "store.cartorderitem",
+        "store.cart",
+        "store.category",
+        "store.brand",
+        "store.productfaq",
+        "store.review",
+        "store.Coupon",
+        "store.DeliveryCouriers",
+        "userauths",
+        "userauths.user",
+        "userauths.profile",
     ],
     "icons": {
         "admin.LogEntry": "fas fa-file",
@@ -677,12 +682,12 @@ from backend.config.logging_config import build_logging_config
 # DEBUG is declared at the top of each env-specific settings file (dev/prod).
 # base.py does NOT set DEBUG itself — it is provided by the inheriting module.
 # We use a safe fallback here so Django's check framework can import base alone.
-_debug_mode = locals().get('DEBUG', True)
+_debug_mode = locals().get("DEBUG", True)
 
 LOGGING = build_logging_config(
     debug=_debug_mode,
-    use_json=False,       # Overridden to True in production.py
-    mail_admins=False,    # Overridden to True in production.py
+    use_json=False,  # Overridden to True in production.py
+    mail_admins=False,  # Overridden to True in production.py
 )
 
 # =============================================================================
@@ -726,6 +731,7 @@ def _apply_logging_config(config):
     after all apps load, ensuring handlers attach directly to loggers.
     """
     import logging.config as _lc
+
     _lc.dictConfig(config)
 
 
@@ -733,4 +739,4 @@ def _apply_logging_config(config):
 # Using the standard 'logging.config.dictConfig' here — BackendConfig.ready()
 # (in backend/apps.py) re-applies this config AFTER all apps load to fix
 # the Python 3.12 QueueHandler/QueueListener issue under Uvicorn/Daphne.
-LOGGING_CONFIG = 'logging.config.dictConfig'
+LOGGING_CONFIG = "logging.config.dictConfig"

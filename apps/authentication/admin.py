@@ -33,7 +33,6 @@ from __future__ import annotations
 import csv
 import io
 import logging
-import time
 from typing import Any
 
 from django import forms
@@ -41,7 +40,7 @@ from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.hashers import make_password
 from django.core.exceptions import ValidationError
-from django.db import transaction, IntegrityError
+from django.db import transaction
 from django.http import StreamingHttpResponse
 from django.utils import timezone
 from django.utils.html import format_html
@@ -1483,3 +1482,312 @@ class CustomLogEntryAdmin(LogEntryAdmin):
     def has_delete_permission(self, request, obj=None):
         """Only superusers can delete audit log entries (for GDPR right-to-erasure)."""
         return request.user.is_superuser
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 9.  LOGIN EVENT ADMIN — Binance-style Security Audit Log
+# ═══════════════════════════════════════════════════════════════════════════
+
+@admin.register(__import__('apps.authentication.models', fromlist=['LoginEvent']).LoginEvent)
+class LoginEventAdmin(admin.ModelAdmin):
+    """
+    Read-only admin for the LoginEvent security audit log.
+
+    Provides the "Recent Login Activity" view analogous to Binance's
+    Security → Login History page. All records are immutable — there
+    is no create, update, or delete (except superuser GDPR erasure).
+
+    Indexes match the DB:
+      - user + created_at  → filtered list per user
+      - outcome            → show only failures / blocked
+      - country            → geo-anomaly review
+    """
+
+    # ── Display ──────────────────────────────────────────────────────
+    list_display = (
+        'created_at',
+        'outcome_badge',
+        'user_link',
+        'ip_address',
+        'country',
+        'city',
+        'auth_method',
+        'client_type',
+        'browser_family',
+        'risk_score',
+        'is_new_device',
+        'is_new_country',
+    )
+    list_filter = (
+        'outcome',
+        'auth_method',
+        'client_type',
+        'is_successful',
+        'is_new_device',
+        'is_new_country',
+        'is_tor_exit_node',
+    )
+    search_fields = (
+        'user__email',
+        'user__phone',
+        'ip_address',
+        'country',
+        'city',
+    )
+    ordering = ('-created_at',)
+    date_hierarchy = 'created_at'
+    list_per_page = 50
+    show_full_result_count = False
+
+    readonly_fields = (
+        'user',
+        'ip_address',
+        'user_agent',
+        'client_type',
+        'browser_family',
+        'os_family',
+        'device_type',
+        'country',
+        'country_code',
+        'region',
+        'city',
+        'latitude',
+        'longitude',
+        'auth_method',
+        'outcome',
+        'failure_reason',
+        'is_successful',
+        'risk_score',
+        'is_new_device',
+        'is_new_country',
+        'is_tor_exit_node',
+        'session',
+        'created_at',
+    )
+
+    fieldsets = (
+        ('Auth Outcome', {
+            'fields': (
+                'user',
+                'outcome',
+                'is_successful',
+                'failure_reason',
+                'auth_method',
+                'risk_score',
+                'session',
+            ),
+        }),
+        ('Network', {
+            'fields': ('ip_address', 'user_agent'),
+        }),
+        ('Device', {
+            'fields': (
+                'client_type',
+                'browser_family',
+                'os_family',
+                'device_type',
+                'is_new_device',
+            ),
+        }),
+        ('Geolocation', {
+            'fields': (
+                'country',
+                'country_code',
+                'region',
+                'city',
+                'latitude',
+                'longitude',
+                'is_new_country',
+                'is_tor_exit_node',
+            ),
+        }),
+        ('Timestamps', {
+            'fields': ('created_at',),
+        }),
+    )
+
+    # ── Badges ───────────────────────────────────────────────────────
+
+    @admin.display(description='Outcome', ordering='outcome')
+    def outcome_badge(self, obj):
+        colors = {
+            'success':    '#10b981',
+            'failed':     '#ef4444',
+            'blocked':    '#f97316',
+            'suspicious': '#a855f7',
+        }
+        color = colors.get(obj.outcome, '#6b7280')
+        return format_html(
+            '<span style="'
+            'background:{color};color:#fff;padding:2px 8px;'
+            'border-radius:4px;font-size:11px;font-weight:700;'
+            '">{label}</span>',
+            color=color,
+            label=obj.outcome.upper(),
+        )
+
+    @admin.display(description='User', ordering='user__email')
+    def user_link(self, obj):
+        if not obj.user:
+            return format_html('<span style="color:#9ca3af">— anonymous —</span>')
+        identifier = obj.user.email or obj.user.phone or str(obj.user.pk)
+        url = f'/admin/authentication/unifieduser/{obj.user.pk}/change/'
+        return format_html('<a href="{}">{}</a>', url, identifier)
+
+    # ── Permissions (append-only audit data) ─────────────────────────
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        """Only superusers can delete (GDPR right-to-erasure)."""
+        return request.user.is_superuser
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 10.  USER SESSION ADMIN — Telegram-style Active Sessions Dashboard
+# ═══════════════════════════════════════════════════════════════════════════
+
+@admin.register(__import__('apps.authentication.models', fromlist=['UserSession']).UserSession)
+class UserSessionAdmin(admin.ModelAdmin):
+    """
+    Admin view for UserSession — the server-side session registry.
+
+    Allows support staff to:
+      - View every user's active sessions (device, IP, location, last-used).
+      - Manually terminate stale or suspicious sessions (delete row).
+      - Run "terminate all sessions" bulk action.
+
+    This is NOT a security UI replacement — the user-facing dashboard
+    (GET /api/v1/auth/sessions/) is the primary interface. This admin
+    provides a staff-level view for support escalations.
+    """
+
+    # ── Display ──────────────────────────────────────────────────────
+    list_display = (
+        'user_link',
+        'device_name',
+        'client_type',
+        'ip_address',
+        'country',
+        'city',
+        'last_used_at',
+        'expires_at',
+        'is_expired_badge',
+    )
+    list_filter = (
+        'client_type',
+        'country',
+    )
+    search_fields = (
+        'user__email',
+        'user__phone',
+        'ip_address',
+        'device_name',
+        'jti',
+    )
+    ordering = ('-last_used_at',)
+    date_hierarchy = 'last_used_at'
+    list_per_page = 50
+    show_full_result_count = False
+
+    readonly_fields = (
+        'user',
+        'jti',
+        'client_type',
+        'browser_family',
+        'os_family',
+        'device_name',
+        'user_agent',
+        'ip_address',
+        'country',
+        'country_code',
+        'city',
+        'last_used_at',
+        'expires_at',
+        'created_at',
+    )
+
+    fieldsets = (
+        ('Session', {
+            'fields': ('user', 'jti', 'expires_at', 'last_used_at', 'created_at'),
+        }),
+        ('Device', {
+            'fields': (
+                'device_name',
+                'client_type',
+                'browser_family',
+                'os_family',
+                'user_agent',
+            ),
+        }),
+        ('Geolocation', {
+            'fields': ('ip_address', 'country', 'country_code', 'city'),
+        }),
+    )
+
+    actions = ['terminate_sessions']
+
+    # ── Computed columns ─────────────────────────────────────────────
+
+    @admin.display(description='User', ordering='user__email')
+    def user_link(self, obj):
+        identifier = obj.user.email or obj.user.phone or str(obj.user.pk)
+        url = f'/admin/authentication/unifieduser/{obj.user.pk}/change/'
+        return format_html('<a href="{}">{}</a>', url, identifier)
+
+    @admin.display(description='Expired?', ordering='expires_at')
+    def is_expired_badge(self, obj):
+        from django.utils import timezone as tz
+        expired = obj.expires_at and obj.expires_at < tz.now()
+        if expired:
+            return format_html(
+                '<span style="background:#ef4444;color:#fff;padding:2px 8px;'
+                'border-radius:4px;font-size:11px;font-weight:700;">EXPIRED</span>'
+            )
+        return format_html(
+            '<span style="background:#10b981;color:#fff;padding:2px 8px;'
+            'border-radius:4px;font-size:11px;font-weight:700;">ACTIVE</span>'
+        )
+
+    # ── Bulk action ───────────────────────────────────────────────────
+
+    @admin.action(description='⛔ Terminate selected sessions (blacklist JTI + delete row)')
+    def terminate_sessions(self, request, queryset):
+        """Blacklist the JWT JTI and delete the session row."""
+        terminated = 0
+        for session in queryset:
+            try:
+                from rest_framework_simplejwt.token_blacklist.models import (
+                    OutstandingToken, BlacklistedToken
+                )
+                outstanding = OutstandingToken.objects.filter(jti=session.jti).first()
+                if outstanding:
+                    BlacklistedToken.objects.get_or_create(token=outstanding)
+            except Exception:
+                pass
+            session.delete()
+            terminated += 1
+
+        self.message_user(
+            request,
+            f'✅ {terminated} session(s) terminated and JTI(s) blacklisted.',
+            messages.SUCCESS,
+        )
+
+    # ── Permissions ───────────────────────────────────────────────────
+
+    def has_add_permission(self, request):
+        """Sessions are created by the auth flow — not manually."""
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        """Sessions are immutable — use 'terminate' action instead."""
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        """Staff can delete (terminate) any session."""
+        return request.user.is_staff

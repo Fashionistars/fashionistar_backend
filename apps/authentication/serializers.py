@@ -328,7 +328,36 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
                 email = _BUM.normalize_email(email)
                 attrs['email'] = email
 
-            # 5. Uniqueness Check — catches duplicates BEFORE model.save()
+            # ── 5. Soft-deleted pool check FIRST ─────────────────────────────
+            # CRITICAL ORDER: We MUST check soft-deleted users BEFORE the
+            # standard alive-only uniqueness check. If a soft-deleted user
+            # exists with the same email/phone, the CustomUserManager will
+            # only see alive users (is_deleted=False) and won't catch it,
+            # causing the UNIQUE constraint to fire at the DB layer (500 error).
+            # By catching it here we return the correct 403 + support message.
+            from apps.authentication.exceptions import SoftDeletedUserExistsError
+
+            if email:
+                soft_deleted_by_email = UnifiedUser.objects.all_with_deleted().filter(
+                    email__iexact=email, is_deleted=True
+                ).first()
+                if soft_deleted_by_email:
+                    logger.warning(
+                        "⛔ Registration blocked: soft-deleted account for email '%s'", email
+                    )
+                    raise SoftDeletedUserExistsError()
+
+            if phone:
+                soft_deleted_by_phone = UnifiedUser.objects.all_with_deleted().filter(
+                    phone=phone, is_deleted=True
+                ).first()
+                if soft_deleted_by_phone:
+                    logger.warning(
+                        "⛔ Registration blocked: soft-deleted account for phone '%s'", phone
+                    )
+                    raise SoftDeletedUserExistsError()
+
+            # ── 6. Active Uniqueness Check — catches live duplicates BEFORE model.save()
             #    Uses iexact for full case-insensitive safety on both WSGI+ASGI.
             if email and UnifiedUser.objects.filter(
                 email__iexact=email
@@ -351,8 +380,8 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             logger.info("Registration validation successful.")
             return attrs
 
-        except serializers.ValidationError as e:
-            raise e
+        except (serializers.ValidationError, SoftDeletedUserExistsError):
+            raise
         except Exception as e:
             logger.error(f"Unexpected error in registration validation: {str(e)}")
             raise serializers.ValidationError({"non_field_errors": _("An error occurred during validation.")})

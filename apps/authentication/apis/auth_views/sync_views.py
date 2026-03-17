@@ -553,30 +553,78 @@ class GoogleAuthView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        user = SyncGoogleAuthService.verify_and_login(
-            data['id_token'], data.get('role', 'client')
-        )
+        try:
+            result = SyncGoogleAuthService.verify_and_login(
+                token=data['id_token'],
+                role=data.get('role', 'client'),
+                ip_address=request.META.get('REMOTE_ADDR'),
+                user_agent=request.META.get('HTTP_USER_AGENT', ''),
+            )
+        except ValueError as exc:
+            return Response(
+                {"status": "error", "message": str(exc), "code": "invalid_google_token"},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        except Exception as exc:
+            logger.error("❌ GoogleAuthView error: %s", exc, exc_info=True)
+            return Response(
+                {"status": "error", "message": "Google authentication failed."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
-        from rest_framework_simplejwt.tokens import RefreshToken
-        refresh = RefreshToken.for_user(user)
+        user       = result['user']
+        tokens     = result['tokens']
+        is_new     = result['is_new']
+
+        # ── Create UserSession record on_commit ──────────────────────────
+        from rest_framework_simplejwt.tokens import RefreshToken as _RefTok
+        from apps.authentication.models import UserSession, LoginEvent
+        try:
+            refresh_obj = _RefTok(tokens['refresh'])
+            transaction.on_commit(
+                lambda: UserSession.create_from_token(
+                    user=user,
+                    refresh_token=refresh_obj,
+                    request=request,
+                )
+            )
+            transaction.on_commit(
+                lambda: LoginEvent.record(
+                    user=user,
+                    ip_address=request.META.get('REMOTE_ADDR', '0.0.0.0'),
+                    user_agent=request.META.get('HTTP_USER_AGENT', ''),
+                    auth_method=LoginEvent.METHOD_GOOGLE,
+                    outcome=LoginEvent.OUTCOME_SUCCESS,
+                    is_successful=True,
+                )
+            )
+        except Exception as sess_exc:
+            logger.warning("⚠️ GoogleAuthView: session/event record failed: %s", sess_exc)
 
         logger.info(
-            "✅ Google login: user_id=%s email=%s", user.id, user.email
+            "✅ Google %s: user_id=%s email=%s is_new=%s",
+            "register" if is_new else "login",
+            user.id, user.email, is_new,
         )
 
         return Response(
             {
-                "message": "Google Login Successful",
-                "tokens": {
-                    "access":  str(refresh.access_token),
-                    "refresh": str(refresh),
-                },
+                "status":  "success",
+                "message": "Google registration successful." if is_new else "Google login successful.",
+                "is_new":  is_new,
+                "tokens":  tokens,
                 "user": {
-                    "email": user.email,
-                    "role":  user.role,
+                    "id":         str(user.id),
+                    "member_id":  user.member_id,
+                    "email":      user.email,
+                    "first_name": user.first_name,
+                    "last_name":  user.last_name,
+                    "role":       user.role,
+                    "is_verified": user.is_verified,
+                    "avatar":     user.avatar,
                 },
             },
-            status=status.HTTP_200_OK,
+            status=status.HTTP_201_CREATED if is_new else status.HTTP_200_OK,
         )
 
 

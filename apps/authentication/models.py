@@ -1,13 +1,14 @@
+import logging
+
+from apps.authentication.managers import CustomUserManager
+from apps.common.models import HardDeleteMixin, SoftDeleteModel, TimeStampedModel
+from auditlog.registry import auditlog
 from django.contrib.auth.models import AbstractUser
+from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.db.models import F
-from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
-from apps.common.models import TimeStampedModel, SoftDeleteModel, HardDeleteMixin
 from phonenumber_field.modelfields import PhoneNumberField
-from auditlog.registry import auditlog
-from apps.authentication.managers import CustomUserManager
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +179,6 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
         _("last name"), max_length=150, blank=True, null=True
     )
 
-    # Profile Data (Merged from legacy Profile)
     # --- ARCHITECTURE NOTE ---
     # avatar is now a plain URLField that stores the Cloudinary HTTPS secure_url.
     # Uploads go through the two-phase direct-upload pattern:
@@ -611,3 +611,492 @@ class BiometricCredential(TimeStampedModel):
         return f"{self.user.email} - {self.device_name or 'Key'}"
 
 
+# ================================================================
+# LOGIN EVENT — Binance-style security audit log
+# Every single login attempt (success OR failure) is recorded here.
+# Displayed as "Recent Login Activity" in the user security dashboard.
+# ================================================================
+
+class LoginEvent(TimeStampedModel):
+    """
+    Immutable security audit record for every login **attempt**.
+
+    Modelled after the security audit logs used by Binance, Coinbase,
+    Telegram, and Google — capturing the minimum viable set of forensic
+    data needed for:
+      - User-visible "recent logins" in the Security Dashboard
+      - SIEM / threat-detection pipelines
+      - Suspicious-activity alerting (new country, new device, etc.)
+      - Compliance and audit trails
+
+    Design decisions:
+      - ``user`` is nullable so we can log failed attempts for
+        *unknown* identifiers (user enumeration attempts).
+      - ``is_successful`` + ``failure_reason`` let us distinguish
+        wrong-password from inactive-account from deactivated-account
+        in a single table scan.
+      - ``risk_score`` (0–100) is updated by a Celery task after
+        the request completes (geo-lookup + device fingerprint).
+      - ``ip_address`` uses ``GenericIPAddressField`` to support both
+        IPv4 and IPv6 natively.
+      - The model is intentionally **append-only** — no update() calls.
+        Audit records must never be mutated.
+    """
+
+    # ── Outcomes ─────────────────────────────────────────────────────
+    OUTCOME_SUCCESS  = 'success'
+    OUTCOME_FAILED   = 'failed'
+    OUTCOME_BLOCKED  = 'blocked'    # IP-banned or rate-limited
+    OUTCOME_SUSPICIOUS = 'suspicious'  # MFA challenged
+
+    OUTCOME_CHOICES = [
+        (OUTCOME_SUCCESS,   'Success'),
+        (OUTCOME_FAILED,    'Failed'),
+        (OUTCOME_BLOCKED,   'Blocked'),
+        (OUTCOME_SUSPICIOUS,'Suspicious'),
+    ]
+
+    # ── Device / client types ─────────────────────────────────────────
+    CLIENT_WEB    = 'web'
+    CLIENT_MOBILE = 'mobile'
+    CLIENT_API    = 'api'
+    CLIENT_CURL   = 'curl'
+    CLIENT_UNKNOWN = 'unknown'
+
+    CLIENT_TYPE_CHOICES = [
+        (CLIENT_WEB,    'Web Browser'),
+        (CLIENT_MOBILE, 'Mobile App'),
+        (CLIENT_API,    'API Client'),
+        (CLIENT_CURL,   'cURL / Script'),
+        (CLIENT_UNKNOWN,'Unknown'),
+    ]
+
+    # ── Auth methods ──────────────────────────────────────────────────
+    METHOD_EMAIL   = 'email'
+    METHOD_PHONE   = 'phone'
+    METHOD_GOOGLE  = 'google'
+    METHOD_BIOMETRIC = 'biometric'
+
+    METHOD_CHOICES = [
+        (METHOD_EMAIL,    'Email + Password'),
+        (METHOD_PHONE,    'Phone + Password'),
+        (METHOD_GOOGLE,   'Google OAuth'),
+        (METHOD_BIOMETRIC,'Biometric / FIDO2'),
+    ]
+
+    # ── Core relations ───────────────────────────────────────────────
+    user = models.ForeignKey(
+        UnifiedUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='login_events',
+        db_index=True,
+        help_text=(
+            "NULL when a login attempt targets an unknown identifier "
+            "(failed user-enumeration attempt)."
+        ),
+    )
+
+    # ── Request metadata ──────────────────────────────────────────────
+    ip_address = models.GenericIPAddressField(
+        protocol='both',          # IPv4 + IPv6
+        unpack_ipv4=True,         # ::ffff:1.2.3.4 → 1.2.3.4
+        db_index=True,
+        help_text="Client IP address (supports IPv4 and IPv6).",
+    )
+    user_agent = models.TextField(
+        blank=True,
+        help_text="Raw HTTP User-Agent string.",
+    )
+
+    # ── Parsed device info (populated by Celery post-request) ─────────
+    client_type = models.CharField(
+        max_length=20,
+        choices=CLIENT_TYPE_CHOICES,
+        default=CLIENT_UNKNOWN,
+        db_index=True,
+        help_text="Derived from User-Agent: web / mobile / api / curl.",
+    )
+    browser_family = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Browser family: Chrome, Firefox, Safari, Unknown, etc.",
+    )
+    os_family = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Operating system: Windows, macOS, iOS, Android, Linux, etc.",
+    )
+    device_type = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Device category: desktop, mobile, tablet, bot, etc.",
+    )
+
+    # ── Geolocation (populated by Celery geo-lookup task) ─────────────
+    country = models.CharField(
+        max_length=100,
+        blank=True,
+        db_index=True,
+        help_text="Country name derived from IP (via MaxMind / ipapi).",
+    )
+    country_code = models.CharField(
+        max_length=3,
+        blank=True,
+        help_text="ISO 3166-1 alpha-2 country code (e.g. 'NG', 'US').",
+    )
+    region = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="State / region / province (e.g. 'Lagos', 'California').",
+    )
+    city = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="City name (e.g. 'Lagos', 'San Francisco').",
+    )
+    latitude = models.DecimalField(
+        max_digits=9, decimal_places=6,
+        null=True, blank=True,
+        help_text="Approx. latitude from IP geo-lookup.",
+    )
+    longitude = models.DecimalField(
+        max_digits=9, decimal_places=6,
+        null=True, blank=True,
+        help_text="Approx. longitude from IP geo-lookup.",
+    )
+
+    # ── Auth context ──────────────────────────────────────────────────
+    auth_method = models.CharField(
+        max_length=20,
+        choices=METHOD_CHOICES,
+        default=METHOD_EMAIL,
+        help_text="Authentication method used for this attempt.",
+    )
+    outcome = models.CharField(
+        max_length=20,
+        choices=OUTCOME_CHOICES,
+        default=OUTCOME_FAILED,
+        db_index=True,
+        help_text="Result of the login attempt.",
+    )
+    failure_reason = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text=(
+            "Short machine-readable failure code: "
+            "'invalid_credentials', 'account_inactive', 'account_deleted', "
+            "'rate_limited', 'mfa_required', etc."
+        ),
+    )
+    is_successful = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="True iff the login attempt succeeded and tokens were issued.",
+    )
+
+    # ── Risk & Anomaly ────────────────────────────────────────────────
+    risk_score = models.SmallIntegerField(
+        default=0,
+        help_text=(
+            "Risk score 0-100. Computed by Celery after the request: "
+            "new country (+30), new device (+20), Tor exit node (+50), "
+            "high-velocity (+40), etc. ≥70 triggers a security alert."
+        ),
+    )
+    is_new_device = models.BooleanField(
+        default=False,
+        help_text="True if this is the first time this device fingerprint was seen.",
+    )
+    is_new_country = models.BooleanField(
+        default=False,
+        help_text="True if the login country is new for this user.",
+    )
+    is_tor_exit_node = models.BooleanField(
+        default=False,
+        help_text="True if the IP is a known Tor exit node.",
+    )
+
+    # ── Session link ──────────────────────────────────────────────────
+    session = models.ForeignKey(
+        'UserSession',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='login_events',
+        help_text="The session created by this successful login (if any).",
+    )
+
+    # ── Timestamps ────────────────────────────────────────────────────
+    # ``created_at`` from TimeStampedModel = the exact moment of the attempt.
+
+    class Meta:
+        verbose_name        = "Login Event"
+        verbose_name_plural = "Login Events"
+        ordering            = ["-created_at"]
+        indexes = [
+            models.Index(fields=['user', '-created_at'],     name='le_user_ts_idx'),
+            models.Index(fields=['ip_address', '-created_at'],name='le_ip_ts_idx'),
+            models.Index(fields=['outcome', '-created_at'],  name='le_outcome_ts_idx'),
+            models.Index(fields=['country', '-created_at'],  name='le_country_ts_idx'),
+            models.Index(fields=['is_successful'],            name='le_success_idx'),
+        ]
+
+    def __str__(self):
+        identifier = (
+            str(self.user.email or self.user.phone)
+            if self.user else 'anon'
+        )
+        return (
+            f"[{self.outcome.upper()}] {identifier} "
+            f"from {self.ip_address} ({self.country or '?'}) "
+            f"at {self.created_at:%Y-%m-%d %H:%M:%S UTC}"
+        )
+
+    @classmethod
+    def record(
+        cls,
+        *,
+        user=None,
+        ip_address: str,
+        user_agent: str = '',
+        auth_method: str = 'email',
+        outcome: str = 'failed',
+        failure_reason: str = '',
+        is_successful: bool = False,
+        session=None,
+    ) -> 'LoginEvent':
+        """
+        Factory class-method for creating a LoginEvent in a single call.
+
+        Designed to be called from LoginView immediately after the
+        authentication decision is made. Geo-lookup and device parsing
+        are deferred to a Celery task (``enrich_login_event``) that
+        runs after the HTTP response is sent.
+
+        Usage::
+
+            event = LoginEvent.record(
+                user=user,
+                ip_address=get_client_ip(request),
+                user_agent=request.META.get('HTTP_USER_AGENT', ''),
+                auth_method='email',
+                outcome=LoginEvent.OUTCOME_SUCCESS,
+                is_successful=True,
+                session=session,
+            )
+        """
+        return cls.objects.create(
+            user=user,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            auth_method=auth_method,
+            outcome=outcome,
+            failure_reason=failure_reason,
+            is_successful=is_successful,
+            session=session,
+        )
+
+
+# ================================================================
+# USER SESSION — Telegram-style active sessions registry
+# One row per live refresh token. "Active sessions" dashboard
+# reads from this table. "Log out all other devices" deletes rows.
+# ================================================================
+
+class UserSession(TimeStampedModel):
+    """
+    Tracks every active **authenticated session** (one per refresh token).
+
+    This is the SERVER-SIDE session registry — conceptually similar to
+    Telegram's "Active Sessions", GitHub's "Sessions", or Google's
+    "Devices this account is signed in to".
+
+    Key capabilities enabled by this model:
+      1. **Enumerate active sessions** — ``GET /api/v1/auth/sessions/``
+         returns all of the user's live sessions: device, location, last-used.
+      2. **Revoke a specific session** — ``DELETE /api/v1/auth/sessions/{id}/``
+         deletes the row AND blacklists the JWT refresh token.
+      3. **Logout all other devices** — ``POST /api/v1/auth/sessions/revoke-others/``
+         deletes all rows except the current one AND blacklists all their tokens.
+
+    Session lifecycle:
+      created:    at successful login / Google OAuth / OTP verification
+      refreshed:  ``last_used_at`` updated on every token refresh call
+      terminated: deleted on explicit logout OR when the refresh token expires
+
+    Relationship to JWT:
+      The ``jti`` (JWT ID) of the **refresh token** is the natural key.
+      When a user calls ``/logout/``, we:
+        1. Blacklist the JTI via SimpleJWT's token blacklist.
+        2. Delete the corresponding ``UserSession`` row.
+    """
+
+    # ── Device / client types  (mirrors LoginEvent) ───────────────────
+    CLIENT_WEB     = 'web'
+    CLIENT_MOBILE  = 'mobile'
+    CLIENT_API     = 'api'
+    CLIENT_UNKNOWN = 'unknown'
+
+    CLIENT_TYPE_CHOICES = [
+        (CLIENT_WEB,    'Web Browser'),
+        (CLIENT_MOBILE, 'Mobile App'),
+        (CLIENT_API,    'API Client'),
+        (CLIENT_UNKNOWN,'Unknown'),
+    ]
+
+    # ── Core ──────────────────────────────────────────────────────────
+    user = models.ForeignKey(
+        UnifiedUser,
+        on_delete=models.CASCADE,
+        related_name='sessions',
+        db_index=True,
+        help_text="The owner of this session.",
+    )
+    jti = models.CharField(
+        max_length=255,
+        unique=True,
+        db_index=True,
+        help_text=(
+            "JWT ID (jti claim) of the refresh token for this session. "
+            "Used to match and blacklist via SimpleJWT."
+        ),
+    )
+
+    # ── Device information ────────────────────────────────────────────
+    client_type = models.CharField(
+        max_length=20,
+        choices=CLIENT_TYPE_CHOICES,
+        default=CLIENT_UNKNOWN,
+        help_text="Browser / mobile app / API client.",
+    )
+    browser_family = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Chrome, Firefox, Safari, etc.",
+    )
+    os_family = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Windows, macOS, iOS, Android, Linux, etc.",
+    )
+    device_name = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text=(
+            "Human-readable label for the session, e.g. "
+            "'Chrome on Windows', 'iPhone 15 Pro Max', 'cURL Script'."
+        ),
+    )
+    user_agent = models.TextField(
+        blank=True,
+        help_text="Raw User-Agent string for the session.",
+    )
+
+    # ── Geolocation ───────────────────────────────────────────────────
+    ip_address = models.GenericIPAddressField(
+        protocol='both',
+        unpack_ipv4=True,
+        null=True, blank=True,
+        help_text="IP address at session creation (login time).",
+    )
+    country = models.CharField(max_length=100, blank=True)
+    country_code = models.CharField(max_length=3, blank=True)
+    city = models.CharField(max_length=100, blank=True)
+
+    # ── Activity ──────────────────────────────────────────────────────
+    last_used_at = models.DateTimeField(
+        auto_now=True,
+        help_text="Updated on every token refresh. Stale sessions = last_used_at old.",
+    )
+    expires_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the refresh token expires (from JWT payload).",
+    )
+    is_current = models.BooleanField(
+        default=False,
+        help_text=(
+            "True for the session that corresponds to the JWT making "
+            "the current request. Computed at serializer time, not stored."
+        ),
+    )
+
+    class Meta:
+        verbose_name        = "User Session"
+        verbose_name_plural = "User Sessions"
+        ordering            = ["-last_used_at"]
+        indexes = [
+            models.Index(fields=['user', '-last_used_at'],  name='us_user_ts_idx'),
+            models.Index(fields=['jti'],                     name='us_jti_idx'),
+            models.Index(fields=['expires_at'],              name='us_expires_idx'),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.user} — {self.device_name or self.client_type} "
+            f"({self.city or self.country or self.ip_address or '?'})"
+        )
+
+    @classmethod
+    def create_from_token(
+        cls,
+        *,
+        user,
+        refresh_token,
+        request=None,
+    ) -> 'UserSession':
+        """
+        Create a new session record from a SimpleJWT RefreshToken instance.
+
+        Called immediately after a successful login / Google OAuth / OTP
+        verification. IP and User-Agent are extracted from the request.
+
+        Args:
+            user:           The authenticated UnifiedUser.
+            refresh_token:  A ``rest_framework_simplejwt.tokens.RefreshToken``
+                            instance (already issued).
+            request:        The Django HttpRequest (for IP + User-Agent).
+
+        Returns:
+            The newly-created ``UserSession`` instance.
+        """
+        import datetime
+
+        from django.utils import timezone
+
+        ip_address = None
+        user_agent = ''
+        if request:
+            forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
+            ip_address = (
+                forwarded.split(',')[0].strip()
+                if forwarded
+                else request.META.get('REMOTE_ADDR')
+            )
+            user_agent = request.META.get('HTTP_USER_AGENT', '')
+
+        jti        = str(refresh_token.payload.get('jti', ''))
+        expires_at = timezone.now() + datetime.timedelta(
+            seconds=int(refresh_token.lifetime.total_seconds())
+        )
+
+        # Build a readable device label from User-Agent
+        device_name = 'Unknown Device'
+        try:
+            import user_agents as ua_parser
+            ua = ua_parser.parse(user_agent)
+            browser = ua.browser.family
+            os_name = ua.os.family
+            device_name = f"{browser} on {os_name}" if browser != 'Other' else os_name
+        except Exception:
+            pass
+
+        return cls.objects.create(
+            user=user,
+            jti=jti,
+            user_agent=user_agent,
+            device_name=device_name,
+            ip_address=ip_address,
+            expires_at=expires_at,
+        )

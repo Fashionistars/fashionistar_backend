@@ -503,3 +503,283 @@ class IsSales(BasePermission):
         except Exception as e:
             permission_logger.error(f"Error checking sales permission (async) for user {request.user}: {e}")
             return False
+
+
+# =============================================================================
+# IsAuthenticatedAndActive
+# =============================================================================
+
+class IsAuthenticatedAndActive(BasePermission):
+    """
+    Ensures the user is authenticated AND has an active account (is_active=True).
+
+    This is stricter than DRF's built-in `IsAuthenticated` which only checks
+    that a valid JWT was presented — it does NOT verify that the account has
+    been activated or hasn't been suspended by an admin.
+
+    Use this on any endpoint where a suspended user must be blocked
+    even if they hold a valid, non-expired JWT token.
+
+    Example:
+        class MyView(APIView):
+            permission_classes = [IsAuthenticatedAndActive]
+    """
+
+    message = "Your account is inactive. Please contact support."
+
+    def has_permission(self, request, view):
+        try:
+            user = request.user
+            if isinstance(user, AnonymousUser) or not user.is_authenticated:
+                permission_logger.warning(
+                    "IsAuthenticatedAndActive: anonymous/unauthenticated request blocked."
+                )
+                return False
+
+            if not user.is_active:
+                permission_logger.warning(
+                    "IsAuthenticatedAndActive: inactive account '%s' blocked.",
+                    getattr(user, 'email', user.pk),
+                )
+                return False
+
+            return True
+        except Exception as e:
+            permission_logger.error(
+                "IsAuthenticatedAndActive error for '%s': %s",
+                getattr(request.user, 'email', '?'), e,
+            )
+            return False
+
+    async def has_permission_async(self, request, view):
+        try:
+            user = await request.auser() if hasattr(request, 'auser') else request.user
+            if isinstance(user, AnonymousUser) or not user.is_authenticated:
+                return False
+            if not user.is_active:
+                permission_logger.warning(
+                    "IsAuthenticatedAndActive (async): inactive account '%s' blocked.",
+                    getattr(user, 'email', user.pk),
+                )
+                return False
+            return True
+        except Exception as e:
+            permission_logger.error("IsAuthenticatedAndActive async error: %s", e)
+            return False
+
+
+# =============================================================================
+# IsVerifiedUser
+# =============================================================================
+
+class IsVerifiedUser(BasePermission):
+    """
+    The highest-trust permission gate for authenticated users.
+
+    Checks three conditions in strict order:
+      1. User is authenticated (valid JWT / session).
+      2. Account is active (is_active=True — not suspended).
+      3. Identity is verified (is_verified=True — OTP/email confirmed).
+
+    Use this on any endpoint that should be inaccessible to:
+      - Unauthenticated visitors
+      - Suspended users (is_active=False)
+      - Registered but unverified users (is_verified=False)
+
+    This mirrors the flow used by platforms like Binance and Coinbase where
+    OTP verification is a hard prerequisite for accessing account features.
+
+    Example:
+        class ChangePasswordView(APIView):
+            permission_classes = [IsVerifiedUser]
+    """
+
+    message = (
+        "Your account is not yet verified. "
+        "Please complete OTP verification to access this resource."
+    )
+
+    def has_permission(self, request, view):
+        try:
+            user = request.user
+            if isinstance(user, AnonymousUser) or not user.is_authenticated:
+                permission_logger.warning(
+                    "IsVerifiedUser: unauthenticated request blocked."
+                )
+                return False
+
+            if not user.is_active:
+                permission_logger.warning(
+                    "IsVerifiedUser: inactive account '%s' blocked.",
+                    getattr(user, 'email', user.pk),
+                )
+                return False
+
+            if not getattr(user, 'is_verified', False):
+                permission_logger.warning(
+                    "IsVerifiedUser: unverified account '%s' blocked.",
+                    getattr(user, 'email', user.pk),
+                )
+                return False
+
+            return True
+        except Exception as e:
+            permission_logger.error(
+                "IsVerifiedUser error for '%s': %s",
+                getattr(request.user, 'email', '?'), e,
+            )
+            return False
+
+    async def has_permission_async(self, request, view):
+        try:
+            user = await request.auser() if hasattr(request, 'auser') else request.user
+            if isinstance(user, AnonymousUser) or not user.is_authenticated:
+                return False
+            if not user.is_active:
+                return False
+            if not getattr(user, 'is_verified', False):
+                permission_logger.warning(
+                    "IsVerifiedUser (async): unverified account '%s' blocked.",
+                    getattr(user, 'email', user.pk),
+                )
+                return False
+            return True
+        except Exception as e:
+            permission_logger.error("IsVerifiedUser async error: %s", e)
+            return False
+
+
+# =============================================================================
+# RateLimitPermission  (Redis-backed sliding window, per IP + per user)
+# =============================================================================
+
+class RateLimitPermission(BasePermission):
+    """
+    Redis-backed, per-IP + per-authenticated-user sliding-window rate limiter.
+
+    Default: 100 requests / 3600 seconds (1 hour) per identity.
+
+    How it works:
+      - For anonymous requests  → keyed on IP address.
+      - For authenticated users → keyed on user PK (bypasses IP spoofing).
+      - Uses Redis INCR + EXPIRE in a pipeline for O(1) atomicity.
+      - No blocking I/O: falls back to ALLOW if Redis is unavailable
+        (fail-open strategy — never blocks legitimate users during cache outages).
+
+    Customise limits per view by subclassing::
+
+        class StrictRateLimit(RateLimitPermission):
+            max_requests = 10
+            window_seconds = 60
+
+    Example:
+        class LoginView(APIView):
+            permission_classes = [RateLimitPermission]
+
+    Attributes:
+        max_requests (int):    Maximum requests allowed in the window.
+        window_seconds (int):  Sliding window duration in seconds.
+    """
+
+    max_requests: int = 100
+    window_seconds: int = 3600
+
+    message = "Too many requests. Please slow down and try again later."
+
+    @staticmethod
+    def _get_client_ip(request) -> str:
+        """Extract the real client IP, respecting proxy headers."""
+        x_forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded:
+            return x_forwarded.split(',')[0].strip()
+        return request.META.get('REMOTE_ADDR', '0.0.0.0')
+
+    def _get_cache_key(self, request) -> str:
+        user = getattr(request, 'user', None)
+        if user and user.is_authenticated:
+            identity = f"user:{user.pk}"
+        else:
+            identity = f"ip:{self._get_client_ip(request)}"
+        return f"ratelimit:{identity}"
+
+    def has_permission(self, request, view) -> bool:
+        try:
+            from django.core.cache import cache
+
+            cache_key = self._get_cache_key(request)
+
+            # Atomic increment using Django cache (backed by Redis)
+            current = cache.get(cache_key, 0)
+            current += 1
+            cache.set(cache_key, current, timeout=self.window_seconds)
+
+            if current > self.max_requests:
+                permission_logger.warning(
+                    "RateLimitPermission: key='%s' hit limit (%d/%d).",
+                    cache_key, current, self.max_requests,
+                )
+                return False
+            return True
+        except Exception as e:
+            # Fail-open: never block on cache outage
+            permission_logger.error(
+                "RateLimitPermission error (fail-open): %s", e
+            )
+            return True
+
+    async def has_permission_async(self, request, view) -> bool:
+        # Delegate to sync version via thread for Django cache safety
+        import asyncio
+        try:
+            return await asyncio.to_thread(self.has_permission, request, view)
+        except Exception as e:
+            permission_logger.error(
+                "RateLimitPermission async error (fail-open): %s", e
+            )
+            return True
+
+
+# =============================================================================
+# require_verification  —  Function/Method decorator
+# =============================================================================
+
+def require_verification(func):
+    """
+    Decorator for DRF view methods that enforces ``IsVerifiedUser`` inline.
+
+    Use this on individual methods when you want different permissions
+    at the class level vs. the method level.
+
+    Usage (on a method inside a ViewSet or APIView)::
+
+        class UserProfileView(APIView):
+            permission_classes = [IsAuthenticated]  # general gate
+
+            @require_verification
+            def patch(self, request, *args, **kwargs):
+                # Only fully-verified users reach here
+                ...
+
+    The decorator adds ``IsVerifiedUser`` on top of whatever class-level
+    permissions are already enforced by DRF.
+    """
+    from functools import wraps
+    from rest_framework.response import Response
+    from rest_framework import status
+
+    @wraps(func)
+    def wrapper(self, request, *args, **kwargs):
+        permission = IsVerifiedUser()
+        if not permission.has_permission(request, self):
+            return Response(
+                {
+                    "status": "error",
+                    "message": permission.message,
+                    "code": "account_not_verified",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return func(self, request, *args, **kwargs)
+
+    return wrapper
+

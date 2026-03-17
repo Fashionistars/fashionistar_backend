@@ -14,7 +14,6 @@ Both tasks use exponential backoff with max 3 retries.
 
 from celery import shared_task
 import logging
-from django.conf import settings
 from django.template.exceptions import TemplateDoesNotExist
 
 # ── Corrected import paths (apps.common, not utilities) ─────────────
@@ -100,3 +99,119 @@ def send_sms_task(self, to: str, body: str) -> str:
             self.request.retries + 1, self.max_retries + 1, to, exc
         )
         raise self.retry(exc=exc, countdown=30 * (2 ** self.request.retries))
+
+
+@shared_task(bind=True, retry_backoff=True, max_retries=5, name='authentication.upload_google_avatar_to_cloudinary')
+def upload_google_avatar_to_cloudinary(self, user_pk: str, google_avatar_url: str) -> str:
+    """
+    Download a Google profile picture and upload it to our Cloudinary account.
+
+    This task is triggered on_commit after a new Google OAuth registration.
+    It replaces the raw Google CDN URL (which can become inaccessible if the
+    user revokes Google token access) with a permanent Cloudinary HTTPS URL
+    that we control.
+
+    Flow:
+      1. Download the image from Google's CDN (plain HTTP GET).
+      2. Upload the raw bytes to Cloudinary under the ``avatars/`` folder,
+         using the user's member_id as the public_id for de-duplication.
+      3. Update ``user.avatar`` with the Cloudinary secure_url.
+
+    Args:
+        user_pk:           UUID string of the UnifiedUser PK.
+        google_avatar_url: The ``picture`` field from the Google ID-token payload.
+
+    Returns:
+        str: The Cloudinary secure_url stored on the user.
+    """
+    import urllib.request
+    import io
+
+    try:
+        from apps.authentication.models import UnifiedUser
+
+        logger.info(
+            "📸 [Celery] upload_google_avatar: user_pk=%s url=%s",
+            user_pk, google_avatar_url,
+        )
+
+        # ── 1. Fetch the user ───────────────────────────────────────────
+        try:
+            user = UnifiedUser.objects.get(pk=user_pk)
+        except UnifiedUser.DoesNotExist:
+            logger.error(
+                "❌ upload_google_avatar: user_pk=%s not found — giving up.", user_pk
+            )
+            return "user_not_found"
+
+        # ── 2. Download avatar bytes from Google CDN ────────────────────
+        try:
+            # Add =s400 to request a 400px version from Google's image API
+            sized_url = google_avatar_url
+            if '=' not in google_avatar_url:
+                sized_url = google_avatar_url + '=s400'
+
+            req = urllib.request.Request(
+                sized_url,
+                headers={'User-Agent': 'Fashionistar/1.0 AvatarFetcher'},
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                image_bytes = resp.read()
+                # Content-Type reserved for future format-specific handling
+                _ = resp.headers.get('Content-Type', 'image/jpeg')
+        except Exception as dl_exc:
+            logger.warning(
+                "⚠️ upload_google_avatar: download failed for %s: %s", user_pk, dl_exc
+            )
+            raise self.retry(exc=dl_exc)
+
+        # ── 3. Upload to Cloudinary ─────────────────────────────────────
+        try:
+            import cloudinary
+            import cloudinary.uploader
+
+            # Use member_id as public_id so re-uploads replace the same file
+            public_id = f"avatars/google_{user.member_id or str(user.pk)[:8]}"
+
+            result = cloudinary.uploader.upload(
+                io.BytesIO(image_bytes),
+                public_id=public_id,
+                folder="fashionistar/avatars",
+                overwrite=True,
+                resource_type="image",
+                format="webp",                  # Transcode to WebP for bandwidth savings
+                transformation=[
+                    {"width": 400, "height": 400, "crop": "fill", "gravity": "face"},
+                    {"quality": "auto", "fetch_format": "auto"},
+                ],
+                tags=["google_avatar", "user_avatar"],
+            )
+            cloudinary_url = result.get('secure_url', '')
+        except Exception as cl_exc:
+            logger.warning(
+                "⚠️ upload_google_avatar: Cloudinary upload failed for %s: %s",
+                user_pk, cl_exc,
+            )
+            raise self.retry(exc=cl_exc)
+
+        # ── 4. Persist the Cloudinary URL on the user ───────────────────
+        if cloudinary_url:
+            UnifiedUser.objects.filter(pk=user_pk).update(avatar=cloudinary_url)
+            logger.info(
+                "✅ [Celery] Google avatar uploaded to Cloudinary for user=%s → %s",
+                user_pk, cloudinary_url,
+            )
+            return cloudinary_url
+        else:
+            logger.warning(
+                "⚠️ upload_google_avatar: Cloudinary returned empty URL for user=%s", user_pk
+            )
+            return "empty_url"
+
+    except Exception as exc:
+        logger.error(
+            "❌ [Celery] upload_google_avatar fatal error for user=%s: %s",
+            user_pk, exc, exc_info=True,
+        )
+        raise self.retry(exc=exc, countdown=60 * (2 ** self.request.retries))
+

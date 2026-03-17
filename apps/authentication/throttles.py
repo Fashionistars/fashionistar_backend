@@ -9,11 +9,8 @@ This module implements a three-tier throttling strategy:
 """
 
 import logging
-from typing import Tuple, Optional
+from typing import Optional
 from rest_framework.throttling import UserRateThrottle, AnonRateThrottle
-from rest_framework.exceptions import Throttled
-from django.conf import settings
-from django.core.cache import cache
 
 logger = logging.getLogger('application')
 

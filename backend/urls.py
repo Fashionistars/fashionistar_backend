@@ -3,6 +3,13 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 
+# ── Custom error handlers (JSON for API, HTML for browser) ──────────────────
+handler400 = 'backend.error_views.bad_request_handler'
+handler403 = 'backend.error_views.forbidden_handler'
+handler404 = 'backend.error_views.not_found_handler'
+handler500 = 'backend.error_views.server_error_handler'
+
+
 # drf-yasg: OpenAPI/Swagger schema generation
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
@@ -37,10 +44,10 @@ urlpatterns = [
    path('admin/', admin.site.urls),
    path("auth/", include("userauths.urls")),
 
-   # ── New Modular Monolith (V2) ──────────────────────────────────────────
+   # ── New Modular Monolith (v1) ──────────────────────────────────────────
    path('api/', include('apps.authentication.urls', namespace='authentication')),
 
-   # ── Common Utilities (health check, metrics, etc.) ────────────────────────
+   # ── Common Utilities (health check, Cloudinary presign, Cloudinary webhook, metrics, etc.) ────────────────────────
    path('api/', include('apps.common.urls', namespace='common')),
 
    path("admin_backend/", include("admin_backend.urls")),

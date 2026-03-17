@@ -15,7 +15,7 @@ Phase 2 — DIRECT UPLOAD (client-side):
     Django backend is NEVER in the upload path — no blocking I/O, no DNS hangs.
 
 Phase 3 — CONFIRM:
-    Cloudinary calls our webhook (``/api/v2/upload/webhook/cloudinary/``)
+    Cloudinary calls our webhook (``/api/v1/upload/webhook/cloudinary/``)
     with the full asset metadata (secure_url, public_id, bytes, width, height).
     A Celery task saves the ``secure_url`` to the appropriate model field.
 

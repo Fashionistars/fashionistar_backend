@@ -327,7 +327,7 @@ class EnterpriseImportExportMixin(ImportExportModelAdmin):
         # NOTE: django-import-export ≥4.0 changed the API:
         #   get_export_resource_class()  → removed (singular)
         #   get_export_resource_classes() → added (plural, returns a list)
-        resource_classes = self.get_export_resource_classes()
+        resource_classes = self.get_export_resource_classes(request)
         resource_class = resource_classes[0] if resource_classes else None
         if resource_class:
             resource = resource_class()
