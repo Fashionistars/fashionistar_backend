@@ -1,9 +1,10 @@
 # apps/authentication/apis/auth_views/__init__.py
 """
-Auth Views Package — Sync (DRF) + Async (Ninja/ADRF).
+Auth Views Package — Sync (DRF) only.
 
-Sync views:  RegisterView, LoginView, VerifyOTPView, etc.
-Async views: auth_router (Ninja), AsyncLoginView (ADRF), etc.
+Note: Async Django-Ninja views have been deprecated (Phase 7).
+      Only DRF sync views (sync_views.py) are active.
+      Async views will be re-introduced for measurement/orders in a future phase.
 """
 from .sync_views import (  # noqa: F401
     RegisterView as SyncRegisterView,
@@ -14,22 +15,10 @@ from .sync_views import (  # noqa: F401
     LogoutView as SyncLogoutView,
     RefreshTokenView as SyncRefreshTokenView,
 )
-from .async_views import (  # noqa: F401
-    auth_router,
-    AsyncLoginView,
-    AsyncLogoutView,
-    AsyncRefreshTokenView,
-    VerifyOTPView as AsyncVerifyOTPView,
-)
 
 __all__ = [
-    # Sync (DRF)
+    # Sync (DRF) — active
     'SyncRegisterView', 'SyncLoginView', 'SyncVerifyOTPView',
     'SyncResendOTPView', 'SyncGoogleAuthView', 'SyncLogoutView',
     'SyncRefreshTokenView',
-    # Async (Ninja Router + ADRF)
-    'auth_router',
-    'AsyncLoginView', 'AsyncLogoutView', 'AsyncRefreshTokenView',
-    'AsyncVerifyOTPView',
 ]
-

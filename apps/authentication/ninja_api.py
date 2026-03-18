@@ -2,49 +2,38 @@
 """
 Django Ninja API Instance — Async V1 Authentication.
 
-All Ninja endpoints live under /api/v1/ninja/ to stay on uniform v1 versioning
-and avoid URL collisions with DRF endpoints at /api/v1/auth/.
+STATUS: Async views deprecated in Phase 7. Ninja API is kept as a stub
+so urls.py doesn't break. It will be re-enabled when async measurement/
+order endpoints are needed.
 
-Guards against Django's double-import during ``auto_reload``, which
-triggers ``ConfigError("Looks like you created multiple NinjaAPIs")``.
-The module-level ``_api_instance`` pattern ensures only one NinjaAPI is
-created per Python process.
+The NinjaAPI is instantiated with NO routers in this phase.
 """
-
 import logging
 from ninja import NinjaAPI
 
 logger = logging.getLogger('application')
 
-# ── Singleton guard: Prevent double-registration on auto-reload ──────
+# ── Singleton guard ───────────────────────────────────────────────────────────
 _api_instance = None
 
 
 def _get_api() -> NinjaAPI:
-    """
-    Returns the NinjaAPI singleton, creating it on first call.
-
-    This avoids the ``ConfigError`` that Ninja raises when it detects
-    multiple ``NinjaAPI`` objects with the same ``urls_namespace``.
-    """
+    """Returns the NinjaAPI singleton (empty stub — no async routers registered)."""
     global _api_instance
     if _api_instance is not None:
         return _api_instance
 
-    from apps.authentication.apis.auth_views.async_views import (
-        auth_router,
-    )
-
+    # Async auth_router removed (Phase 7 deprecation).
+    # Re-wire async routers here when measurement/orders async endpoints are built.
     _api_instance = NinjaAPI(
-        title="Fashionistar Auth API V1",
+        title="Fashionistar API V1",
         version="1.0.0",
-        description="Asynchronous Authentication API using Django Ninja — served at /api/v1/ninja/auth/",
+        description="Async API using Django Ninja — future home of measurement/orders endpoints.",
         urls_namespace='authentication_v1',
     )
-    _api_instance.add_router("", auth_router)
-    logger.info("✅ NinjaAPI V1 initialized (namespace=authentication_v1, path=/api/v1/ninja/auth/)")
+    logger.info("✅ NinjaAPI V1 stub initialized (namespace=authentication_v1, path=/api/v1/ninja/)")
     return _api_instance
 
 
-# ── Module-level export (used by urls.py) ────────────────────────────
+# ── Module-level export (used by urls.py) ─────────────────────────────────────
 api = _get_api()

@@ -312,7 +312,7 @@ class CloudinaryPresignView(APIView):
 
     Authentication: Bearer JWT (IsAuthenticated).
 
-    Request body:
+    Request body (validated by PresignRequestSerializer):
         { "asset_type": "avatar" | "product_image" | "product_video" | "measurement" }
 
     Response 200:
@@ -329,24 +329,24 @@ class CloudinaryPresignView(APIView):
             "eager_async":    true
         }
 
-    Response 400 — invalid asset_type.
+    Response 400 — invalid asset_type (serializer validation error).
     Response 500 — signature generation failed.
     """
     permission_classes = [IsAuthenticated]
 
     def post(self, request: HttpRequest) -> Response:
+        from apps.common.serializers import PresignRequestSerializer
         from apps.common.utils.cloudinary import generate_cloudinary_upload_params
 
-        asset_type = request.data.get("asset_type", "avatar")  # type: ignore[attr-defined]
-
-        if asset_type not in VALID_ASSET_TYPES:
+        # ── Validate input via dedicated serializer ────────────────────────
+        serializer = PresignRequestSerializer(data=request.data)
+        if not serializer.is_valid():
             return Response(
-                {
-                    "success": False,
-                    "message": f"Invalid asset_type '{asset_type}'. Must be one of: {sorted(VALID_ASSET_TYPES)}.",
-                },
+                {"success": False, "errors": serializer.errors},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        asset_type = serializer.validated_data["asset_type"]
 
         result = generate_cloudinary_upload_params(
             user_id=str(request.user.pk),

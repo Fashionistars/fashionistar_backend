@@ -24,6 +24,7 @@ Security posture:
   - Rate limiting applied via RateLimitPermission (100 req/hour per IP).
   - Password change wraps the save() in transaction.atomic() + on_commit
     for the notification email.
+  - AuditService.log() called on every password event for SIEM compliance.
   - All actions are logged via the 'application' logger for SIEM ingestion.
 """
 
@@ -55,14 +56,68 @@ from rest_framework.views import APIView
 logger = logging.getLogger('application')
 
 # ---------------------------------------------------------------------------
-# Helper — uniform success/error envelope
+# Helpers
 # ---------------------------------------------------------------------------
-_SUCCESS = lambda msg: {"status": "success", "message": msg}  # noqa: E731
-_ERROR   = lambda msg, code=None: {                           # noqa: E731
+_SUCCESS = lambda msg: {"status": "success", "message": msg}           # noqa: E731
+_ERROR   = lambda msg, code=None: {                                     # noqa: E731
     "status": "error",
     "message": msg,
-    **({"code": code} if code else {}),
+    **({} if not code else {"code": code}),
 }
+
+
+def _get_client_ip(request) -> str:
+    """Return the real client IP respecting X-Forwarded-For."""
+    xff = request.META.get("HTTP_X_FORWARDED_FOR", "")
+    return xff.split(",")[0].strip() if xff else request.META.get("REMOTE_ADDR", "")
+
+
+def _audit_log(
+    *,
+    event_type_name: str,
+    action: str,
+    request,
+    actor=None,
+    metadata: dict | None = None,
+    severity_name: str = "INFO",
+    is_compliance: bool = True,
+):
+    """
+    Best-effort AuditService.log() call.
+
+    Wrapped in broad try/except so a misconfigured audit log NEVER blocks
+    the password operation itself. Failures are logged at WARNING level.
+    """
+    try:
+        from apps.audit_logs.services import AuditService
+        from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
+
+        event_type = getattr(EventType, event_type_name, None)
+        severity   = getattr(SeverityLevel, severity_name, SeverityLevel.INFO)
+
+        if event_type is None:
+            logger.warning(
+                "_audit_log: unknown event_type_name='%s'", event_type_name
+            )
+            return
+
+        AuditService.log(
+            event_type=event_type,
+            event_category=EventCategory.SECURITY,
+            severity=severity,
+            action=action,
+            request=request,
+            actor=actor,
+            actor_email=getattr(actor, "email", None) if actor else None,
+            ip_address=_get_client_ip(request),
+            metadata=metadata or {},
+            is_compliance=is_compliance,
+        )
+    except Exception as exc:  # pragma: no cover — audit must never block
+        logger.warning(
+            "_audit_log call failed (%s). event=%s action=%s",
+            exc, event_type_name, action,
+        )
 
 
 # ===========================================================================
@@ -78,15 +133,19 @@ class PasswordResetRequestView(APIView):
 
     Always returns the same generic message (anti-enumeration).
     Rate-limited: 100 req/hour per IP.
+
+    AuditService event: PASSWORD_RESET_REQUESTED (compliance=True)
     """
-    serializer_class   = PasswordResetRequestSerializer
-    permission_classes  = [AllowAny, RateLimitPermission]
-    renderer_classes    = [CustomJSONRenderer, BrowsableAPIRenderer]
-    throttle_scope      = 'password_reset'
+    serializer_class  = PasswordResetRequestSerializer
+    permission_classes = [AllowAny, RateLimitPermission]
+    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
+    throttle_scope     = 'password_reset'
 
     def post(self, request):
-        request_id = str(uuid.uuid4())[:8]
-        logger.info("[%s] PasswordResetRequest: start", request_id)
+        request_id     = str(uuid.uuid4())[:8]
+        email_or_phone = request.data.get("email_or_phone", "")
+        logger.info("[%s] PasswordResetRequest: start — identifier=%s",
+                    request_id, email_or_phone)
 
         serializer = PasswordResetRequestSerializer(data=request.data)
         if not serializer.is_valid():
@@ -95,11 +154,25 @@ class PasswordResetRequestView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        email_or_phone = serializer.validated_data["email_or_phone"]
+
         try:
-            message = SyncPasswordService.request_reset(
-                serializer.validated_data['email_or_phone']
-            )
+            message = SyncPasswordService.request_reset(email_or_phone)
             logger.info("[%s] PasswordResetRequest: dispatched", request_id)
+
+            # ── Audit log ──────────────────────────────────────────────────
+            _audit_log(
+                event_type_name="PASSWORD_RESET_REQUESTED",
+                action=f"Password reset requested for: {email_or_phone}",
+                request=request,
+                metadata={
+                    "email_or_phone": email_or_phone,
+                    "request_id": request_id,
+                },
+                severity_name="INFO",
+                is_compliance=True,
+            )
+
             return Response(_SUCCESS(message), status=status.HTTP_200_OK)
 
         except Exception as exc:
@@ -131,17 +204,20 @@ class PasswordResetConfirmEmailView(APIView):
       password2 — confirmation field
 
     Returns 200 on success, 400 on bad token / password mismatch.
+
+    On success:  audit event PASSWORD_RESET_COMPLETED (compliance=True)
+    On failure:  rich error body with forgot_password_page + request_new_reset URLs
     """
-    serializer_class   = PasswordResetConfirmEmailSerializer
-    permission_classes  = [AllowAny]
-    renderer_classes    = [CustomJSONRenderer, BrowsableAPIRenderer]
+    serializer_class  = PasswordResetConfirmEmailSerializer
+    permission_classes = [AllowAny]
+    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     def post(self, request, uidb64: str, token: str):
         request_id = str(uuid.uuid4())[:8]
         logger.info("[%s] PasswordResetConfirmEmail: uidb64=%s", request_id, uidb64)
 
         # Merge URL params into data so the serializer validates them
-        data = {**request.data, 'uidb64': uidb64, 'token': token}
+        data = {**request.data, "uidb64": uidb64, "token": token}
         serializer = PasswordResetConfirmEmailSerializer(data=data)
         if not serializer.is_valid():
             return Response(
@@ -151,20 +227,49 @@ class PasswordResetConfirmEmailView(APIView):
 
         try:
             service_payload = {
-                'uidb64':        uidb64,
-                'token':         token,
-                'new_password':  serializer.validated_data['password'],
+                "uidb64":       uidb64,
+                "token":        token,
+                "new_password": serializer.validated_data["password"],
             }
             msg = SyncPasswordService.confirm_reset(service_payload)
             logger.info("[%s] PasswordResetConfirmEmail: success", request_id)
+
+            # ── Audit log — success ────────────────────────────────────────
+            _audit_log(
+                event_type_name="PASSWORD_RESET_COMPLETED",
+                action="Password reset completed via email magic link",
+                request=request,
+                metadata={
+                    "method": "email",
+                    "uidb64": uidb64,
+                    "request_id": request_id,
+                },
+                severity_name="INFO",
+                is_compliance=True,
+            )
+
             return Response(_SUCCESS(msg), status=status.HTTP_200_OK)
 
         except Exception as exc:
             logger.warning(
                 "[%s] PasswordResetConfirmEmail: failed — %s", request_id, exc
             )
+            # ── Bug 8b fix: rich error with actionable URLs ────────────────
+            from django.conf import settings as _s
+            _base = getattr(_s, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
             return Response(
-                _ERROR(str(exc), code="invalid_token"),
+                {
+                    "status": "error",
+                    "message": (
+                        "Invalid or expired reset link. "
+                        "Please request a new password reset."
+                    ),
+                    "code": "invalid_token",
+                    "actions": {
+                        "request_new_reset":   "/api/v1/password/reset-request/",
+                        "forgot_password_page": f"{_base}/forgot-password",
+                    },
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -178,14 +283,16 @@ class PasswordResetConfirmPhoneView(APIView):
     Finalise a phone-based password reset via OTP.
 
     Body:
-      phone    — the user's registered phone number
-      otp      — 6-digit code sent via SMS
-      password — new password
+      otp       — 6-digit code sent via SMS (phone is fetched from Redis OTP token)
+      password  — new password
       password2 — confirmation
+
+    On success:  audit event PASSWORD_RESET_COMPLETED (compliance=True)
+    On failure:  rich error body with resend_otp + request_new_reset URLs
     """
-    serializer_class   = PasswordResetConfirmPhoneSerializer
-    permission_classes  = [AllowAny]
-    renderer_classes    = [CustomJSONRenderer, BrowsableAPIRenderer]
+    serializer_class  = PasswordResetConfirmPhoneSerializer
+    permission_classes = [AllowAny]
+    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     def post(self, request):
         request_id = str(uuid.uuid4())[:8]
@@ -200,14 +307,28 @@ class PasswordResetConfirmPhoneView(APIView):
 
         vd = serializer.validated_data
         service_payload = {
-            'phone':        request.data.get('phone'),
-            'token':        vd['otp'],
-            'new_password': vd['password'],
+            "phone":        request.data.get("phone"),  # may be None — service fetches from Redis
+            "token":        vd["otp"],
+            "new_password": vd["password"],
         }
 
         try:
             msg = SyncPasswordService.confirm_reset(service_payload)
             logger.info("[%s] PasswordResetConfirmPhone: success", request_id)
+
+            # ── Audit log — success ────────────────────────────────────────
+            _audit_log(
+                event_type_name="PASSWORD_RESET_COMPLETED",
+                action="Password reset completed via phone OTP",
+                request=request,
+                metadata={
+                    "method": "phone",
+                    "request_id": request_id,
+                },
+                severity_name="INFO",
+                is_compliance=True,
+            )
+
             return Response(_SUCCESS(msg), status=status.HTTP_200_OK)
 
         except Exception as exc:
@@ -215,14 +336,14 @@ class PasswordResetConfirmPhoneView(APIView):
                 "[%s] PasswordResetConfirmPhone: failed — %s", request_id, exc
             )
             from django.conf import settings as _s
-            _base = getattr(_s, 'FRONTEND_URL', 'http://localhost:3000').rstrip('/')
+            _base = getattr(_s, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
             return Response(
                 {
                     "status": "error",
                     "message": "Invalid or expired OTP. Please request a new code.",
                     "code": "invalid_otp",
                     "actions": {
-                        "resend_otp": f"{_base}/resend-otp",
+                        "resend_otp":        f"{_base}/resend-otp",
                         "request_new_reset": "/api/v1/password/reset-request/",
                     },
                 },
@@ -248,29 +369,30 @@ class ChangePasswordView(APIView):
     Flow:
       1. Validate old password + new password (DRF serializer).
       2. transaction.atomic() — set new password and save().
-      3. transaction.on_commit() — fire confirmation email (non-blocking).
-      4. Return 200 with success message.
+      3. AuditService.log(PASSWORD_CHANGED) — compliance record.
+      4. transaction.on_commit() — fire confirmation email via Celery (non-blocking).
+      5. Return 200 with success message.
 
     Body:
       old_password     — current password
       new_password     — new password (validated by Django validators)
       confirm_password — must match new_password
     """
-    serializer_class   = PasswordChangeSerializer
-    permission_classes  = [IsVerifiedUser]
-    renderer_classes    = [CustomJSONRenderer, BrowsableAPIRenderer]
+    serializer_class  = PasswordChangeSerializer
+    permission_classes = [IsVerifiedUser]
+    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     @require_verification  # Double gate — inline method-level check
     def post(self, request):
         request_id = str(uuid.uuid4())[:8]
         logger.info(
             "[%s] ChangePassword: user=%s",
-            request_id, getattr(request.user, 'email', request.user.pk),
+            request_id, getattr(request.user, "email", request.user.pk),
         )
 
         serializer = PasswordChangeSerializer(
             data=request.data,
-            context={'request': request},
+            context={"request": request},
         )
         if not serializer.is_valid():
             return Response(
@@ -283,22 +405,38 @@ class ChangePasswordView(APIView):
 
         try:
             with transaction.atomic():
-                user.set_password(vd['new_password'])
-                user.save(update_fields=['password', 'updated_at'])
+                user.set_password(vd["new_password"])
+                user.save(update_fields=["password", "updated_at"])
 
                 logger.info(
                     "[%s] ChangePassword: password updated for user=%s",
-                    request_id, getattr(user, 'email', user.pk),
+                    request_id, getattr(user, "email", user.pk),
                 )
 
-                # ── Fire-and-forget Celery confirmation email on commit ────
-                # Using Celery async task instead of inline EmailManager.send_mail()
-                # to keep the request-response cycle non-blocking.
-                if getattr(user, 'email', None):
+                # ── Audit log — compliance record (inside atomic) ──────────
+                # Using plain call (not on_commit) so if the audit log write
+                # fails we still have the audit event associated correctly.
+                _audit_log(
+                    event_type_name="PASSWORD_CHANGED",
+                    action=f"Password changed by user {user.pk}",
+                    request=request,
+                    actor=user,
+                    metadata={
+                        "user_id": str(user.pk),
+                        "user_email": getattr(user, "email", ""),
+                        "request_id": request_id,
+                    },
+                    severity_name="INFO",
+                    is_compliance=True,
+                )
+
+                # ── Fire-and-forget Celery confirmation email on commit ─────
+                # Using Celery async task to keep request-response non-blocking.
+                if getattr(user, "email", None):
                     from apps.authentication.tasks import send_email_task
                     _user_email = user.email
                     _user_ctx = {
-                        "user_first_name": getattr(user, 'first_name', ''),
+                        "user_first_name": getattr(user, "first_name", ""),
                         "user_email":      _user_email,
                     }
                     transaction.on_commit(lambda: send_email_task.delay(
