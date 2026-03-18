@@ -1,0 +1,248 @@
+[BackendConfig] Django dev logging ready: StreamHandler on root, per-app file handlers, autoreload DEBUG suppressed.
+[DEBUG   ] apps.common.events — EventBus: subscribed on_user_registered to 'user.registered'
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Python314\Lib\logging\__init__.py", line 1154, in emit
+    stream.write(msg + self.terminator)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2705' in position 25: character maps to <undefined>
+Call stack:
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\test_layer1_django.py", line 166, in <module>
+    run_tests()
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\test_layer1_django.py", line 24, in run_tests
+    r = client.get("/api/v1/health/")
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\rest_framework\test.py", line 292, in get
+    response = super().get(path, data=data, **extra)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\rest_framework\test.py", line 209, in get
+    return self.generic('GET', path, **r)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\rest_framework\test.py", line 237, in generic
+    return super().generic(
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\test\client.py", line 671, in generic
+    return self.request(**r)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\rest_framework\test.py", line 289, in request
+    return super().request(**kwargs)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\rest_framework\test.py", line 241, in request
+    request = super().request(**kwargs)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\test\client.py", line 1082, in request
+    response = self.handler(environ)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\test\client.py", line 186, in __call__
+    response = self.get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\rest_framework\test.py", line 261, in get_response
+    return super().get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\core\handlers\base.py", line 141, in get_response
+    response = self._middleware_chain(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\apps\common\middleware.py", line 89, in __call__
+    response = self.get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\apps\common\middleware.py", line 132, in __call__
+    response = self.get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\apps\common\middleware.py", line 295, in __call__
+    response = self.get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\apps\audit_logs\middleware.py", line 67, in __call__
+    response = self.get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\utils\deprecation.py", line 309, in __call__
+    response = response or self.get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\whitenoise\middleware.py", line 123, in __call__
+    return self.get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\corsheaders\middleware.py", line 53, in __call__
+    result = self.get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\utils\deprecation.py", line 309, in __call__
+    response = response or self.get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\utils\deprecation.py", line 309, in __call__
+    response = response or self.get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\utils\deprecation.py", line 309, in __call__
+    response = response or self.get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\utils\deprecation.py", line 309, in __call__
+    response = response or self.get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\utils\deprecation.py", line 309, in __call__
+    response = response or self.get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\utils\deprecation.py", line 309, in __call__
+    response = response or self.get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\core\handlers\base.py", line 182, in _get_response
+    callback, callback_args, callback_kwargs = self.resolve_request(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\core\handlers\base.py", line 314, in resolve_request
+    resolver_match = resolver.resolve(request.path_info)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\urls\resolvers.py", line 676, in resolve
+    for pattern in self.url_patterns:
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\utils\functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\urls\resolvers.py", line 729, in url_patterns
+    patterns = getattr(self.urlconf_module, "urlpatterns", self.urlconf_module)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\utils\functional.py", line 47, in __get__
+    res = instance.__dict__[self.name] = self.func(instance)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\urls\resolvers.py", line 722, in urlconf_module
+    return import_module(self.urlconf_name)
+  File "C:\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1342, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 938, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 759, in exec_module
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\backend\urls.py", line 48, in <module>
+    path('api/', include('apps.authentication.urls', namespace='authentication')),
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\urls\conf.py", line 39, in include
+    urlconf_module = import_module(urlconf_module)
+  File "C:\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1342, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 938, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 759, in exec_module
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\apps\authentication\urls.py", line 17, in <module>
+    from apps.authentication.ninja_api import api
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1342, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 938, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 759, in exec_module
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\apps\authentication\ninja_api.py", line 39, in <module>
+    api = _get_api()
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\apps\authentication\ninja_api.py", line 34, in _get_api
+    logger.info("\u2705 NinjaAPI V1 stub initialized (namespace=authentication_v1, path=/api/v1/ninja/)")
+Message: '\u2705 NinjaAPI V1 stub initialized (namespace=authentication_v1, path=/api/v1/ninja/)'
+Arguments: ()
+
+1. Health Check
+[DEBUG   ] asyncio — Using proactor: IocpProactor
+[WARNING ] apps.common.views — Health check WARNING — degraded checks: ['celery']
+[INFO    ] security — SECURITY_AUDIT action=REQUEST req=297acf68-d851-463c-94de-6b48bd58d887 device=fp:57efdd91ba75ee0012c0 session=- ip=127.0.0.1 method=GET path=/api/v1/health/ status=200 duration_ms=1286.3 user_id=anonymous role=anonymous ua='-' referrer=-
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Python314\Lib\logging\__init__.py", line 1154, in emit
+    stream.write(msg + self.terminator)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2192' in position 58: character maps to <undefined>
+Call stack:
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\test_layer1_django.py", line 166, in <module>
+    run_tests()
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\test_layer1_django.py", line 24, in run_tests
+    r = client.get("/api/v1/health/")
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\rest_framework\test.py", line 292, in get
+    response = super().get(path, data=data, **extra)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\rest_framework\test.py", line 209, in get
+    return self.generic('GET', path, **r)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\rest_framework\test.py", line 237, in generic
+    return super().generic(
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\test\client.py", line 671, in generic
+    return self.request(**r)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\rest_framework\test.py", line 289, in request
+    return super().request(**kwargs)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\rest_framework\test.py", line 241, in request
+    request = super().request(**kwargs)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\test\client.py", line 1082, in request
+    response = self.handler(environ)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\test\client.py", line 186, in __call__
+    response = self.get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\rest_framework\test.py", line 261, in get_response
+    return super().get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\core\handlers\base.py", line 141, in get_response
+    response = self._middleware_chain(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\apps\common\middleware.py", line 89, in __call__
+    response = self.get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\apps\common\middleware.py", line 133, in __call__
+    self._emit_log(request, response, start)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\apps\common\middleware.py", line 147, in _emit_log
+    logger.info(
+Message: '[%s] %s \u2192 %d in %.1fms [req=%s]'
+Arguments: ('GET', '/api/v1/health/', 200, 1286.8879000016022, '297acf68-d851-463c-94de-6b48bd58d887')
+200 {'success': True, 'status': 'warning', 'version': '1.0.0', 'timestamp': '2026-03-18T17:21:02.342165+00:00', 'uptime_seconds': 1, 'check_time_ms': 579.11, 'checks': {'database': {'status': 'ok', 'latency_ms': 6.55}, 'redis': {'status': 'ok', 'latency_ms': 14.63}, 'celery': {'status': 'warning', 'workers': 0, 'note': 'No active workers found'}, 'migrations': {'status': 'ok', 'pending': 0}, 'storage': {'status': 'ok', 'provider': ''}, 'email': {'status': 'ok', 'provider': 'console (dev mode)'}}, 'request_id': '297acf68-d851-463c-94de-6b48bd58d887'}
+
+2. Register
+[INFO    ] security — SECURITY_AUDIT action=CLIENT_ERROR req=191193f6-d49a-4be0-a890-f7527c366be5 device=fp:57efdd91ba75ee0012c0 session=- ip=127.0.0.1 method=POST path=/api/v1/auth/register/ status=400 duration_ms=74.9 user_id=anonymous role=anonymous ua='-' referrer=-
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Python314\Lib\logging\__init__.py", line 1154, in emit
+    stream.write(msg + self.terminator)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2192' in position 66: character maps to <undefined>
+Call stack:
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\test_layer1_django.py", line 166, in <module>
+    run_tests()
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\test_layer1_django.py", line 32, in run_tests
+    r = client.post("/api/v1/auth/register/", {
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\rest_framework\test.py", line 299, in post
+    response = super().post(
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\rest_framework\test.py", line 213, in post
+    return self.generic('POST', path, data, content_type, **extra)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\rest_framework\test.py", line 237, in generic
+    return super().generic(
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\test\client.py", line 671, in generic
+    return self.request(**r)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\rest_framework\test.py", line 289, in request
+    return super().request(**kwargs)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\rest_framework\test.py", line 241, in request
+    request = super().request(**kwargs)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\test\client.py", line 1082, in request
+    response = self.handler(environ)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\test\client.py", line 186, in __call__
+    response = self.get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\rest_framework\test.py", line 261, in get_response
+    return super().get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\core\handlers\base.py", line 141, in get_response
+    response = self._middleware_chain(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\apps\common\middleware.py", line 89, in __call__
+    response = self.get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\apps\common\middleware.py", line 133, in __call__
+    self._emit_log(request, response, start)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\apps\common\middleware.py", line 147, in _emit_log
+    logger.info(
+Message: '[%s] %s \u2192 %d in %.1fms [req=%s]'
+Arguments: ('POST', '/api/v1/auth/register/', 400, 75.36680001066998, '191193f6-d49a-4be0-a890-f7527c366be5')
+[WARNING ] django.request — Bad Request: /api/v1/auth/register/
+400 {'success': False, 'message': 'Validation failed.', 'code': 'validation_error', 'errors': {'password2': ['This field is required.']}, 'meta': {'request_id': '191193f6-d49a-4be0-a890-f7527c366be5', 'status': 400}}
+Traceback (most recent call last):
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\test_layer1_django.py", line 166, in <module>
+    run_tests()
+    ~~~~~~~~~^^
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\test_layer1_django.py", line 44, in run_tests
+    assert r.status_code == 201
+           ^^^^^^^^^^^^^^^^^^^^
+AssertionError

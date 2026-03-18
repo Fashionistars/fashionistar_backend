@@ -120,11 +120,6 @@ class OTPService:
             logger.error("OTP Generation Failed: %s", exc, exc_info=True)
             raise
 
-    @staticmethod
-    async def generate_otp_async(user_id: Any, purpose: str = 'verify') -> str:
-        """Async wrapper — wraps generate_otp_sync in sync_to_async."""
-        return await sync_to_async(OTPService.generate_otp_sync)(user_id, purpose)
-
     # ------------------------------------------------------------------
     # VERIFY — by user_id (internal / backward-compat)
     # ------------------------------------------------------------------
@@ -194,11 +189,6 @@ class OTPService:
         except Exception as exc:
             logger.error("OTP Verification Error: %s", exc, exc_info=True)
             return False
-
-    @staticmethod
-    async def verify_otp_async(user_id: Any, otp: str, purpose: str = 'verify') -> bool:
-        """Async wrapper — wraps verify_otp_sync in sync_to_async."""
-        return await sync_to_async(OTPService.verify_otp_sync)(user_id, otp, purpose)
 
     # ------------------------------------------------------------------
     # VERIFY — by OTP only  (O(1) — no user_id needed in request)
@@ -297,13 +287,6 @@ class OTPService:
         except Exception as exc:
             logger.error("OTP-only Verification Error: %s", exc, exc_info=True)
             return None
-
-    @staticmethod
-    async def verify_by_otp_async(
-        otp: str, purpose: str = 'verify'
-    ) -> Optional[Dict[str, str]]:
-        """Async wrapper — wraps verify_by_otp_sync in sync_to_async."""
-        return await sync_to_async(OTPService.verify_by_otp_sync)(otp, purpose)
 
     # ------------------------------------------------------------------
     # RESEND

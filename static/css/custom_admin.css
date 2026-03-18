@@ -1,0 +1,17 @@
+/* Custom Jazzmin Admin Styles */
+
+/* Fix the large logo on the login screen */
+.login-box .login-logo img {
+    max-height: 120px !important;
+    width: auto !important;
+    max-width: 100% !important;
+    object-fit: contain;
+    margin-bottom: 20px;
+}
+
+/* Fix sidebar brand logo size if it's too large */
+.brand-link .brand-image {
+    max-height: 35px !important;
+    width: auto !important;
+    object-fit: contain;
+}

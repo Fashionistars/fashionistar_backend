@@ -628,6 +628,7 @@ JAZZMIN_SETTINGS = {
     "default_icon_children": "fas fa-arrow-circle-right",
     "related_modal_active": False,
     "custom_js": None,
+    "custom_css": "css/custom_admin.css",
     "show_ui_builder": False,
     "changeform_format": "horizontal_tabs",
     "changeform_format_overrides": {

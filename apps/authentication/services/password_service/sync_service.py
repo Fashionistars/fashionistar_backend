@@ -10,6 +10,7 @@ from apps.authentication.models import UnifiedUser
 from apps.authentication.services.otp import OTPService
 from apps.common.managers.email import EmailManager
 from apps.common.managers.sms import SMSManager
+from apps.authentication.tasks import send_email_task, send_sms_task
 
 logger = logging.getLogger('application')
 
@@ -52,21 +53,20 @@ class SyncPasswordService:
                 uid = urlsafe_base64_encode(force_bytes(user.pk))
                 reset_link = f"{settings.FRONTEND_URL}/auth/reset-password?uid={uid}&token={token}"
                 
-                EmailManager.send_mail(
+                send_email_task.delay(
                     subject="Password Reset Request",
                     recipients=[user.email],
                     template_name="authentication/email/password_reset.html",
-
-                    context={"user": user, "reset_link": reset_link}
+                    context={"user": {"first_name": getattr(user, "first_name", ""), "email": getattr(user, "email", "")}, "reset_link": reset_link}
                 )
-                logger.info(f"📧 Reset Email sent to {user.email}")
+                logger.info(f"📧 Reset Email Celery task dispatched for {user.email}")
 
             else:
                 # PHONE FLOW
                 otp = OTPService.generate_otp_sync(user.id, purpose='password_reset')
                 message = f"Your Password Reset Code is: {otp}. Valid for 5 minutes."
-                SMSManager.send_sms(to=str(user.phone), body=message)
-                logger.info(f"📱 Reset SMS sent to {user.phone}")
+                send_sms_task.delay(to=str(user.phone), body=message)
+                logger.info(f"📱 Reset SMS Celery task dispatched for {user.phone}")
 
             return "If an account exists, a reset code has been sent."
 
@@ -112,18 +112,14 @@ class SyncPasswordService:
                 user.save(update_fields=['password', 'updated_at'])
 
                 if user.email:
-                    def _send_changed_email():
-                        try:
-                            EmailManager.send_mail(
-                                subject="Password Changed",
-                                recipients=[user.email],
-                                template_name="authentication/email/password_changed.html",
-                                context={"user": user},
-                                fail_silently=True,
-                            )
-                        except Exception as mail_exc:
-                            logger.error(f"❌ Password reset email failed: {mail_exc}")
-                    transaction.on_commit(_send_changed_email)
+                    _user_email = user.email
+                    _user_context = {"first_name": getattr(user, "first_name", ""), "email": _user_email}
+                    transaction.on_commit(lambda: send_email_task.delay(
+                        subject="Password Changed",
+                        recipients=[_user_email],
+                        template_name="authentication/email/password_changed.html",
+                        context={"user": _user_context}
+                    ))
 
             logger.info(f"✅ Password reset successful for User {user.id}")
             return "Password has been reset successfully."

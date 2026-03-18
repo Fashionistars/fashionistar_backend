@@ -162,7 +162,7 @@ class PasswordResetRequestView(APIView):
 
             # ── Audit log ──────────────────────────────────────────────────
             _audit_log(
-                event_type_name="PASSWORD_RESET_REQUESTED",
+                event_type_name="PASSWORD_RESET_REQUEST",
                 action=f"Password reset requested for: {email_or_phone}",
                 request=request,
                 metadata={
@@ -236,7 +236,7 @@ class PasswordResetConfirmEmailView(APIView):
 
             # ── Audit log — success ────────────────────────────────────────
             _audit_log(
-                event_type_name="PASSWORD_RESET_COMPLETED",
+                event_type_name="PASSWORD_RESET_DONE",
                 action="Password reset completed via email magic link",
                 request=request,
                 metadata={
@@ -318,7 +318,7 @@ class PasswordResetConfirmPhoneView(APIView):
 
             # ── Audit log — success ────────────────────────────────────────
             _audit_log(
-                event_type_name="PASSWORD_RESET_COMPLETED",
+                event_type_name="PASSWORD_RESET_DONE",
                 action="Password reset completed via phone OTP",
                 request=request,
                 metadata={

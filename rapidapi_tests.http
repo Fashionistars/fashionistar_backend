@@ -1,0 +1,132 @@
+# RapidAPI / REST Client Test Suite for Fashionistar
+# ==================================================
+# Usage: Open this file in VSCode with the "REST Client" or "RapidAPI" extension.
+# Variables:
+@baseUrl = http://localhost:8000/api/v1
+@email = curltest_1234@fashionistar.io
+@phone = +18005551234
+@password = StrongPassword#2026
+@newPassword = New!Password#2026
+
+### 1. Register User
+# @name register
+POST {{baseUrl}}/auth/register/
+Content-Type: application/json
+
+{
+    "email": "{{email}}",
+    "phone_number": "{{phone}}",
+    "password": "{{password}}",
+    "password2": "{{password}}",
+    "first_name": "Rapid",
+    "last_name": "Test",
+    "role": "client"
+}
+
+### 2. Login (Unverified) -> Expect 403 with `actions` URL
+# @name login_unverified
+POST {{baseUrl}}/auth/login/
+Content-Type: application/json
+
+{
+    "email_or_phone": "{{email}}",
+    "password": "{{password}}"
+}
+
+### 3. Resend OTP
+# @name resend_otp
+POST {{baseUrl}}/auth/resend-otp/
+Content-Type: application/json
+
+{
+    "email_or_phone": "{{email}}"
+}
+
+### 4. Verify OTP (mocked OTP is 123456)
+# @name verify_otp
+POST {{baseUrl}}/auth/verify-otp/
+Content-Type: application/json
+
+{
+    "otp": "123456"
+}
+
+### 5. Login (Verified) -> Gets Tokens
+# @name login_verified
+POST {{baseUrl}}/auth/login/
+Content-Type: application/json
+
+{
+    "email_or_phone": "{{email}}",
+    "password": "{{password}}"
+}
+
+@accessToken = {{login_verified.response.body.data.access}}
+@refreshToken = {{login_verified.response.body.data.refresh}}
+
+### 6. Refresh Token
+# @name refresh_token
+POST {{baseUrl}}/auth/token/refresh/
+Content-Type: application/json
+
+{
+    "refresh": "{{refreshToken}}"
+}
+
+### 7. Change Password
+# @name change_password
+POST {{baseUrl}}/password/change/
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+    "old_password": "{{password}}",
+    "new_password": "{{newPassword}}",
+    "confirm_password": "{{newPassword}}"
+}
+
+### 8. Logout
+# @name logout
+POST {{baseUrl}}/auth/logout/
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+    "refresh": "{{refreshToken}}"
+}
+
+### 9. Password Reset Request
+# @name reset_request
+POST {{baseUrl}}/password/reset-request/
+Content-Type: application/json
+
+{
+    "email_or_phone": "{{email}}"
+}
+
+### 10. Password Reset Phone Confirm (Mocked OTP is 123456)
+# @name reset_phone_confirm
+POST {{baseUrl}}/password/reset-phone-confirm/
+Content-Type: application/json
+
+{
+    "phone": "{{phone}}",
+    "otp": "123456",
+    "password": "{{password}}",
+    "password2": "{{password}}"
+}
+
+### 11. Presign Cloudinary Upload
+# @name presign
+POST {{baseUrl}}/upload/presign/
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+    "asset_type": "avatar"
+}
+
+### 12. Health Check
+# @name health_check
+GET {{baseUrl}}/health/
+Content-Type: application/json
