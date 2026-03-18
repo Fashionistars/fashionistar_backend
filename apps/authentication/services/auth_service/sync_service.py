@@ -137,6 +137,7 @@ class SyncAuthService:
         """
         from apps.authentication.exceptions import (
             SoftDeletedUserError,
+            AccountNotVerifiedError,
             AccountInactiveError,
             InvalidCredentialsError,
         )
@@ -208,6 +209,46 @@ class SyncAuthService:
 
             # ── 3. Classify auth failures ────────────────────────────────────
             if not user:
+                # ── 3a: Not-verified check (FIRST — before is_active) ────────
+                # Django authenticate() returns None for users with is_active=False,
+                # which happens to BOTH unverified AND admin-disabled users.
+                # We must check is_verified FIRST to give the correct error.
+                if candidate is not None and not candidate.is_verified:
+                    logger.warning(
+                        "⛔ Login blocked — account not OTP-verified: %s", email_or_phone
+                    )
+                    _record_login_event(
+                        user=candidate,
+                        ip_address=ip,
+                        user_agent=ua,
+                        auth_method=auth_method,
+                        outcome=LoginEvent.OUTCOME_BLOCKED,
+                        failure_reason='account_not_verified',
+                        is_successful=False,
+                    )
+                    try:
+                        from apps.audit_logs.services import AuditService
+                        from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
+                        AuditService.log(
+                            event_type=EventType.LOGIN_BLOCKED,
+                            event_category=EventCategory.SECURITY,
+                            severity=SeverityLevel.WARNING,
+                            action=f"Login blocked — account not OTP-verified: {email_or_phone}",
+                            request=request,
+                            actor=candidate,
+                            actor_email=getattr(candidate, 'email', None),
+                            ip_address=ip,
+                            user_agent=ua,
+                            resource_type="UnifiedUser",
+                            resource_id=str(candidate.pk) if candidate else None,
+                            metadata={"reason": "account_not_verified"},
+                            is_compliance=True,
+                        )
+                    except Exception:
+                        pass
+                    raise AccountNotVerifiedError()
+
+                # ── 3b: Admin deactivation check (SECOND) ────────────────────
                 if candidate is not None and not candidate.is_active:
                     logger.warning(
                         "⛔ Login blocked — inactive account: %s", email_or_phone
@@ -369,7 +410,7 @@ class SyncAuthService:
                 'user':    user,
             }
 
-        except (SoftDeletedUserError, AccountInactiveError, InvalidCredentialsError):
+        except (SoftDeletedUserError, AccountNotVerifiedError, AccountInactiveError, InvalidCredentialsError):
             # Typed business errors — re-raise so the view returns correct HTTP status
             raise
 

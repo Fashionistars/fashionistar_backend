@@ -460,3 +460,59 @@ dashboards: ## 📊 Show all service URLs
 	@echo "  $(CYAN)Flower:$(NC)       http://localhost:5555"
 	@echo "  $(CYAN)Prometheus:$(NC)   http://localhost:9090"
 	@echo "  $(CYAN)Grafana:$(NC)      http://localhost:3000"
+
+# ═══════════════════════════════════════════════════════════════
+##@ ngrok — Public Tunnels (Cloudinary Webhooks / Mobile Testing)
+# ═══════════════════════════════════════════════════════════════
+#
+# ONE-TIME SETUP (already done — authtoken saved globally):
+#   C:\tools\ngrok\ngrok.exe config add-authtoken YOUR_TOKEN
+#   OR: export NGROK_AUTHTOKEN=YOUR_TOKEN in your shell profile
+#
+# USAGE:
+#   1. In Terminal A: make dev         (starts Django WSGI on :8000)
+#   2. In Terminal B: make ngrok-dev   (creates public HTTPS tunnel → :8000)
+#      OR combine:    make dev-tunnel  (sequential: dev server + ngrok)
+#
+#   For ASGI/WebSocket support:
+#   1. In Terminal A: make uvicorn          (starts Uvicorn ASGI on :8001)
+#   2. In Terminal B: make ngrok-asgi       (tunnel → :8001)
+#      OR combine:    make asgi-tunnel
+
+NGROK := C:\tools\ngrok\ngrok.exe
+
+ngrok-dev: ## 🔗 Start ngrok tunnel → localhost:8000 (Django WSGI/dev)
+	@echo "$(CYAN)Starting ngrok tunnel → http://localhost:8000 ...$(NC)"
+	@echo "$(YELLOW)  Webhook URL: https://<tunnel>.ngrok-free.app/api/v1/upload/webhook/cloudinary/$(NC)"
+	@echo "$(YELLOW)  ngrok UI:    http://127.0.0.1:4040$(NC)"
+	$(NGROK) http 8000 --log stdout
+
+ngrok-asgi: ## 🔗 Start ngrok tunnel → localhost:8001 (Uvicorn ASGI/WebSocket)
+	@echo "$(CYAN)Starting ngrok tunnel → http://localhost:8001 (ASGI) ...$(NC)"
+	@echo "$(YELLOW)  Webhook URL: https://<tunnel>.ngrok-free.app/api/v1/upload/webhook/cloudinary/$(NC)"
+	@echo "$(YELLOW)  ngrok UI:    http://127.0.0.1:4040$(NC)"
+	$(NGROK) http 8001 --log stdout
+
+ngrok-url: ## 🔍 Print current active ngrok public URL (must already be running)
+	@echo "$(CYAN)Active ngrok tunnels:$(NC)"
+	@curl -s http://127.0.0.1:4040/api/tunnels 2>/dev/null | \
+		uv run python -c "import sys,json; d=json.load(sys.stdin); [print('  ✔ ' + t['public_url'] + ' → ' + t['config']['addr']) for t in d.get('tunnels',[])]" \
+		|| echo "$(RED)✗ ngrok not running — start with 'make ngrok-dev'$(NC)"
+
+dev-tunnel: ## 🚀 Django dev server (port 8000) — then open ngrok in new terminal
+	@echo "$(BOLD)$(CYAN)FASHIONISTAR — Dev Server + Tunnel$(NC)"
+	@echo "  $(CYAN)Step 1:$(NC) Starting Django WSGI dev server on :8000 ..."
+	@echo "  $(YELLOW)To also start tunnel → open a second terminal and run:$(NC)"
+	@echo "  $(CYAN)          make ngrok-dev$(NC)"
+	DJANGO_SETTINGS_MODULE=backend.config.development uv run manage.py runserver --settings=backend.config.development
+
+asgi-tunnel: ## 🚀 Uvicorn ASGI server (port 8001) — then open ngrok-asgi in new terminal
+	@echo "$(BOLD)$(CYAN)FASHIONISTAR — ASGI Server + Tunnel$(NC)"
+	@echo "  $(CYAN)Step 1:$(NC) Starting Uvicorn ASGI on :8001 ..."
+	@echo "  $(YELLOW)To also start tunnel → open a second terminal and run:$(NC)"
+	@echo "  $(CYAN)          make ngrok-asgi$(NC)"
+	DJANGO_SETTINGS_MODULE=backend.config.development uv run uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto --log-config uvicorn_log_config.json
+
+ngrok-inspect: ## 🔍 Open ngrok web inspector in browser (localhost:4040)
+	@echo "$(CYAN)ngrok Web Inspector: http://127.0.0.1:4040$(NC)"
+	@start http://127.0.0.1:4040 2>/dev/null || xdg-open http://127.0.0.1:4040 2>/dev/null || echo "Open: http://127.0.0.1:4040"

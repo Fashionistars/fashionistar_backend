@@ -30,23 +30,27 @@ Security posture:
 import logging
 import uuid
 
-from django.db import transaction
-from rest_framework import status
-from rest_framework.permissions import AllowAny
-from rest_framework.response import Response
-from rest_framework.views import APIView
-
-from apps.common.permissions import IsVerifiedUser, RateLimitPermission, require_verification
-from apps.common.renderers import CustomJSONRenderer
 from apps.authentication.serializers import (
-    PasswordResetRequestSerializer,
+    PasswordChangeSerializer,
     PasswordResetConfirmEmailSerializer,
     PasswordResetConfirmPhoneSerializer,
-    PasswordChangeSerializer,
+    PasswordResetRequestSerializer,
 )
 from apps.authentication.services.password_service import (
     SyncPasswordService,
 )
+from apps.common.permissions import (
+    IsVerifiedUser,
+    RateLimitPermission,
+    require_verification,
+)
+from apps.common.renderers import CustomJSONRenderer
+from django.db import transaction
+from rest_framework import status
+from rest_framework.permissions import AllowAny
+from rest_framework.renderers import BrowsableAPIRenderer
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 logger = logging.getLogger('application')
 
@@ -75,9 +79,9 @@ class PasswordResetRequestView(APIView):
     Always returns the same generic message (anti-enumeration).
     Rate-limited: 100 req/hour per IP.
     """
-
+    serializer_class   = PasswordResetRequestSerializer
     permission_classes  = [AllowAny, RateLimitPermission]
-    renderer_classes    = [CustomJSONRenderer]
+    renderer_classes    = [CustomJSONRenderer, BrowsableAPIRenderer]
     throttle_scope      = 'password_reset'
 
     def post(self, request):
@@ -128,9 +132,9 @@ class PasswordResetConfirmEmailView(APIView):
 
     Returns 200 on success, 400 on bad token / password mismatch.
     """
-
+    serializer_class   = PasswordResetConfirmEmailSerializer
     permission_classes  = [AllowAny]
-    renderer_classes    = [CustomJSONRenderer]
+    renderer_classes    = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     def post(self, request, uidb64: str, token: str):
         request_id = str(uuid.uuid4())[:8]
@@ -179,9 +183,9 @@ class PasswordResetConfirmPhoneView(APIView):
       password — new password
       password2 — confirmation
     """
-
+    serializer_class   = PasswordResetConfirmPhoneSerializer
     permission_classes  = [AllowAny]
-    renderer_classes    = [CustomJSONRenderer]
+    renderer_classes    = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     def post(self, request):
         request_id = str(uuid.uuid4())[:8]
@@ -210,8 +214,18 @@ class PasswordResetConfirmPhoneView(APIView):
             logger.warning(
                 "[%s] PasswordResetConfirmPhone: failed — %s", request_id, exc
             )
+            from django.conf import settings as _s
+            _base = getattr(_s, 'FRONTEND_URL', 'http://localhost:3000').rstrip('/')
             return Response(
-                _ERROR(str(exc), code="invalid_otp"),
+                {
+                    "status": "error",
+                    "message": "Invalid or expired OTP. Please request a new code.",
+                    "code": "invalid_otp",
+                    "actions": {
+                        "resend_otp": f"{_base}/resend-otp",
+                        "request_new_reset": "/api/v1/password/reset-request/",
+                    },
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -242,9 +256,9 @@ class ChangePasswordView(APIView):
       new_password     — new password (validated by Django validators)
       confirm_password — must match new_password
     """
-
+    serializer_class   = PasswordChangeSerializer
     permission_classes  = [IsVerifiedUser]
-    renderer_classes    = [CustomJSONRenderer]
+    renderer_classes    = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     @require_verification  # Double gate — inline method-level check
     def post(self, request):
@@ -277,28 +291,26 @@ class ChangePasswordView(APIView):
                     request_id, getattr(user, 'email', user.pk),
                 )
 
-                # ── Fire-and-forget confirmation email on commit ──────────
+                # ── Fire-and-forget Celery confirmation email on commit ────
+                # Using Celery async task instead of inline EmailManager.send_mail()
+                # to keep the request-response cycle non-blocking.
                 if getattr(user, 'email', None):
-                    from apps.common.managers.email import EmailManager
-
-                    def _send_confirmation_email():
-                        try:
-                            EmailManager.send_mail(
-                                subject="Password Changed — Fashionistar",
-                                recipients=[user.email],
-                                template_name=(
-                                    "authentication/email/password_changed.html"
-                                ),
-                                context={"user": user},
-                                fail_silently=True,
-                            )
-                        except Exception as mail_exc:
-                            logger.error(
-                                "[%s] ChangePassword: confirmation email failed — %s",
-                                request_id, mail_exc,
-                            )
-
-                    transaction.on_commit(_send_confirmation_email)
+                    from apps.authentication.tasks import send_email_task
+                    _user_email = user.email
+                    _user_ctx = {
+                        "user_first_name": getattr(user, 'first_name', ''),
+                        "user_email":      _user_email,
+                    }
+                    transaction.on_commit(lambda: send_email_task.delay(
+                        subject="Password Changed — Fashionistar",
+                        recipients=[_user_email],
+                        template_name="authentication/email/password_changed.html",
+                        context=_user_ctx,
+                    ))
+                    logger.info(
+                        "[%s] ChangePassword: confirmation email scheduled via Celery",
+                        request_id,
+                    )
 
             return Response(
                 _SUCCESS("Password changed successfully."),

@@ -209,68 +209,46 @@ class LoginView(generics.GenericAPIView):
 
     def post(self, request, *args, **kwargs) -> Response:
         """
-        Validates credentials via LoginSerializer, issues JWT tokens.
+        Full enterprise-grade login via SyncAuthService.
 
-        LoginSerializer.validate() checks: user exists, password correct,
-        is_active=True (account must be OTP-verified).
+        SyncAuthService.login() performs (in order):
+          1. Soft-delete pre-check → SoftDeletedUserError (403)
+          2. Django authenticate() → password verification
+          3. is_verified check    → AccountNotVerifiedError (403) with OTP URLs
+          4. is_active check      → AccountDeactivatedError (403) with support URL
+          5. Invalid credentials  → InvalidCredentialsError (401)
+          6. LoginEvent INSERT (every attempt — success AND failure)
+          7. AuditService.log()  (async via Celery on_commit)
+          8. UserSession.create_from_token() via transaction.on_commit()
+          9. lifecycle_counter Celery task (fire-and-forget)
 
-        Error mapping (enterprise-grade):
-          SoftDeletedUserError  → 403  (account deactivated, contact support)
-          AccountInactiveError  → 403  (account not yet verified / disabled)
-          InvalidCredentialsError → 401 (wrong password or unknown user)
-          ValidationError       → 400  (missing fields)
+        This provides a complete, tamper-proof audit trail for every login
+        attempt — critical for SIEM dashboards and compliance requirements.
         """
         from apps.authentication.exceptions import (
             SoftDeletedUserError,
-            AccountInactiveError,
+            AccountNotVerifiedError,
+            AccountDeactivatedError,
             InvalidCredentialsError,
         )
         try:
+            # ── Step 1: Field validation (email_or_phone + password format) ──
             serializer = self.get_serializer(data=request.data)
-
-            # ── Step 1: Field-level validation (required, format) ────────────
-            # We do NOT use raise_exception=True here because DRF's is_valid()
-            # swallows ALL exceptions from validate() — including our typed auth
-            # exceptions (SoftDeletedUserError, InvalidCredentialsError) — and
-            # re-raises them as generic ValidationError, losing the HTTP status
-            # code. Instead we validate fields first, then call validate() directly.
             if not serializer.is_valid():
                 raise drf_serializers.ValidationError(serializer.errors)
 
-            # ── Step 2: Business-logic validation (direct call) ───────────────
-            # This allows SoftDeletedUserError (403), InvalidCredentialsError (401)
-            # and AccountInactiveError (403) to propagate to the handlers below.
-            validated_data = serializer.validate(serializer.initial_data)
-            user = validated_data['user']
+            email_or_phone = serializer.validated_data.get('email_or_phone')
+            password       = serializer.validated_data.get('password')
 
-
-            # Update last login timestamp
-            from django.contrib.auth.models import update_last_login
-            update_last_login(None, user)
-
-            # Issue JWT tokens
-            from rest_framework_simplejwt.tokens import RefreshToken
-            refresh = RefreshToken.for_user(user)
-
-            # Fire lifecycle login counter (non-blocking, after commit)
-            try:
-                from django.db import transaction as _tx
-                from apps.common.tasks import increment_lifecycle_login_counter
-                from django.utils import timezone
-                login_ts = timezone.now().isoformat()
-
-                def _fire():
-                    try:
-                        increment_lifecycle_login_counter.apply_async(
-                            kwargs={'user_uuid': str(user.pk), 'login_at': login_ts},
-                            retry=False,
-                            ignore_result=True,
-                        )
-                    except Exception:
-                        pass
-                _tx.on_commit(_fire)
-            except Exception:
-                pass  # Never block login on analytics
+            # ── Step 2: Full audit-logged auth via SyncAuthService ───────────
+            # This is where LoginEvent, UserSession, AuditLog are ALL recorded.
+            # SyncAuthService.login() raises typed exceptions for every failure.
+            result = SyncAuthService.login(
+                email_or_phone=email_or_phone,
+                password=password,
+                request=request,
+            )
+            user = result['user']
 
             logger.info(
                 "✅ LoginView: login successful for %s (id=%s role=%s)",
@@ -283,44 +261,45 @@ class LoginView(generics.GenericAPIView):
                     "user_id":          str(user.id),
                     "role":             user.role,
                     "identifying_info": user.identifying_info,
-                    "access":           str(refresh.access_token),
-                    "refresh":          str(refresh),
+                    "access":           result['access'],
+                    "refresh":          result['refresh'],
                 },
                 status=status.HTTP_200_OK,
             )
 
         except SoftDeletedUserError as exc:
             logger.warning(
-                "⛔ LoginView: soft-deleted account attempt for %s",
+                "⛔ LoginView: soft-deleted account attempt — %s",
                 request.data.get('email_or_phone', ''),
             )
             return Response(
-                {
-                    "error": str(exc.detail),
-                    "code":  exc.default_code,
-                },
+                {"success": False, "message": str(exc.detail), "code": exc.default_code},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        except AccountInactiveError as exc:
+        except AccountNotVerifiedError as exc:
             logger.warning(
-                "⛔ LoginView: inactive account attempt for %s",
+                "⛔ LoginView: unverified account attempt — %s",
                 request.data.get('email_or_phone', ''),
             )
             return Response(
-                {
-                    "error": str(exc.detail),
-                    "code":  exc.default_code,
-                },
+                {"success": False, "message": str(exc.detail), "code": exc.default_code},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        except AccountDeactivatedError as exc:
+            logger.warning(
+                "⛔ LoginView: deactivated account attempt — %s",
+                request.data.get('email_or_phone', ''),
+            )
+            return Response(
+                {"success": False, "message": str(exc.detail), "code": exc.default_code},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         except InvalidCredentialsError as exc:
             return Response(
-                {
-                    "error": str(exc.detail),
-                    "code":  exc.default_code,
-                },
+                {"success": False, "message": str(exc.detail), "code": exc.default_code},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
@@ -333,7 +312,7 @@ class LoginView(generics.GenericAPIView):
                 "❌ LoginView unexpected error: %s", str(exc), exc_info=True
             )
             return Response(
-                {"error": "An error occurred during login. Please try again."},
+                {"success": False, "error": "An error occurred during login. Please try again."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 

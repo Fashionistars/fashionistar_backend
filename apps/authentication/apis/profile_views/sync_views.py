@@ -4,6 +4,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.views import APIView
+from rest_framework.renderers import BrowsableAPIRenderer
 from apps.common.renderers import CustomJSONRenderer
 from apps.authentication.models import UnifiedUser
 from apps.authentication.serializers import UserSerializer
@@ -11,7 +12,7 @@ import logging
 
 class UserProfileDetailView(APIView):
     permission_classes = [IsAuthenticated]
-    renderer_classes = [CustomJSONRenderer]
+    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     def get(self, request):
         serializer = UserSerializer(request.user)
@@ -26,7 +27,7 @@ class UserProfileDetailView(APIView):
 
 class UserListView(APIView):
     permission_classes = [IsAdminUser]
-    renderer_classes = [CustomJSONRenderer]
+    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     def get(self, request):
         users = UnifiedUser.objects.all()

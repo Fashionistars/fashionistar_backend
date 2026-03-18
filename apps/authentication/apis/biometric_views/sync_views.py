@@ -4,6 +4,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
+from rest_framework.renderers import BrowsableAPIRenderer
 from apps.common.renderers import CustomJSONRenderer
 from apps.authentication.services.biometric_service import SyncBiometricService
 from apps.authentication.models import UnifiedUser
@@ -13,7 +14,7 @@ logger = logging.getLogger('application')
 
 class BiometricRegisterOptionsView(APIView):
     permission_classes = [IsAuthenticated]
-    renderer_classes = [CustomJSONRenderer]
+    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     def post(self, request):
         try:
@@ -25,7 +26,7 @@ class BiometricRegisterOptionsView(APIView):
 
 class BiometricRegisterVerifyView(APIView):
     permission_classes = [IsAuthenticated]
-    renderer_classes = [CustomJSONRenderer]
+    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     def post(self, request):
         try:
@@ -45,7 +46,7 @@ class BiometricRegisterVerifyView(APIView):
 
 class BiometricLoginOptionsView(APIView):
     permission_classes = [AllowAny]
-    renderer_classes = [CustomJSONRenderer]
+    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     def post(self, request):
         try:
@@ -68,7 +69,7 @@ class BiometricLoginOptionsView(APIView):
 
 class BiometricLoginVerifyView(APIView):
     permission_classes = [AllowAny]
-    renderer_classes = [CustomJSONRenderer]
+    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     def post(self, request):
         try:

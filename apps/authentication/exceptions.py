@@ -146,19 +146,56 @@ class SoftDeletedUserError(AuthenticationError):
 
     The response message is intentionally explicit here (post-authentication
     context) so the user understands why they cannot log in and what to do.
+    Includes a support URL derived from FRONTEND_URL so frontend can link
+    directly to the support page.
     """
-    status_code    = status.HTTP_403_FORBIDDEN
-    default_detail = (
-        "Your account has been deactivated. "
-        "Please contact our support team to restore access."
-    )
-    default_code   = "account_deactivated"
+    status_code  = status.HTTP_403_FORBIDDEN
+    default_code = "account_deactivated"
+
+    def __init__(self, support_url: str = ''):
+        from django.conf import settings as _s
+        _base        = getattr(_s, 'FRONTEND_URL', 'http://localhost:3000').rstrip('/')
+        _support_url = support_url or f"{_base}/support"
+        detail = (
+            "Your account has been permanently deactivated. "
+            f"Please contact our support team to restore access: {_support_url}"
+        )
+        super().__init__(detail=detail)
+
+
+class AccountNotVerifiedError(AuthenticationError):
+    """
+    Raised FIRST during login when the account exists, password is correct,
+    but ``is_verified=False`` — meaning the user has not yet completed OTP
+    verification after registration.
+
+    HTTP 403 Forbidden.
+
+    The detail message includes actionable URLs so the frontend can
+    automatically display a "Verify / Resend OTP" prompt.
+    """
+    status_code  = status.HTTP_403_FORBIDDEN
+    default_code = "account_not_verified"
+
+    def __init__(self, verify_url: str = '', resend_url: str = ''):
+        from django.conf import settings as _s
+        _base       = getattr(_s, 'FRONTEND_URL', 'http://localhost:3000').rstrip('/')
+        _verify_url = verify_url  or f"{_base}/verify-otp"
+        _resend_url = resend_url  or f"{_base}/resend-otp"
+        detail = (
+            "Your account has not been verified yet. "
+            "Please check your email or phone for the OTP code we sent during registration. "
+            f"Verify your account here: {_verify_url} "
+            f"— or request a new code here: {_resend_url}"
+        )
+        super().__init__(detail=detail)
 
 
 class AccountInactiveError(AuthenticationError):
     """
     Raised when a user's account is found, password is correct, but
-    ``is_active=False`` (admin-disabled, not a soft-delete).
+    ``is_active=False`` AND ``is_verified=True`` — indicating an admin
+    has explicitly deactivated the account (not a verification issue).
 
     HTTP 403 Forbidden.
     """
@@ -194,13 +231,22 @@ class AccountDeactivatedError(AuthenticationError):
     (not via the soft-delete workflow).
 
     HTTP 403 Forbidden.
+
+    Includes a support URL derived from FRONTEND_URL so frontend can
+    provide a clickable "Contact Support" link.
     """
-    status_code    = status.HTTP_403_FORBIDDEN
-    default_detail = (
-        "Your account has been disabled by an administrator. "
-        "Contact our support team for assistance."
-    )
-    default_code   = "account_disabled"
+    status_code  = status.HTTP_403_FORBIDDEN
+    default_code = "account_deactivated"
+
+    def __init__(self, support_url: str = ''):
+        from django.conf import settings as _s
+        _base        = getattr(_s, 'FRONTEND_URL', 'http://localhost:3000').rstrip('/')
+        _support_url = support_url or f"{_base}/support"
+        detail = (
+            "Your account has been deactivated by an administrator. "
+            f"Please contact our support team for assistance: {_support_url}"
+        )
+        super().__init__(detail=detail)
 
 
 class AccountSuspendedError(AuthenticationError):

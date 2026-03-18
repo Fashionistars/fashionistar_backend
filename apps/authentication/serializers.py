@@ -103,8 +103,10 @@ class LoginSerializer(serializers.Serializer):
            » Else → InvalidCredentialsError (401)
         3. Password check:
            » Wrong password → InvalidCredentialsError (401)
-        4. is_active check:
-           » is_active=False → AccountInactiveError (403)
+        4a. is_verified check (FIRST — before is_active):
+           » is_verified=False → AccountNotVerifiedError (403) with OTP verify/resend URLs
+        4b. is_active check (SECOND):
+           » is_active=False → AccountDeactivatedError (403) with support URL
 
         All raised exceptions are DRF APIExceptions (typed), so
         ``LoginView.post()`` catches them individually and returns
@@ -117,13 +119,15 @@ class LoginSerializer(serializers.Serializer):
             dict: Same data dict with 'user' key added.
 
         Raises:
-            SoftDeletedUserError (403)   — account exists but deactivated.
-            AccountInactiveError  (403)  — account exists but not verified.
-            InvalidCredentialsError (401)— wrong password or unknown user.
+            SoftDeletedUserError   (403) — account permanently deactivated.
+            AccountNotVerifiedError(403) — account not yet OTP-verified.
+            AccountDeactivatedError(403) — is_active=False (admin-disabled).
+            InvalidCredentialsError(401) — wrong password or unknown user.
         """
         from apps.authentication.exceptions import (
             SoftDeletedUserError,
-            AccountInactiveError,
+            AccountNotVerifiedError,
+            AccountDeactivatedError,
             InvalidCredentialsError,
         )
 
@@ -131,7 +135,7 @@ class LoginSerializer(serializers.Serializer):
         password = data.get('password')
 
         try:
-            # ── Step 1: Alive-only lookup ─────────────────────────────────────
+            # ── Step 1: Alive-only lookup ────────────────────────────────────────
             user = None
             if '@' in email_or_phone:
                 user = UnifiedUser.objects.filter(email=email_or_phone).first()
@@ -162,19 +166,26 @@ class LoginSerializer(serializers.Serializer):
                 )
                 raise InvalidCredentialsError()
 
-            # ── Step 3: Password check ────────────────────────────────────────
+            # ── Step 3: Password check ──────────────────────────────────────────
             if not user.check_password(password):
                 logger.warning(
                     "⛔ Login failed: wrong password for '%s'", email_or_phone,
                 )
                 raise InvalidCredentialsError()
 
-            # ── Step 4: Account active check ──────────────────────────────────
+            # ── Step 4a: OTP verification check (FIRST — before is_active) ─────
+            if not user.is_verified:
+                logger.warning(
+                    "⛔ Login rejected: account not verified '%s'", email_or_phone,
+                )
+                raise AccountNotVerifiedError()
+
+            # ── Step 4b: Admin deactivation check (SECOND) ──────────────────
             if not user.is_active:
                 logger.warning(
-                    "⛔ Login rejected: inactive account '%s'", email_or_phone,
+                    "⛔ Login rejected: deactivated account '%s'", email_or_phone,
                 )
-                raise AccountInactiveError()
+                raise AccountDeactivatedError()
 
             logger.info(
                 "✅ LoginSerializer: valid credentials for '%s'", email_or_phone,
@@ -182,8 +193,11 @@ class LoginSerializer(serializers.Serializer):
             data['user'] = user
             return data
 
-        except (SoftDeletedUserError, AccountInactiveError, InvalidCredentialsError):
-            # Typed business exceptions — re-raise so LogicView returns correct HTTP code
+        except (
+            SoftDeletedUserError, AccountNotVerifiedError,
+            AccountDeactivatedError, InvalidCredentialsError,
+        ):
+            # Typed business exceptions — re-raise so LoginView returns correct HTTP code
             raise
 
         except Exception as exc:
@@ -194,8 +208,6 @@ class LoginSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {'non_field_errors': [_('An unexpected error occurred during login.')]}
             )
-
-
 
 
 class AsyncLoginSerializer(LoginSerializer):
@@ -450,10 +462,17 @@ class AsyncUserRegistrationSerializer(UserRegistrationSerializer):
 class ResendOTPRequestSerializer(serializers.Serializer):
     """
     Serializer for requesting OTP resend by email or phone.
+
+    CRITICAL FIX: Uses ``all_with_deleted()`` manager so that users who
+    just registered (is_active=False, is_verified=False) are found.
+    The default ``objects`` manager filters alive-only (is_deleted=False)
+    but a newly-registered unverified user IS alive — they just haven't
+    been activated yet. Using ``all_with_deleted()`` is the correct choice
+    here because it returns ALL rows regardless of soft-delete or active state.
     """
     email_or_phone = serializers.CharField(
-        write_only=True, 
-        required=True, 
+        write_only=True,
+        required=True,
         help_text="User's email or phone for resend OTP"
     )
 
@@ -463,30 +482,62 @@ class ResendOTPRequestSerializer(serializers.Serializer):
     def validate(self, data):
         """
         Validates that a user exists for the provided email or phone.
+        Uses all_with_deleted() so recently-registered unverified users
+        are found (they are NOT soft-deleted, just not yet active).
         """
         try:
             email_or_phone = data.get('email_or_phone')
             user = None
+
+            # Use all_with_deleted() — includes active, inactive, and
+            # soft-deleted users. This is correct for resend-OTP because
+            # the user just registered and may not be active yet.
             if '@' in email_or_phone:
-                user = get_object_or_404(UnifiedUser, email=email_or_phone)
+                user = UnifiedUser.objects.all_with_deleted().filter(
+                    email=email_or_phone
+                ).first()
             else:
-                user = get_object_or_404(UnifiedUser, phone=email_or_phone)
-                
-            logger.info(f"Resend OTP validation successful for {email_or_phone}")
+                user = UnifiedUser.objects.all_with_deleted().filter(
+                    phone=email_or_phone
+                ).first()
+
+            if not user:
+                logger.warning(
+                    "ResendOTP validation failed: no user for '%s'", email_or_phone
+                )
+                raise serializers.ValidationError({
+                    'email_or_phone': [_(
+                        'No account found with this email or phone. '
+                        'Please check your input or register a new account.'
+                    )]
+                })
+
+            # Store user on validated_data for the view to access
+            data['user'] = user
+            logger.info("ResendOTP validation successful for %s", email_or_phone)
             return data
-        except Exception as e:
-            # get_object_or_404 raises Http404, we want ValidationError
-            logger.warning(f"Resend OTP failed: User not found for {data.get('email_or_phone')}")
-            raise serializers.ValidationError({'email_or_phone': [_('User with this email or phone not found.')]})
+
+        except serializers.ValidationError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "ResendOTP failed for %s: %s",
+                data.get('email_or_phone'), exc
+            )
+            raise serializers.ValidationError({
+                'email_or_phone': [_('User with this email or phone not found.')]
+            })
 
 
 class PasswordResetRequestSerializer(serializers.Serializer):
     """
     Serializer for requesting password reset.
+    Uses all_with_deleted() so soft-deleted users can still trigger a reset
+    (anti-enumeration: always returns 200 regardless).
     """
     email_or_phone = serializers.CharField(
-        write_only=True, 
-        required=True, 
+        write_only=True,
+        required=True,
         help_text="User's email or phone for password reset"
     )
 
@@ -495,19 +546,27 @@ class PasswordResetRequestSerializer(serializers.Serializer):
 
     def validate(self, data):
         """
-        Validates user existence.
+        Validates user existence — uses all_with_deleted() for consistency.
+        Returns success even if user not found (anti-enumeration).
         """
         try:
             email_or_phone = data.get('email_or_phone')
             if '@' in email_or_phone:
-                get_object_or_404(UnifiedUser, email=email_or_phone)
+                UnifiedUser.objects.all_with_deleted().filter(
+                    email=email_or_phone
+                ).first()  # Anti-enumeration: ignore None
             else:
-                get_object_or_404(UnifiedUser, phone=email_or_phone)
-            logger.info(f"Password reset request validation successful for {email_or_phone}")
+                UnifiedUser.objects.all_with_deleted().filter(
+                    phone=email_or_phone
+                ).first()  # Anti-enumeration: ignore None
+            logger.info("Password reset request validation for %s", email_or_phone)
             return data
-        except Exception as e:
-            logger.warning(f"Password reset request failed: User not found for {data.get('email_or_phone')}")
-            raise serializers.ValidationError({'email_or_phone': [_('User with this email or phone not found.')]})
+        except Exception as exc:
+            logger.warning(
+                "Password reset request error for %s: %s",
+                data.get('email_or_phone'), exc
+            )
+            return data  # Always pass — anti-enumeration
 
 
 class PasswordResetConfirmEmailSerializer(serializers.Serializer):
@@ -537,23 +596,30 @@ class PasswordResetConfirmEmailSerializer(serializers.Serializer):
 
 class PasswordResetConfirmPhoneSerializer(serializers.Serializer):
     """
-    Serializer for confirming password reset via phone.
+    Serializer for confirming password reset via phone OTP.
+
+    Requires phone number in body so the service can look up the user
+    and validate the OTP against their Redis-stored token.
     """
+    # phone = serializers.CharField(
+    #     required=True,
+    #     help_text="The user's registered phone number (E.164 format)."                WE DON'T NEED THIS RIGHT NOW, WE ONLY NEED OTP SO THAT IF THE OTP IS CORRECT, WE CAN FETCH THE USER'S PHONE NUMBER FROM THE OTP TOKEN IN REDIS AND THEN RESET THE PASSWORD 
+    # )
     password = serializers.CharField(
-        write_only=True, 
-        required=True, 
-        validators=[validate_password], 
+        write_only=True,
+        required=True,
+        validators=[validate_password],
         help_text="New password"
     )
     password2 = serializers.CharField(
-        write_only=True, 
-        required=True, 
+        write_only=True,
+        required=True,
         help_text="Confirm new password"
     )
     otp = serializers.CharField(
-        required=True, 
-        allow_blank=False, 
-        max_length=6, 
+        required=True,
+        allow_blank=False,
+        max_length=6,
         help_text="OTP sent to user's phone"
     )
 
@@ -562,21 +628,32 @@ class PasswordResetConfirmPhoneSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         """
-        Validates passwords and OTP.
+        Validates passwords and OTP format.
+        On invalid OTP format, returns rich error with resend/reset URLs.
         """
         try:
+            from django.conf import settings as _s
+            _base = getattr(_s, 'FRONTEND_URL', 'http://localhost:3000').rstrip('/')
+
             if attrs['password'] != attrs['password2']:
                 raise serializers.ValidationError({"password": _("Passwords do not match.")})
 
             otp = attrs.get('otp')
             if not otp or len(otp) != 6 or not otp.isdigit():
-                raise serializers.ValidationError({"otp": _("OTP must be 6 digits and numeric.")})
+                raise serializers.ValidationError({
+                    "otp": _(
+                        "OTP must be 6 numeric digits. "
+                        "Didn't receive it? Request a new one or re-trigger the reset."
+                    ),
+                    "resend_otp_url": f"{_base}/resend-otp",
+                    "reset_request_url": "/api/v1/password/reset-request/",
+                })
 
             return attrs
         except serializers.ValidationError as e:
             raise e
         except Exception as e:
-            logger.error(f"Unexpected error in password reset confirm: {str(e)}")
+            logger.error(f"Unexpected error in password reset confirm phone: {str(e)}")
             raise serializers.ValidationError({"non_field_errors": _("Validation failed.")})
 
 

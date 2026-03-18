@@ -22,7 +22,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
+from rest_framework.renderers import BrowsableAPIRenderer
 from apps.common.permissions import IsVerifiedUser
 from apps.common.renderers import CustomJSONRenderer
 from apps.authentication.models import UserSession
@@ -85,7 +85,7 @@ class SessionListView(APIView):
     """
 
     permission_classes = [IsVerifiedUser]
-    renderer_classes   = [CustomJSONRenderer]
+    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]    
 
     def get(self, request):
         current_jti = _get_current_jti(request)
@@ -122,7 +122,7 @@ class SessionRevokeView(APIView):
     """
 
     permission_classes = [IsVerifiedUser]
-    renderer_classes   = [CustomJSONRenderer]
+    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     def delete(self, request, session_id: int):
         try:
@@ -181,7 +181,7 @@ class SessionRevokeOthersView(APIView):
     """
 
     permission_classes = [IsVerifiedUser]
-    renderer_classes   = [CustomJSONRenderer]
+    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]    
 
     def post(self, request):
         current_jti = _get_current_jti(request)
@@ -237,7 +237,7 @@ class LoginEventListView(APIView):
     """
 
     permission_classes = [IsVerifiedUser]
-    renderer_classes   = [CustomJSONRenderer]
+    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     def get(self, request):
         from apps.authentication.models import LoginEvent
