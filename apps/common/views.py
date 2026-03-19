@@ -347,10 +347,14 @@ class CloudinaryPresignView(APIView):
             )
 
         asset_type = serializer.validated_data["asset_type"]
+        # Optional context_id: used by vendors to get unique presign params per product
+        # when uploading bulk products rapidly. Avatar uploads don't need this.
+        context_id = request.data.get("context_id") or None
 
         result = generate_cloudinary_upload_params(
             user_id=str(request.user.pk),
             asset_type=asset_type,
+            context_id=context_id,
         )
 
         if not result.success:

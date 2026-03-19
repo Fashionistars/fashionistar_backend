@@ -14,7 +14,6 @@ Test coverage:
 from __future__ import annotations
 
 import hashlib
-import hmac
 import json
 import threading
 import time
@@ -34,8 +33,13 @@ User = get_user_model()
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _make_webhook_sig(body: bytes, timestamp: str, secret: str) -> str:
-    data = body + timestamp.encode()
-    return hmac.new(secret.encode(), data, hashlib.sha256).hexdigest()
+    """Build a Cloudinary-compatible webhook signature: SHA256(body + timestamp + secret)."""
+    try:
+        body_str = body.decode("utf-8")
+    except UnicodeDecodeError:
+        body_str = body.decode("latin-1")
+    payload = body_str + timestamp + secret
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 FAKE_CLOUDINARY_SETTINGS = {

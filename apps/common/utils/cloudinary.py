@@ -343,29 +343,32 @@ def generate_cloudinary_signature(params_to_sign: dict) -> str:
 def generate_cloudinary_upload_params(
     user_id: str,
     asset_type: str = "avatar",
+    context_id: Optional[str] = None,
 ) -> CloudinaryPresignResult:
     """
     Build a complete, time-limited, signed parameter set for client-side
     direct upload to Cloudinary.
 
-    Results are automatically cached in Redis for ``CLOUDINARY_SIGNATURE_TTL``
-    seconds (default 3300s = 55 min).  Subsequent calls within the TTL window
-    return the cached result instantly without re-computing the signature.
+    Results are automatically cached in Redis for 3300s (55 min).
+    Subsequent calls within the TTL window return the cached result.
+
+    For bulk uploads (e.g., vendor uploading 10 product images rapidly),
+    pass a unique ``context_id`` per upload (product UUID, line number, etc.)
+    to bypass the cache and get a fresh signature for each image.
 
     Args:
-        user_id:    UUID string of the uploading user (used to namespace the
-                    Cloudinary folder).
+        user_id:    UUID string of the uploading user.
         asset_type: One of ``avatar`` | ``product_image`` | ``product_video``
                     | ``measurement``.
+        context_id: Optional uniqueness key for bulk/multi-upload scenarios.
 
     Returns:
-        ``CloudinaryPresignResult`` containing all params the frontend needs to
-        POST directly to Cloudinary.
+        ``CloudinaryPresignResult`` with all params the frontend needs.
     """
     from apps.common.utils.redis import cache_upload_presign, get_cached_presign
 
     # ── 1. Redis cache hit? ───────────────────────────────────────────────
-    cached = get_cached_presign(user_id, asset_type)
+    cached = get_cached_presign(user_id, asset_type, context_id)
     if cached:
         logger.debug("Presign cache HIT for user=%s asset=%s", user_id, asset_type)
         return CloudinaryPresignResult(**cached, success=True)
@@ -448,7 +451,7 @@ def generate_cloudinary_upload_params(
     )
 
     # ── 7. Cache in Redis ─────────────────────────────────────────────────
-    cache_upload_presign(user_id, asset_type, result.to_dict())
+    cache_upload_presign(user_id, asset_type, result.to_dict(), context_id)
 
     logger.info(
         "Presign generated for user=%s asset=%s folder=%s",
@@ -540,20 +543,22 @@ def validate_cloudinary_webhook(
     timestamp: str,
     signature: str,
     *,
-    max_age_seconds: int = 900,    # reject events older than 15 minutes
+    max_age_seconds: int = 3600,    # Cloudinary: signatures valid for 1 hour
 ) -> bool:
     """
-    Validate an incoming Cloudinary webhook notification using their
-    HMAC-SHA256 signature scheme.
+    Validate an incoming Cloudinary webhook notification.
 
-    Cloudinary's algorithm:
-        HMAC-SHA256(body + timestamp, api_secret)
+    Cloudinary's algorithm (per official docs):
+        SHA-256( body_string + timestamp + api_secret )
 
-    Also performs timestamp replay protection: rejects notifications
-    older than ``max_age_seconds`` (default 15 min / 900s).
+    Where body_string, timestamp, and api_secret are all CONCATENATED as
+    plain strings before hashing. The api_secret is NOT used as an HMAC key.
+    Reference: https://cloudinary.com/documentation/notifications#verifying_notification_signatures
 
-    Always validate in constant time (``hmac.compare_digest``) to prevent
-    timing-attack enumeration.
+    Also checks timestamp replay: rejects events older than ``max_age_seconds``
+    (default 3600s / 1 hour — matching Cloudinary's spec).
+
+    Uses ``hmac.compare_digest`` for constant-time comparison.
 
     Args:
         body:      Raw request body bytes.
@@ -581,10 +586,17 @@ def validate_cloudinary_webhook(
         logger.warning("Cloudinary webhook rejected: invalid timestamp=%r", timestamp)
         return False
 
-    # ── HMAC-SHA256 verification ──────────────────────────────────────
-    api_secret = settings.CLOUDINARY_STORAGE.get("API_SECRET", "").encode()
-    data       = body + timestamp.encode()
-    expected   = hmac.new(api_secret, data, hashlib.sha256).hexdigest()
+    # ── SHA-256 verification (Cloudinary's documented algorithm) ─────────
+    # Formula: SHA256( body_as_string + timestamp + api_secret )
+    # The api_secret is CONCATENATED (not used as HMAC key)
+    api_secret = settings.CLOUDINARY_STORAGE.get("API_SECRET", "")
+    try:
+        body_str = body.decode("utf-8")
+    except (UnicodeDecodeError, AttributeError):
+        body_str = body.decode("latin-1")
+
+    payload  = body_str + timestamp + api_secret
+    expected = hashlib.sha256(payload.encode("utf-8")).hexdigest()
     return hmac.compare_digest(expected, signature)
 
 

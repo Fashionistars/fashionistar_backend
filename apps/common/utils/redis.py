@@ -73,24 +73,56 @@ def get_redis_connection_safe(
 # 2. Cloudinary Pre-sign Cache
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Key template: cloudinary:presign:{user_id}:{asset_type}
+# Key template: cloudinary:presign:{user_id}:{asset_type}[:{context_id}]
+# context_id is optional — used for bulk/product uploads to avoid cache collisions
 _PRESIGN_KEY = "cloudinary:presign:{user_id}:{asset_type}"
 _PRESIGN_TTL = 3300  # 55 minutes — slightly less than the 1-hour signature validity
 
 
-def cache_upload_presign(user_id: str, asset_type: str, params: dict) -> bool:
+def _presign_cache_key(user_id: str, asset_type: str, context_id: Optional[str] = None) -> str:
+    """
+    Build the Redis cache key for a presign.
+
+    If ``context_id`` is given (e.g. product UUID, bulk session ID, or a
+    timestamp string), it is appended to make each upload context unique.
+    This prevents the same cached presign from being returned when a user
+    uploads multiple different products in rapid succession.
+
+    Examples:
+        Avatar (single, cached):    ``cloudinary:presign:uid123:avatar``
+        Product A (unique):         ``cloudinary:presign:uid123:product_image:prod-abc``
+        Product B (unique):         ``cloudinary:presign:uid123:product_image:prod-xyz``
+        Bulk session:               ``cloudinary:presign:uid123:product_image:bulk-20260319T234500``
+    """
+    base = _PRESIGN_KEY.format(user_id=user_id, asset_type=asset_type)
+    if context_id:
+        return f"{base}:{context_id}"
+    return base
+
+
+def cache_upload_presign(
+    user_id: str,
+    asset_type: str,
+    params: dict,
+    context_id: Optional[str] = None,
+) -> bool:
     """
     Cache a Cloudinary pre-signed upload parameter set in Redis.
 
-    Key format: ``cloudinary:presign:{user_id}:{asset_type}``
+    Key format: ``cloudinary:presign:{user_id}:{asset_type}[:{context_id}]``
     TTL:        3300 seconds (55 minutes)
+
+    ``context_id`` is optional.  Pass it when the same user will upload
+    multiple items of the same asset_type in quick succession (e.g. bulk
+    product images).  This ensures each upload gets a unique signed presign
+    rather than getting the same cached one.
 
     Args:
         user_id:    The UUID string of the requesting user.
         asset_type: One of ``avatar``, ``product_image``, ``product_video``,
                     ``measurement``.
-        params:     Dict of presign params returned by Cloudinary signature
-                    generation (cloud_name, api_key, signature, timestamp, …).
+        params:     Dict of presign params.
+        context_id: Optional disambiguation key (product UUID, bulk session ID).
 
     Returns:
         ``True`` on success, ``False`` if Redis is unavailable.
@@ -99,18 +131,25 @@ def cache_upload_presign(user_id: str, asset_type: str, params: dict) -> bool:
     if conn is None:
         return False
     try:
-        key = _PRESIGN_KEY.format(user_id=user_id, asset_type=asset_type)
+        key = _presign_cache_key(user_id, asset_type, context_id)
         conn.setex(key, _PRESIGN_TTL, json.dumps(params))
-        logger.debug("Presign cached for user=%s asset=%s", user_id, asset_type)
+        logger.debug("Presign cached for user=%s asset=%s context=%s", user_id, asset_type, context_id)
         return True
     except Exception as exc:
         logger.warning("Failed to cache presign for user=%s: %s", user_id, exc)
         return False
 
 
-def get_cached_presign(user_id: str, asset_type: str) -> Optional[dict]:
+def get_cached_presign(
+    user_id: str,
+    asset_type: str,
+    context_id: Optional[str] = None,
+) -> Optional[dict]:
     """
     Retrieve cached Cloudinary presign params from Redis.
+
+    Pass the same ``context_id`` used in ``cache_upload_presign`` to hit
+    the correct per-context cache entry.
 
     Returns:
         The cached params dict, or ``None`` on miss / Redis unavailability.
@@ -119,10 +158,10 @@ def get_cached_presign(user_id: str, asset_type: str) -> Optional[dict]:
     if conn is None:
         return None
     try:
-        key = _PRESIGN_KEY.format(user_id=user_id, asset_type=asset_type)
+        key = _presign_cache_key(user_id, asset_type, context_id)
         raw = conn.get(key)
         if raw:
-            logger.debug("Presign cache HIT for user=%s asset=%s", user_id, asset_type)
+            logger.debug("Presign cache HIT for user=%s asset=%s context=%s", user_id, asset_type, context_id)
             return json.loads(raw)
         return None
     except Exception as exc:
@@ -130,18 +169,24 @@ def get_cached_presign(user_id: str, asset_type: str) -> Optional[dict]:
         return None
 
 
-def invalidate_upload_presign(user_id: str, asset_type: str) -> bool:
+def invalidate_upload_presign(
+    user_id: str,
+    asset_type: str,
+    context_id: Optional[str] = None,
+) -> bool:
     """
     Invalidate (delete) a cached presign token for the given user + asset type.
 
     Call this after a successful upload confirmation so the next upload request
     generates a fresh signature rather than reusing the old one.
+
+    Pass ``context_id`` if you used one during caching.
     """
     conn = get_redis_connection_safe()
     if conn is None:
         return False
     try:
-        key = _PRESIGN_KEY.format(user_id=user_id, asset_type=asset_type)
+        key = _presign_cache_key(user_id, asset_type, context_id)
         conn.delete(key)
         return True
     except Exception as exc:
