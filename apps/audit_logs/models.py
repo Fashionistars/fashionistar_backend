@@ -44,6 +44,10 @@ class EventCategory(models.TextChoices):
     SYSTEM           = "system",           _("System")
     NOTIFICATION     = "notification",     _("Notification")
     COMPLIANCE       = "compliance",       _("Compliance")
+    ORDER            = "order",            _("Order")
+    PAYMENT          = "payment",          _("Payment")
+    CART             = "cart",             _("Cart & Checkout")
+    MEASUREMENT      = "measurement",     _("AI Measurement")
 
 
 class EventType(models.TextChoices):
@@ -89,6 +93,36 @@ class EventType(models.TextChoices):
     DATA_VIEWED            = "data_viewed",          _("Data Viewed")
     DATA_EXPORTED          = "data_exported",        _("Data Exported")
     SENSITIVE_DATA_ACCESS  = "sensitive_data_access",_("Sensitive Data Accessed")
+
+    # ── E-Commerce: Orders ────────────────────────────────────────────
+    ORDER_CREATED          = "order_created",        _("Order Created")
+    ORDER_UPDATED          = "order_updated",        _("Order Updated")
+    ORDER_CANCELLED        = "order_cancelled",      _("Order Cancelled")
+    ORDER_FULFILLED        = "order_fulfilled",      _("Order Fulfilled")
+    ORDER_RETURNED         = "order_returned",       _("Order Returned")
+
+    # ── E-Commerce: Payments (financial compliance critical) ──────────
+    PAYMENT_INITIATED      = "payment_initiated",    _("Payment Initiated")
+    PAYMENT_SUCCESS        = "payment_success",      _("Payment Success")
+    PAYMENT_FAILED         = "payment_failed",       _("Payment Failed")
+    REFUND_INITIATED       = "refund_initiated",     _("Refund Initiated")
+    REFUND_COMPLETED       = "refund_completed",     _("Refund Completed")
+    DISPUTE_OPENED         = "dispute_opened",       _("Dispute Opened")
+    DISPUTE_RESOLVED       = "dispute_resolved",     _("Dispute Resolved")
+
+    # ── E-Commerce: Cart & Checkout ───────────────────────────────────
+    CART_UPDATED           = "cart_updated",         _("Cart Updated")
+    CHECKOUT_STARTED       = "checkout_started",     _("Checkout Started")
+    CHECKOUT_COMPLETED     = "checkout_completed",   _("Checkout Completed")
+    CHECKOUT_ABANDONED     = "checkout_abandoned",   _("Checkout Abandoned")
+
+    # ── AI Measurement ────────────────────────────────────────────────
+    MEASUREMENT_CREATED    = "measurement_created",  _("Measurement Created")
+    MEASUREMENT_UPDATED    = "measurement_updated",  _("Measurement Updated")
+    MEASUREMENT_DELETED    = "measurement_deleted",  _("Measurement Deleted")
+    AI_ANALYSIS_STARTED    = "ai_analysis_started",  _("AI Analysis Started")
+    AI_ANALYSIS_COMPLETED  = "ai_analysis_completed",_("AI Analysis Completed")
+    AI_ANALYSIS_FAILED     = "ai_analysis_failed",   _("AI Analysis Failed")
 
     # ── System ───────────────────────────────────────────────────────
     SYSTEM_ERROR           = "system_error",         _("System Error")
@@ -227,6 +261,22 @@ class AuditEventLog(models.Model):
         blank=True,
         help_text="OS family (Windows, macOS, Android, iOS, …)",
     )
+    country = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="GeoIP country or request origin (if resolved).",
+    )
+
+    # ── Distributed tracing ───────────────────────────────────────────
+    correlation_id = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Unique request / trace ID for cross-service correlation.",
+    )
 
     # ── Resource affected ─────────────────────────────────────────────
     resource_type = models.CharField(
@@ -324,6 +374,8 @@ class AuditEventLog(models.Model):
             models.Index(fields=["resource_type", "resource_id"], name="idx_ael_resource"),
             models.Index(fields=["is_compliance", "-created_at"],  name="idx_ael_compliance"),
             models.Index(fields=["actor_email", "-created_at"], name="idx_ael_email"),
+            models.Index(fields=["correlation_id"],             name="idx_ael_corr"),
+            models.Index(fields=["country", "-created_at"],     name="idx_ael_country"),
         ]
 
     def __str__(self):

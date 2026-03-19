@@ -45,8 +45,8 @@ import hashlib
 import hmac
 import logging
 import time
-from dataclasses import dataclass, field
-from typing import Any, Optional
+from dataclasses import dataclass
+from typing import Optional
 
 import cloudinary.api
 import cloudinary.uploader
@@ -275,30 +275,34 @@ class CloudinaryDeleteResult:
 @dataclass
 class CloudinaryPresignResult:
     """Presign token for client-side direct upload."""
-    cloud_name:     str
-    api_key:        str
-    signature:      str
-    timestamp:      int
-    folder:         str
-    upload_preset:  str
-    resource_type:  str
-    eager:          list = field(default_factory=list)
-    eager_async:    bool = True
-    success:        bool = True
-    error:          str  = ""
+    cloud_name:       str
+    api_key:          str
+    signature:        str
+    timestamp:        int
+    folder:           str
+    upload_preset:    str
+    resource_type:    str
+    eager:            str = ""           # pipe-delimited string for Cloudinary API
+    eager_async:      bool = True
+    notification_url: str = ""
+    success:          bool = True
+    error:            str  = ""
 
     def to_dict(self) -> dict:
-        return {
-            "cloud_name":    self.cloud_name,
-            "api_key":       self.api_key,
-            "signature":     self.signature,
-            "timestamp":     self.timestamp,
-            "folder":        self.folder,
-            "upload_preset": self.upload_preset,
-            "resource_type": self.resource_type,
-            "eager":         self.eager,
-            "eager_async":   self.eager_async,
+        d = {
+            "cloud_name":       self.cloud_name,
+            "api_key":          self.api_key,
+            "signature":        self.signature,
+            "timestamp":        self.timestamp,
+            "folder":           self.folder,
+            "upload_preset":    self.upload_preset,
+            "resource_type":    self.resource_type,
+            "eager":            self.eager,
+            "eager_async":      self.eager_async,
         }
+        if self.notification_url:
+            d["notification_url"] = self.notification_url
+        return d
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -367,30 +371,57 @@ def generate_cloudinary_upload_params(
         return CloudinaryPresignResult(**cached, success=True)
 
     # ── 2. Look up asset config ───────────────────────────────────────────
-    config = _ASSET_CONFIGS.get(asset_type, _ASSET_CONFIGS["avatar"])
+    config        = _ASSET_CONFIGS.get(asset_type, _ASSET_CONFIGS["avatar"])
     cloud_name    = settings.CLOUDINARY_STORAGE.get("CLOUD_NAME", "")
     api_key       = settings.CLOUDINARY_STORAGE.get("API_KEY", "")
-    preset_name   = getattr(settings, config["preset_setting"], "fashionistar_avatars")
     resource_type = config["resource_type"]
     folder        = f"{config['folder_prefix']}/user_{user_id}"
     eager         = config["eager"]
     timestamp     = int(time.time())
 
-    # ── 3. Build params to sign ───────────────────────────────────────────
-    # Cloudinary eager param is serialized as a pipe-separated transformation string
-    eager_str = "|".join(
-        ",".join(f"{k}_{v}" for k, v in t.items())
-        for t in eager
+    # ── 3. Resolve notification_url (webhook) ─────────────────────────────
+    # Per Cloudinary docs, notification_url must be included in params_to_sign
+    # so Cloudinary can call our webhook after upload/eager completion.
+    notification_url = getattr(
+        settings,
+        "CLOUDINARY_NOTIFICATION_URL",
+        "",
     )
-    params_to_sign = {
-        "timestamp":      timestamp,
-        "folder":         folder,
-        "upload_preset":  preset_name,
-        "eager":          eager_str,
-        "eager_async":    "true",
-    }
 
-    # ── 4. Sign ───────────────────────────────────────────────────────────
+    # ── 4. Build params to sign ───────────────────────────────────────────
+    # Cloudinary eager param is serialized as a pipe-separated transformation
+    # string using Cloudinary's SHORT key names (w, h, c, q, f, etc.)
+    # The _ASSET_CONFIGS use Python SDK long names for readability; we map
+    # them to API abbreviations here.
+    _CLD_KEY_MAP = {
+        "width": "w", "height": "h", "crop": "c", "quality": "q",
+        "fetch_format": "f", "format": "f", "gravity": "g",
+        "radius": "r", "effect": "e", "opacity": "o", "angle": "a",
+        "x": "x", "y": "y", "zoom": "z", "aspect_ratio": "ar",
+        "dpr": "dpr", "overlay": "l", "underlay": "u",
+    }
+    eager_str = "|".join(
+        ",".join(
+            f"{_CLD_KEY_MAP.get(k, k)}_{v}" for k, v in t.items()
+        )
+        for t in eager
+    ) if eager else ""
+
+    # IMPORTANT: For server-side authenticated uploads (signed with api_secret),
+    # upload_preset is NOT required and should NOT be included in the signature.
+    # Including a non-existent preset causes a 400 'Upload preset not found'.
+    # The HMAC-SHA256 signature IS the authentication mechanism.
+    params_to_sign: dict = {
+        "timestamp":   timestamp,
+        "folder":      folder,
+    }
+    if eager_str:
+        params_to_sign["eager"]       = eager_str
+        params_to_sign["eager_async"] = "true"
+    if notification_url:
+        params_to_sign["notification_url"] = notification_url
+
+    # ── 5. Sign ───────────────────────────────────────────────────────────
     try:
         signature = generate_cloudinary_signature(params_to_sign)
     except Exception as exc:
@@ -401,21 +432,22 @@ def generate_cloudinary_upload_params(
             success=False, error=str(exc),
         )
 
-    # ── 5. Build result ───────────────────────────────────────────────────
+    # ── 6. Build result ───────────────────────────────────────────────────
     result = CloudinaryPresignResult(
         cloud_name=cloud_name,
         api_key=api_key,
         signature=signature,
         timestamp=timestamp,
         folder=folder,
-        upload_preset=preset_name,
+        upload_preset="",         # NOT sent to Cloudinary — signature authenticates
         resource_type=resource_type,
-        eager=eager,
+        eager=eager_str,
         eager_async=True,
+        notification_url=notification_url,
         success=True,
     )
 
-    # ── 6. Cache in Redis ─────────────────────────────────────────────────
+    # ── 7. Cache in Redis ─────────────────────────────────────────────────
     cache_upload_presign(user_id, asset_type, result.to_dict())
 
     logger.info(
@@ -507,6 +539,8 @@ def validate_cloudinary_webhook(
     body: bytes,
     timestamp: str,
     signature: str,
+    *,
+    max_age_seconds: int = 900,    # reject events older than 15 minutes
 ) -> bool:
     """
     Validate an incoming Cloudinary webhook notification using their
@@ -515,6 +549,9 @@ def validate_cloudinary_webhook(
     Cloudinary's algorithm:
         HMAC-SHA256(body + timestamp, api_secret)
 
+    Also performs timestamp replay protection: rejects notifications
+    older than ``max_age_seconds`` (default 15 min / 900s).
+
     Always validate in constant time (``hmac.compare_digest``) to prevent
     timing-attack enumeration.
 
@@ -522,10 +559,29 @@ def validate_cloudinary_webhook(
         body:      Raw request body bytes.
         timestamp: Value of the ``X-Cld-Timestamp`` header.
         signature: Value of the ``X-Cld-Signature`` header.
+        max_age_seconds: Maximum allowed age for the webhook event.
 
     Returns:
-        ``True`` if signature is valid, ``False`` otherwise.
+        ``True`` if signature is valid AND not expired, ``False`` otherwise.
     """
+    if not timestamp or not signature:
+        return False
+
+    # ── Replay protection ─────────────────────────────────────────────
+    try:
+        ts = int(timestamp)
+        age = abs(int(time.time()) - ts)
+        if age > max_age_seconds:
+            logger.warning(
+                "Cloudinary webhook rejected: timestamp too old "
+                "(age=%ds, max=%ds)", age, max_age_seconds,
+            )
+            return False
+    except (ValueError, TypeError):
+        logger.warning("Cloudinary webhook rejected: invalid timestamp=%r", timestamp)
+        return False
+
+    # ── HMAC-SHA256 verification ──────────────────────────────────────
     api_secret = settings.CLOUDINARY_STORAGE.get("API_SECRET", "").encode()
     data       = body + timestamp.encode()
     expected   = hmac.new(api_secret, data, hashlib.sha256).hexdigest()

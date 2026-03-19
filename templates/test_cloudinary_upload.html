@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloudinary Upload Test — Fashionistar</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: #0f0f0f; color: #f5f5f5; padding: 2rem; }
+        .card { background: #1a1a1a; border-radius: 16px; padding: 2rem; max-width: 700px; margin: 0 auto; border: 1px solid #2a2a2a; }
+        h1 { font-size: 1.5rem; margin-bottom: 1rem; background: linear-gradient(135deg,#c084fc,#818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .step { margin: 1rem 0; padding: 1rem; background: #222; border-radius: 8px; }
+        .step h3 { color: #c084fc; margin-bottom: 0.5rem; }
+        #log { background: #111; border: 1px solid #333; padding: 1rem; border-radius: 8px; font-family: monospace; font-size: 0.85rem; max-height: 500px; overflow-y: auto; margin-top: 1rem; white-space: pre-wrap; word-break: break-all; }
+        .btn { display: inline-block; background: linear-gradient(135deg,#c084fc,#818cf8); color: #fff; padding: 0.65rem 1.75rem; border-radius: 8px; font-weight: 700; border: none; cursor: pointer; margin-top: 0.5rem; font-size: 1rem; }
+        .btn:hover { opacity: 0.85; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .success { color: #4ade80; }
+        .error { color: #f87171; }
+        .info { color: #60a5fa; }
+        .warn { color: #fbbf24; }
+        input[type="file"] { margin: 0.5rem 0; }
+        #status { font-weight: bold; margin-top: 1rem; font-size: 1.1rem; }
+        .token-input { width: 100%; padding: 0.5rem; background: #333; border: 1px solid #555; border-radius: 4px; color: #fff; font-family: monospace; font-size: 0.8rem; margin-top: 0.3rem; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🧪 Cloudinary Upload + Webhook Test</h1>
+        <p style="color:#a1a1aa; margin-bottom: 1rem;">Tests the full flow: Presign → Upload to Cloudinary → Webhook notification → DB verification</p>
+
+        <div class="step">
+            <h3>JWT Access Token</h3>
+            <input type="text" id="tokenInput" class="token-input" placeholder="Paste your JWT access token here..." />
+            <div style="color:#a1a1aa; font-size:0.75rem; margin-top:0.3rem;">Run: uv run python manage.py shell → generate token</div>
+        </div>
+
+        <div class="step">
+            <h3>Step 1: Select Image</h3>
+            <input type="file" id="fileInput" accept="image/*" />
+            <div style="color:#a1a1aa; font-size:0.8rem; margin-top:0.3rem;">Will use fashionistar logo if no file selected</div>
+        </div>
+
+        <div class="step">
+            <h3>Step 2: Run Full Test</h3>
+            <button id="testBtn" class="btn" onclick="runTest()">🚀 Start Upload Test</button>
+        </div>
+
+        <div id="status"></div>
+        <div id="log"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+
+        const logEl = document.getElementById('log');
+        const statusEl = document.getElementById('status');
+
+        function log(msg, cls = '') {
+            const ts = new Date().toISOString().slice(11, 19);
+            logEl.innerHTML += `<span class="${cls}">[${ts}] ${msg}</span>\n`;
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        function setStatus(msg, cls) {
+            statusEl.innerHTML = `<span class="${cls}">${msg}</span>`;
+        }
+
+        async function runTest() {
+            const btn = document.getElementById('testBtn');
+            const token = document.getElementById('tokenInput').value.trim();
+            btn.disabled = true;
+            logEl.innerHTML = '';
+
+            if (!token) {
+                log('❌ Please paste a JWT access token first!', 'error');
+                setStatus('❌ Missing JWT token', 'error');
+                btn.disabled = false;
+                return;
+            }
+
+            try {
+                // ── Step 1: Get presign params (FRESH each time) ─────────
+                log('📋 Requesting FRESH presign params from API...', 'info');
+                const presignResp = await fetch(`${API_BASE}/api/v1/upload/presign/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({ asset_type: 'avatar' }),
+                });
+
+                if (!presignResp.ok) {
+                    const errText = await presignResp.text();
+                    throw new Error(`Presign failed (${presignResp.status}): ${errText}`);
+                }
+
+                const presignData = await presignResp.json();
+                log(`✅ Presign received!`, 'success');
+                log(`  cloud_name:       ${presignData.cloud_name}`, 'info');
+                log(`  api_key:          ${presignData.api_key}`, 'info');
+                log(`  timestamp:        ${presignData.timestamp}`, 'info');
+                log(`  folder:           ${presignData.folder}`, 'info');
+                log(`  eager:            ${presignData.eager}`, 'info');
+                log(`  notification_url: ${presignData.notification_url || '(none)'}`, presignData.notification_url ? 'success' : 'warn');
+
+                if (!presignData.notification_url) {
+                    log('⚠️  No notification_url — Cloudinary won\'t call our webhook!', 'warn');
+                }
+
+                const uploadUrl = `https://api.cloudinary.com/v1_1/${presignData.cloud_name}/image/upload`;
+                log(`📤 Upload URL: ${uploadUrl}`, 'info');
+
+                // ── Step 2: Prepare file ─────────────────────────────────
+                const fileInput = document.getElementById('fileInput');
+                let file;
+                if (fileInput.files.length > 0) {
+                    file = fileInput.files[0];
+                    log(`📁 Using selected file: ${file.name} (${(file.size/1024).toFixed(1)}KB)`, 'info');
+                } else {
+                    log('📁 No file selected, fetching logo from server...', 'info');
+                    const logoResp = await fetch(`${API_BASE}/static/images/logos/logo.png`);
+                    if (!logoResp.ok) throw new Error('Failed to fetch logo.png from server');
+                    const blob = await logoResp.blob();
+                    file = new File([blob], 'logo.png', { type: 'image/png' });
+                    log(`📁 Loaded logo: ${(file.size/1024).toFixed(1)}KB`, 'info');
+                }
+
+                // ── Step 3: Upload to Cloudinary ─────────────────────────
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('api_key', presignData.api_key);
+                formData.append('timestamp', String(presignData.timestamp));
+                formData.append('signature', presignData.signature);
+                formData.append('folder', presignData.folder);
+
+                // eager is already a pipe-delimited string from the presign API
+                if (presignData.eager) {
+                    formData.append('eager', presignData.eager);
+                }
+                formData.append('eager_async', 'true');
+
+                // Include notification_url so Cloudinary sends webhook
+                if (presignData.notification_url) {
+                    formData.append('notification_url', presignData.notification_url);
+                }
+
+                // upload_preset might not exist on Cloudinary dashboard — only include if present
+                if (presignData.upload_preset) {
+                    formData.append('upload_preset', presignData.upload_preset);
+                }
+
+                log('⬆️  Uploading to Cloudinary...', 'info');
+                setStatus('⏳ Uploading...', 'info');
+
+                const uploadResp = await fetch(uploadUrl, {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (!uploadResp.ok) {
+                    const errText = await uploadResp.text();
+                    throw new Error(`Upload failed (${uploadResp.status}): ${errText}`);
+                }
+
+                const uploadData = await uploadResp.json();
+                log(``, '');
+                log(`✅ UPLOAD SUCCESS!`, 'success');
+                log(`  public_id:  ${uploadData.public_id}`, 'success');
+                log(`  secure_url: ${uploadData.secure_url}`, 'success');
+                log(`  format:     ${uploadData.format}`, 'info');
+                log(`  bytes:      ${uploadData.bytes}`, 'info');
+                log(`  width:      ${uploadData.width}`, 'info');
+                log(`  height:     ${uploadData.height}`, 'info');
+
+                if (uploadData.eager) {
+                    log(`  eager transforms:`, 'info');
+                    uploadData.eager.forEach((t, i) => {
+                        log(`    [${i}] ${t.secure_url || t.url || JSON.stringify(t)}`, 'info');
+                    });
+                }
+
+                // ── Step 4: Wait for webhook ─────────────────────────────
+                setStatus('⏳ Waiting for Cloudinary webhook notification (15s)...', 'info');
+                log('', '');
+                log('🔔 Waiting for webhook notification (15 seconds)...', 'info');
+                log('   Webhook endpoint: /api/v1/upload/webhook/cloudinary/', 'info');
+
+                await new Promise(resolve => setTimeout(resolve, 15000));
+
+                log('', '');
+                log('⏰ 15s elapsed — check Django server terminal for:', 'info');
+                log('   • "Cloudinary webhook received: type=upload ..."', 'info');
+                log('   • "Cloudinary webhook: saved ..."', 'info');
+                log('', '');
+                log('═══════════════════════════════════════════', 'success');
+                log('  ✅ TEST COMPLETE', 'success');
+                log(`  📷 Image URL: ${uploadData.secure_url}`, 'info');
+                log('  📋 Check Django logs for webhook receipt', 'info');
+                log('  📋 Check admin panel for updated avatar URL', 'info');
+                log('═══════════════════════════════════════════', 'success');
+
+                setStatus('✅ Upload complete! Check server logs for webhook.', 'success');
+
+            } catch (err) {
+                log(`❌ ERROR: ${err.message}`, 'error');
+                setStatus(`❌ Test failed: ${err.message}`, 'error');
+                console.error(err);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

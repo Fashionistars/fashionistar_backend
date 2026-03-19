@@ -68,6 +68,7 @@ from apps.common.admin_import_export import (
     EnterpriseImportExportMixin,
     EnterpriseModelResource,
 )
+from apps.audit_logs.mixins import AuditedModelAdmin
 from apps.authentication.models import UnifiedUser, BiometricCredential
 
 logger = logging.getLogger('application')
@@ -569,6 +570,7 @@ class BiometricInline(admin.TabularInline):
 
 @admin.register(UnifiedUser)
 class UnifiedUserAdmin(
+    AuditedModelAdmin,           # Audit every admin save/delete to AuditEventLog
     SoftDeleteAdminMixin,
     EnterpriseImportExportMixin,  # Provides stream_export_csv, export guards, MRO fix
     BaseUserAdmin,

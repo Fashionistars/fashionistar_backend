@@ -239,23 +239,39 @@ class WebhookValidationTests(TestCase):
     def test_valid_signature_returns_true(self):
         from apps.common.utils.cloudinary import validate_cloudinary_webhook
         body      = b'{"public_id":"test/img","secure_url":"https://res.cloudinary.com/test/test.jpg"}'
-        timestamp = "1234567890"
+        timestamp = str(int(time.time()))  # Must be current for replay protection
         sig       = _make_webhook_sig(body, timestamp, secret="test-secret")
         self.assertTrue(validate_cloudinary_webhook(body, timestamp, sig))
 
     def test_invalid_signature_returns_false(self):
         from apps.common.utils.cloudinary import validate_cloudinary_webhook
         body      = b'{"public_id":"test"}'
-        timestamp = "123"
+        timestamp = str(int(time.time()))
         self.assertFalse(validate_cloudinary_webhook(body, timestamp, "invalidsig"))
 
     def test_tampered_body_returns_false(self):
         from apps.common.utils.cloudinary import validate_cloudinary_webhook
         body      = b'{"public_id":"legit"}'
-        timestamp = "9999"
+        timestamp = str(int(time.time()))
         valid_sig = _make_webhook_sig(body, timestamp, "test-secret")
         tampered  = b'{"public_id":"evil"}'
         self.assertFalse(validate_cloudinary_webhook(tampered, timestamp, valid_sig))
+
+    def test_expired_timestamp_returns_false(self):
+        """Timestamps older than 15 minutes must be rejected (replay protection)."""
+        from apps.common.utils.cloudinary import validate_cloudinary_webhook
+        body      = b'{"public_id":"test"}'
+        old_ts    = str(int(time.time()) - 1000)  # ~17 minutes ago
+        sig       = _make_webhook_sig(body, old_ts, "test-secret")
+        self.assertFalse(validate_cloudinary_webhook(body, old_ts, sig))
+
+    def test_empty_signature_returns_false(self):
+        from apps.common.utils.cloudinary import validate_cloudinary_webhook
+        self.assertFalse(validate_cloudinary_webhook(b'{}', str(int(time.time())), ""))
+
+    def test_empty_timestamp_returns_false(self):
+        from apps.common.utils.cloudinary import validate_cloudinary_webhook
+        self.assertFalse(validate_cloudinary_webhook(b'{}', "", "somesig"))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -436,7 +452,7 @@ class PresignEndpointTests(TestCase):
 
     def test_presign_unauthenticated_returns_401(self):
         resp = self.client.post(
-            "/api/upload/presign/",
+            "/api/v1/upload/presign/",
             data=json.dumps({"asset_type": "avatar"}),
             content_type="application/json",
         )
@@ -468,7 +484,7 @@ class PresignEndpointTests(TestCase):
         client.force_authenticate(user=self.user)
 
         resp = client.post(
-            "/api/upload/presign/",
+            "/api/v1/upload/presign/",
             data={"asset_type": "___nonexistent___"},
             format="json",
         )
@@ -483,7 +499,7 @@ class PresignEndpointTests(TestCase):
 
         for asset_type in list(_ASSET_CONFIGS.keys())[:5]:  # test first 5 to keep it fast
             resp = client.post(
-                "/api/upload/presign/",
+                "/api/v1/upload/presign/",
                 data={"asset_type": asset_type},
                 format="json",
             )
@@ -491,6 +507,41 @@ class PresignEndpointTests(TestCase):
                 resp.status_code, 200,
                 f"Presign failed for asset_type={asset_type}: {resp.content}"
             )
+
+    def test_presign_response_includes_eager_as_string(self):
+        """Eager must be a pipe-delimited string, not a list of dicts."""
+        from rest_framework.test import APIClient
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+
+        resp = client.post(
+            "/api/v1/upload/presign/",
+            data={"asset_type": "avatar"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIsInstance(data.get("eager"), str, "eager must be a string")
+        # Should contain 'w_' (short Cloudinary key), not 'width_'
+        if data.get("eager"):
+            self.assertIn("w_", data["eager"], "eager should use short keys (w_, h_, c_)")
+            self.assertNotIn("width_", data["eager"], "eager should not use full SDK keys")
+
+    @override_settings(CLOUDINARY_NOTIFICATION_URL="https://example.com/webhook/")
+    def test_presign_response_includes_notification_url(self):
+        """When CLOUDINARY_NOTIFICATION_URL is set, presign must include it."""
+        from rest_framework.test import APIClient
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+
+        resp = client.post(
+            "/api/v1/upload/presign/",
+            data={"asset_type": "avatar"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data.get("notification_url"), "https://example.com/webhook/")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -518,7 +569,7 @@ class WebhookEndpointTests(TestCase):
     def test_webhook_missing_signature_returns_200_rejected(self):
         """Missing signature → 200 with status=rejected (never 4xx to prevent Cloudinary retries)."""
         resp = self.client.post(
-            "/api/upload/webhook/cloudinary/",
+            "/api/v1/upload/webhook/cloudinary/",
             data=b'{"test": "data"}',
             content_type="application/json",
         )

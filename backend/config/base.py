@@ -268,6 +268,14 @@ CLOUDINARY_STORAGE = {
     "API_SECRET": env("CLOUDINARY_API_SECRET", default="your_api_secret"),
 }
 
+# Webhook callback URL for Cloudinary upload/eager notifications.
+# Must be a publicly-reachable HTTPS URL (e.g. ngrok in dev).
+# Set BACKEND_URL in .env to the public base (e.g. https://your-ngrok.ngrok-free.dev)
+CLOUDINARY_NOTIFICATION_URL = env(
+    "CLOUDINARY_NOTIFICATION_URL",
+    default="",
+)
+
 STORAGES = {
     "default": {
         "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
