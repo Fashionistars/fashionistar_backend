@@ -45,8 +45,17 @@ def _is_api_request(request) -> bool:
     return 'application/json' in accept
 
 
-SUPPORT_URL = getattr(settings, 'ERROR_SUPPORT_URL', 'https://fashionistar.com/support')
-FRONTEND_URL = getattr(settings, 'FRONTEND_BASE_URL', 'https://fashionistar.com')
+# ── URL helpers (read lazily at request time, never at module load) ──────────
+
+def _get_support_url() -> str:
+    """Return the support URL from settings, falling back to fashionistar.net."""
+    base = getattr(settings, 'FRONTEND_URL', 'https://fashionistar.net').rstrip('/')
+    return getattr(settings, 'ERROR_SUPPORT_URL', f'{base}/support')
+
+
+def _get_frontend_url() -> str:
+    """Return the frontend home URL from settings."""
+    return getattr(settings, 'FRONTEND_URL', 'https://fashionistar.net').rstrip('/')
 
 
 def _json_error(status: int, code: str, message: str, **extra) -> JsonResponse:
@@ -60,6 +69,10 @@ def _json_error(status: int, code: str, message: str, **extra) -> JsonResponse:
 
 
 def _html_error(status: int, title: str, heading: str, description: str) -> HttpResponse:
+    # Read URLs lazily at request time so .env changes take effect
+    frontend_url = _get_frontend_url()
+    support_url = _get_support_url()
+
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -91,9 +104,9 @@ def _html_error(status: int, title: str, heading: str, description: str) -> Http
     <div class="code">{status}</div>
     <h1>{heading}</h1>
     <p>{description}</p>
-    <a class="btn" href="{FRONTEND_URL}">← Back to Home</a>
+    <a class="btn" href="{frontend_url}">← Back to Home</a>
     <br><br>
-    <a href="{SUPPORT_URL}">Need help? Contact Support</a>
+    <a href="{support_url}">Need help? Contact Support</a>
   </div>
 </body>
 </html>"""
@@ -117,7 +130,7 @@ def forbidden_handler(request, exception=None):
     """handler403 — 403 Forbidden"""
     if _is_api_request(request):
         msg = str(exception) if exception else 'You do not have permission to access this resource.'
-        return _json_error(403, 'permission_denied', msg, support_url=SUPPORT_URL)
+        return _json_error(403, 'permission_denied', msg, support_url=_get_support_url())
     return _html_error(403, '403 Forbidden', 'Access Denied',
                        'You do not have permission to view this page.')
 
@@ -148,7 +161,7 @@ def server_error_handler(request, *args, **kwargs):
         return _json_error(
             500, 'internal_server_error',
             'An unexpected error occurred. Our engineers have been notified.',
-            support_url=SUPPORT_URL,
+            support_url=_get_support_url(),
         )
     return _html_error(
         500, '500 Server Error', 'Something Went Wrong',

@@ -227,8 +227,10 @@ AUTH_USER_MODEL = "authentication.UnifiedUser"
 AUTHENTICATION_BACKENDS = [
     # UnifiedUserBackend handles email + phone + Google OAuth
     "apps.authentication.backends.UnifiedUserBackend",
-    # Django's ModelBackend kept as session/admin fallback
-    "django.contrib.auth.backends.ModelBackend",
+    # SoftDeleteAwareModelBackend — catches SoftDeletedUserError from
+    # get_by_natural_key() so Django admin login shows a form validation
+    # error instead of a 500 crash. Drop-in replacement for ModelBackend.
+    "apps.authentication.backends.SoftDeleteAwareModelBackend",
 ]
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -660,6 +662,7 @@ JAZZMIN_UI_TWEAKS = {
     "sidebar_nav_flat_style": False,
     "theme": "cyborg",
     "dark_mode_theme": "cyborg",
+    "default_theme_mode": "auto",
     "button_classes": {
         "primary": "btn-primary",
         "secondary": "btn-secondary",
@@ -668,6 +671,19 @@ JAZZMIN_UI_TWEAKS = {
         "danger": "btn-danger",
         "success": "btn-success",
     },
+    "user_avatar": "avatar",
+    "usermenu_links": [
+        {
+            "name": "Profile",
+            "url": "admin:auth_user_change",
+            "icon": "fas fa-user",
+        },
+        {
+            "name": "Logout",
+            "url": "admin:logout",
+            "icon": "fas fa-sign-out-alt",
+        },
+    ],
 }
 
 

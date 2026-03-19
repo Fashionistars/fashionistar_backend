@@ -2,8 +2,9 @@
 """
 AuditService — high-level API for writing structured audit events.
 
-All writes are NON-BLOCKING: events are written via transaction.on_commit()
-+ Celery task so the HTTP request path is never delayed.
+All writes are NON-BLOCKING: events are dispatched directly to the Celery
+broker (Redis) via ``apply_async()`` so the HTTP request path is never
+delayed and audit events are NEVER lost on transaction rollback.
 
 Falls back to direct synchronous write if Celery is unavailable so
 audit events are NEVER silently dropped.
@@ -182,26 +183,28 @@ class AuditService:
         """
         Write the audit event asynchronously via Celery, or synchronously
         if the broker is unavailable.
+
+        IMPORTANT: We call ``apply_async()`` DIRECTLY — NOT inside
+        ``transaction.on_commit()``. This ensures:
+          1. The task is enqueued to Redis immediately, regardless of
+             whether the caller's DB transaction commits or rolls back.
+          2. Failed-request audit logs (e.g. validation errors inside
+             ``transaction.atomic()``) are NEVER silently dropped.
+          3. The Celery worker writes to the DB in its own connection,
+             so there is no risk of stale reads or lock contention with
+             the caller's transaction.
         """
         try:
-            from django.db import transaction
             from apps.audit_logs.tasks import write_audit_event
 
-            def _enqueue():
-                try:
-                    write_audit_event.apply_async(
-                        kwargs={"payload": payload},
-                        retry=False,
-                        ignore_result=True,
-                    )
-                except Exception:
-                    # Broker down — write synchronously so events are never dropped
-                    _write_sync(payload)
-
-            transaction.on_commit(_enqueue)
-
+            write_audit_event.apply_async(
+                kwargs={"payload": payload},
+                retry=False,
+                ignore_result=True,
+            )
         except Exception:
-            # Not inside a transaction (e.g. management commands, signals)
+            # Broker down or Celery misconfigured — write synchronously
+            # so events are never dropped.
             _write_sync(payload)
 
 

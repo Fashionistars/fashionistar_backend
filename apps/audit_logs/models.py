@@ -12,7 +12,7 @@ ORM level) by providing STRUCTURED, QUERYABLE, human-readable audit events
 with enriched context that the ORM-level log cannot capture.
 
 Design Principles:
-    - NEVER blocks the HTTP request — writes go via transaction.on_commit()
+    - NEVER blocks the HTTP request — writes go via direct Celery dispatch
     - NEVER raises exceptions to callers — all errors are logged as WARNING
     - 7-year retention for financial compliance (configurable per-event)
     - Immutable once written (no update/delete permission in admin)
@@ -144,7 +144,7 @@ class AuditEventLog(models.Model):
     Design
     ------
     * Rows are NEVER updated or deleted by application code — immutable audit trail.
-    * Writes are always async (transaction.on_commit → Celery task) to avoid
+    * Writes are always async (direct Celery ``apply_async()`` dispatch) to avoid
       blocking the HTTP request path.
     * actor_email snapshot ensures the audit trail is preserved even after
       GDPR hard-delete of the live account.

@@ -21,7 +21,7 @@ def write_audit_event(self, payload: dict) -> None:
     """
     Write an AuditEventLog row from the given payload dict.
 
-    Called asynchronously via transaction.on_commit() from AuditService.
+    Called directly via ``apply_async()`` from AuditService — independent
     Retries up to 2 times on transient DB errors; after that, logs and
     gives up (audit failure must never crash the main flow).
     """

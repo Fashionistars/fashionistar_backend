@@ -1,5 +1,4 @@
-from django.contrib.auth.backends import BaseBackend
-from django.contrib.auth import get_user_model
+from django.contrib.auth.backends import BaseBackend, ModelBackend
 from apps.authentication.models import UnifiedUser
 import logging
 
@@ -49,6 +48,9 @@ class UnifiedUserBackend(BaseBackend):
             logger.warning(f"Authentication failed for {username}")
             return None
         except Exception as e:
+            # Catch SoftDeletedUserError (and any other custom exception) —
+            # return None so Django auth tries the next backend or shows
+            # a generic "invalid credentials" message (no 500).
             logger.error(f"Error in UnifiedUser authentication: {str(e)}")
             return None
 
@@ -132,4 +134,55 @@ class UnifiedUserBackend(BaseBackend):
             return None
         except Exception as e:
             logger.error(f"Error getting UnifiedUser (async): {str(e)}")
+            return None
+
+
+class SoftDeleteAwareModelBackend(ModelBackend):
+    """
+    Drop-in replacement for Django's ``ModelBackend`` that handles
+    ``SoftDeletedUserError`` gracefully.
+
+    Problem
+    -------
+    ``ModelBackend.authenticate()`` calls
+    ``UserModel._default_manager.get_by_natural_key(username)`` which, in our
+    ``CustomUserManager``, raises ``SoftDeletedUserError`` when the identifier
+    belongs to a soft-deleted account. This is an ``APIException`` subclass
+    that Django's admin ``AuthenticationForm`` cannot catch, resulting in an
+    unhandled 500 Internal Server Error on the admin login page.
+
+    Solution
+    --------
+    Override ``authenticate()`` to catch ``SoftDeletedUserError`` and return
+    ``None`` (meaning "this backend cannot authenticate this user"). Django's
+    auth framework then falls through and the admin form shows the standard
+    "Please enter the correct email and password" validation error.
+    """
+
+    def authenticate(self, request, username=None, password=None, **kwargs):
+        """
+        Wrap ``ModelBackend.authenticate()`` with soft-delete safety.
+
+        Catches ``SoftDeletedUserError`` from ``get_by_natural_key()`` and
+        returns ``None`` so the Django admin login form displays a validation
+        error instead of crashing with a 500.
+        """
+        try:
+            return super().authenticate(request, username=username, password=password, **kwargs)
+        except Exception as exc:
+            # Import lazily to avoid circular imports at module load time
+            from apps.authentication.exceptions import SoftDeletedUserError
+            if isinstance(exc, SoftDeletedUserError):
+                logger.warning(
+                    "SoftDeleteAwareModelBackend: caught SoftDeletedUserError "
+                    "for identifier '%s' — returning None (admin-safe).",
+                    username,
+                )
+                return None
+            # Any other unexpected exception — log and return None (never crash login)
+            logger.error(
+                "SoftDeleteAwareModelBackend: unexpected error during "
+                "authenticate(): %s",
+                exc, exc_info=True,
+            )
             return None

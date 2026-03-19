@@ -565,6 +565,10 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
             self.email = None
         if not self.phone:
             self.phone = None
+        # URLField rejects '' (empty string) as invalid URL.
+        # Normalize to None so blank avatar passes validation.
+        if not self.avatar:
+            self.avatar = None
 
         # ── 2. Auto-generate member_id exactly once at creation ─
         if self._state.adding and not self.member_id:
