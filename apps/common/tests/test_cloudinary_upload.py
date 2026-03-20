@@ -32,14 +32,21 @@ User = get_user_model()
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _make_webhook_sig(body: bytes, timestamp: str, secret: str) -> str:
-    """Build a Cloudinary-compatible webhook signature: SHA256(body + timestamp + secret)."""
+def _make_webhook_sig(body: bytes, timestamp: str, secret: str, algo: str = "sha1") -> str:
+    """
+    Build a Cloudinary-compatible webhook signature.
+
+    Formula: HASH(body_string + timestamp + api_secret)
+    Default: SHA-1 (Cloudinary's default). Pass algo='sha256' to use SHA-256.
+    """
     try:
         body_str = body.decode("utf-8")
     except UnicodeDecodeError:
         body_str = body.decode("latin-1")
-    payload = body_str + timestamp + secret
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    payload = (body_str + timestamp + secret).encode("utf-8")
+    if algo == "sha256":
+        return hashlib.sha256(payload).hexdigest()
+    return hashlib.sha1(payload).hexdigest()  # noqa: S324 — default Cloudinary algo
 
 
 FAKE_CLOUDINARY_SETTINGS = {
