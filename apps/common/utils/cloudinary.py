@@ -548,98 +548,94 @@ def validate_cloudinary_webhook(
     """
     Validate an incoming Cloudinary webhook notification signature.
 
-    Uses the official Cloudinary Python SDK's `verify_notification_signature`
-    method which is guaranteed to match Cloudinary's exact algorithm:
-
-        SHA-1 or SHA-256 of: body_string + timestamp + api_secret
-
-    The SDK defaults to SHA-1 but respects `cloudinary.config().signature_algorithm`.
-    This function tries the SDK method first, then falls back to manual SHA-1 and
-    SHA-256 computation for robustness.
-
+    ⚠️ CRITICAL DETAIL: Cloudinary uses HMAC-SHA1 of the RAW BODY ONLY.
+    
+    Official Cloudinary Algorithm (per their docs):
+        https://cloudinary.com/documentation/notifications_api#signed_notifications
+        
+        signature = HMAC-SHA1(raw_request_body, api_secret)
+        
+    NOT: HMAC-SHA1(body + timestamp + api_secret)
+    NOT: SHA256 or any other hash algorithm
+    
     Replay protection: rejects events older than ``max_age_seconds`` (default
     7200s = 2 hours, per the Cloudinary docs tip).
 
     Args:
-        body:            Raw request body bytes.
-        timestamp:       Value of the ``X-Cld-Timestamp`` header (str or int).
-        signature:       Value of the ``X-Cld-Signature`` header.
-        max_age_seconds: Maximum allowed age (default 7200 = 2 hours).
+        body:            Raw HTTP request body (bytes) — NOT decoded to string
+        timestamp:       Value of the ``X-Cld-Timestamp`` header (str or int)
+        signature:       Value of the ``X-Cld-Signature`` header (40-char SHA1 hex)
+        max_age_seconds: Maximum allowed age (default 7200 = 2 hours)
 
     Returns:
         ``True`` if signature is valid AND not expired, ``False`` otherwise.
     """
     if not timestamp or not signature:
+        logger.warning("Cloudinary webhook: missing timestamp or signature")
         return False
 
-    # ── Replay protection ──────────────────────────────────────────────────
+    api_secret = settings.CLOUDINARY_STORAGE.get("API_SECRET", "")
+    if not api_secret:
+        logger.error("Cloudinary webhook: API_SECRET not configured")
+        return False
+
+    # ── Step 1: Timestamp validation (replay protection) ──────────────────
     try:
-        ts  = int(timestamp)
-        age = abs(int(time.time()) - ts)
-        if age > max_age_seconds:
+        webhook_timestamp = int(timestamp)
+        current_time = int(time.time())
+        age_seconds = current_time - webhook_timestamp
+        
+        if age_seconds < 0:
             logger.warning(
-                "Cloudinary webhook rejected: timestamp too old (age=%ds, max=%ds)",
-                age, max_age_seconds,
+                "Cloudinary webhook: timestamp is in the future (clock skew). "
+                "age=%ds", age_seconds
             )
             return False
-    except (ValueError, TypeError):
-        logger.warning("Cloudinary webhook rejected: invalid timestamp=%r", timestamp)
+        
+        if age_seconds > max_age_seconds:
+            logger.warning(
+                "Cloudinary webhook: expired. age=%ds (max=%ds)",
+                age_seconds, max_age_seconds
+            )
+            return False
+            
+    except (ValueError, TypeError) as exc:
+        logger.error("Cloudinary webhook: invalid timestamp '%s': %s", timestamp, exc)
         return False
 
-    # ── Decode the body to string ──────────────────────────────────────────
-    try:
-        body_str = body.decode("utf-8")
-    except (UnicodeDecodeError, AttributeError):
-        body_str = body.decode("latin-1")
+    # ── Step 2: Generate expected signature (HMAC-SHA1) ────────────────────
+    # CRITICAL: Use the raw body bytes directly, NOT decoded string
+    # CRITICAL: Use SHA1, NOT SHA256
+    # Reference: https://cloudinary.com/documentation/notifications_api#signed_notifications
+    expected_signature = hmac.new(
+        api_secret.encode("utf-8"),
+        body,
+        hashlib.sha1,  # ← MUST BE SHA1
+    ).hexdigest()
 
-    # ── Primary: use Cloudinary SDK's built-in verification ────────────────
-    # The SDK is guaranteed to use the same algorithm as Cloudinary's servers.
-    try:
-        import cloudinary
-        import cloudinary.utils
-        # Ensure Cloudinary SDK is configured with the correct credentials
-        api_secret = settings.CLOUDINARY_STORAGE.get("API_SECRET", "")
-        cloudinary.config(
-            cloud_name  = settings.CLOUDINARY_STORAGE.get("CLOUD_NAME", ""),
-            api_key     = settings.CLOUDINARY_STORAGE.get("API_KEY", ""),
-            api_secret  = api_secret,
-        )
-        result = cloudinary.utils.verify_notification_signature(
-            body_str,
-            ts,               # SDK expects int
-            signature,
-            valid_for=max_age_seconds,
-        )
-        if result:
-            logger.debug("Cloudinary webhook: SDK verification passed")
-            return True
-    except Exception as exc:
-        logger.warning("Cloudinary SDK verify_notification_signature failed: %s — falling back to manual", exc)
-
-    # ── Fallback: manual SHA-1 then SHA-256 ────────────────────────────────
-    api_secret = settings.CLOUDINARY_STORAGE.get("API_SECRET", "")
-    payload_bytes = (body_str + timestamp + api_secret).encode("utf-8")
-
-    sha1_digest   = hashlib.sha1(payload_bytes).hexdigest()   # noqa: S324
-    if hmac.compare_digest(sha1_digest, signature):
-        logger.debug("Cloudinary webhook: SHA-1 fallback valid")
-        return True
-
-    sha256_digest = hashlib.sha256(payload_bytes).hexdigest()
-    if hmac.compare_digest(sha256_digest, signature):
-        logger.debug("Cloudinary webhook: SHA-256 fallback valid")
-        return True
-
-    # ── DIAGNOSTIC: log exactly what was computed vs received ──────────────
-    logger.warning(
-        "Cloudinary webhook SIG MISMATCH — "
-        "received=%s (len=%d) | sha1=%s | sha256=%s | "
-        "body_len=%d body_start=%r | secret_len=%d | timestamp=%s",
-        signature, len(signature),
-        sha1_digest, sha256_digest,
-        len(body_str), body_str[:120], len(api_secret), timestamp,
+    # ── Step 3: Compare signatures (constant-time to prevent timing attacks) ──
+    signature_valid = hmac.compare_digest(
+        expected_signature.lower(),
+        signature.lower()
     )
-    return False
+
+    if not signature_valid:
+        logger.warning(
+            "Cloudinary webhook SIG MISMATCH — "
+            "received=%s (len=%d) | expected=%s (len=%d) | "
+            "body_len=%d | timestamp=%s | age=%ds",
+            signature, len(signature),
+            expected_signature, len(expected_signature),
+            len(body), timestamp, age_seconds
+        )
+        return False
+
+    logger.info(
+        "✅ Cloudinary webhook signature VALID: "
+        "timestamp=%s age=%ds sig=%s...",
+        timestamp, age_seconds, signature[:16]
+    )
+    return True
 
 
 # ─────────────────────────────────────────────────────────────────────────────
