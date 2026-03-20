@@ -548,26 +548,21 @@ def validate_cloudinary_webhook(
     """
     Validate an incoming Cloudinary webhook notification signature.
 
-    Per official Cloudinary documentation
-    (https://cloudinary.com/documentation/notifications#verifying_notification_signatures):
+    Uses the official Cloudinary Python SDK's `verify_notification_signature`
+    method which is guaranteed to match Cloudinary's exact algorithm:
 
-        String to sign = body_string + timestamp + api_secret
+        SHA-1 or SHA-256 of: body_string + timestamp + api_secret
 
-    Then hash that string with SHA-1 OR SHA-256:
-      - SHA-1 is Cloudinary's default (the SDK uses SHA-1 by default)
-      - SHA-256 is available if you set signature_algorithm=sha256 on your account
-
-    This function tries BOTH algorithms and accepts if either matches.
+    The SDK defaults to SHA-1 but respects `cloudinary.config().signature_algorithm`.
+    This function tries the SDK method first, then falls back to manual SHA-1 and
+    SHA-256 computation for robustness.
 
     Replay protection: rejects events older than ``max_age_seconds`` (default
     7200s = 2 hours, per the Cloudinary docs tip).
 
-    Uses ``hmac.compare_digest`` for constant-time comparison to prevent
-    timing-attack enumeration.
-
     Args:
         body:            Raw request body bytes.
-        timestamp:       Value of the ``X-Cld-Timestamp`` header.
+        timestamp:       Value of the ``X-Cld-Timestamp`` header (str or int).
         signature:       Value of the ``X-Cld-Signature`` header.
         max_age_seconds: Maximum allowed age (default 7200 = 2 hours).
 
@@ -591,29 +586,59 @@ def validate_cloudinary_webhook(
         logger.warning("Cloudinary webhook rejected: invalid timestamp=%r", timestamp)
         return False
 
-    # ── Build the payload string (same formula for both algos) ─────────────
-    # Formula: body_string + timestamp + api_secret  (all concatenated as strings)
-    api_secret = settings.CLOUDINARY_STORAGE.get("API_SECRET", "")
+    # ── Decode the body to string ──────────────────────────────────────────
     try:
         body_str = body.decode("utf-8")
     except (UnicodeDecodeError, AttributeError):
         body_str = body.decode("latin-1")
 
-    payload_str = body_str + timestamp + api_secret
-    payload_bytes = payload_str.encode("utf-8")
+    # ── Primary: use Cloudinary SDK's built-in verification ────────────────
+    # The SDK is guaranteed to use the same algorithm as Cloudinary's servers.
+    try:
+        import cloudinary
+        import cloudinary.utils
+        # Ensure Cloudinary SDK is configured with the correct credentials
+        api_secret = settings.CLOUDINARY_STORAGE.get("API_SECRET", "")
+        cloudinary.config(
+            cloud_name  = settings.CLOUDINARY_STORAGE.get("CLOUD_NAME", ""),
+            api_key     = settings.CLOUDINARY_STORAGE.get("API_KEY", ""),
+            api_secret  = api_secret,
+        )
+        result = cloudinary.utils.verify_notification_signature(
+            body_str,
+            ts,               # SDK expects int
+            signature,
+            valid_for=max_age_seconds,
+        )
+        if result:
+            logger.debug("Cloudinary webhook: SDK verification passed")
+            return True
+    except Exception as exc:
+        logger.warning("Cloudinary SDK verify_notification_signature failed: %s — falling back to manual", exc)
 
-    # ── Try SHA-1 first (Cloudinary's default algorithm) ───────────────────
-    sha1_digest  = hashlib.sha1(payload_bytes).hexdigest()   # noqa: S324 — required by Cloudinary
+    # ── Fallback: manual SHA-1 then SHA-256 ────────────────────────────────
+    api_secret = settings.CLOUDINARY_STORAGE.get("API_SECRET", "")
+    payload_bytes = (body_str + timestamp + api_secret).encode("utf-8")
+
+    sha1_digest   = hashlib.sha1(payload_bytes).hexdigest()   # noqa: S324
     if hmac.compare_digest(sha1_digest, signature):
-        logger.debug("Cloudinary webhook: SHA-1 signature valid")
+        logger.debug("Cloudinary webhook: SHA-1 fallback valid")
         return True
 
-    # ── Fallback: try SHA-256 (if account configured for sha256) ───────────
     sha256_digest = hashlib.sha256(payload_bytes).hexdigest()
     if hmac.compare_digest(sha256_digest, signature):
-        logger.debug("Cloudinary webhook: SHA-256 signature valid")
+        logger.debug("Cloudinary webhook: SHA-256 fallback valid")
         return True
 
+    # ── DIAGNOSTIC: log exactly what was computed vs received ──────────────
+    logger.warning(
+        "Cloudinary webhook SIG MISMATCH — "
+        "received=%s (len=%d) | sha1=%s | sha256=%s | "
+        "body_len=%d body_start=%r | secret_len=%d | timestamp=%s",
+        signature, len(signature),
+        sha1_digest, sha256_digest,
+        len(body_str), body_str[:120], len(api_secret), timestamp,
+    )
     return False
 
 
