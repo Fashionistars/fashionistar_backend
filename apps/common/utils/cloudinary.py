@@ -548,21 +548,20 @@ def validate_cloudinary_webhook(
     """
     Validate an incoming Cloudinary webhook notification signature.
 
-    ⚠️ CRITICAL DETAIL: Cloudinary uses HMAC-SHA1 of the RAW BODY ONLY.
+    ⚠️ CRITICAL DETAIL: Cloudinary webhook signatures use SHA-1 (not HMAC) of 
+    the concatenated body + timestamp + api_secret.
     
-    Official Cloudinary Algorithm (per their docs):
-        https://cloudinary.com/documentation/notifications_api#signed_notifications
+    Official Cloudinary Algorithm (per their signature tests):
+        SHA1(body_string + timestamp + api_secret)
         
-        signature = HMAC-SHA1(raw_request_body, api_secret)
-        
-    NOT: HMAC-SHA1(body + timestamp + api_secret)
-    NOT: SHA256 or any other hash algorithm
+    NOT: HMAC-SHA1(body, api_secret)
+    NOT: HMAC-SHA1(body + timestamp, api_secret)
     
     Replay protection: rejects events older than ``max_age_seconds`` (default
     7200s = 2 hours, per the Cloudinary docs tip).
 
     Args:
-        body:            Raw HTTP request body (bytes) — NOT decoded to string
+        body:            Raw HTTP request body (bytes) — will be decoded to string
         timestamp:       Value of the ``X-Cld-Timestamp`` header (str or int)
         signature:       Value of the ``X-Cld-Signature`` header (40-char SHA1 hex)
         max_age_seconds: Maximum allowed age (default 7200 = 2 hours)
@@ -603,15 +602,17 @@ def validate_cloudinary_webhook(
         logger.error("Cloudinary webhook: invalid timestamp '%s': %s", timestamp, exc)
         return False
 
-    # ── Step 2: Generate expected signature (HMAC-SHA1) ────────────────────
-    # CRITICAL: Use the raw body bytes directly, NOT decoded string
-    # CRITICAL: Use SHA1, NOT SHA256
-    # Reference: https://cloudinary.com/documentation/notifications_api#signed_notifications
-    expected_signature = hmac.new(
-        api_secret.encode("utf-8"),
-        body,
-        hashlib.sha1,  # ← MUST BE SHA1
-    ).hexdigest()
+    # ── Step 2: Generate expected signature (SHA-1, NOT HMAC) ──────────────
+    # CRITICAL: Concatenate body + timestamp + api_secret, then hash
+    # CRITICAL: Decode body to STRING first (UTF-8 or Latin-1 fallback)
+    # Reference: Cloudinary webhook signature test helper in test_cloudinary_upload.py
+    try:
+        body_str = body.decode("utf-8")
+    except UnicodeDecodeError:
+        body_str = body.decode("latin-1")
+    
+    payload = (body_str + str(timestamp) + api_secret).encode("utf-8")
+    expected_signature = hashlib.sha1(payload).hexdigest()
 
     # ── Step 3: Compare signatures (constant-time to prevent timing attacks) ──
     signature_valid = hmac.compare_digest(

@@ -269,10 +269,10 @@ class WebhookValidationTests(TestCase):
         self.assertFalse(validate_cloudinary_webhook(tampered, timestamp, valid_sig))
 
     def test_expired_timestamp_returns_false(self):
-        """Timestamps older than 15 minutes must be rejected (replay protection)."""
+        """Timestamps older than the max_age_seconds window must be rejected (replay protection)."""
         from apps.common.utils.cloudinary import validate_cloudinary_webhook
         body      = b'{"public_id":"test"}'
-        old_ts    = str(int(time.time()) - 1000)  # ~17 minutes ago
+        old_ts    = str(int(time.time()) - 8000)  # Older than 7200s (2hr) default max age
         sig       = _make_webhook_sig(body, old_ts, "test-secret")
         self.assertFalse(validate_cloudinary_webhook(body, old_ts, sig))
 

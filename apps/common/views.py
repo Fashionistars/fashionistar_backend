@@ -390,8 +390,9 @@ class CloudinaryWebhookView(View):
     and ``eager`` transformation results.
 
     Security:
-        - HMAC-SHA256 signature validated against ``X-Cld-Signature`` +
+        - SHA1 signature validated against ``X-Cld-Signature`` +
           ``X-Cld-Timestamp`` headers before any processing.
+        - Algorithm: SHA1(body + timestamp + api_secret)
         - CSRF exempt — Cloudinary is an external service; no CSRF cookie.
         - Always returns 200 to Cloudinary even on validation failure (to
           prevent Cloudinary from endlessly retrying).
