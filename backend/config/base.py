@@ -545,8 +545,16 @@ ZOHO_ZEPTOMAIL_HOSTED_REGION = env(
 
 
 # =============================================================================
-# CELERY — Enterprise Configuration
+# CELERY — Base Settings (Broker / Serialiser / Reliability Flags)
 # =============================================================================
+# Queue definitions, task routes, and beat schedule live in backend/celery.py
+# (the Celery application module). Only the environment-driven connection
+# settings and Django-namespace flags are configured here.
+#
+# Architecture Pattern:
+#   backend/celery.py   ← Queue topology, task routes, beat schedule  ← YOU
+#   backend/config/base.py ← Broker URL, serialiser, reliability flags ← THIS FILE
+
 REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/1")
 
 CELERY_BROKER_URL = env("CELERY_BROKER_URL", default=REDIS_URL)
@@ -560,23 +568,23 @@ CELERY_BROKER_TRANSPORT_OPTIONS = {
 }
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = False
 
-CELERY_TASK_SERIALIZER = "json"
+CELERY_TASK_SERIALIZER   = "json"
 CELERY_RESULT_SERIALIZER = "json"
-CELERY_ACCEPT_CONTENT = ["json"]
-CELERY_TIMEZONE = "UTC"
-CELERY_ENABLE_UTC = True
+CELERY_ACCEPT_CONTENT    = ["json"]
+CELERY_TIMEZONE          = "UTC"
+CELERY_ENABLE_UTC        = True
 
-CELERY_WORKER_MAX_TASKS_PER_CHILD = 200
-CELERY_TASK_ACKS_LATE = True
-CELERY_TASK_REJECT_ON_WORKER_LOST = True
-CELERY_TASK_IGNORE_RESULT = True
-
-CELERY_BEAT_SCHEDULE = {
-    "keep-render-service-awake": {
-        "task": "keep_service_awake",
-        "schedule": 300.0,
-    },
-}
+# ── Reliability flags ─────────────────────────────────────────────────────
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000    # evict workers after 1K tasks for memory hygiene
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1       # one task at a time for fairness
+CELERY_TASK_ACKS_LATE             = True    # ack AFTER completion — guarantees at-least-once delivery
+CELERY_TASK_REJECT_ON_WORKER_LOST = True    # requeue task if worker dies mid-execution
+CELERY_TASK_IGNORE_RESULT         = True    # no result storage overhead
+CELERY_TASK_TRACK_STARTED         = True    # track when tasks start (for monitoring)
+CELERY_TASK_TIME_LIMIT            = 300     # 5-min hard kill
+CELERY_TASK_SOFT_TIME_LIMIT       = 240     # 4-min SoftTimeLimitExceeded warning
+CELERY_WORKER_SEND_TASK_EVENTS    = True    # enable Flower monitoring
+CELERY_TASK_SEND_SENT_EVENT       = True    # track when tasks are sent
 
 
 # =============================================================================

@@ -46,7 +46,7 @@ import hmac
 import logging
 import time
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 import cloudinary.api
 import cloudinary.uploader
@@ -548,20 +548,21 @@ def validate_cloudinary_webhook(
     """
     Validate an incoming Cloudinary webhook notification signature.
 
-    ⚠️ CRITICAL DETAIL: Cloudinary webhook signatures use SHA-1 (not HMAC) of 
-    the concatenated body + timestamp + api_secret.
+    ⚠️ CRITICAL DETAIL: Cloudinary uses HMAC-SHA1 of the RAW BODY ONLY.
     
-    Official Cloudinary Algorithm (per their signature tests):
-        SHA1(body_string + timestamp + api_secret)
+    Official Cloudinary Algorithm (per their docs):
+        https://cloudinary.com/documentation/notifications_api#signed_notifications
         
-    NOT: HMAC-SHA1(body, api_secret)
-    NOT: HMAC-SHA1(body + timestamp, api_secret)
+        signature = HMAC-SHA1(raw_request_body, api_secret)
+        
+    NOT: HMAC-SHA1(body + timestamp + api_secret)
+    NOT: SHA256 or any other hash algorithm
     
     Replay protection: rejects events older than ``max_age_seconds`` (default
     7200s = 2 hours, per the Cloudinary docs tip).
 
     Args:
-        body:            Raw HTTP request body (bytes) — will be decoded to string
+        body:            Raw HTTP request body (bytes) — NOT decoded to string
         timestamp:       Value of the ``X-Cld-Timestamp`` header (str or int)
         signature:       Value of the ``X-Cld-Signature`` header (40-char SHA1 hex)
         max_age_seconds: Maximum allowed age (default 7200 = 2 hours)
@@ -602,17 +603,15 @@ def validate_cloudinary_webhook(
         logger.error("Cloudinary webhook: invalid timestamp '%s': %s", timestamp, exc)
         return False
 
-    # ── Step 2: Generate expected signature (SHA-1, NOT HMAC) ──────────────
-    # CRITICAL: Concatenate body + timestamp + api_secret, then hash
-    # CRITICAL: Decode body to STRING first (UTF-8 or Latin-1 fallback)
-    # Reference: Cloudinary webhook signature test helper in test_cloudinary_upload.py
-    try:
-        body_str = body.decode("utf-8")
-    except UnicodeDecodeError:
-        body_str = body.decode("latin-1")
-    
-    payload = (body_str + str(timestamp) + api_secret).encode("utf-8")
-    expected_signature = hashlib.sha1(payload).hexdigest()
+    # ── Step 2: Generate expected signature (HMAC-SHA1) ────────────────────
+    # CRITICAL: Use the raw body bytes directly, NOT decoded string
+    # CRITICAL: Use SHA1, NOT SHA256
+    # Reference: https://cloudinary.com/documentation/notifications_api#signed_notifications
+    expected_signature = hmac.new(
+        api_secret.encode("utf-8"),
+        body,
+        hashlib.sha1,  # ← MUST BE SHA1
+    ).hexdigest()
 
     # ── Step 3: Compare signatures (constant-time to prevent timing attacks) ──
     signature_valid = hmac.compare_digest(
@@ -913,3 +912,79 @@ async def async_get_media_info_bulk(
             return await asyncio.to_thread(_sync)
 
     return list(await asyncio.gather(*[asyncio.create_task(_fetch(pid)) for pid in public_ids]))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 6. Admin panel synchronous upload (Phase 4)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def upload_to_cloudinary_from_admin(
+    file_obj: Any,
+    folder: str,
+    asset_type: str = "generic_image",
+    user: Any = None,
+) -> str:
+    """
+    Synchronous Cloudinary upload for Django admin panel use.
+
+    Called from CloudinaryUploadAdminMixin.save_model() when an admin
+    uploads a file (category image, brand logo, collection banner, etc.).
+
+    Design:
+      - Uploads synchronously (admin save is already blocking; no need for async)
+      - Triggers eager transformations asynchronously (eager_async=True)
+      - Returns the Cloudinary secure_url to save on the model field
+      - Raises on upload failure (admin sees the error via Django messages)
+
+    Args:
+        file_obj  : Django InMemoryUploadedFile or TemporaryUploadedFile
+        folder    : Cloudinary folder string, e.g. "fashionistar/categories/images"
+        asset_type: Key from _ASSET_CONFIGS, e.g. "category", "product_image", "avatar"
+        user      : The Django admin user (ignored at upload level, used for audit)
+
+    Returns:
+        str: Cloudinary secure_url
+
+    Raises:
+        ValueError: If Cloudinary returns no secure_url (upload failed silently)
+        Exception : Any Cloudinary API errors
+
+    Usage:
+        url = upload_to_cloudinary_from_admin(
+            file_obj=request.FILES["image"],
+            folder="fashionistar/categories/images",
+            asset_type="category",
+        )
+    """
+    config = _ASSET_CONFIGS.get(asset_type, _ASSET_CONFIGS.get("generic_image", {}))
+    eager  = config.get("eager", [])
+
+    # Seek to start in case file was already partially read
+    if hasattr(file_obj, "seek"):
+        file_obj.seek(0)
+
+    result = cloudinary.uploader.upload(
+        file_obj,
+        folder=folder,
+        resource_type="auto",   # Auto-detect: image / video / raw
+        eager=eager if eager else None,
+        eager_async=bool(eager),  # Non-blocking: background eager transforms
+        use_filename=True,
+        unique_filename=True,
+        overwrite=False,
+        quality="auto",         # Smart quality optimisation
+        fetch_format="auto",    # Auto WebP / AVIF for supported browsers
+    )
+
+    secure_url: str = result.get("secure_url", "")
+    if not secure_url:
+        raise ValueError(
+            f"Cloudinary admin upload returned no secure_url "
+            f"(folder={folder!r}, asset_type={asset_type!r}): {result}"
+        )
+
+    logger.info(
+        "upload_to_cloudinary_from_admin: uploaded %s → %s...",
+        folder, secure_url[:80],
+    )
+    return secure_url

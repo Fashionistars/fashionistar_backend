@@ -53,6 +53,8 @@ class UserRole(str, Enum):
     CUSTOMER = "customer"
     VENDOR = "vendor"
     ADMIN = "admin"
+    STAFF = "staff"
+    SUPPORT = "support"
     SYSTEM = "system"
     UNKNOWN = "unknown"
 

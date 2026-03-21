@@ -1,132 +1,80 @@
-# RapidAPI / REST Client Test Suite for Fashionistar
-# ==================================================
-# Usage: Open this file in VSCode with the "REST Client" or "RapidAPI" extension.
-# Variables:
-@baseUrl = http://localhost:8000/api/v1
-@email = curltest_1234@fashionistar.io
-@phone = +18005551234
-@password = StrongPassword#2026
-@newPassword = New!Password#2026
+### Phase 4 — Cloudinary & Webhook Testing (RapidAPI Client Format)
+### Designed for the VSCode REST Client / RapidAPI extension
 
-### 1. Register User
-# @name register
-POST {{baseUrl}}/auth/register/
+@baseUrl = http://127.0.0.1:8000/api/v1
+@authToken = <paste_jwt_token_here>
+
+### 1. Request Cloudinary Upload Presign Signature (Avatar)
+# @name GetAvatarPresign
+GET {{baseUrl}}/upload/presign/?asset_type=avatar
+Authorization: Bearer {{authToken}}
 Content-Type: application/json
 
-{
-    "email": "{{email}}",
-    "phone_number": "{{phone}}",
-    "password": "{{password}}",
-    "password2": "{{password}}",
-    "first_name": "Rapid",
-    "last_name": "Test",
-    "role": "client"
-}
 
-### 2. Login (Unverified) -> Expect 403 with `actions` URL
-# @name login_unverified
-POST {{baseUrl}}/auth/login/
+### 2. Request Cloudinary Upload Presign Signature (Product Image)
+# @name GetProductPresign
+GET {{baseUrl}}/upload/presign/?asset_type=product_image
+Authorization: Bearer {{authToken}}
 Content-Type: application/json
 
-{
-    "email_or_phone": "{{email}}",
-    "password": "{{password}}"
-}
 
-### 3. Resend OTP
-# @name resend_otp
-POST {{baseUrl}}/auth/resend-otp/
+### 3. Simulate Cloudinary Upload Webhook (Avatar - Happy Path)
+# Requires valid X-Cld-Signature for the configured API_SECRET if checking signatures
+# (For local dev without secret validation, this will process normally)
+POST {{baseUrl}}/upload/webhook/cloudinary/
 Content-Type: application/json
+X-Cld-Timestamp: 1700000000
+X-Cld-Signature: test_signature_dummy
 
 {
-    "email_or_phone": "{{email}}"
+  "notification_type": "upload",
+  "public_id": "/avatars/user_YOUR_USER_UUID_HERE/avatar_test",
+  "secure_url": "https://res.cloudinary.com/fashionistar/image/upload/v1/avatars/user_test/avatar_test.jpg",
+  "resource_type": "image",
+  "created_at": "2026-03-21T18:00:00Z",
+  "bytes": 102400,
+  "width": 800,
+  "height": 800,
+  "format": "jpg"
 }
 
-### 4. Verify OTP (mocked OTP is 123456)
-# @name verify_otp
-POST {{baseUrl}}/auth/verify-otp/
+
+### 4. Simulate Cloudinary Upload Webhook (Duplicate - Idempotency Test)
+# Run the above request first, then this exact same payload.
+# The server should return 200 OK without updating the DB a second time.
+POST {{baseUrl}}/upload/webhook/cloudinary/
 Content-Type: application/json
+X-Cld-Timestamp: 1700000000
+X-Cld-Signature: test_signature_dummy
 
 {
-    "otp": "123456"
+  "notification_type": "upload",
+  "public_id": "/avatars/user_YOUR_USER_UUID_HERE/avatar_test",
+  "secure_url": "https://res.cloudinary.com/fashionistar/image/upload/v1/avatars/user_test/avatar_test.jpg",
+  "resource_type": "image",
+  "created_at": "2026-03-21T18:00:00Z",
+  "bytes": 102400,
+  "width": 800,
+  "height": 800,
+  "format": "jpg"
 }
 
-### 5. Login (Verified) -> Gets Tokens
-# @name login_verified
-POST {{baseUrl}}/auth/login/
+
+### 5. Simulate Cloudinary Webhook (Future App - Graceful Skip)
+# Tests the _safe_resolve_model functionality
+POST {{baseUrl}}/upload/webhook/cloudinary/
 Content-Type: application/json
+X-Cld-Timestamp: 1700000000
+X-Cld-Signature: test_signature_dummy
 
 {
-    "email_or_phone": "{{email}}",
-    "password": "{{password}}"
+  "notification_type": "upload",
+  "public_id": "/products/images/PROD-XYZ/front",
+  "secure_url": "https://res.cloudinary.com/fashionistar/image/upload/v1/products/images/PROD-XYZ/front.jpg",
+  "resource_type": "image",
+  "created_at": "2026-03-21T18:00:00Z"
 }
 
-@accessToken = {{login_verified.response.body.data.access}}
-@refreshToken = {{login_verified.response.body.data.refresh}}
 
-### 6. Refresh Token
-# @name refresh_token
-POST {{baseUrl}}/auth/token/refresh/
-Content-Type: application/json
-
-{
-    "refresh": "{{refreshToken}}"
-}
-
-### 7. Change Password
-# @name change_password
-POST {{baseUrl}}/password/change/
-Content-Type: application/json
-Authorization: Bearer {{accessToken}}
-
-{
-    "old_password": "{{password}}",
-    "new_password": "{{newPassword}}",
-    "confirm_password": "{{newPassword}}"
-}
-
-### 8. Logout
-# @name logout
-POST {{baseUrl}}/auth/logout/
-Content-Type: application/json
-Authorization: Bearer {{accessToken}}
-
-{
-    "refresh": "{{refreshToken}}"
-}
-
-### 9. Password Reset Request
-# @name reset_request
-POST {{baseUrl}}/password/reset-request/
-Content-Type: application/json
-
-{
-    "email_or_phone": "{{email}}"
-}
-
-### 10. Password Reset Phone Confirm (Mocked OTP is 123456)
-# @name reset_phone_confirm
-POST {{baseUrl}}/password/reset-phone-confirm/
-Content-Type: application/json
-
-{
-    "phone": "{{phone}}",
-    "otp": "123456",
-    "password": "{{password}}",
-    "password2": "{{password}}"
-}
-
-### 11. Presign Cloudinary Upload
-# @name presign
-POST {{baseUrl}}/upload/presign/
-Content-Type: application/json
-Authorization: Bearer {{accessToken}}
-
-{
-    "asset_type": "avatar"
-}
-
-### 12. Health Check
-# @name health_check
+### 6. Health Check / Status
 GET {{baseUrl}}/health/
-Content-Type: application/json
