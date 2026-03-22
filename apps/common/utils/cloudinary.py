@@ -548,21 +548,22 @@ def validate_cloudinary_webhook(
     """
     Validate an incoming Cloudinary webhook notification signature.
 
-    ⚠️ CRITICAL DETAIL: Cloudinary uses HMAC-SHA1 of the RAW BODY ONLY.
-    
+    Uses the official Cloudinary Python SDK:
+        cloudinary.utils.verify_notification_signature(body, timestamp, signature, valid_for)
+
     Official Cloudinary Algorithm (per their docs):
-        https://cloudinary.com/documentation/notifications_api#signed_notifications
-        
-        signature = HMAC-SHA1(raw_request_body, api_secret)
-        
-    NOT: HMAC-SHA1(body + timestamp + api_secret)
-    NOT: SHA256 or any other hash algorithm
-    
+        https://cloudinary.com/documentation/notifications#verify_notification_sig
+
+        signature = SHA1( raw_request_body + str(timestamp) + api_secret )
+
+    This is plain SHA-1 — NOT HMAC — of the concatenated string.
+    The SDK handles decoding, concatenation, hashing, and constant-time comparison.
+
     Replay protection: rejects events older than ``max_age_seconds`` (default
     7200s = 2 hours, per the Cloudinary docs tip).
 
     Args:
-        body:            Raw HTTP request body (bytes) — NOT decoded to string
+        body:            Raw HTTP request body (bytes)
         timestamp:       Value of the ``X-Cld-Timestamp`` header (str or int)
         signature:       Value of the ``X-Cld-Signature`` header (40-char SHA1 hex)
         max_age_seconds: Maximum allowed age (default 7200 = 2 hours)
@@ -603,30 +604,44 @@ def validate_cloudinary_webhook(
         logger.error("Cloudinary webhook: invalid timestamp '%s': %s", timestamp, exc)
         return False
 
-    # ── Step 2: Generate expected signature (HMAC-SHA1) ────────────────────
-    # CRITICAL: Use the raw body bytes directly, NOT decoded string
-    # CRITICAL: Use SHA1, NOT SHA256
-    # Reference: https://cloudinary.com/documentation/notifications_api#signed_notifications
-    expected_signature = hmac.new(
-        api_secret.encode("utf-8"),
-        body,
-        hashlib.sha1,  # ← MUST BE SHA1
-    ).hexdigest()
+    # ── Step 2: Use official Cloudinary Python SDK to verify the signature ─
+    #
+    # Cloudinary's algorithm: SHA1( body_str + str(timestamp) + api_secret )
+    # This is plain SHA-1, NOT HMAC.
+    # Reference: https://cloudinary.com/documentation/notifications#verify_notification_sig
+    #            https://github.com/cloudinary/pycloudinary (cloudinary/utils.py)
+    try:
+        import cloudinary.utils as cld_utils  # type: ignore
 
-    # ── Step 3: Compare signatures (constant-time to prevent timing attacks) ──
-    signature_valid = hmac.compare_digest(
-        expected_signature.lower(),
-        signature.lower()
-    )
+        body_str = body.decode("utf-8", errors="replace")
 
-    if not signature_valid:
+        is_valid: bool = cld_utils.verify_notification_signature(
+            body_str,
+            webhook_timestamp,
+            signature,
+            valid_for=max_age_seconds,
+        )
+
+    except Exception as exc:
+        # If the SDK itself raises (e.g. invalid config), fall back to manual
+        # SHA-1 verification per the Cloudinary official documentation.
+        logger.error(
+            "Cloudinary SDK verify_notification_signature raised: %s — "
+            "falling back to manual SHA-1 verification.",
+            exc,
+        )
+        # Fallback: SHA1(body_str + str(timestamp) + api_secret)
+        import hashlib as _hs
+        raw = f"{body.decode('utf-8', errors='replace')}{timestamp}{api_secret}"
+        expected = _hs.sha1(raw.encode("utf-8")).hexdigest()  # nosec: Cloudinary mandates SHA-1
+        is_valid = hmac.compare_digest(expected.lower(), signature.lower())
+
+    if not is_valid:
         logger.warning(
             "Cloudinary webhook SIG MISMATCH — "
-            "received=%s (len=%d) | expected=%s (len=%d) | "
-            "body_len=%d | timestamp=%s | age=%ds",
+            "received=%s (len=%d) | body_len=%d | timestamp=%s | age=%ds",
             signature, len(signature),
-            expected_signature, len(expected_signature),
-            len(body), timestamp, age_seconds
+            len(body), timestamp, age_seconds,
         )
         return False
 

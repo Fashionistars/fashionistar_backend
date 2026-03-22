@@ -98,6 +98,9 @@ def create_or_restore_superuser(
             user.is_verified = True
             user.is_active = True
             user.role = 'admin'
+            # Clear any stale/invalid avatar URLs so full_clean() doesn't reject
+            if user.avatar and not user.avatar.startswith(('http://', 'https://')):
+                user.avatar = ''
             user.set_password(password)
             user.save(using='default')
 
