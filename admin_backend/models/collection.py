@@ -47,11 +47,26 @@ class Collections(models.Model):
     slug = models.SlugField(unique=True, blank=True, null=True, db_index=True)
     background_image = models.ImageField(
         upload_to='gallery/bg_img/',
-        validators=[validate_image_cover_extension]
+        validators=[validate_image_cover_extension],
+        null=True, blank=True,
     )
     image = models.ImageField(
         upload_to='gallery/product_img/',
-        validators=[validate_image_cover_extension]
+        validators=[validate_image_cover_extension],
+        null=True, blank=True,
+    )
+    # ── Cloudinary URLs (populated by webhook after presign direct-uploads) ────
+    cloudinary_url = models.URLField(
+        max_length=800,
+        blank=True,
+        null=True,
+        help_text="Main collection image — auto-populated by Cloudinary webhook.",
+    )
+    background_cloudinary_url = models.URLField(
+        max_length=800,
+        blank=True,
+        null=True,
+        help_text="Background hero image — auto-populated by Cloudinary webhook.",
     )
     # created_at = models.DateTimeField(auto_now_add=True)
     created_at = models.DateTimeField(default=timezone.now)

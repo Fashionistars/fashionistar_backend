@@ -193,21 +193,21 @@ _WEBHOOK_ROUTES: list[tuple[str, str, str, callable, str]] = [
         "admin_backend.models.category.Category",
         "id",
         _extract_short_id,
-        "category",                   # ← FUTURE (admin_backend app)
+        "category",                   # ← LIVE (admin_backend app exists)
     ),
     (
         "/brands/images/",
         "admin_backend.models.brand.Brand",
         "id",
         _extract_short_id,
-        "brand",                      # ← FUTURE (admin_backend app)
+        "brand",                      # ← LIVE (admin_backend app exists)
     ),
     (
         "/collections/images/",
         "admin_backend.models.collection.Collections",
         "id",
         _extract_short_id,
-        "collection",                 # ← FUTURE (admin_backend app)
+        "collection",                 # ← LIVE (admin_backend app exists)
     ),
     (
         "/profiles/images/",
@@ -270,6 +270,51 @@ def _get_audit_event_type(asset_label: str, resource_type: str) -> str:
     return mapping.get(asset_label, _EVENT_WEBHOOK_RECEIVED)
 
 
+# ─── Cloudinary SDK bootstrap helper ────────────────────────────────────────
+def _ensure_cloudinary_config() -> None:
+    """
+    Explicitly configure the Cloudinary SDK inside Celery worker processes.
+
+    Problem: In Celery worker processes (especially with --pool=solo or solo
+    pools), the django-cloudinary-storage library's Django app startup hook
+    that calls cloudinary.config() is NOT always executed, leaving the SDK
+    with empty/None credentials. Any subsequent call to cloudinary.uploader
+    or cloudinary.api raises ``ValueError('Must supply api_key')``.
+
+    Solution: Read credentials directly from Django settings and call
+    cloudinary.config() explicitly before every API call. This is idempotent
+    — the SDK overwrites its global config object, so calling it multiple
+    times is safe.
+    """
+    import cloudinary
+    from django.conf import settings
+
+    cld_storage = getattr(settings, "CLOUDINARY_STORAGE", {})
+    cloud_name  = cld_storage.get("CLOUD_NAME", "")
+    api_key     = cld_storage.get("API_KEY", "")
+    api_secret  = cld_storage.get("API_SECRET", "")
+
+    if not all([cloud_name, api_key, api_secret]):
+        # Try the legacy CLOUDINARY_URL env var as a fallback
+        import os
+        cld_url = os.environ.get("CLOUDINARY_URL", "")
+        if cld_url:
+            cloudinary.config.from_url(cld_url)
+            return
+        logger.error(
+            "_ensure_cloudinary_config: CLOUDINARY_STORAGE settings missing credentials. "
+            "Set CLOUD_NAME, API_KEY, API_SECRET in CLOUDINARY_STORAGE settings."
+        )
+        raise ValueError("Must supply api_key — check CLOUDINARY_STORAGE in Django settings.")
+
+    cloudinary.config(
+        cloud_name=cloud_name,
+        api_key=api_key,
+        api_secret=api_secret,
+        secure=True,
+    )
+
+
 def _dispatch_audit_log(
     asset_label: str,
     event_type: str,
@@ -281,8 +326,21 @@ def _dispatch_audit_log(
     """Fire-and-forget audit log dispatch. Never raises."""
     try:
         from apps.audit_logs.services.audit import AuditService
+        # Map asset_label to audit event category
+        _CATEGORY_MAP = {
+            "avatar":        "authentication",
+            "product_image": "media",
+            "product_video": "media",
+            "product_gallery": "media",
+            "category":      "media",
+            "collection":    "media",
+            "brand":         "media",
+            "measurement":   "media",
+        }
+        event_category = _CATEGORY_MAP.get(asset_label, "media")
         AuditService.log(
             event_type=event_type,
+            event_category=event_category,
             action=f"Cloudinary {asset_label} webhook processed",
             resource_type=model_path.rsplit(".", 1)[-1],
             resource_id=pk_value,
@@ -603,6 +661,11 @@ def generate_eager_transformations(
     import cloudinary.uploader
     from apps.common.utils.cloudinary import _ASSET_CONFIGS
 
+    # ── CRITICAL: Ensure Cloudinary SDK is configured in this Celery worker ──
+    # The SDK global config may be empty if cloudinary-storage's startup hook
+    # was not called in this worker process. Always configure explicitly.
+    _ensure_cloudinary_config()
+
     config = _ASSET_CONFIGS.get(asset_type, _ASSET_CONFIGS["generic_image"])
     eager  = config.get("eager", [])
 
@@ -659,6 +722,9 @@ def purge_cloudinary_cache(
         resource_type: "image" | "video" | "raw".
     """
     import cloudinary.api
+
+    # ── CRITICAL: Ensure Cloudinary SDK is configured in this Celery worker ──
+    _ensure_cloudinary_config()
 
     try:
         if not public_ids:

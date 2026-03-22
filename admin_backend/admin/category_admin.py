@@ -73,6 +73,11 @@ class CategoryAdmin(ImportExportModelAdmin):
         ('Basic Information', {
             'fields': ('name', 'image', 'slug')
         }),
+        ('Cloudinary (auto-populated by webhook)', {
+            'fields': ('cloudinary_url',),
+            'classes': ('collapse',),
+            'description': 'Auto-populated after a presign direct-upload to Cloudinary.',
+        }),
         ('Status', {
             'fields': ('active',),
         }),
@@ -81,4 +86,4 @@ class CategoryAdmin(ImportExportModelAdmin):
             'classes': ('collapse',),          # Collapse the timestamps section by default
         }),
     )
-    readonly_fields = ('category_image', 'created_at', 'updated_at')
+    readonly_fields = ('category_image', 'cloudinary_url', 'created_at', 'updated_at')

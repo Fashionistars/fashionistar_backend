@@ -57,6 +57,12 @@ class BrandAdmin(ImportExportModelAdmin):
         ('Basic Information', {
             'fields': ('title', 'image', 'slug', 'description')
         }),
+        ('Cloudinary (auto-populated by webhook)', {
+            'fields': ('cloudinary_url',),
+            'classes': ('collapse',),
+            'description': 'These fields are automatically populated when Cloudinary '
+                           'sends a webhook after a presign direct-upload.',
+        }),
         ('Status', {
             'fields': ('active',),
         }),
@@ -66,4 +72,4 @@ class BrandAdmin(ImportExportModelAdmin):
         }),
     )
 
-    readonly_fields = ('brand_image', 'created_at', 'updated_at')    
+    readonly_fields = ('brand_image', 'cloudinary_url', 'created_at', 'updated_at')

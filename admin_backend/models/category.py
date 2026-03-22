@@ -23,6 +23,13 @@ class Category(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100, unique=True, db_index=True)
     image = models.ImageField(upload_to='category_images/', default="category.jpg", null=True, blank=True)
+    # ── Cloudinary URL (populated by webhook after presign direct-upload) ──────
+    cloudinary_url = models.URLField(
+        max_length=800,
+        blank=True,
+        null=True,
+        help_text="Auto-populated by Cloudinary webhook after presign upload.",
+    )
     active = models.BooleanField(default=True)
     slug = models.SlugField(unique=True, blank=True, null=True, db_index=True)
     # created_at = models.DateTimeField(auto_now_add=True)

@@ -4,9 +4,16 @@ from django.conf import settings
 from django.utils import timezone
 from django.utils.text import slugify
 
+
 class Brand(models.Model):
     """
     Represents a brand.
+
+    Image strategy:
+        - ``image``          — Legacy local ImageField (kept for backward compat).
+        - ``cloudinary_url`` — Populated automatically by the Cloudinary webhook
+                               after a presign+direct-upload flow. This is the
+                               canonical production image URL.
     """
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -18,6 +25,13 @@ class Brand(models.Model):
     title = models.CharField(max_length=100)
     description = models.TextField(null=True, blank=True)
     image = models.ImageField(upload_to='brand_images/', default="brand.jpg", null=True, blank=True)
+    # ── Cloudinary URL (populated by webhook after presign direct-upload) ──────
+    cloudinary_url = models.URLField(
+        max_length=800,
+        blank=True,
+        null=True,
+        help_text="Auto-populated by Cloudinary webhook after presign upload.",
+    )
     active = models.BooleanField(default=True)
     slug = models.SlugField(unique=True, blank=True, null=True, db_index=True)
     created_at = models.DateTimeField(default=timezone.now)
