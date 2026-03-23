@@ -307,10 +307,12 @@ class PasswordResetConfirmPhoneView(APIView):
 
         vd = serializer.validated_data
         service_payload = {
-            "phone":        request.data.get("phone"),  # may be None — service fetches from Redis
+            # OTP-only: no phone in body. The service calls verify_by_otp_sync(otp)
+            # which performs an O(1) SHA-256 Redis hash-index lookup to discover user_id.
             "token":        vd["otp"],
             "new_password": vd["password"],
         }
+
 
         try:
             msg = SyncPasswordService.confirm_reset(service_payload)

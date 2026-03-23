@@ -67,12 +67,15 @@ def mock_otp_generation(mocker):
         'apps.authentication.services.otp.sync_service.OTPService.generate_otp_sync',
         side_effect=_fake_generate,
     )
-    # Also patch the async wrapper to avoid sync_to_async in async tests
+    # generate_otp_async is optional — only patch if it exists on the class
+    # (create=True tells mocker to create the attribute if missing rather than raising)
     mocker.patch(
         'apps.authentication.services.otp.sync_service.OTPService.generate_otp_async',
         side_effect=_fake_generate,
+        create=True,
     )
     return _OTP_STORE
+
 
 
 # ─── Optional: mock Celery tasks (used in tests with transaction=True) ─────────

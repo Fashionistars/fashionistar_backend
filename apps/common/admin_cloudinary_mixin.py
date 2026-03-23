@@ -97,7 +97,6 @@ class CloudinaryUploadAdminMixin:
         change: bool,
     ) -> None:
         """Process all Cloudinary field uploads for this admin save."""
-        from apps.common.utils.cloudinary import upload_to_cloudinary_from_admin
 
         for field_name, (folder, asset_type) in self.cloudinary_fields.items():
             # Check if the admin form has a new file for this field

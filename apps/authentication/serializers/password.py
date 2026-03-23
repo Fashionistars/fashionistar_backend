@@ -87,14 +87,26 @@ class PasswordResetConfirmPhoneSerializer(serializers.Serializer):
     """
     Serializer for confirming password reset via phone OTP.
 
-    Phone is NOT required in the body — the service fetches it from the
-    OTP token stored in Redis, preventing any user enumeration from the body.
+    OTP-ONLY design (mirrors VerifyOTPView pattern exactly):
+      - Client sends ONLY: otp + password + password2.
+      - phone is NOT required in the body — the service discovers the user
+        via OTPService.verify_by_otp_sync(otp, purpose='password_reset'),
+        which uses an O(1) SHA-256 hash index lookup in Redis:
+            otp_hash:{sha256(otp)}  →  otp:{user_id}:password_reset:{snippet}
+      - This prevents account enumeration: an attacker cannot test whether
+        a phone number has an account by observing different error responses.
 
-    Rich OTP format error includes resend + reset-request URLs for frontend.
+    Redis key schema (written during reset-request):
+      Primary  : otp:{user_id}:password_reset:{snippet}
+                 Value = "{encrypted_otp}|{sha256_hex}"
+      Secondary: otp_hash:{sha256_hex}  →  primary_key  (TTL = 300 s)
     """
-    # phone field intentionally commented out — service resolves via Redis OTP
-    # phone = serializers.CharField(required=True, ...)
-
+    otp = serializers.CharField(
+        required=True,
+        allow_blank=False,
+        max_length=6,
+        help_text="6-digit OTP received via SMS",
+    )
     password = serializers.CharField(
         write_only=True,
         required=True,
@@ -105,12 +117,6 @@ class PasswordResetConfirmPhoneSerializer(serializers.Serializer):
         write_only=True,
         required=True,
         help_text="Confirm new password",
-    )
-    otp = serializers.CharField(
-        required=True,
-        allow_blank=False,
-        max_length=6,
-        help_text="OTP sent to user's phone",
     )
 
     class Meta:
@@ -126,12 +132,12 @@ class PasswordResetConfirmPhoneSerializer(serializers.Serializer):
                     {"password": _("Passwords do not match.")}
                 )
 
-            otp = attrs.get("otp")
+            otp = attrs.get("otp", "")
             if not otp or len(otp) != 6 or not otp.isdigit():
                 raise serializers.ValidationError({
                     "otp": _(
-                        "OTP must be 6 numeric digits. "
-                        "Didn't receive it? Request a new one or re-trigger the reset."
+                        "OTP must be exactly 6 numeric digits. "
+                        "Didn't receive it? Request a new one."
                     ),
                     "resend_otp_url":    f"{_base}/resend-otp",
                     "reset_request_url": "/api/v1/password/reset-request/",
@@ -141,7 +147,7 @@ class PasswordResetConfirmPhoneSerializer(serializers.Serializer):
         except serializers.ValidationError:
             raise
         except Exception as exc:
-            logger.error("Unexpected error in password reset confirm phone: %s", exc)
+            logger.error("Unexpected error in PasswordResetConfirmPhoneSerializer: %s", exc)
             raise serializers.ValidationError(
                 {"non_field_errors": _("Validation failed.")}
             )

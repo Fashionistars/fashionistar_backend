@@ -1744,13 +1744,17 @@ class UserSessionAdmin(admin.ModelAdmin):
     @admin.display(description='Expired?', ordering='expires_at')
     def is_expired_badge(self, obj):
         from django.utils import timezone as tz
+        from django.utils.safestring import mark_safe
         expired = obj.expires_at and obj.expires_at < tz.now()
         if expired:
-            return format_html(
+            # mark_safe used (not format_html) because the HTML is fully static —
+            # no user-supplied data is interpolated, so format_html's escaping is
+            # not required.  format_html() with no args raises TypeError in Django 6.
+            return mark_safe(
                 '<span style="background:#ef4444;color:#fff;padding:2px 8px;'
                 'border-radius:4px;font-size:11px;font-weight:700;">EXPIRED</span>'
             )
-        return format_html(
+        return mark_safe(
             '<span style="background:#10b981;color:#fff;padding:2px 8px;'
             'border-radius:4px;font-size:11px;font-weight:700;">ACTIVE</span>'
         )

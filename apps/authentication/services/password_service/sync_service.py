@@ -53,11 +53,24 @@ class SyncPasswordService:
                 uid = urlsafe_base64_encode(force_bytes(user.pk))
                 reset_link = f"{settings.FRONTEND_URL}/auth/reset-password?uid={uid}&token={token}"
                 
+                # Build the frontend reset URL using FRONTEND_URL from settings.
+                # Both HTML template (reset_url, SITE_URL) and .txt template
+                # (reset_url) read from these exact keys.
+                _site_url = getattr(settings, 'FRONTEND_URL', 'https://fashionistar.net').rstrip('/')
                 send_email_task.delay(
                     subject="Password Reset Request",
                     recipients=[user.email],
                     template_name="authentication/email/password_reset.html",
-                    context={"user": {"first_name": getattr(user, "first_name", ""), "email": getattr(user, "email", "")}, "reset_link": reset_link}
+                    context={
+                        "user": {
+                            "first_name": getattr(user, "first_name", "") or "",
+                            "email": getattr(user, "email", "") or "",
+                        },
+                        # Template uses {{ reset_url }} — must match exactly
+                        "reset_url": reset_link,
+                        # Template uses {{ SITE_URL }} for the support href
+                        "SITE_URL": _site_url,
+                    }
                 )
                 logger.info(f"📧 Reset Email Celery task dispatched for {user.email}")
 
@@ -93,15 +106,24 @@ class SyncPasswordService:
                 if not default_token_generator.check_token(user, data['token']):
                     raise Exception("Invalid or expired token.")
             
-            elif 'phone' in data and data['phone']:
-                # Phone Flow
-                try:
-                    user = UnifiedUser.objects.get(phone=data['phone'])
-                except UnifiedUser.DoesNotExist:
-                    raise Exception("Invalid phone.")
-                     
-                if not OTPService.verify_otp_sync(user.id, data['token'], purpose='password_reset'):
+            elif 'token' in data and data['token'] and 'phone' not in data:
+                # ── Phone OTP-only flow (mirrors VerifyOTPView) ────────────────
+                # Client sends ONLY the OTP — no phone in request body.
+                # verify_by_otp_sync performs an O(1) SHA-256 hash index lookup:
+                #   sha256(otp) → otp_hash:{hex} → primary_key → parse user_id
+                # This is identical to the VerifyOTPView pattern: no scan, no keys().
+                otp_result = OTPService.verify_by_otp_sync(
+                    data['token'], purpose='password_reset'
+                )
+                if not otp_result:
                     raise Exception("Invalid or expired OTP.")
+
+                # Fetch user from DB using the user_id discovered from Redis
+                try:
+                    user = UnifiedUser.objects.get(pk=otp_result['user_id'])
+                except UnifiedUser.DoesNotExist:
+                    raise Exception("User not found.")
+
             
             else:
                 raise Exception("Invalid request data.")

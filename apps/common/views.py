@@ -49,23 +49,26 @@ Metrics compatible with:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
 from datetime import datetime, timezone
 from typing import Any
-import asyncio
 
+from apps.common.renderers import CustomJSONRenderer
+from apps.common.serializers import PresignRequestSerializer
 from django.conf import settings
 from django.db import connection
+from django.http import HttpRequest, JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
-from django.http import HttpRequest, JsonResponse
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.views import APIView
-from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import AllowAny
+from rest_framework.renderers import BrowsableAPIRenderer
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 logger = logging.getLogger(__name__)
 
@@ -332,7 +335,10 @@ class CloudinaryPresignView(APIView):
     Response 400 — invalid asset_type (serializer validation error).
     Response 500 — signature generation failed.
     """
-    permission_classes = [IsAuthenticated]
+    serializer_class    = PresignRequestSerializer
+    permission_classes  = [AllowAny]
+    renderer_classes    = [CustomJSONRenderer, BrowsableAPIRenderer]
+    
 
     def post(self, request: HttpRequest) -> Response:
         from apps.common.serializers import PresignRequestSerializer
@@ -405,8 +411,8 @@ class CloudinaryWebhookView(View):
     http_method_names = ["post", "head"]
 
     def post(self, request: HttpRequest) -> JsonResponse:  # type: ignore[override]
-        from apps.common.utils.cloudinary import validate_cloudinary_webhook
         from apps.common.tasks import process_cloudinary_upload_webhook
+        from apps.common.utils.cloudinary import validate_cloudinary_webhook
 
         body       = request.body
         timestamp  = request.headers.get("X-Cld-Timestamp", "")
