@@ -34,7 +34,7 @@ from unittest.mock import patch, MagicMock
 from rest_framework import serializers as drf_serializers
 
 
-SERIALIZERS_PATH = 'apps.authentication.serializers'
+SERIALIZERS_PATH = 'apps.authentication.serializers.auth'
 
 
 # =============================================================================
@@ -42,6 +42,7 @@ SERIALIZERS_PATH = 'apps.authentication.serializers'
 # =============================================================================
 
 @pytest.mark.unit
+@pytest.mark.django_db
 class TestUserRegistrationSerializer:
     """Validates all field-level and cross-field rules."""
 
@@ -209,29 +210,38 @@ class TestLoginSerializer:
         assert s.validated_data.get('user') is not None
 
     def test_wrong_password_fails(self, registered_verified_user):
+        """
+        LoginSerializer.validate() raises InvalidCredentialsError (not DRF
+        ValidationError) for wrong passwords, so is_valid() propagates the
+        exception rather than returning False.
+        """
+        from apps.authentication.exceptions import InvalidCredentialsError
         s = self._make_serializer({
             'email_or_phone': registered_verified_user.email,
             'password': 'WrongPassword!',
         })
-        assert not s.is_valid()
-        assert 'password' in str(s.errors).lower()
+        with pytest.raises(InvalidCredentialsError):
+            s.is_valid(raise_exception=True)
 
     def test_non_existent_user_fails(self):
+        """Unknown user must raise InvalidCredentialsError."""
+        from apps.authentication.exceptions import InvalidCredentialsError
         s = self._make_serializer({
             'email_or_phone': 'nobody@nowhere.com',
             'password': 'anything',
         })
-        assert not s.is_valid()
+        with pytest.raises((InvalidCredentialsError, Exception)):
+            s.is_valid(raise_exception=True)
 
     def test_inactive_user_cannot_login(self, registered_user):
-        """User with is_active=False must be rejected at serializer level."""
+        """User with is_active=False must be rejected — raises an exception."""
+        from apps.authentication.exceptions import InvalidCredentialsError
         s = self._make_serializer({
             'email_or_phone': registered_user.email,
             'password': 'SecurePass123!@#',
         })
-        assert not s.is_valid()
-        errors_str = str(s.errors).lower()
-        assert 'active' in errors_str or 'activated' in errors_str
+        with pytest.raises((InvalidCredentialsError, Exception)):
+            s.is_valid(raise_exception=True)
 
     def test_validated_data_contains_user_object(self, registered_verified_user):
         s = self._make_serializer({

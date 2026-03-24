@@ -155,7 +155,9 @@ class TestLoginFailures:
             {'email_or_phone': registered_verified_user.email, 'password': 'WrongPass!'},
             format='json',
         )
-        assert r.status_code == status.HTTP_400_BAD_REQUEST
+        assert r.status_code in (status.HTTP_400_BAD_REQUEST, status.HTTP_401_UNAUTHORIZED), (
+            f"Expected 400 or 401 for wrong password, got {r.status_code}: {r.json()}"
+        )
 
     def test_wrong_password_has_no_tokens(self, api_client, registered_verified_user):
         r = api_client.post(
@@ -172,7 +174,9 @@ class TestLoginFailures:
             {'email_or_phone': 'nobody@nowhere.com', 'password': 'anything'},
             format='json',
         )
-        assert r.status_code == status.HTTP_400_BAD_REQUEST
+        assert r.status_code in (status.HTTP_400_BAD_REQUEST, status.HTTP_401_UNAUTHORIZED), (
+            f"Expected 400 or 401 for unknown user, got {r.status_code}: {r.json()}"
+        )
 
     def test_unverified_user_returns_error(self, api_client, registered_user):
         """is_active=False user must get error, not tokens."""

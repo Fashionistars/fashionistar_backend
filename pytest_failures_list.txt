@@ -1,0 +1,16 @@
+FAILED                                                                   [ 89%]
+FAILED                                                                   [ 93%]
+FAILED                                                                   [ 94%]
+FAILED                                                                   [ 94%]
+FAILED apps/authentication/tests/integration/test_login_endpoint.py::TestLoginFailures::test_wrong_password_returns_400
+FAILED apps/authentication/tests/integration/test_login_endpoint.py::TestLoginFailures::test_nonexistent_user_returns_400
+FAILED apps/authentication/tests/unit/test_serializers.py::TestLoginSerializer::test_wrong_password_fails
+FAILED apps/authentication/tests/unit/test_serializers.py::TestLoginSerializer::test_non_existent_user_fails
+FAILED apps/authentication/tests/unit/test_serializers.py::TestLoginSerializer::test_inactive_user_cannot_login
+FAILED apps/authentication/tests/test_password_reset.py::TestPasswordResetConfirmEmail::test_race_condition_same_token_two_threads
+FAILED apps/authentication/tests/test_password_reset.py::TestConcurrencyStress::test_20_concurrent_reset_requests_all_200
+FAILED apps/authentication/tests/test_password_reset.py::TestConcurrencyStress::test_20_concurrent_phone_confirm_only_1_wins
+FAILED apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_valid_email_payload_passes
+FAILED apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_vendor_role_accepted
+FAILED apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_duplicate_email_returns_email_field_error
+FAILED apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_email_normalized_before_uniqueness_check

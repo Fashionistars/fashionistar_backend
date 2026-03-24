@@ -9,23 +9,10 @@ delayed and audit events are NEVER lost on transaction rollback.
 Falls back to direct synchronous write if Celery is unavailable so
 audit events are NEVER silently dropped.
 
-Usage:
-    from apps.audit_logs.services.audit import AuditService
-    from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
-
-    AuditService.log(
-        event_type=EventType.LOGIN_SUCCESS,
-        event_category=EventCategory.AUTHENTICATION,
-        action="User logged in successfully",
-        request=request,            # optional — auto-populated by middleware
-        actor=request.user,         # optional
-        resource_type="UnifiedUser",
-        resource_id=str(user.pk),
-        old_values=None,
-        new_values={"last_login": str(now)},
-        metadata={"risk_score": 0.1},
-        is_compliance=False,
-    )
+Auto-enrichment on every event (no extra work for callers):
+  - ip_address, user_agent: from request headers
+  - device_type, browser_family, os_family: from User-Agent string
+  - country, country_code, city: via ip-api.com geo lookup (Redis-cached 24h)
 """
 
 import logging
@@ -33,12 +20,80 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class AuditService:
-    """
-    Stateless service for writing audit events.
+# ─────────────────────────────────────────────────────────────────────────────
+# Geo-IP extraction (synchronous, Redis-cached 24h, never blocks on failure)
+# ─────────────────────────────────────────────────────────────────────────────
 
-    All classmethods — no instantiation needed.
+def _resolve_geo(ip: str) -> dict:
     """
+    Resolve country, country_code, city, and region for an IP address.
+
+    Skips private/loopback IPs. Redis-caches results for 24 hours.
+    Uses ip-api.com (free tier — no API key needed, 45req/minute limit).
+    On ANY error, returns empty dict — geo must NEVER fail an audit.
+    """
+    _PRIVATE_PREFIXES = (
+        '127.', '10.', '192.168.', '::1', '0.0.0.0', 'localhost',
+    )
+    if not ip or any(ip.startswith(p) for p in _PRIVATE_PREFIXES):
+        return {}
+    if ip.startswith('172.'):
+        try:
+            second_octet = int(ip.split('.')[1])
+            if 16 <= second_octet <= 31:
+                return {}
+        except Exception:
+            pass
+
+    try:
+        from utilities.django_redis import get_redis_connection_safe
+        r = get_redis_connection_safe()
+        cache_key = f"geo:{ip}"
+
+        if r:
+            cached = r.get(cache_key)
+            if cached:
+                import json
+                try:
+                    return json.loads(cached)
+                except Exception:
+                    pass
+
+        import json as _json
+        import urllib.request as _req
+        import urllib.error as _err
+
+        url = f"http://ip-api.com/json/{ip}?fields=49439"
+        try:
+            with _req.urlopen(url, timeout=1.5) as resp:
+                data = _json.loads(resp.read().decode())
+        except (_err.URLError, _err.HTTPError, OSError, Exception):
+            return {}
+
+        if data.get("status") != "success":
+            return {}
+
+        result = {
+            "country":      data.get("country") or "",
+            "country_code": data.get("countryCode") or "",
+            "city":         data.get("city") or "",
+            "region":       data.get("regionName") or "",
+        }
+
+        if r:
+            try:
+                r.setex(cache_key, 86400, _json.dumps(result))
+            except Exception:
+                pass
+
+        return result
+
+    except Exception:
+        return {}
+
+
+class AuditService:
+    """Stateless service for writing audit events. All classmethods."""
 
     @classmethod
     def log(
@@ -51,7 +106,7 @@ class AuditService:
         # Actor
         actor=None,
         actor_email: str | None = None,
-        # Request context (auto-filled by middleware if None)
+        # Request context (auto-filled from middleware/request if None)
         request=None,
         ip_address: str | None = None,
         user_agent: str | None = None,
@@ -62,6 +117,10 @@ class AuditService:
         request_path: str | None = None,
         response_status: int | None = None,
         duration_ms: float | None = None,
+        # Geo (auto-resolved from IP unless provided)
+        country: str | None = None,
+        country_code: str | None = None,
+        city: str | None = None,
         # Resource
         resource_type: str | None = None,
         resource_id: str | None = None,
@@ -77,8 +136,8 @@ class AuditService:
         """
         Record a structured audit event.
 
-        All arguments are keyword-only to prevent positional mistakes.
-        Guaranteed NEVER to raise — any error is swallowed and logged.
+        All arguments are keyword-only. Guaranteed NEVER to raise.
+        Every call auto-enriches with geo-IP, UA parsing, and request context.
         """
         try:
             from apps.audit_logs.middleware import get_audit_context
@@ -88,14 +147,13 @@ class AuditService:
             resolved_actor = actor
             if resolved_actor is None and request is not None:
                 u = getattr(request, "user", None)
-                if u and u.is_authenticated:
+                if u and getattr(u, 'is_authenticated', False):
                     resolved_actor = u
-
             if resolved_actor is None:
                 resolved_actor = ctx.get("actor")
 
             resolved_email = actor_email or getattr(resolved_actor, "email", None)
-            if not resolved_email and request:
+            if not resolved_email:
                 resolved_email = ctx.get("actor_email")
 
             # ── Resolve request context ───────────────────────────────
@@ -123,22 +181,37 @@ class AuditService:
                                    request.path if request else None,
                                    ctx.get("request_path"))
 
-            # ── UA parsing (graceful — ua-parser is optional) ─────────
+            # ── UA parsing → device_type, browser_family, os_family ───
             resolved_device  = device_type
             resolved_browser = browser_family
             resolved_os      = os_family
-            if resolved_ua and (not device_type or not browser_family):
+            if resolved_ua and (not resolved_device or not resolved_browser or not resolved_os):
                 try:
                     from user_agents import parse as ua_parse
-                    ua = ua_parse(resolved_ua)
-                    resolved_device  = resolved_device  or (
-                        "mobile"  if ua.is_mobile  else
-                        "tablet"  if ua.is_tablet  else
-                        "bot"     if ua.is_bot     else
+                    ua_obj = ua_parse(resolved_ua)
+                    resolved_device  = resolved_device or (
+                        "mobile"  if ua_obj.is_mobile  else
+                        "tablet"  if ua_obj.is_tablet  else
+                        "bot"     if ua_obj.is_bot     else
                         "desktop"
                     )
-                    resolved_browser = resolved_browser or ua.browser.family or None
-                    resolved_os      = resolved_os      or ua.os.family      or None
+                    resolved_browser = resolved_browser or (ua_obj.browser.family or None)
+                    resolved_os      = resolved_os      or (ua_obj.os.family      or None)
+                except Exception:
+                    pass
+
+            # ── Geo-IP enrichment → country, country_code, city ───────
+            resolved_country      = country or ""
+            resolved_country_code = country_code or ""
+            resolved_city         = city or ""
+
+            if resolved_ip and not (resolved_country and resolved_country_code):
+                try:
+                    geo = _resolve_geo(resolved_ip)
+                    if geo:
+                        resolved_country      = resolved_country      or geo.get("country", "")
+                        resolved_country_code = resolved_country_code or geo.get("country_code", "")
+                        resolved_city         = resolved_city         or geo.get("city", "")
                 except Exception:
                     pass
 
@@ -155,6 +228,9 @@ class AuditService:
                 device_type=resolved_device,
                 browser_family=resolved_browser,
                 os_family=resolved_os,
+                country=resolved_country or None,
+                country_code=resolved_country_code or None,
+                city=resolved_city or None,
                 resource_type=resource_type,
                 resource_id=str(resource_id) if resource_id else None,
                 request_method=resolved_meth,
@@ -169,7 +245,6 @@ class AuditService:
                 retention_days=retention_days,
             )
 
-            # ── Dispatch (async preferred, sync fallback) ─────────────
             cls._dispatch(payload)
 
         except Exception:
@@ -180,31 +255,15 @@ class AuditService:
 
     @staticmethod
     def _dispatch(payload: dict) -> None:
-        """
-        Write the audit event asynchronously via Celery, or synchronously
-        if the broker is unavailable.
-
-        IMPORTANT: We call ``apply_async()`` DIRECTLY — NOT inside
-        ``transaction.on_commit()``. This ensures:
-          1. The task is enqueued to Redis immediately, regardless of
-             whether the caller's DB transaction commits or rolls back.
-          2. Failed-request audit logs (e.g. validation errors inside
-             ``transaction.atomic()``) are NEVER silently dropped.
-          3. The Celery worker writes to the DB in its own connection,
-             so there is no risk of stale reads or lock contention with
-             the caller's transaction.
-        """
+        """Enqueue audit event to Celery immediately (NOT inside on_commit)."""
         try:
             from apps.audit_logs.tasks import write_audit_event
-
             write_audit_event.apply_async(
                 kwargs={"payload": payload},
                 retry=False,
                 ignore_result=True,
             )
         except Exception:
-            # Broker down or Celery misconfigured — write synchronously
-            # so events are never dropped.
             _write_sync(payload)
 
 

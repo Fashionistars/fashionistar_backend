@@ -65,8 +65,8 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status
-from rest_framework.permissions import AllowAny
-from rest_framework.renderers import BrowsableAPIRenderer
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.renderers import BrowsableAPIRenderer, MultiPartRenderer, JSONRenderer, StaticHTMLRenderer
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -337,7 +337,7 @@ class CloudinaryPresignView(APIView):
     """
     serializer_class    = PresignRequestSerializer
     permission_classes  = [AllowAny]
-    renderer_classes    = [CustomJSONRenderer, BrowsableAPIRenderer]
+    renderer_classes    = [CustomJSONRenderer, BrowsableAPIRenderer, MultiPartRenderer, JSONRenderer, StaticHTMLRenderer]
     
 
     def post(self, request: HttpRequest) -> Response:

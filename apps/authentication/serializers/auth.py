@@ -228,6 +228,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         ref_name = "AuthUserRegistration"
 
     def validate(self, attrs):
+        from apps.authentication.exceptions import SoftDeletedUserExistsError
         try:
             if attrs["password"] != attrs["password2"]:
                 logger.warning("Registration failed: Passwords do not match.")
@@ -272,7 +273,6 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
                 attrs["email"] = email
 
             # Soft-deleted pool check FIRST (prevents unique-constraint 500)
-            from apps.authentication.exceptions import SoftDeletedUserExistsError
 
             if email:
                 if UnifiedUser.objects.all_with_deleted().filter(
@@ -308,9 +308,9 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         except (serializers.ValidationError, SoftDeletedUserExistsError):
             raise
         except Exception as exc:
-            logger.error("Unexpected error in registration validation: %s", exc)
+            logger.error("Unexpected error in registration validation: %s", exc, exc_info=True)
             raise serializers.ValidationError(
-                {"non_field_errors": _("An error occurred during validation.")}
+                {"non_field_errors": f"An error occurred during validation: {str(exc)}"}
             )
 
     def create(self, validated_data):

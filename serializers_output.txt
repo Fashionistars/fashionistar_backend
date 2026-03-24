@@ -1,0 +1,194 @@
+============================= test session starts =============================
+collected 25 items
+
+apps/authentication/tests/unit/test_serializers.py::TestLoginSerializer::test_valid_email_login_passes 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20de-9fc8-7f1f-9da9-541571c92bce [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth \u2014 \u2705 LoginSerializer: valid credentials for 'verified@fashionistar.io'\nPASSED                                                                   [  4%]
+apps/authentication/tests/unit/test_serializers.py::TestLoginSerializer::test_wrong_password_fails 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20de-a5e9-79ea-bd12-554077730082 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.serializers.auth \u2014 \u26d4 Login failed: wrong password for 'verified@fashionistar.io'\nFAILED                                                                   [  8%]
+apps/authentication/tests/unit/test_serializers.py::TestLoginSerializer::test_non_existent_user_fails 
+-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.serializers.auth \u2014 \u26d4 Login failed: user not found 'nobody@nowhere.com'\nFAILED                                                                   [ 12%]
+apps/authentication/tests/unit/test_serializers.py::TestLoginSerializer::test_inactive_user_cannot_login 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20de-b024-7bb1-baea-2a5c8039c2ae [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=registered@fashionistar.io\n-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.serializers.auth \u2014 \u26d4 Login rejected: account not verified 'registered@fashionistar.io'\nFAILED                                                                   [ 16%]
+apps/authentication/tests/unit/test_serializers.py::TestLoginSerializer::test_validated_data_contains_user_object 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20de-b6f5-7960-97f3-5c570a7c12e1 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth \u2014 \u2705 LoginSerializer: valid credentials for 'verified@fashionistar.io'\nPASSED                                                                   [ 20%]
+apps/authentication/tests/unit/test_serializers.py::TestResendOTPRequestSerializer::test_valid_existing_email_passes 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20de-be30-74b3-9555-24a51fba6a25 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.otp — ResendOTP validation successful for verified@fashionistar.io
+PASSED                                                                   [ 24%]
+apps/authentication/tests/unit/test_serializers.py::TestResendOTPRequestSerializer::test_nonexistent_email_fails 
+-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.serializers.otp — ResendOTP validation failed: no user for 'ghost@nobody.com'
+PASSED                                                                   [ 28%]
+apps/authentication/tests/unit/test_serializers.py::TestResendOTPRequestSerializer::test_missing_field_fails PASSED [ 32%]
+apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_valid_email_payload_passes 
+-------------------------------- live log call --------------------------------
+[ERROR   ] apps.authentication.serializers.auth — Unexpected error in registration validation: Database access not allowed, use the "django_db" mark, or the "db" or "transactional_db" fixtures to enable it.
+FAILED                                                                   [ 36%]
+apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_password_mismatch_raises 
+-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.serializers.auth — Registration failed: Passwords do not match.
+PASSED                                                                   [ 40%]
+apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_both_email_and_phone_rejected PASSED [ 44%]
+apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_neither_email_nor_phone_rejected PASSED [ 48%]
+apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_admin_role_rejected PASSED [ 52%]
+apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_staff_role_rejected PASSED [ 56%]
+apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_vendor_role_accepted 
+-------------------------------- live log call --------------------------------
+[ERROR   ] apps.authentication.serializers.auth — Unexpected error in registration validation: Database access not allowed, use the "django_db" mark, or the "db" or "transactional_db" fixtures to enable it.
+FAILED                                                                   [ 60%]
+apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_duplicate_email_returns_email_field_error 
+-------------------------------- live log call --------------------------------
+[ERROR   ] apps.authentication.serializers.auth — Unexpected error in registration validation: Database access not allowed, use the "django_db" mark, or the "db" or "transactional_db" fixtures to enable it.
+FAILED                                                                   [ 64%]
+apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_email_normalized_before_uniqueness_check 
+-------------------------------- live log call --------------------------------
+[ERROR   ] apps.authentication.serializers.auth — Unexpected error in registration validation: Database access not allowed, use the "django_db" mark, or the "db" or "transactional_db" fixtures to enable it.
+FAILED                                                                   [ 68%]
+apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_empty_email_normalized_to_none 
+-------------------------------- live log call --------------------------------
+[ERROR   ] apps.authentication.serializers.auth — Unexpected error in registration validation: Database access not allowed, use the "django_db" mark, or the "db" or "transactional_db" fixtures to enable it.
+PASSED                                                                   [ 72%]
+apps/authentication/tests/unit/test_serializers.py::TestOTPSerializer::test_valid_6_digit_otp_passes 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth — OTP validation successful.
+PASSED                                                                   [ 76%]
+apps/authentication/tests/unit/test_serializers.py::TestOTPSerializer::test_5_digit_otp_fails 
+-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.serializers.auth — OTP validation failed: Invalid length 5.
+PASSED                                                                   [ 80%]
+apps/authentication/tests/unit/test_serializers.py::TestOTPSerializer::test_7_digit_otp_exceeds_maxlength_or_fails PASSED [ 84%]
+apps/authentication/tests/unit/test_serializers.py::TestOTPSerializer::test_non_numeric_otp_fails 
+-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.serializers.auth — OTP validation failed: Non-digit characters detected.
+PASSED                                                                   [ 88%]
+apps/authentication/tests/unit/test_serializers.py::TestOTPSerializer::test_alphanumeric_otp_fails 
+-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.serializers.auth — OTP validation failed: Non-digit characters detected.
+PASSED                                                                   [ 92%]
+apps/authentication/tests/unit/test_serializers.py::TestOTPSerializer::test_empty_otp_fails PASSED [ 96%]
+apps/authentication/tests/unit/test_serializers.py::TestOTPSerializer::test_missing_otp_fails PASSED [100%]
+
+================================== FAILURES ===================================
+________________ TestLoginSerializer.test_wrong_password_fails ________________
+apps\authentication\tests\unit\test_serializers.py:216: in test_wrong_password_fails
+    assert not s.is_valid()
+               ^^^^^^^^^^^^
+.venv\Lib\site-packages\rest_framework\serializers.py:225: in is_valid
+    self._validated_data = self.run_validation(self.initial_data)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\rest_framework\serializers.py:447: in run_validation
+    value = self.validate(value)
+            ^^^^^^^^^^^^^^^^^^^^
+apps\authentication\serializers\auth.py:143: in validate
+    raise InvalidCredentialsError()
+E   apps.authentication.exceptions.InvalidCredentialsError: Invalid credentials. Please check your email/phone and password and try again.
+---------------------------- Captured stdout setup ----------------------------
+[INFO    ] apps.authentication.models \u2014 Saved UnifiedUser 019d20de-a5e9-79ea-bd12-554077730082 [email] member_id=FASTAR000001\n[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io
+----------------------------- Captured log setup ------------------------------
+INFO     apps.authentication.models:models.py:582 Saved UnifiedUser 019d20de-a5e9-79ea-bd12-554077730082 [email] member_id=FASTAR000001\nINFO     apps.authentication.managers:managers.py:146 \u2705 Created user: email=verified@fashionistar.io
+---------------------------- Captured stdout call -----------------------------
+[WARNING ] apps.authentication.serializers.auth \u2014 \u26d4 Login failed: wrong password for 'verified@fashionistar.io'
+------------------------------ Captured log call ------------------------------
+WARNING  apps.authentication.serializers.auth:auth.py:140 \u26d4 Login failed: wrong password for 'verified@fashionistar.io'
+______________ TestLoginSerializer.test_non_existent_user_fails _______________
+apps\authentication\tests\unit\test_serializers.py:224: in test_non_existent_user_fails
+    assert not s.is_valid()
+               ^^^^^^^^^^^^
+.venv\Lib\site-packages\rest_framework\serializers.py:225: in is_valid
+    self._validated_data = self.run_validation(self.initial_data)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\rest_framework\serializers.py:447: in run_validation
+    value = self.validate(value)
+            ^^^^^^^^^^^^^^^^^^^^
+apps\authentication\serializers\auth.py:136: in validate
+    raise InvalidCredentialsError()
+E   apps.authentication.exceptions.InvalidCredentialsError: Invalid credentials. Please check your email/phone and password and try again.
+---------------------------- Captured stdout call -----------------------------
+[WARNING ] apps.authentication.serializers.auth \u2014 \u26d4 Login failed: user not found 'nobody@nowhere.com'
+------------------------------ Captured log call ------------------------------
+WARNING  apps.authentication.serializers.auth:auth.py:135 \u26d4 Login failed: user not found 'nobody@nowhere.com'
+_____________ TestLoginSerializer.test_inactive_user_cannot_login _____________
+apps\authentication\tests\unit\test_serializers.py:232: in test_inactive_user_cannot_login
+    assert not s.is_valid()
+               ^^^^^^^^^^^^
+.venv\Lib\site-packages\rest_framework\serializers.py:225: in is_valid
+    self._validated_data = self.run_validation(self.initial_data)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\rest_framework\serializers.py:447: in run_validation
+    value = self.validate(value)
+            ^^^^^^^^^^^^^^^^^^^^
+apps\authentication\serializers\auth.py:150: in validate
+    raise AccountNotVerifiedError()
+E   apps.authentication.exceptions.AccountNotVerifiedError: Your account has not been verified yet. Please check your email or phone for the OTP code we sent during registration. Verify your account here: http://fashionistar.net/verify-otp — or request a new code here: http://fashionistar.net/resend-otp
+---------------------------- Captured stdout setup ----------------------------
+[INFO    ] apps.authentication.models \u2014 Saved UnifiedUser 019d20de-b024-7bb1-baea-2a5c8039c2ae [email] member_id=FASTAR000001\n[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=registered@fashionistar.io
+----------------------------- Captured log setup ------------------------------
+INFO     apps.authentication.models:models.py:582 Saved UnifiedUser 019d20de-b024-7bb1-baea-2a5c8039c2ae [email] member_id=FASTAR000001\nINFO     apps.authentication.managers:managers.py:146 \u2705 Created user: email=registered@fashionistar.io
+---------------------------- Captured stdout call -----------------------------
+[WARNING ] apps.authentication.serializers.auth \u2014 \u26d4 Login rejected: account not verified 'registered@fashionistar.io'
+------------------------------ Captured log call ------------------------------
+WARNING  apps.authentication.serializers.auth:auth.py:147 \u26d4 Login rejected: account not verified 'registered@fashionistar.io'
+_______ TestUserRegistrationSerializer.test_valid_email_payload_passes ________
+apps\authentication\tests\unit\test_serializers.py:63: in test_valid_email_payload_passes
+    assert s.is_valid(), s.errors
+E   AssertionError: {'non_field_errors': [ErrorDetail(string='An error occurred during validation.', code='invalid')]}
+E   assert False
+E    +  where False = is_valid()
+E    +    where is_valid = UserRegistrationSerializer(data={'email': 'valid@fashionistar-test.io', 'password': 'SecurePass123!', 'password2': 'SecurePass123!', 'role': 'client'}):\n    email = EmailField(allow_blank=True, help_text="User's email address", required=False)\n    phone = PhoneNumberField(allow_blank=True, help_text="User's phone number", required=False)\n    role = ChoiceField(choices=[('vendor', 'Vendor'), ('client', 'Client')], help_text="User's role: 'vendor' or 'client'")\n    password = CharField(help_text="User's password", required=True, style={'input_type': 'password'}, validators=[<function validate_password>], write_only=True)\n    password2 = CharField(help_text="Confirm user's password", required=True, style={'input_type': 'password'}, write_only=True).is_valid
+---------------------------- Captured stdout call -----------------------------
+[ERROR   ] apps.authentication.serializers.auth — Unexpected error in registration validation: Database access not allowed, use the "django_db" mark, or the "db" or "transactional_db" fixtures to enable it.
+------------------------------ Captured log call ------------------------------
+ERROR    apps.authentication.serializers.auth:auth.py:311 Unexpected error in registration validation: Database access not allowed, use the "django_db" mark, or the "db" or "transactional_db" fixtures to enable it.
+__________ TestUserRegistrationSerializer.test_vendor_role_accepted ___________
+apps\authentication\tests\unit\test_serializers.py:130: in test_vendor_role_accepted
+    assert s.is_valid(), s.errors
+E   AssertionError: {'non_field_errors': [ErrorDetail(string='An error occurred during validation.', code='invalid')]}
+E   assert False
+E    +  where False = is_valid()
+E    +    where is_valid = UserRegistrationSerializer(data={'email': 'vendor@test.io', 'password': 'SecurePass123!', 'password2': 'SecurePass123!', 'role': 'vendor'}):\n    email = EmailField(allow_blank=True, help_text="User's email address", required=False)\n    phone = PhoneNumberField(allow_blank=True, help_text="User's phone number", required=False)\n    role = ChoiceField(choices=[('vendor', 'Vendor'), ('client', 'Client')], help_text="User's role: 'vendor' or 'client'")\n    password = CharField(help_text="User's password", required=True, style={'input_type': 'password'}, validators=[<function validate_password>], write_only=True)\n    password2 = CharField(help_text="Confirm user's password", required=True, style={'input_type': 'password'}, write_only=True).is_valid
+---------------------------- Captured stdout call -----------------------------
+[ERROR   ] apps.authentication.serializers.auth — Unexpected error in registration validation: Database access not allowed, use the "django_db" mark, or the "db" or "transactional_db" fixtures to enable it.
+------------------------------ Captured log call ------------------------------
+ERROR    apps.authentication.serializers.auth:auth.py:311 Unexpected error in registration validation: Database access not allowed, use the "django_db" mark, or the "db" or "transactional_db" fixtures to enable it.
+_ TestUserRegistrationSerializer.test_duplicate_email_returns_email_field_error _
+apps\authentication\tests\unit\test_serializers.py:145: in test_duplicate_email_returns_email_field_error
+    assert 'email' in s.errors
+E   assert 'email' in {'non_field_errors': [ErrorDetail(string='An error occurred during validation.', code='invalid')]}
+E    +  where {'non_field_errors': [ErrorDetail(string='An error occurred during validation.', code='invalid')]} = UserRegistrationSerializer(data={'email': 'dup@test.io', 'password': 'SecurePass123!', 'password2': 'SecurePass123!', 'role': 'client'}):\n    email = EmailField(allow_blank=True, help_text="User's email address", required=False)\n    phone = PhoneNumberField(allow_blank=True, help_text="User's phone number", required=False)\n    role = ChoiceField(choices=[('vendor', 'Vendor'), ('client', 'Client')], help_text="User's role: 'vendor' or 'client'")\n    password = CharField(help_text="User's password", required=True, style={'input_type': 'password'}, validators=[<function validate_password>], write_only=True)\n    password2 = CharField(help_text="Confirm user's password", required=True, style={'input_type': 'password'}, write_only=True).errors
+---------------------------- Captured stdout call -----------------------------
+[ERROR   ] apps.authentication.serializers.auth — Unexpected error in registration validation: Database access not allowed, use the "django_db" mark, or the "db" or "transactional_db" fixtures to enable it.
+------------------------------ Captured log call ------------------------------
+ERROR    apps.authentication.serializers.auth:auth.py:311 Unexpected error in registration validation: Database access not allowed, use the "django_db" mark, or the "db" or "transactional_db" fixtures to enable it.
+_ TestUserRegistrationSerializer.test_email_normalized_before_uniqueness_check _
+apps\authentication\tests\unit\test_serializers.py:164: in test_email_normalized_before_uniqueness_check
+    assert 'email' in s.errors
+E   assert 'email' in {'non_field_errors': [ErrorDetail(string='An error occurred during validation.', code='invalid')]}
+E    +  where {'non_field_errors': [ErrorDetail(string='An error occurred during validation.', code='invalid')]} = UserRegistrationSerializer(data={'email': 'user@EXAMPLE.COM', 'password': 'SecurePass123!', 'password2': 'SecurePass123!', 'role': 'client'}):\n    email = EmailField(allow_blank=True, help_text="User's email address", required=False)\n    phone = PhoneNumberField(allow_blank=True, help_text="User's phone number", required=False)\n    role = ChoiceField(choices=[('vendor', 'Vendor'), ('client', 'Client')], help_text="User's role: 'vendor' or 'client'")\n    password = CharField(help_text="User's password", required=True, style={'input_type': 'password'}, validators=[<function validate_password>], write_only=True)\n    password2 = CharField(help_text="Confirm user's password", required=True, style={'input_type': 'password'}, write_only=True).errors
+---------------------------- Captured stdout call -----------------------------
+[ERROR   ] apps.authentication.serializers.auth — Unexpected error in registration validation: Database access not allowed, use the "django_db" mark, or the "db" or "transactional_db" fixtures to enable it.
+------------------------------ Captured log call ------------------------------
+ERROR    apps.authentication.serializers.auth:auth.py:311 Unexpected error in registration validation: Database access not allowed, use the "django_db" mark, or the "db" or "transactional_db" fixtures to enable it.
+=========================== short test summary info ===========================
+FAILED apps/authentication/tests/unit/test_serializers.py::TestLoginSerializer::test_wrong_password_fails
+FAILED apps/authentication/tests/unit/test_serializers.py::TestLoginSerializer::test_non_existent_user_fails
+FAILED apps/authentication/tests/unit/test_serializers.py::TestLoginSerializer::test_inactive_user_cannot_login
+FAILED apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_valid_email_payload_passes
+FAILED apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_vendor_role_accepted
+FAILED apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_duplicate_email_returns_email_field_error
+FAILED apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_email_normalized_before_uniqueness_check
+======================== 7 failed, 18 passed in 17.53s ========================

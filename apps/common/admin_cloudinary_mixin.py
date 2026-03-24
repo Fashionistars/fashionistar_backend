@@ -121,20 +121,41 @@ class CloudinaryUploadAdminMixin:
                     getattr(request.user, "email", "?"),
                 )
 
-                secure_url = upload_to_cloudinary_from_admin(
+                # ✅ FIXED: was calling upload_to_cloudinary_from_admin (NameError)
+                secure_url = upload_to_cloudinary_from_admin_sync(
                     file_obj=file_obj,
                     folder=folder,
                     asset_type=asset_type,
                     user=request.user,
                 )
 
-                # Set the Cloudinary URL on the model instance
-                setattr(obj, field_name, secure_url)
+                # ── Smart URL field routing ──────────────────────────────────
+                # The Django image field (e.g. 'image', 'background_image') is
+                # NOT updated — we store only the Cloudinary URL.
+                # Map each upload field → its corresponding cloudinary_url field:
+                #   image            → cloudinary_url
+                #   background_image → background_cloudinary_url
+                #   avatar           → cloudinary_url
+                # Default fallback: <field_name>_cloudinary_url or cloudinary_url
+                _URL_FIELD_MAP = {
+                    "image":            "cloudinary_url",
+                    "background_image": "background_cloudinary_url",
+                    "avatar":           "cloudinary_url",
+                }
+                url_field = _URL_FIELD_MAP.get(field_name, f"{field_name}_cloudinary_url")
+
+                # Only set the cloudinary URL field if it exists on the model
+                if hasattr(obj, url_field):
+                    setattr(obj, url_field, secure_url)
+                else:
+                    # Fallback: set the raw field itself (older models)
+                    setattr(obj, field_name, secure_url)
 
                 logger.info(
-                    "CloudinaryUploadAdminMixin: ✅ uploaded %s.%s → %s...",
+                    "CloudinaryUploadAdminMixin: ✅ uploaded %s.%s → %s → %s...",
                     obj.__class__.__name__,
                     field_name,
+                    url_field,
                     secure_url[:60],
                 )
 
@@ -143,6 +164,7 @@ class CloudinaryUploadAdminMixin:
                     request=request,
                     obj=obj,
                     field_name=field_name,
+                    url_field=url_field,
                     secure_url=secure_url,
                     asset_type=asset_type,
                 )
@@ -161,29 +183,34 @@ class CloudinaryUploadAdminMixin:
         request: Any,
         obj: Any,
         field_name: str,
+        url_field: str,
         secure_url: str,
         asset_type: str,
     ) -> None:
         """Log admin file upload as ADMIN_ACTION audit event."""
         try:
             from apps.audit_logs.services.audit import AuditService
+            from apps.audit_logs.models import EventType, EventCategory
             AuditService.log(
-                event_type="admin_action",
+                event_type=EventType.ADMIN_ACTION,
+                event_category=EventCategory.ADMIN,
                 action=(
                     f"Admin uploaded {asset_type} to Cloudinary: "
-                    f"{obj.__class__.__name__}.{field_name}"
+                    f"{obj.__class__.__name__}.{field_name} → {url_field}"
                 ),
                 actor=request.user,
                 request=request,
                 resource_type=obj.__class__.__name__,
                 resource_id=str(obj.pk) if obj.pk else None,
                 new_values={
-                    field_name: secure_url[:120],
+                    url_field: secure_url[:120],
                     "asset_type": asset_type,
+                    "source_field": field_name,
                 },
                 metadata={
                     "cloudinary_admin_upload": True,
                     "field_name": field_name,
+                    "url_field": url_field,
                 },
                 is_compliance=True,
             )

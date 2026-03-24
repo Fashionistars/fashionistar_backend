@@ -382,6 +382,31 @@ class AuditEventLog(models.Model):
         actor = self.actor_email or "system"
         return f"[{self.event_type}] {actor} @ {self.created_at:%Y-%m-%d %H:%M:%S}"
 
+    def save(self, *args, **kwargs):
+        """
+        E2 — IMMUTABILITY GUARD.
+
+        AuditEventLog rows are append-only. Once written they can NEVER be
+        updated — this is a core compliance requirement (PCI-DSS, GDPR Art. 30).
+
+        Raises
+        ------
+        PermissionError
+            If any code attempts to UPDATE (i.e., save an existing PK).
+            Write operations ONLY succeed for new inserts (_state.adding=True).
+
+        Note: admin.py already sets has_change_permission → False so the admin
+        UI cannot call save() on existing rows. This guard is a second line of
+        defense against programmatic tampering.
+        """
+        if not self._state.adding:
+            raise PermissionError(
+                "AuditEventLog records are immutable — updates are forbidden. "
+                f"Attempted update on pk={self.pk}. "
+                "Create a new AuditEventLog entry instead."
+            )
+        super().save(*args, **kwargs)
+
     @property
     def is_security_event(self) -> bool:
         return self.event_category in (

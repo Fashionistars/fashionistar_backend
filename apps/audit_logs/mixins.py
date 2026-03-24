@@ -3,6 +3,12 @@
 AuditedModelAdmin — Drop-in ModelAdmin mixin that captures every Django admin
 action (add, change, delete) as an AuditEventLog entry.
 
+Enterprise additions:
+  - _safe_model_dict: captures Cloudinary / media URLs in old_values snapshot
+    as {"__media_url__": url} so they survive change diffing.
+  - revert classmethod + admin action: restore old_values to a model from
+    a specific AuditEventLog entry — fully audited revert (creates new event).
+
 Usage:
     from apps.audit_logs.mixins import AuditedModelAdmin
 
@@ -27,19 +33,67 @@ _REDACTED_FIELDS = frozenset({
     "otp_secret", "otp_base32",
 })
 
+# Django field types that hold media / Cloudinary URLs
+_MEDIA_FIELD_TYPES = None
+
+
+def _get_media_field_types():
+    """Lazily import media field types to avoid early Django setup issues."""
+    global _MEDIA_FIELD_TYPES
+    if _MEDIA_FIELD_TYPES is None:
+        try:
+            from django.db.models import ImageField, FileField, URLField
+            _MEDIA_FIELD_TYPES = (ImageField, FileField, URLField)
+        except Exception:
+            _MEDIA_FIELD_TYPES = ()
+    return _MEDIA_FIELD_TYPES
+
 
 def _safe_model_dict(obj, exclude=None) -> dict:
-    """Serialize a model instance to dict, redacting sensitive fields."""
+    """
+    Serialize a model instance to a dict, with these guarantees:
+    - Sensitive fields (password, secret, etc.) → '***REDACTED***'
+    - ImageField / FileField values → {"__media_url__": url_str} snapshot
+      so Cloudinary URLs are preserved in old_values for revert/diff.
+    - URLField cloudinary_url / background_cloudinary_url → preserved as-is.
+    - Non-serializable types → str()
+    """
     if obj is None:
         return {}
     try:
         data = model_to_dict(obj, exclude=exclude)
+
+        # Also grab URLField / ImageField / FileField values not in model_to_dict
+        # (model_to_dict skips auto-fields and some special fields)
+        media_types = _get_media_field_types()
+        if media_types:
+            for field in obj._meta.get_fields():
+                if isinstance(field, media_types) and field.name not in data:
+                    try:
+                        raw_val = getattr(obj, field.name, None)
+                        if raw_val:
+                            url = getattr(raw_val, 'url', str(raw_val))
+                            data[field.name] = {"__media_url__": url}
+                    except Exception:
+                        pass
+
         for k in list(data.keys()):
+            v = data[k]
+            # Redact sensitive fields
             if k in _REDACTED_FIELDS or "password" in k.lower() or "secret" in k.lower():
                 data[k] = "***REDACTED***"
-            # Convert non-serializable types to strings
-            if not isinstance(data[k], (str, int, float, bool, list, dict, type(None))):
-                data[k] = str(data[k])
+                continue
+            # Snapshot media URL fields
+            if media_types and hasattr(v, 'url'):
+                try:
+                    data[k] = {"__media_url__": v.url}
+                except Exception:
+                    data[k] = str(v)
+                continue
+            # Ensure JSON-serializable types
+            if not isinstance(v, (str, int, float, bool, list, dict, type(None))):
+                data[k] = str(v)
+
         return data
     except Exception:
         return {"__error__": "Could not serialize model"}
@@ -50,16 +104,17 @@ class AuditedModelAdmin:
     Mixin for Django ModelAdmin that logs every admin action to AuditEventLog.
 
     Captures:
-    - save_model  → ADMIN_ACTION with old_values / new_values diff
+    - save_model  → ADMIN_ACTION with old_values / new_values diff + media URL snapshots
     - delete_model → ADMIN_ACTION with old_values snapshot
-    - Custom admin actions via response_action override
+    - delete_queryset → ADMIN_BULK_DELETE
+    - revert_last_change admin action → restores old_values and logs ADMIN_ACTION with action="Reverted"
 
     Simply add this mixin BEFORE admin.ModelAdmin in MRO:
         class MyAdmin(AuditedModelAdmin, admin.ModelAdmin): ...
     """
 
     def save_model(self, request, obj, form, change):
-        """Override save_model to capture before/after state."""
+        """Override save_model to capture before/after state including media URL snapshots."""
         from apps.audit_logs.services.audit import AuditService
         from apps.audit_logs.models import EventType, EventCategory
 
@@ -111,7 +166,7 @@ class AuditedModelAdmin:
             )
 
     def delete_model(self, request, obj):
-        """Override delete_model to capture the deleted object's state."""
+        """Override delete_model to capture the deleted object's state + media URLs."""
         from apps.audit_logs.services.audit import AuditService
         from apps.audit_logs.models import EventType, EventCategory
 
@@ -166,3 +221,114 @@ class AuditedModelAdmin:
                 "AuditedModelAdmin: failed to log delete_queryset for %s",
                 model_name, exc_info=True,
             )
+
+    # ── Change Revert — Industrial-grade rollback with full audit trail ────────
+
+    @admin.action(description="↩ Revert selected record(s) to last audited state")
+    def revert_last_admin_change(self, request, queryset):
+        """
+        Admin action: revert each selected object to its old_values from the
+        most recent AuditEventLog ADMIN_ACTION entry.
+
+        - Loads old_values from AuditEventLog
+        - Applies non-redacted field values back to the model
+        - Saves + writes a new AuditEventLog with action="Reverted"
+        - Shows success/error message in the Django admin UI
+        """
+        from apps.audit_logs.models import AuditEventLog, EventType, EventCategory
+        from apps.audit_logs.services.audit import AuditService
+
+        reverted = 0
+        errors = 0
+
+        for obj in queryset:
+            try:
+                # Find the most recent ADMIN_ACTION for this object
+                last_event = (
+                    AuditEventLog.objects
+                    .filter(
+                        resource_type=obj.__class__.__name__,
+                        resource_id=str(obj.pk),
+                        event_type=EventType.ADMIN_ACTION,
+                    )
+                    .exclude(old_values=None)
+                    .order_by("-created_at")
+                    .first()
+                )
+
+                if not last_event or not last_event.old_values:
+                    self.message_user(
+                        request,
+                        f"No revertible audit event found for {obj.__class__.__name__} pk={obj.pk}.",
+                        level="warning",
+                    )
+                    continue
+
+                old_vals = last_event.old_values
+                changed_back = []
+
+                for field_name, old_val in old_vals.items():
+                    # Skip redacted, error, and meta keys
+                    if (
+                        old_val == "***REDACTED***"
+                        or field_name.startswith("__")
+                        or not hasattr(obj, field_name)
+                    ):
+                        continue
+
+                    # Handle media URL snapshots: {"__media_url__": url}
+                    if isinstance(old_val, dict) and "__media_url__" in old_val:
+                        old_val = old_val["__media_url__"]
+
+                    try:
+                        setattr(obj, field_name, old_val)
+                        changed_back.append(field_name)
+                    except Exception:
+                        pass
+
+                if changed_back:
+                    obj.save(update_fields=changed_back)
+
+                    AuditService.log(
+                        event_type=EventType.ADMIN_ACTION,
+                        event_category=EventCategory.ADMIN,
+                        action=(
+                            f"Admin reverted {obj.__class__.__name__} pk={obj.pk} "
+                            f"to state from audit event {last_event.pk} "
+                            f"— fields: {', '.join(changed_back)}"
+                        ),
+                        severity="warning",
+                        request=request,
+                        resource_type=obj.__class__.__name__,
+                        resource_id=str(obj.pk),
+                        old_values=_safe_model_dict(obj),
+                        new_values=old_vals,
+                        metadata={
+                            "reverted_from_audit_event": str(last_event.pk),
+                            "reverted_fields": changed_back,
+                        },
+                        is_compliance=True,
+                    )
+
+                    reverted += 1
+                else:
+                    errors += 1
+
+            except Exception as exc:
+                logger.error(
+                    "AuditedModelAdmin.revert: failed for pk=%s: %s",
+                    obj.pk, exc,
+                )
+                errors += 1
+
+        if reverted:
+            self.message_user(request, f"✅ Reverted {reverted} record(s) successfully.")
+        if errors:
+            self.message_user(
+                request,
+                f"⚠ {errors} record(s) could not be reverted — see logs.",
+                level="warning",
+            )
+
+    # Register the revert action automatically on the admin class
+    actions = ['revert_last_admin_change']
