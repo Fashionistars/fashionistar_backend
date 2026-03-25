@@ -180,7 +180,9 @@ class AuditEventLogAdmin(admin.ModelAdmin):
         "ip_address",
         "country",
         "user_agent",
-        "device_fingerprint",
+        "device_type",
+        "browser_family",
+        "os_family",
         "request_method",
         "request_path",
         "response_status",
@@ -208,7 +210,8 @@ class AuditEventLogAdmin(admin.ModelAdmin):
         }),
         ("Request Context", {
             "fields": (
-                "ip_address", "country", "user_agent", "device_fingerprint",
+                "ip_address", "country", "user_agent", 
+                "device_type", "browser_family", "os_family",
                 "request_method", "request_path", "response_status",
             ),
         }),

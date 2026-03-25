@@ -42,17 +42,47 @@ def write_audit_event(self, payload: dict) -> None:
     failure as WARNING and gives up — audit failures MUST never crash the
     main request flow.
     """
+    # ── Known AuditEventLog field names (allowlist) ───────────────────────────
+    # Geo-enrichment services may add extra keys (country_code, city, region,
+    # asn, …) that are NOT columns on AuditEventLog. Strip them here so we
+    # never crash with "unexpected keyword argument".
+    _KNOWN_FIELDS = {
+        "event_type", "event_category", "severity", "action",
+        "actor", "actor_email",
+        "ip_address", "user_agent", "device_type",
+        "browser_family", "os_family",
+        "country", "correlation_id",
+        "resource_type", "resource_id",
+        "request_method", "request_path", "response_status", "duration_ms",
+        "old_values", "new_values", "metadata", "error_message",
+        "is_compliance", "retention_days",
+    }
+
     try:
         from apps.audit_logs.models import AuditEventLog
+
+        # Extract actor_id separately (set via obj.actor_id, not __init__)
         actor_id = payload.pop("actor_id", None)
-        obj = AuditEventLog(**payload)
+
+        # ⚡ Strip any keys the ORM doesn't know about (geo extras, future fields)
+        safe_payload = {k: v for k, v in payload.items() if k in _KNOWN_FIELDS}
+
+        # Log stripped keys so we can identify payload drift early
+        stripped = set(payload) - _KNOWN_FIELDS - {"actor_id"}
+        if stripped:
+            logger.debug(
+                "write_audit_event: stripped unknown payload keys: %s", stripped
+            )
+
+        obj = AuditEventLog(**safe_payload)
         if actor_id:
             obj.actor_id = actor_id
         obj.save()
+
         logger.debug(
             "AuditEventLog written: event_type=%s actor=%s",
-            payload.get("event_type"),
-            payload.get("actor_email") or actor_id,
+            safe_payload.get("event_type"),
+            safe_payload.get("actor_email") or actor_id,
         )
     except Exception as exc:
         logger.warning(
