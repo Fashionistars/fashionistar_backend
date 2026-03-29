@@ -27,20 +27,20 @@ logger = logging.getLogger(__name__)
 
 # ─── Severity badge colors ──────────────────────────────────────────────────
 _SEVERITY_COLORS = {
-    SeverityLevel.DEBUG:    ("#6c757d", "⚙"),
-    SeverityLevel.INFO:     ("#0d6efd", "ℹ"),
-    SeverityLevel.WARNING:  ("#ffc107", "⚠"),
-    SeverityLevel.ERROR:    ("#dc3545", "✗"),
+    SeverityLevel.DEBUG: ("#6c757d", "⚙"),
+    SeverityLevel.INFO: ("#0d6efd", "ℹ"),
+    SeverityLevel.WARNING: ("#ffc107", "⚠"),
+    SeverityLevel.ERROR: ("#dc3545", "✗"),
     SeverityLevel.CRITICAL: ("#7f0000", "🔴"),
 }
 
 _CATEGORY_COLORS = {
-    EventCategory.AUTHENTICATION:    "#198754",
-    EventCategory.AUTHORIZATION:     "#6f42c1",
-    EventCategory.SECURITY:          "#dc3545",
-    EventCategory.ADMIN:             "#0dcaf0",
+    EventCategory.AUTHENTICATION: "#198754",
+    EventCategory.AUTHORIZATION: "#6f42c1",
+    EventCategory.SECURITY: "#dc3545",
+    EventCategory.ADMIN: "#0dcaf0",
     EventCategory.DATA_MODIFICATION: "#ffc107",
-    EventCategory.COMPLIANCE:        "#fd7e14",
+    EventCategory.COMPLIANCE: "#fd7e14",
 }
 
 
@@ -48,8 +48,10 @@ _CATEGORY_COLORS = {
 # E5 — Compliance CSV Export (streaming, superuser-only)
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class _EchoWriter:
     """Pseudo-buffer for csv.writer + StreamingHttpResponse."""
+
     def write(self, value):
         return value
 
@@ -60,17 +62,25 @@ def _compliance_csv_rows(queryset):
     Uses queryset.iterator(chunk_size=500) to avoid loading all rows into RAM.
     """
     FIELDS = [
-        "id", "created_at", "event_type", "event_category", "severity",
-        "actor_email", "ip_address", "country", "action",
-        "resource_type", "resource_id", "response_status",
-        "correlation_id", "is_compliance", "error_message",
+        "id",
+        "created_at",
+        "event_type",
+        "event_category",
+        "severity",
+        "actor_email",
+        "ip_address",
+        "country",
+        "action",
+        "resource_type",
+        "resource_id",
+        "response_status",
+        "correlation_id",
+        "is_compliance",
+        "error_message",
     ]
     yield FIELDS
     for obj in queryset.only(*FIELDS).iterator(chunk_size=500):
-        yield [
-            str(getattr(obj, f, "") or "")
-            for f in FIELDS
-        ]
+        yield [str(getattr(obj, f, "") or "") for f in FIELDS]
 
 
 @admin.action(description="📥 Export compliance logs as CSV (superuser only)")
@@ -117,6 +127,7 @@ def export_compliance_logs_csv(modeladmin, request, queryset):
 # ═══════════════════════════════════════════════════════════════════════════
 # AuditEventLog Admin
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 @admin.register(AuditEventLog)
 class AuditEventLogAdmin(admin.ModelAdmin):
@@ -166,7 +177,7 @@ class AuditEventLogAdmin(admin.ModelAdmin):
     ordering = ("-created_at",)
     date_hierarchy = "created_at"
     list_per_page = 50
-    show_full_result_count = False   # Avoids COUNT(*) on large tables
+    show_full_result_count = False  # Avoids COUNT(*) on large tables
 
     # ── Detail view ─────────────────────────────────────────────────────────
     readonly_fields = (
@@ -199,33 +210,62 @@ class AuditEventLogAdmin(admin.ModelAdmin):
     )
 
     fieldsets = (
-        ("Event Identity", {
-            "fields": (
-                "id", "created_at", "event_type", "event_category", "severity",
-                "is_compliance", "correlation_id",
-            ),
-        }),
-        ("Actor", {
-            "fields": ("actor", "actor_email"),
-        }),
-        ("Request Context", {
-            "fields": (
-                "ip_address", "country", "user_agent", 
-                "device_type", "browser_family", "os_family",
-                "request_method", "request_path", "response_status",
-            ),
-        }),
-        ("Action", {
-            "fields": ("action", "resource_type", "resource_id"),
-        }),
-        ("Diff & Metadata", {
-            "classes": ("collapse",),
-            "fields": ("old_values", "new_values", "metadata", "error_message"),
-        }),
-        ("Retention", {
-            "classes": ("collapse",),
-            "fields": ("retention_days",),
-        }),
+        (
+            "Event Identity",
+            {
+                "fields": (
+                    "id",
+                    "created_at",
+                    "event_type",
+                    "event_category",
+                    "severity",
+                    "is_compliance",
+                    "correlation_id",
+                ),
+            },
+        ),
+        (
+            "Actor",
+            {
+                "fields": ("actor", "actor_email"),
+            },
+        ),
+        (
+            "Request Context",
+            {
+                "fields": (
+                    "ip_address",
+                    "country",
+                    "user_agent",
+                    "device_type",
+                    "browser_family",
+                    "os_family",
+                    "request_method",
+                    "request_path",
+                    "response_status",
+                ),
+            },
+        ),
+        (
+            "Action",
+            {
+                "fields": ("action", "resource_type", "resource_id"),
+            },
+        ),
+        (
+            "Diff & Metadata",
+            {
+                "classes": ("collapse",),
+                "fields": ("old_values", "new_values", "metadata", "error_message"),
+            },
+        ),
+        (
+            "Retention",
+            {
+                "classes": ("collapse",),
+                "fields": ("retention_days",),
+            },
+        ),
     )
 
     # ── Permissions (immutable, superuser-only) ─────────────────────────────
@@ -254,9 +294,11 @@ class AuditEventLogAdmin(admin.ModelAdmin):
         return format_html(
             '<span style="background:{};color:#fff;padding:2px 8px;'
             'border-radius:12px;font-size:11px;font-weight:700;">'
-            '{} {}'
-            '</span>',
-            color, icon, label,
+            "{} {}"
+            "</span>",
+            color,
+            icon,
+            label,
         )
 
     @admin.display(description="Category", ordering="event_category")
@@ -266,7 +308,8 @@ class AuditEventLogAdmin(admin.ModelAdmin):
         return format_html(
             '<span style="background:{};color:#fff;padding:2px 8px;'
             'border-radius:12px;font-size:11px;font-weight:600;">'
-            '{}'
-            '</span>',
-            color, label,
+            "{}"
+            "</span>",
+            color,
+            label,
         )

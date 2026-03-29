@@ -53,8 +53,22 @@ DJANGO_SECRET_ADMIN_URL=env("DJANGO_SECRET_ADMIN_URL", default="admin/")
 # ALLOWED_HOSTS from environment variable, split by comma
 # For production, specify your Render URL and any other hostnames.
 # For local, '127.0.0.1' and 'localhost' are usually sufficient.
-ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["127.0.0.1", "localhost", "localhost:8000", "localhost:3001"])
-CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=['http://localhost:3000', 'http://localhost:8000'])
+ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[
+    "127.0.0.1", "localhost", "localhost:8000", "localhost:3001",
+    # ngrok tunnel — required for Playwright E2E tests and manual QA via tunnel
+    "hydrographically-tawdrier-hayley.ngrok-free.dev",
+    ".ngrok-free.dev",   # wildcard for any future ngrok tunnel restarts
+    ".ngrok.io",
+])
+CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[
+    'http://localhost:3000',
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+    # ngrok tunnel — must include scheme (Django 4.0+ requirement)
+    'https://hydrographically-tawdrier-hayley.ngrok-free.dev',
+    'https://*.ngrok-free.dev',   # wildcard for tunnel restarts
+    'https://*.ngrok.io',
+])
 SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
 
 
