@@ -37,18 +37,27 @@ DJANGO_SECRET_ADMIN_URL = env("DJANGO_SECRET_ADMIN_URL", default="admin/")  # no
 # ⚠️  NEVER set ALLOWED_HOSTS = ['*'] in production.py
 ALLOWED_HOSTS = ['*']
 
-# Allow all common local origins for CSRF in dev
-CSRF_TRUSTED_ORIGINS = [
+# ── Tunnel URLs (dynamic — read from .env, never hardcoded) ────────────────
+_frontend_tunnel = env("FRONTEND_TUNNEL_URL", default=None)  # noqa: F405
+_backend_tunnel  = env("BACKEND_TUNNEL_URL", default=None)   # noqa: F405
+
+_csrf_origins = [
     'http://localhost:8000',
     'http://127.0.0.1:8000',
     'http://localhost:8001',       # Uvicorn ASGI
     'http://127.0.0.1:8001',      # Uvicorn ASGI
     'http://0.0.0.0:8000',
     'http://0.0.0.0:8001',
-    'http://localhost:3000',       # React frontend
-    'http://localhost:3001',       # Next.js frontend
+    'http://localhost:3000',       # Next.js frontend
+    'http://localhost:3001',       # Next.js frontend alt port
     'http://localhost:3002',
 ]
+if _frontend_tunnel:
+    _csrf_origins.append(_frontend_tunnel)
+if _backend_tunnel:
+    _csrf_origins.append(_backend_tunnel)
+
+CSRF_TRUSTED_ORIGINS = _csrf_origins
 
 
 # =============================================================================
@@ -124,3 +133,10 @@ SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=7),   # Long in dev for convenience
     'REFRESH_TOKEN_LIFETIME': timedelta(days=90),
 }
+
+
+# =============================================================================
+# GOOGLE OAUTH2 (development)
+# =============================================================================
+GOOGLE_CLIENT_ID     = env("GOOGLE_CLIENT_ID", default="")      # noqa: F405
+GOOGLE_CLIENT_SECRET = env("GOOGLE_CLIENT_SECRET", default="")  # noqa: F405
