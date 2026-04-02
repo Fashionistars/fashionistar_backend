@@ -6,9 +6,11 @@ Part of the serializers/ folder split (Bug 9).
 Previously in the monolithic serializers.py.
 """
 
+from apps.authentication.exceptions import SoftDeletedUserExistsError
 import logging
 
 from apps.authentication.models import UnifiedUser
+from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
@@ -36,15 +38,30 @@ class ResendOTPRequestSerializer(serializers.Serializer):
     def validate(self, data):
         try:
             email_or_phone = data.get("email_or_phone")
+            
+            
+            # Normalise email domain to lowercase
+            from django.contrib.auth.base_user import BaseUserManager as _BUM
+            if email_or_phone:
+                email_or_phone = _BUM.normalize_email(email_or_phone)
+                data["email_or_phone"] = email_or_phone
 
-            if "@" in email_or_phone:
-                user = UnifiedUser.objects.all_with_deleted().filter(
-                    email=email_or_phone
-                ).first()
-            else:
-                user = UnifiedUser.objects.all_with_deleted().filter(
-                    phone=email_or_phone
-                ).first()
+
+            # Soft-deleted pool check FIRST (prevents unique-constraint 500)
+            # ✅ OPTIMIZED: Single database query using Q object
+            if email_or_phone:
+                if UnifiedUser.objects.all_with_deleted().filter(
+                    (Q(email__iexact=email_or_phone) | Q(phone=email_or_phone)) & Q(is_deleted=True)
+                ).exists():
+                    logger.warning(
+                        "⛔ Resend OTP blocked: soft-deleted account '%s'", email_or_phone
+                    )
+                    raise SoftDeletedUserExistsError()
+            
+            # ✅ OPTIMIZED: Single database query using Q object for both email and phone
+            user = UnifiedUser.objects.all_with_deleted().filter(
+                Q(email=email_or_phone) if "@" in email_or_phone else Q(phone=email_or_phone)
+            ).first()
 
             if not user:
                 logger.warning(

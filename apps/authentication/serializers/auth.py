@@ -10,6 +10,7 @@ import logging
 
 from apps.authentication.models import UnifiedUser
 from django.contrib.auth.password_validation import validate_password
+from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 from phonenumber_field.serializerfields import PhoneNumberField
 from rest_framework import serializers
@@ -62,12 +63,6 @@ class OTPSerializer(serializers.Serializer):
             )
 
 
-class AsyncOTPSerializer(OTPSerializer):
-    """Asynchronous version of OTPSerializer."""
-
-    async def avalidate(self, attrs):
-        return self.validate(attrs)
-
 
 # ─── Login Serializers ───────────────────────────────────────────────────────
 
@@ -109,29 +104,23 @@ class LoginSerializer(serializers.Serializer):
         password       = data.get("password")
 
         try:
-            # ── Step 1: Alive-only lookup ─────────────────────────────────
-            if "@" in email_or_phone:
-                user = UnifiedUser.objects.filter(email=email_or_phone).first()
-            else:
-                user = UnifiedUser.objects.filter(phone=email_or_phone).first()
+            # ── Step 1: Alive-only lookup (✅ 1 DB HIT using Q) ─────────────
+            user = UnifiedUser.objects.filter(
+                Q(email=email_or_phone) if "@" in email_or_phone else Q(phone=email_or_phone)
+            ).first()
 
             if user is None:
-                # ── Step 2: Soft-deleted pool check ───────────────────────
-                if "@" in email_or_phone:
-                    deleted_user = UnifiedUser.objects.all_with_deleted().filter(
-                        email=email_or_phone, is_deleted=True,
-                    ).first()
-                else:
-                    deleted_user = UnifiedUser.objects.all_with_deleted().filter(
-                        phone=email_or_phone, is_deleted=True,
-                    ).first()
-
-                if deleted_user:
+                # ── Step 2: Soft-deleted pool check (✅ 1 DB HIT using Q) ─
+                if UnifiedUser.objects.all_with_deleted().filter(
+                    (Q(email=email_or_phone) if "@" in email_or_phone else Q(phone=email_or_phone)),
+                    is_deleted=True
+                ).exists():
                     logger.warning(
                         "⛔ Login rejected: soft-deleted account '%s'", email_or_phone
                     )
                     raise SoftDeletedUserError()
 
+                # User not found at all
                 logger.warning("⛔ Login failed: user not found '%s'", email_or_phone)
                 raise InvalidCredentialsError()
 
@@ -142,7 +131,7 @@ class LoginSerializer(serializers.Serializer):
                 )
                 raise InvalidCredentialsError()
 
-            # ── Step 4a: OTP verification (FIRST — before is_active) ──────
+            # ── Step 4a: Check if the user has verified their OTP (FIRST — before is_active) ──────
             if not user.is_verified:
                 logger.warning(
                     "⛔ Login rejected: account not verified '%s'", email_or_phone
@@ -177,11 +166,6 @@ class LoginSerializer(serializers.Serializer):
             )
 
 
-class AsyncLoginSerializer(LoginSerializer):
-    """Asynchronous version of LoginSerializer."""
-
-    async def avalidate(self, data):
-        return self.validate(data)
 
 
 # ─── Registration Serializers ─────────────────────────────────────────────────
@@ -216,6 +200,19 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         help_text="User's phone number",
     )
 
+    first_name = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=150,
+        help_text="User's first name",
+    )
+    last_name = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=150,
+        help_text="User's last name",
+    )
+
     ROLE_CHOICES = [("vendor", "Vendor"), ("client", "Client")]
     role = serializers.ChoiceField(
         choices=ROLE_CHOICES,
@@ -224,7 +221,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UnifiedUser
-        fields = ("email", "phone", "role", "password", "password2")
+        fields = ("email", "phone", "role", "first_name", "last_name", "password", "password2")
         ref_name = "AuthUserRegistration"
 
     def validate(self, attrs):
@@ -239,6 +236,8 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             # Normalise empty strings → None
             attrs["email"] = attrs.get("email") or None
             attrs["phone"] = attrs.get("phone") or None
+            attrs["first_name"] = attrs.get("first_name") or None
+            attrs["last_name"] = attrs.get("last_name") or None
 
             email = attrs["email"]
             phone = attrs["phone"]
@@ -266,41 +265,33 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
                     )]
                 })
 
-            # Normalise email domain to lowercase
+            # Normalise email domain to lowercase (only for email)
             from django.contrib.auth.base_user import BaseUserManager as _BUM
             if email:
                 email = _BUM.normalize_email(email)
                 attrs["email"] = email
 
             # Soft-deleted pool check FIRST (prevents unique-constraint 500)
-
-            if email:
-                if UnifiedUser.objects.all_with_deleted().filter(
-                    email__iexact=email, is_deleted=True
-                ).exists():
-                    logger.warning(
-                        "⛔ Registration blocked: soft-deleted account email '%s'", email
-                    )
-                    raise SoftDeletedUserExistsError()
-
-            if phone:
-                if UnifiedUser.objects.all_with_deleted().filter(
-                    phone=phone, is_deleted=True
-                ).exists():
-                    logger.warning(
-                        "⛔ Registration blocked: soft-deleted account phone '%s'", phone
-                    )
-                    raise SoftDeletedUserExistsError()
-
-            # Active uniqueness check
-            if email and UnifiedUser.objects.filter(email__iexact=email).exists():
-                raise serializers.ValidationError(
-                    {"email": _("A user with this email address already exists.")}
+            # ✅ OPTIMIZED: Single database query using Q object (one-liner)
+            if (email or phone) and UnifiedUser.objects.all_with_deleted().filter(
+                (Q(email__iexact=email) if email else Q(phone=phone)),
+                is_deleted=True
+            ).exists():
+                logger.warning(
+                    "⛔ Registration blocked: soft-deleted account '%s' or '%s'", email, phone
                 )
-            if phone and UnifiedUser.objects.filter(phone=phone).exists():
-                raise serializers.ValidationError(
-                    {"phone": _("A user with this phone number already exists.")}
-                )
+                raise SoftDeletedUserExistsError()
+
+            # Active uniqueness check (✅ OPTIMIZED: Single query using Q one-liner)
+            if (email or phone) and UnifiedUser.objects.filter(
+                (Q(email__iexact=email) if email else Q(phone=phone))
+            ).exists():
+                raise serializers.ValidationError({
+                    "email" if email else "phone": [_(
+                        "A user with this email address already exists."
+                        if email else "A user with this phone number already exists."
+                    )]
+                })
 
             logger.info("Registration validation successful.")
             return attrs
@@ -336,13 +327,6 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"error": f"An error occurred during user creation: {exc}"}
             )
-
-
-class AsyncUserRegistrationSerializer(UserRegistrationSerializer):
-    """Asynchronous version of UserRegistrationSerializer."""
-
-    async def acreate(self, validated_data):
-        return self.create(validated_data)
 
 
 # ─── Logout / Token Refresh ───────────────────────────────────────────────────

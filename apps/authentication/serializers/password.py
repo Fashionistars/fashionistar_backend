@@ -10,7 +10,9 @@ import logging
 
 from apps.authentication.models import UnifiedUser
 from django.contrib.auth.password_validation import validate_password
+from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
+from fashionistar_backend.apps.authentication.exceptions import SoftDeletedUserError, SoftDeletedUserExistsError
 from rest_framework import serializers
 
 logger = logging.getLogger(__name__)
@@ -35,23 +37,42 @@ class PasswordResetRequestSerializer(serializers.Serializer):
     def validate(self, data):
         try:
             email_or_phone = data.get("email_or_phone")
-            if "@" in email_or_phone:
-                UnifiedUser.objects.all_with_deleted().filter(
-                    email=email_or_phone
-                ).first()  # Anti-enumeration: ignore None
-            else:
-                UnifiedUser.objects.all_with_deleted().filter(
-                    phone=email_or_phone
-                ).first()  # Anti-enumeration: ignore None
-            logger.info("Password reset request validation for %s", email_or_phone)
+
+            # Normalise email domain to lowercase only for email (phone remains unchanged)
+            from django.contrib.auth.base_user import BaseUserManager as _BUM
+            if email_or_phone and "@" in email_or_phone:
+                email_or_phone = _BUM.normalize_email(email_or_phone)
+                data["email_or_phone"] = email_or_phone
+
+            # Soft-deleted pool check FIRST (prevents unique-constraint 500)
+            if UnifiedUser.objects.all_with_deleted().filter(
+                (Q(email=email_or_phone) if "@" in email_or_phone else Q(phone=email_or_phone)),
+                is_deleted=True
+            ).exists():
+                logger.warning(
+                    "⛔ Password Reset Request Rejected: soft-deleted account '%s'", email_or_phone
+                )
+                raise SoftDeletedUserError()
+
+
+
+            # ✅ OPTIMIZED: Single database query using Q object
+            user =  UnifiedUser.objects.all_with_deleted().filter(
+                Q(email=email_or_phone) if "@" in email_or_phone else Q(phone=email_or_phone)
+            ).first()  # Anti-enumeration: ignore None
+
+            data["user"] = user
+            logger.info("Password reset request validation successful for %s", email_or_phone)
             return data
+        except SoftDeletedUserError:
+            raise
         except Exception as exc:
             logger.warning(
-                "Password reset request error for %s: %s",
+                "Password reset request validation error for %s: %s",
                 data.get("email_or_phone"), exc,
-            )
-            return data  # Always pass — anti-enumeration
-
+                ~"Returning success response to prevent account enumeration."
+            )            
+            return data  # Always pass validation — prevents enumeration attacks by giving same response for existing vs non-existing users
 
 class PasswordResetConfirmEmailSerializer(serializers.Serializer):
     """

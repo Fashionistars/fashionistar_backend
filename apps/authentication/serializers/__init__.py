@@ -20,9 +20,6 @@ ARCHITECTURE NOTE (Bug 9 — Phase 7):
 
 # ── Auth / OTP ────────────────────────────────────────────────────────────────
 from apps.authentication.serializers.auth import (  # noqa: F401
-    AsyncLoginSerializer,
-    AsyncOTPSerializer,
-    AsyncUserRegistrationSerializer,
     GoogleAuthSerializer,
     LoginSerializer,
     LogoutSerializer,
@@ -54,11 +51,8 @@ from apps.authentication.serializers.profile import (  # noqa: F401
 __all__ = [
     # Auth
     "OTPSerializer",
-    "AsyncOTPSerializer",
     "LoginSerializer",
-    "AsyncLoginSerializer",
     "UserRegistrationSerializer",
-    "AsyncUserRegistrationSerializer",
     "LogoutSerializer",
     "TokenRefreshSerializer",
     "GoogleAuthSerializer",

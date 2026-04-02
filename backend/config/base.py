@@ -476,6 +476,7 @@ CORS_ALLOW_HEADERS = [
     "x-csrftoken",
     "x-requested-with",
     "access-control-allow-origin",
+    "ngrok-skip-browser-warning",  # Allow frontend dev to bypass ngrok warning page
 ]
 
 CORS_ALLOW_METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
