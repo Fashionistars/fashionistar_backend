@@ -91,18 +91,21 @@ class SyncPasswordService:
         Writes PASSWORD_RESET_REQUEST to AuditEventLog whether or not the user exists.
         """
         try:
+            is_email = "@" in email_or_phone
+
             # ✅ OPTIMIZED: Single database query using Q object
             try:
                 user = UnifiedUser.objects.filter(
-                    Q(email=email_or_phone, is_deleted=False) if "@" in email_or_phone else Q(phone=email_or_phone, is_deleted=False)
-                ).first()
+                Q(email=email_or_phone) if "@" in email_or_phone else Q(phone=email_or_phone)
+            ).first()
             except UnifiedUser.DoesNotExist:
                 logger.warning(f"User with identifier '{email_or_phone}' not found during password reset request.")
                 user = None
-            user = UnifiedUser.objects.filter(
-                Q(email=email_or_phone) if "@" in email_or_phone else Q(phone=email_or_phone)
-            ).first()
-            is_email = "@" in email_or_phone
+            except Exception as e:
+                logger.error(f"Error querying UnifiedUser for password reset request: {str(e)}")
+                user = None
+
+           
 
             # ── Audit: always log that a reset was requested ─────────────
             from apps.audit_logs.models import EventType

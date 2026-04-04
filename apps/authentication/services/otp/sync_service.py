@@ -318,14 +318,13 @@ class OTPService:
         """
         from apps.authentication.tasks import send_email_task, send_sms_task
         from django.db import transaction
-
+        
         try:
-            # 1. Find User
-            if '@' in email_or_phone:
-                user = UnifiedUser.objects.filter(email=email_or_phone).first()
-            else:
-                user = UnifiedUser.objects.filter(phone=email_or_phone).first()
-
+            # ── Step 1: Alive-only lookup (✅ 1 DB HIT using Q) ─────────────
+            user = UnifiedUser.objects.filter(
+                Q(email=email_or_phone) if "@" in email_or_phone else Q(phone=email_or_phone)
+            ).first()
+            
             if not user:
                 logger.warning(
                     "Resend OTP requested for non-existent user: %s", email_or_phone

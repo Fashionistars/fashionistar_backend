@@ -19,7 +19,7 @@ class AuthenticationConfig(AppConfig):
         # Password and last_login are excluded for security.
         try:
             from auditlog.registry import auditlog
-            from apps.authentication.models import UnifiedUser, LoginEvent, UserSession
+            from apps.authentication.models import UnifiedUser, LoginEvent, UserSession, ClientProfile
 
             auditlog.register(
                 UnifiedUser,
@@ -27,6 +27,7 @@ class AuthenticationConfig(AppConfig):
             )
             auditlog.register(LoginEvent)
             auditlog.register(UserSession, exclude_fields=['token_jti'])
+            auditlog.register(ClientProfile)
 
         except Exception:
             import logging

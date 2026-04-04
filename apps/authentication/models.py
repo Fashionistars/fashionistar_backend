@@ -1104,3 +1104,59 @@ class UserSession(TimeStampedModel):
             ip_address=ip_address,
             expires_at=expires_at,
         )
+
+
+
+# ================================================================
+# CLIENT PROFILE — 1:1 Profile for role='client' users
+# ================================================================
+
+class ClientProfile(TimeStampedModel):
+    """
+    Extended profile for client-role users.
+    Linked 1:1 to UnifiedUser (role='client').
+    Mirrors the VendorProfile design pattern.
+    """
+    user = models.OneToOneField(
+        "authentication.UnifiedUser",
+        on_delete=models.CASCADE,
+        related_name="client_profile",
+        limit_choices_to={"role": "client"},
+        help_text="The client user this profile belongs to.",
+    )
+    bio = models.TextField(blank=True, default="", max_length=500)
+    default_shipping_address = models.TextField(blank=True, default="")
+    state   = models.CharField(max_length=100, blank=True, default="")
+    country = models.CharField(max_length=100, blank=True, default="Nigeria")
+    SIZE_CHOICES = [
+        ("XS","XS"),("S","S"),("M","M"),("L","L"),
+        ("XL","XL"),("XXL","XXL"),("XXXL","XXXL"),
+    ]
+    preferred_size     = models.CharField(max_length=10, choices=SIZE_CHOICES, blank=True, default="")
+    style_preferences  = models.JSONField(default=list, blank=True)
+    favourite_colours  = models.JSONField(default=list, blank=True)
+    total_orders       = models.PositiveIntegerField(default=0)
+    total_spent_ngn    = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    is_profile_complete = models.BooleanField(default=False)
+
+    class Meta:
+        verbose_name        = "Client Profile"
+        verbose_name_plural = "Client Profiles"
+        db_table            = "authentication_client_profile"
+        indexes = [
+            models.Index(fields=["user"], name="client_profile_user_idx"),
+        ]
+
+    def __str__(self):
+        return f"ClientProfile({self.user.email or self.user.phone or self.user.pk})"
+
+    def update_completeness(self):
+        complete = all([self.preferred_size, self.default_shipping_address, bool(self.style_preferences)])
+        if self.is_profile_complete != complete:
+            self.is_profile_complete = complete
+            self.save(update_fields=["is_profile_complete", "updated_at"])
+
+    @classmethod
+    def get_or_create_for_user(cls, user):
+        profile, _ = cls.objects.get_or_create(user=user)
+        return profile

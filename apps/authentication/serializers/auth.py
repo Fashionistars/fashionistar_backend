@@ -104,6 +104,12 @@ class LoginSerializer(serializers.Serializer):
         password       = data.get("password")
 
         try:
+            # Normalise email domain to lowercase only for email (phone remains unchanged)
+            from django.contrib.auth.base_user import BaseUserManager as _BUM
+            if email_or_phone and "@" in email_or_phone:
+                email_or_phone = _BUM.normalize_email(email_or_phone)
+                data["email_or_phone"] = email_or_phone
+
             # ── Step 1: Alive-only lookup (✅ 1 DB HIT using Q) ─────────────
             user = UnifiedUser.objects.filter(
                 Q(email=email_or_phone) if "@" in email_or_phone else Q(phone=email_or_phone)
@@ -358,8 +364,17 @@ class TokenRefreshSerializer(serializers.Serializer):
 # ─── Google OAuth ─────────────────────────────────────────────────────────────
 
 class GoogleAuthSerializer(serializers.Serializer):
-    """Serializer for Google ID Token authentication."""
-    id_token = serializers.CharField(required=True, help_text="Google ID Token")
+    """
+    Serializer for Google ID Token authentication.
+
+    Flow:
+        Login (existing user): { id_token }  — role is optional, ignored
+        Register (new user):   { id_token, role: 'vendor'|'client' }
+    """
+    id_token = serializers.CharField(
+        required=True,
+        help_text="Google ID Token (JWT) returned by @react-oauth/google on the frontend.",
+    )
 
     ROLE_CHOICES = getattr(
         UnifiedUser, "ROLE_CHOICES", [("vendor", "Vendor"), ("client", "Client")]
@@ -367,7 +382,9 @@ class GoogleAuthSerializer(serializers.Serializer):
     role = serializers.ChoiceField(
         choices=ROLE_CHOICES,
         default="client",
-        help_text="User's role",
+        required=False,       # ← Optional: for login, role is derived from DB record
+        allow_blank=True,     # ← Permits "" from frontend during login
+        help_text="User's role — required for new registrations, ignored for existing users.",
     )
 
     class Meta:
@@ -379,9 +396,12 @@ class GoogleAuthSerializer(serializers.Serializer):
                 raise serializers.ValidationError(
                     {"id_token": _("Google ID Token is required.")}
                 )
+            # Normalise role: strip blanks, default to 'client'
+            role = (attrs.get("role") or "client").strip().lower()
             valid_roles = [c[0] for c in self.ROLE_CHOICES]
-            if attrs.get("role") not in valid_roles:
-                raise serializers.ValidationError({"role": _("Invalid role.")})
+            if role not in valid_roles:
+                role = "client"
+            attrs["role"] = role
             return attrs
         except serializers.ValidationError:
             raise
@@ -390,3 +410,4 @@ class GoogleAuthSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {"non_field_errors": _("An error occurred during Google Auth validation.")}
             )
+

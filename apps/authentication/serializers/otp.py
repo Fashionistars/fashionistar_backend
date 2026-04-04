@@ -39,10 +39,9 @@ class ResendOTPRequestSerializer(serializers.Serializer):
         try:
             email_or_phone = data.get("email_or_phone")
             
-            
-            # Normalise email domain to lowercase
+            # Normalise email domain to lowercase only for email (phone remains unchanged)
             from django.contrib.auth.base_user import BaseUserManager as _BUM
-            if email_or_phone:
+            if email_or_phone and "@" in email_or_phone:
                 email_or_phone = _BUM.normalize_email(email_or_phone)
                 data["email_or_phone"] = email_or_phone
 

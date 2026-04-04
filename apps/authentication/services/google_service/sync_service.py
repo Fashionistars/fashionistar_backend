@@ -84,6 +84,11 @@ class SyncGoogleAuthService:
             if not id_info.get('email_verified', False):
                 raise ValueError("Google email is not verified.")
 
+            # Normalise email domain to lowercase only for email (phone remains unchanged)
+            from django.contrib.auth.base_user import BaseUserManager as _BUM
+            if email and "@" in email:
+                email = _BUM.normalize_email(email)
+
             # ── 2. Extract rich profile data ───────────────────────────────
             first_name        = id_info.get('given_name', '')   or ''
             last_name         = id_info.get('family_name', '')  or ''

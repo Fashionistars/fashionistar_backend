@@ -1630,8 +1630,11 @@ class LoginEventAdmin(admin.ModelAdmin):
 
     @admin.display(description='User', ordering='user__email')
     def user_link(self, obj):
+        from django.utils.safestring import mark_safe
         if not obj.user:
-            return format_html('<span style="color:#9ca3af">— anonymous —</span>')
+            # mark_safe is safe here — the string is a fully static literal,
+            # no user-controlled data is interpolated.
+            return mark_safe('<span style="color:#9ca3af">— anonymous —</span>')
         identifier = obj.user.email or obj.user.phone or str(obj.user.pk)
         url = f'/admin/authentication/unifieduser/{obj.user.pk}/change/'
         return format_html('<a href="{}">{}</a>', url, identifier)
