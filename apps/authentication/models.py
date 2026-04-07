@@ -72,6 +72,12 @@ class MemberIDCounter(models.Model):
             return obj.counter
 
 
+
+
+
+
+
+
 def generate_member_id():
     """
     Generate a unique, human-readable, brand-aligned member ID.
@@ -88,6 +94,11 @@ def generate_member_id():
     """
     seq = MemberIDCounter.next_value()
     return f"{MEMBER_ID_PREFIX}{seq:0{MEMBER_ID_DIGITS}d}"
+
+
+
+
+
 
 
 class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMixin):
@@ -591,6 +602,11 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
         Ownership check for HardDeleteMixin.
         """
         return self.pk == user.pk
+
+
+
+
+
 
 class BiometricCredential(TimeStampedModel):
     """

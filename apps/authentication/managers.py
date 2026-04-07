@@ -245,6 +245,8 @@ class CustomUserManager(BaseUserManager):
             raise ValueError(_('Superuser must have is_superuser=True.'))
         if extra_fields.get('is_verified') is not True:
             raise ValueError(_('Superuser must have is_verified=True.'))
+        if extra_fields.get('is_active') is not True:
+            raise ValueError(_('Superuser must have is_active=True.'))
         if extra_fields.get('role') != 'admin':
             raise ValueError(_('Superuser must have role=admin.'))
 
@@ -277,6 +279,8 @@ class CustomUserManager(BaseUserManager):
             raise ValueError(_('Superuser must have is_superuser=True.'))
         if extra_fields.get('is_verified') is not True:
             raise ValueError(_('Superuser must have is_verified=True.'))
+        if extra_fields.get('is_active') is not True:
+            raise ValueError(_('Superuser must have is_active=True.'))
         if extra_fields.get('role') != 'admin':
             raise ValueError(_('Superuser must have role=admin.'))
 

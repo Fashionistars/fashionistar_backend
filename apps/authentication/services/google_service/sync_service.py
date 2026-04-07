@@ -168,7 +168,7 @@ class SyncGoogleAuthService:
                         from apps.common.events import event_bus
 
                         def _emit():
-                            event_bus.emit('user.registered', {
+                            event_bus.emit('user.registered', **{
                                 'user_id':  str(user.pk),
                                 'email':    user.email,
                                 'role':     user.role,

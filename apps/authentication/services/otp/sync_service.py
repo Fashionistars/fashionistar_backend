@@ -40,6 +40,8 @@ import logging
 from typing import Any, Optional, Dict
 from asgiref.sync import sync_to_async
 
+from django.db.models import Q
+
 from apps.common.utils import (
     get_redis_connection_safe,
     generate_numeric_otp,
@@ -361,6 +363,7 @@ class OTPService:
 
             if user.email:
                 from django.conf import settings as _settings
+                from datetime import datetime as _dt
                 _email_context = {
                     'user_id':       _user_id,
                     'otp':           _otp,
@@ -372,6 +375,7 @@ class OTPService:
                     'SITE_URL': getattr(
                         _settings, 'SITE_URL', 'https://fashionistar.io'
                     ),
+                    'time': _dt.utcnow().strftime('%H:%M UTC'),
                 }
                 transaction.on_commit(lambda: send_email_task.delay(
                     subject='🔐 Your New Fashionistar Verification OTP',
@@ -449,6 +453,7 @@ class OTPService:
 
             from apps.authentication.tasks import send_email_task, send_sms_task
             from django.conf import settings as _settings
+            from datetime import datetime as _dt
 
             if user.email:
                 _email_context = {
@@ -462,6 +467,7 @@ class OTPService:
                     'SITE_URL': getattr(
                         _settings, 'SITE_URL', 'https://fashionistar.io'
                     ),
+                    'time': _dt.utcnow().strftime('%H:%M UTC'),
                 }
                 send_email_task.delay(
                     subject='🔐 Your New Fashionistar Verification OTP',

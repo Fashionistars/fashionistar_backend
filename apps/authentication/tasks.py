@@ -169,6 +169,9 @@ def upload_google_avatar_to_cloudinary(self, user_pk: str, google_avatar_url: st
         try:
             import cloudinary
             import cloudinary.uploader
+            from apps.common.tasks.cloudinary import _ensure_cloudinary_config
+            
+            _ensure_cloudinary_config()
 
             # Use member_id as public_id so re-uploads replace the same file
             public_id = f"avatars/google_{user.member_id or str(user.pk)[:8]}"
