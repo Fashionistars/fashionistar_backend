@@ -4,14 +4,15 @@ Auth Views Package — Sync (DRF) only.
 
 Note: Async Django-Ninja views have been deprecated (Phase 7).
       Only DRF sync views (sync_views.py) are active.
-      Async views will be re-introduced for measurement/orders in a future phase.
+
+Note: GoogleAuthView has been relocated to → apis/google_view/sync_views.py
+      MeView has been relocated to          → apis/profile_views/sync_views.py
 """
 from .sync_views import (  # noqa: F401
     RegisterView as SyncRegisterView,
     LoginView as SyncLoginView,
     VerifyOTPView as SyncVerifyOTPView,
     ResendOTPView as SyncResendOTPView,
-    GoogleAuthView as SyncGoogleAuthView,
     LogoutView as SyncLogoutView,
     RefreshTokenView as SyncRefreshTokenView,
 )
@@ -19,6 +20,5 @@ from .sync_views import (  # noqa: F401
 __all__ = [
     # Sync (DRF) — active
     'SyncRegisterView', 'SyncLoginView', 'SyncVerifyOTPView',
-    'SyncResendOTPView', 'SyncGoogleAuthView', 'SyncLogoutView',
-    'SyncRefreshTokenView',
+    'SyncResendOTPView', 'SyncLogoutView', 'SyncRefreshTokenView',
 ]

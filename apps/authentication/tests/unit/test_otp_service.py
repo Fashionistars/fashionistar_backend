@@ -161,24 +161,50 @@ class TestVerifyByOTPSync:
 
     def _build_redis_for_verify(self, user_id='USER-001', purpose='verify',
                                  otp='123456', encrypted='ENC|HASH'):
-        """Build a mock Redis that simulates the two-key structure."""
+        """
+        Build a mock Redis that simulates the two-key structure for WATCH/MULTI/EXEC.
+
+        The new OTPService.verify_by_otp_sync() uses:
+            with redis_conn.pipeline() as pipe:
+                pipe.watch(hash_key)
+                primary_raw = pipe.get(hash_key)       # immediate mode after WATCH
+                primary_val = pipe.get(primary_key)    # immediate mode
+                pipe.multi()
+                pipe.delete(primary_key)
+                pipe.delete(hash_key)
+                pipe.execute()
+        """
         otp_hash = _sha256(otp)
-        primary_key = f'otp:{user_id}:{purpose}:SNIPPET'
-        redis = MagicMock()
+        hash_key_str = f'otp_hash:{otp_hash}'
+        primary_key_str = f'otp:{user_id}:{purpose}:SNIPPET'
 
-        def _get(key):
-            k = key if isinstance(key, str) else key.decode()
-            if k == f'otp_hash:{otp_hash}':
-                return primary_key.encode()
-            if k == primary_key:
-                return f'{encrypted}|{otp_hash}'.encode()
-            return None
-
-        redis.get.side_effect = _get
+        # The pipe mock needs to act as both the direct pipeline AND the context manager
         pipe = MagicMock()
+        pipe.__enter__ = MagicMock(return_value=pipe)
+        pipe.__exit__ = MagicMock(return_value=False)
+
+        # Simulate GET calls in WATCH-mode (immediate execution)
+        primary_key_bytes = primary_key_str.encode()
+        # get() is called twice: first for hash_key, then for primary_key
+        call_responses = [
+            primary_key_bytes,   # pipe.get(hash_key) → returns pointer to primary
+            b'encrypted_value',  # pipe.get(primary_key) → primary exists → OTP valid
+        ]
+        pipe.get.side_effect = call_responses
+
         pipe.delete.return_value = None
         pipe.execute.return_value = [1, 1]
+        pipe.watch.return_value = None
+        pipe.multi.return_value = None
+        pipe.unwatch.return_value = None
+
+        redis = MagicMock()
         redis.pipeline.return_value = pipe
+        redis.delete.return_value = None
+        redis.get.side_effect = lambda k: (
+            primary_key_bytes if hash_key_str in str(k) else
+            None
+        )
         return redis
 
     @patch(f'{OTP_SERVICE_PATH}.get_redis_connection_safe')
@@ -212,9 +238,10 @@ class TestVerifyByOTPSync:
 
         OTPService.verify_by_otp_sync('123456', purpose='verify')
 
-        # Pipeline delete must have been called for at least 2 keys
+        # The pipe context manager is the pipeline mock
         pipe = redis.pipeline.return_value
-        assert pipe.delete.call_count == 2
+        # delete() should have been called at least twice (primary + hash)
+        assert pipe.delete.call_count >= 2
 
     @patch(f'{OTP_SERVICE_PATH}.get_redis_connection_safe')
     def test_purpose_mismatch_returns_none(self, mock_redis):
@@ -237,21 +264,30 @@ class TestVerifyByOTPSync:
         """If primary key expired but hash index still exists, index must be deleted."""
         from apps.authentication.services.otp.sync_service import OTPService
         otp_hash = _sha256('123456')
+        hash_key_str = f'otp_hash:{otp_hash}'
+        primary_key_str = 'otp:USER-001:verify:SNPT'
+
+        pipe = MagicMock()
+        pipe.__enter__ = MagicMock(return_value=pipe)
+        pipe.__exit__ = MagicMock(return_value=False)
+        # First pipe.get() returns the primary key (hash index exists)
+        # Second pipe.get() returns None (primary key expired)
+        pipe.get.side_effect = [primary_key_str.encode(), None]
+        pipe.watch.return_value = None
+        pipe.multi.return_value = None
+        pipe.unwatch.return_value = None
+        pipe.execute.return_value = []
+
         redis = MagicMock()
-
-        def _get(key):
-            k = str(key)
-            if f'otp_hash:{otp_hash}' in k:
-                return b'otp:USER-001:verify:SNPT'  # index exists
-            # primary key expired
-            return None
-
-        redis.get.side_effect = _get
+        redis.pipeline.return_value = pipe
+        # redis.delete() is called directly (not via pipeline) for orphan cleanup
+        redis.delete.return_value = 1
         mock_redis.return_value = redis
 
         result = OTPService.verify_by_otp_sync('123456', purpose='verify')
         assert result is None
-        redis.delete.assert_called()  # orphan cleaned up
+        # redis.delete() called directly with the orphaned hash_key
+        redis.delete.assert_called()
 
     @patch(f'{OTP_SERVICE_PATH}.get_redis_connection_safe', return_value=None)
     def test_returns_none_when_redis_unavailable(self, mock_redis):

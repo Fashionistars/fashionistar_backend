@@ -2,14 +2,19 @@
 """
 Profile Views Package — Sync (DRF) only.
 
-Async profile views deprecated (Phase 7).
+Exports:
+  - UserProfileDetailView : GET/PATCH /api/v1/profile/me/   (authenticated user)
+  - UserListView          : GET /api/v1/profile/users/      (admin only)
+  - MeView                : GET /api/v1/auth/me/            (lightweight auth rehydration)
 """
 from .sync_views import (  # noqa: F401
-    ProtectedUserView,
-    UserProfileView,
+    UserProfileDetailView,
+    UserListView,
+    MeView,
 )
 
 __all__ = [
-    'ProtectedUserView',
-    'UserProfileView',
+    'UserProfileDetailView',
+    'UserListView',
+    'MeView',
 ]

@@ -46,7 +46,8 @@ def _get_current_jti(request) -> str | None:
 def _session_to_dict(session: UserSession, current_jti: str | None = None) -> dict:
     """Serialize a UserSession to a safe API-facing dict."""
     return {
-        "id":           session.pk,
+        # UUID7 primary key — always serialize as string
+        "id":           str(session.pk),
         "device_name":  session.device_name or "Unknown Device",
         "client_type":  session.client_type,
         "browser":      session.browser_family,
@@ -124,7 +125,13 @@ class SessionRevokeView(APIView):
     permission_classes = [IsVerifiedUser]
     renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
 
-    def delete(self, request, session_id: int):
+    def delete(self, request, session_id: str):
+        """
+        Revoke a session by its UUID7 primary key (string).
+
+        All models inherit from CommonTimestampModel which uses UUID7 as PK.
+        The URL parameter is <str:session_id> — NOT <int:session_id>.
+        """
         try:
             session = UserSession.objects.get(pk=session_id, user=request.user)
         except UserSession.DoesNotExist:
@@ -132,7 +139,14 @@ class SessionRevokeView(APIView):
                 {"status": "error", "message": "Session not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
-
+        except (ValueError, Exception) as e:
+            # Invalid UUID format (e.g. '999999' instead of a UUID7) —
+            # treat as not found rather than leaking DB error details.
+            logger.debug("SessionRevokeView: invalid session_id format '%s': %s", session_id, e)
+            return Response(
+                {"status": "error", "message": "Session not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         jti = session.jti
 
         with transaction.atomic():
@@ -250,7 +264,8 @@ class LoginEventListView(APIView):
 
         data = [
             {
-                "id":             event.pk,
+                # UUID7 primary key — always serialize as string for frontend
+                "id":             str(event.pk),
                 "outcome":        event.outcome,
                 "is_successful":  event.is_successful,
                 "failure_reason": event.failure_reason,
