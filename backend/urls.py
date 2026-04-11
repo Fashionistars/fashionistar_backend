@@ -32,7 +32,25 @@ schema_view = get_schema_view(
    permission_classes=(permissions.AllowAny,),
 )
 
+
+def health_check(request):
+    """Kubernetes readiness/liveness probe endpoint."""
+    from django.db import connection
+    try:
+        connection.ensure_connection()
+        db_ok = True
+    except Exception:
+        db_ok = False
+    from django.http import JsonResponse
+    return JsonResponse({
+        "status": "ok" if db_ok else "degraded",
+        "service": "fashionistar-api",
+        "version": "v1",
+        "database": "ok" if db_ok else "error",
+    }, status=200 if db_ok else 503)
+
 urlpatterns = [
+    path("health/", health_check, name="health"),
    path('swagger<format>/', schema_view.without_ui(cache_timeout=0), name='schema-json'),
    path('', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
    path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),

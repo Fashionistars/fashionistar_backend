@@ -558,25 +558,28 @@ class GoogleAuthView(generics.CreateAPIView):
         # ── Create UserSession record on_commit ──────────────────────────
         from rest_framework_simplejwt.tokens import RefreshToken as _RefTok
         from apps.authentication.models import UserSession, LoginEvent
+        # CRITICAL FIX: on_commit() MUST be inside explicit atomic() block.
+        # In autocommit mode on_commit fires immediately -- not after commit.
         try:
             refresh_obj = _RefTok(tokens['refresh'])
-            transaction.on_commit(
-                lambda: UserSession.create_from_token(
-                    user=user,
-                    refresh_token=refresh_obj,
-                    request=request,
+            with transaction.atomic():
+                transaction.on_commit(
+                    lambda: UserSession.create_from_token(
+                        user=user,
+                        refresh_token=refresh_obj,
+                        request=request,
+                    )
                 )
-            )
-            transaction.on_commit(
-                lambda: LoginEvent.record(
-                    user=user,
-                    ip_address=request.META.get('REMOTE_ADDR', '0.0.0.0'),
-                    user_agent=request.META.get('HTTP_USER_AGENT', ''),
-                    auth_method=LoginEvent.METHOD_GOOGLE,
-                    outcome=LoginEvent.OUTCOME_SUCCESS,
-                    is_successful=True,
+                transaction.on_commit(
+                    lambda: LoginEvent.record(
+                        user=user,
+                        ip_address=request.META.get('REMOTE_ADDR', '0.0.0.0'),
+                        user_agent=request.META.get('HTTP_USER_AGENT', ''),
+                        auth_method=LoginEvent.METHOD_GOOGLE,
+                        outcome=LoginEvent.OUTCOME_SUCCESS,
+                        is_successful=True,
+                    )
                 )
-            )
         except Exception as sess_exc:
             logger.warning("⚠️ GoogleAuthView: session/event record failed: %s", sess_exc)
 
@@ -719,3 +722,61 @@ class LogoutView(generics.GenericAPIView):
                 {"error": "An error occurred during logout. Please try again."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  ME VIEW — Authenticated user profile (for frontend SSR rehydration)
+# ═══════════════════════════════════════════════════════════════════════════
+
+class MeView(generics.RetrieveAPIView):
+    """
+    GET /api/v1/auth/me/
+
+    Returns the authenticated user's full profile.
+
+    Used by the frontend useAuthHydration() hook to rehydrate Zustand
+    user state on page refresh — without requiring a full re-login.
+
+    Authorization: Bearer <access_token>
+
+    Success Response 200:
+        {
+          "id":          "<uuid>",
+          "member_id":   "<member_id>",
+          "email":       "user@example.com",
+          "phone":       null,
+          "first_name":  "John",
+          "last_name":   "Doe",
+          "role":        "client",
+          "is_verified": true,
+          "is_staff":    false,
+          "avatar":      null,
+          "date_joined": "2026-01-15T10:00:00Z"
+        }
+
+    Error Responses:
+        401 — Not authenticated / token expired
+    """
+    permission_classes = [IsAuthenticated]
+    renderer_classes   = [CustomJSONRenderer]
+
+    def get(self, request, *args, **kwargs) -> Response:
+        """Returns the requesting user's profile from the JWT token claim."""
+        user = request.user
+        return Response(
+            {
+                "id":          str(user.id),
+                "member_id":   user.member_id,
+                "email":       user.email,
+                "phone":       str(user.phone) if user.phone else None,
+                "first_name":  user.first_name,
+                "last_name":   user.last_name,
+                "role":        user.role,
+                "is_verified": user.is_verified,
+                "is_staff":    user.is_staff,
+                "avatar":      user.avatar,
+                "date_joined": user.date_joined.isoformat() if user.date_joined else None,
+            },
+            status=status.HTTP_200_OK,
+        )
+

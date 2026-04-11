@@ -19,6 +19,7 @@ from apps.authentication.ninja_api import api
 # Sync views (DRF)
 from apps.authentication.apis.auth_views.sync_views import (
     LoginView,
+    MeView,
     RegisterView,
     LogoutView,
     RefreshTokenView,
@@ -48,6 +49,7 @@ app_name = "authentication"
 # ========================================================================
 
 v1_auth_patterns = [
+    path("v1/auth/me/", MeView.as_view(), name="me-sync"),
     path("v1/auth/login/", LoginView.as_view(), name="login-sync"),
     path("v1/auth/register/", RegisterView.as_view(), name="register-sync"),
     path("v1/auth/verify-otp/", VerifyOTPView.as_view(), name="verify-otp-sync"),
