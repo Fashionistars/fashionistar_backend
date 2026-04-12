@@ -27,8 +27,9 @@ class UserProfileDetailView(APIView):
     GET  /api/v1/profile/me/ — Return authenticated user full profile via serializer.
     PATCH /api/v1/profile/me/ — Partial update of authenticated user profile.
     """
+
     permission_classes = [IsAuthenticated]
-    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     def get(self, request):
         serializer = UserSerializer(request.user)
@@ -46,8 +47,9 @@ class UserListView(APIView):
     """
     GET /api/v1/profile/users/ — Admin-only list of all registered users.
     """
+
     permission_classes = [IsAdminUser]
-    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     def get(self, request):
         users = UnifiedUser.objects.all()
@@ -59,6 +61,7 @@ class UserListView(APIView):
 # ME VIEW — Authenticated user profile (for frontend SSR rehydration)
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class MeView(generics.RetrieveAPIView):
     """
     GET /api/v1/auth/me/
@@ -69,25 +72,29 @@ class MeView(generics.RetrieveAPIView):
     Authorization: Bearer <access_token>
     Error 401: Not authenticated / token expired.
     """
+
     permission_classes = [IsAuthenticated]
-    renderer_classes   = [CustomJSONRenderer]
+    renderer_classes = [CustomJSONRenderer]
 
     def get(self, request, *args, **kwargs):
         """Return the requesting user's profile from the JWT token claim."""
         user = request.user
         return Response(
             {
-                "id":          str(user.id),
-                "member_id":   user.member_id,
-                "email":       user.email,
-                "phone":       str(user.phone) if user.phone else None,
-                "first_name":  user.first_name,
-                "last_name":   user.last_name,
-                "role":        user.role,
+                "user_id": str(user.id),
+                "identifying_info": user.identifying_info,
+                "member_id": user.member_id,
+                "email": user.email if user.email else None,
+                "phone": str(user.phone) if user.phone else None,
+                "first_name": user.first_name if user.first_name else "",
+                "last_name": user.last_name if user.last_name else "",
+                "role": user.role,
                 "is_verified": user.is_verified,
-                "is_staff":    user.is_staff,
-                "avatar":      user.avatar,
-                "date_joined": user.date_joined.isoformat() if user.date_joined else None,
+                "is_staff": user.is_staff,
+                "avatar": user.avatar,
+                "date_joined": (
+                    user.date_joined.isoformat() if user.date_joined else None
+                ),
             },
             status=status.HTTP_200_OK,
         )

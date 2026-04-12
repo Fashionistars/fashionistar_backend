@@ -11,6 +11,7 @@ ARCHITECTURE NOTE (Bug 9 — Phase 7):
       otp.py       ← ResendOTPRequestSerializer
       password.py  ← Reset Request/Confirm, PasswordChange
       profile.py   ← ProtectedUser, UserProfile, UserSerializer
+      session.py   ← UserSession, LoginEvent (Phase 5 addition)
 
   This __init__.py re-exports EVERY serializer that was in the old file.
   All existing imports like:
@@ -48,6 +49,15 @@ from apps.authentication.serializers.profile import (  # noqa: F401
     UserSerializer,         # alias for UserProfileSerializer
 )
 
+# ── Session & Login Events (Phase 5) ─────────────────────────────────────────
+from apps.authentication.serializers.session import (  # noqa: F401
+    LoginEventListSerializer,
+    LoginEventSerializer,
+    SessionRevokeRequestSerializer,
+    UserSessionListSerializer,
+    UserSessionSerializer,
+)
+
 __all__ = [
     # Auth
     "OTPSerializer",
@@ -67,4 +77,10 @@ __all__ = [
     "ProtectedUserSerializer",
     "UserProfileSerializer",
     "UserSerializer",
+    # Session & Login Events (Phase 5)
+    "UserSessionSerializer",
+    "UserSessionListSerializer",
+    "SessionRevokeRequestSerializer",
+    "LoginEventSerializer",
+    "LoginEventListSerializer",
 ]

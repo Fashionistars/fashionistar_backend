@@ -7,25 +7,30 @@ Endpoints:
   GET  /api/v1/auth/sessions/                   — list all active sessions for current user
   DELETE /api/v1/auth/sessions/<id>/             — terminate a specific session (logout from device)
   POST   /api/v1/auth/sessions/revoke-others/    — logout all other devices, keep current
+  GET  /api/v1/auth/login-events/                — list last 10 login events (security audit trail)
 
 All endpoints require IsVerifiedUser (authenticated + active + OTP-verified).
 
-Why this matters:
-  Users can see exactly which devices have their account open, spot
-  suspicious sessions (unfamiliar country/device), and remotely revoke
-  them — exactly like Telegram, GitHub, and Google Account Security.
+Architecture:
+  - Views delegate all DB reads to selectors (session_selector.py)
+  - Serializers (session.py) replace inline raw-dict serialization
+  - Transaction.atomic() wraps all writes
 """
 
 import logging
 from django.db import transaction
-from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.renderers import BrowsableAPIRenderer
+
 from apps.common.permissions import IsVerifiedUser
 from apps.common.renderers import CustomJSONRenderer
-from apps.authentication.models import UserSession
+from apps.authentication.selectors import get_active_sessions, get_login_events
+from apps.authentication.serializers import (
+    UserSessionSerializer,
+    LoginEventSerializer,
+)
 
 logger = logging.getLogger('application')
 
@@ -41,33 +46,6 @@ def _get_current_jti(request) -> str | None:
         return str(validated_token.get('jti', ''))
     except Exception:
         return None
-
-
-def _session_to_dict(session: UserSession, current_jti: str | None = None) -> dict:
-    """Serialize a UserSession to a safe API-facing dict."""
-    return {
-        # UUID7 primary key — always serialize as string
-        "id":           str(session.pk),
-        "device_name":  session.device_name or "Unknown Device",
-        "client_type":  session.client_type,
-        "browser":      session.browser_family,
-        "os":           session.os_family,
-        "ip_address":   session.ip_address,
-        "country":      session.country,
-        "city":         session.city,
-        "created_at":   session.created_at.isoformat() if session.created_at else None,
-        "last_used_at": session.last_used_at.isoformat() if session.last_used_at else None,
-        "expires_at":   session.expires_at.isoformat() if session.expires_at else None,
-        # ``is_current`` computed dynamically: the session whose JTI matches
-        # the JWT in the current request's Authorization header.
-        # Note: UserSession.jti is the REFRESH token JTI; the access token JTI
-        # is different. We match on either user agent+IP as a heuristic fallback.
-        "is_current":   (session.jti == current_jti) if current_jti else False,
-        "is_expired":   (
-            session.expires_at is not None
-            and session.expires_at < timezone.now()
-        ),
-    }
 
 
 # ===========================================================================
@@ -86,35 +64,37 @@ class SessionListView(APIView):
     """
 
     permission_classes = [IsVerifiedUser]
-    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]    
+    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     def get(self, request):
         current_jti = _get_current_jti(request)
 
-        sessions = (
-            UserSession.objects
-            .filter(user=request.user)
-            .order_by('-last_used_at')[:20]
+        # Use selector for optimized DB query with select_related
+        sessions = get_active_sessions(user=request.user, limit=20)
+
+        serializer = UserSessionSerializer(
+            sessions,
+            many=True,
+            context={"current_jti": current_jti, "request": request},
         )
-        data = [_session_to_dict(s, current_jti) for s in sessions]
 
         return Response(
             {
-                "status": "success",
-                "count":  len(data),
-                "results": data,
+                "status":  "success",
+                "count":   len(serializer.data),
+                "results": serializer.data,
             },
             status=status.HTTP_200_OK,
         )
 
 
 # ===========================================================================
-# DELETE /api/v1/auth/sessions/<int:session_id>/
+# DELETE /api/v1/auth/sessions/<str:session_id>/
 # ===========================================================================
 
 class SessionRevokeView(APIView):
     """
-    Revoke (terminate) a specific session by ID.
+    Revoke (terminate) a specific session by UUID7 string ID.
 
     Security:
       - Only the session owner can revoke their own sessions (user FK enforced).
@@ -132,6 +112,8 @@ class SessionRevokeView(APIView):
         All models inherit from CommonTimestampModel which uses UUID7 as PK.
         The URL parameter is <str:session_id> — NOT <int:session_id>.
         """
+        from apps.authentication.models import UserSession
+
         try:
             session = UserSession.objects.get(pk=session_id, user=request.user)
         except UserSession.DoesNotExist:
@@ -142,11 +124,15 @@ class SessionRevokeView(APIView):
         except (ValueError, Exception) as e:
             # Invalid UUID format (e.g. '999999' instead of a UUID7) —
             # treat as not found rather than leaking DB error details.
-            logger.debug("SessionRevokeView: invalid session_id format '%s': %s", session_id, e)
+            logger.debug(
+                "SessionRevokeView: invalid session_id format '%s': %s",
+                session_id, e,
+            )
             return Response(
                 {"status": "error", "message": "Session not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
+
         jti = session.jti
 
         with transaction.atomic():
@@ -195,9 +181,11 @@ class SessionRevokeOthersView(APIView):
     """
 
     permission_classes = [IsVerifiedUser]
-    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]    
+    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     def post(self, request):
+        from apps.authentication.models import UserSession
+
         current_jti = _get_current_jti(request)
 
         # All sessions except the one that matches the current token
@@ -248,47 +236,29 @@ class LoginEventListView(APIView):
 
     Useful for the Security Dashboard "Recent Login Activity" section.
     Analogous to Binance's "Login Activity" and Google's "Recent Security Events".
+
+    Uses LoginEventSerializer for validated, Swagger-documented responses.
+    Uses get_login_events() selector for optimized ORM query with select_related.
     """
 
     permission_classes = [IsVerifiedUser]
     renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     def get(self, request):
-        from apps.authentication.models import LoginEvent
+        # Use selector for optimized DB query
+        events = get_login_events(user=request.user, limit=10)
 
-        events = (
-            LoginEvent.objects
-            .filter(user=request.user)
-            .order_by('-created_at')[:10]
+        serializer = LoginEventSerializer(
+            events,
+            many=True,
+            context={"request": request},
         )
-
-        data = [
-            {
-                # UUID7 primary key — always serialize as string for frontend
-                "id":             str(event.pk),
-                "outcome":        event.outcome,
-                "is_successful":  event.is_successful,
-                "failure_reason": event.failure_reason,
-                "auth_method":    event.auth_method,
-                "ip_address":     event.ip_address,
-                "country":        event.country,
-                "city":           event.city,
-                "client_type":    event.client_type,
-                "browser":        event.browser_family,
-                "os":             event.os_family,
-                "risk_score":     event.risk_score,
-                "is_new_device":  event.is_new_device,
-                "is_new_country": event.is_new_country,
-                "timestamp":      event.created_at.isoformat() if event.created_at else None,
-            }
-            for event in events
-        ]
 
         return Response(
             {
                 "status":  "success",
-                "count":   len(data),
-                "results": data,
+                "count":   len(serializer.data),
+                "results": serializer.data,
             },
             status=status.HTTP_200_OK,
         )
