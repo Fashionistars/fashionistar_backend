@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 # ================================================================
 # MEMBER ID — Race-safe human-readable user identifier
-# Format: FASTAR0001 ... FASTAR9999 (10 chars, all caps)
+# Format: FASTAR000001 ... FASTAR999999 (12 chars, all caps)
 # ================================================================
 
 MEMBER_ID_PREFIX = "FASTAR"
@@ -75,21 +75,21 @@ class MemberIDCounter(models.Model):
             OverflowError: If the counter would exceed the maximum
                 representable value for the digit width (9999).
         """
-        max_value = 10 ** MEMBER_ID_DIGITS - 1  # 999999
+        max_value = 12**MEMBER_ID_DIGITS - 1  # 999999
 
         with transaction.atomic():
             obj, _ = cls.objects.select_for_update().get_or_create(
                 id=1,
-                defaults={'counter': 0},
+                defaults={"counter": 0},
             )
             if obj.counter >= max_value:
                 raise OverflowError(
                     f"MemberIDCounter has reached the maximum value "
                     f"({max_value}). Extend MEMBER_ID_DIGITS to continue."
                 )
-            obj.counter = F('counter') + 1
-            obj.save(update_fields=['counter'])
-            obj.refresh_from_db(fields=['counter'])
+            obj.counter = F("counter") + 1
+            obj.save(update_fields=["counter"])
+            obj.refresh_from_db(fields=["counter"])
             return obj.counter
 
 
@@ -125,21 +125,21 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
 
     # Resolve conflicts with legacy User model
     groups = models.ManyToManyField(
-        'auth.Group',
-        verbose_name=_('groups'),
+        "auth.Group",
+        verbose_name=_("groups"),
         blank=True,
         help_text=_(
-            'The groups this user belongs to. A user will get all permissions '
-            'granted to each of their groups.'
+            "The groups this user belongs to. A user will get all permissions "
+            "granted to each of their groups."
         ),
         related_name="unified_user_set",
         related_query_name="unified_user",
     )
     user_permissions = models.ManyToManyField(
-        'auth.Permission',
-        verbose_name=_('user permissions'),
+        "auth.Permission",
+        verbose_name=_("user permissions"),
         blank=True,
-        help_text=_('Specific permissions for this user.'),
+        help_text=_("Specific permissions for this user."),
         related_name="unified_user_set",
         related_query_name="unified_user",
     )
@@ -163,6 +163,15 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
     ROLE_EDITOR = "editor"
     ROLE_SUPPORT = "support"
     ROLE_ASSISTANT = "assistant"
+    ROLE_MODERATOR = "moderator"
+    ROLE_SUPER_ADMIN = "super_admin"
+    ROLE_SUPER_VENDOR = "super_vendor"
+    ROLE_SUPER_CLIENT = "super_client"
+    ROLE_SUPER_STAFF = "super_staff"
+    ROLE_SUPER_EDITOR = "super_editor"
+    ROLE_SUPER_SUPPORT = "super_support"
+    ROLE_SUPER_ASSISTANT = "super_assistant"
+    ROLE_SUPER_MODERATOR = "super_moderator"
 
     ROLE_CHOICES = [
         (ROLE_VENDOR, "Vendor"),
@@ -172,12 +181,21 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
         (ROLE_EDITOR, "Editor"),
         (ROLE_SUPPORT, "Support"),
         (ROLE_ASSISTANT, "Assistant"),
+        (ROLE_MODERATOR, "Moderator"),
+        (ROLE_SUPER_ADMIN, "Super Admin"),
+        (ROLE_SUPER_VENDOR, "Super Vendor"),
+        (ROLE_SUPER_CLIENT, "Super Client"),
+        (ROLE_SUPER_STAFF, "Super Staff"),
+        (ROLE_SUPER_EDITOR, "Super Editor"),
+        (ROLE_SUPER_SUPPORT, "Super Support"),
+        (ROLE_SUPER_ASSISTANT, "Super Assistant"),
+        (ROLE_SUPER_MODERATOR, "Super Moderator"),
     ]
 
     # Identification — username removed in favor of email/phone
     username = None
     email = models.EmailField(
-        _('email address'),
+        _("email address"),
         unique=True,
         null=True,
         blank=True,
@@ -196,9 +214,7 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
     first_name = models.CharField(
         _("first name"), max_length=150, blank=True, null=True
     )
-    last_name = models.CharField(
-        _("last name"), max_length=150, blank=True, null=True
-    )
+    last_name = models.CharField(_("last name"), max_length=150, blank=True, null=True)
 
     # --- ARCHITECTURE NOTE ---
     # avatar is now a plain URLField that stores the Cloudinary HTTPS secure_url.
@@ -207,7 +223,7 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
     #   2. Frontend POSTs file DIRECTLY to Cloudinary (bypasses Django server)
     #   3. Cloudinary calls our webhook → Celery task saves the secure_url here
     # This eliminates all synchronous cloudinary.uploader.upload() inside save().
-    avatar = models.URLField(
+    avatar = models.FileField(
         max_length=500,
         blank=True,
         null=True,
@@ -284,8 +300,8 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
         ),
     )
 
-    USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['phone']
+    USERNAME_FIELD = "email"
+    REQUIRED_FIELDS = ["phone"]
 
     objects = CustomUserManager()
 
@@ -295,24 +311,35 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
         ordering = ["-date_joined"]
 
         indexes = [
-            models.Index(fields=['email'],          name='uu_email_idx'),
-            models.Index(fields=['phone'],          name='uu_phone_idx'),
-            models.Index(fields=['role'],           name='uu_role_idx'),
-            models.Index(fields=['is_verified'],    name='uu_is_verified_idx'),
-            models.Index(fields=['is_active'],      name='uu_is_active_idx'),
-            models.Index(fields=['auth_provider'],  name='uu_auth_provider_idx'),
-            models.Index(fields=['country'],        name='uu_country_idx'),
-            models.Index(fields=['email', 'role'],  name='uu_email_role_idx'),
-            models.Index(fields=['phone', 'role'],  name='uu_phone_role_idx'),
-            models.Index(fields=['auth_provider', 'is_verified'], name='uu_provider_verified_idx'),
-            models.Index(fields=['role', 'is_active'],            name='uu_role_active_idx'),
+            models.Index(fields=["email"], name="uu_email_idx"),
+            models.Index(fields=["phone"], name="uu_phone_idx"),
+            models.Index(fields=["role"], name="uu_role_idx"),
+            models.Index(fields=["is_verified"], name="uu_is_verified_idx"),
+            models.Index(fields=["is_active"], name="uu_is_active_idx"),
+            models.Index(
+                fields=["is_verified", "is_active"], name="uu_is_verified_is_active_idx"
+            ),
+            models.Index(fields=["is_staff"], name="uu_is_staff_idx"),
+            models.Index(fields=["auth_provider"], name="uu_auth_provider_idx"),
+            models.Index(fields=["avatar"], name="uu_avatar_idx"),
+            models.Index(fields=["member_id"], name="uu_member_id_idx"),
+            models.Index(fields=["country"], name="uu_country_idx"),
+            models.Index(
+                fields=["country", "is_active"], name="uu_country_is_active_idx"
+            ),
+            models.Index(fields=["email", "role"], name="uu_email_role_idx"),
+            models.Index(fields=["phone", "role"], name="uu_phone_role_idx"),
+            models.Index(
+                fields=["auth_provider", "is_verified"], name="uu_provider_verified_idx"
+            ),
+            models.Index(fields=["role", "is_active"], name="uu_role_active_idx"),
         ]
 
     def __str__(self):
         return (
-            str(self.email) if self.email
-            else str(self.phone) if self.phone
-            else "No Email or Phone"
+            str(self.email)
+            if self.email
+            else str(self.phone) if self.phone else "No Email or Phone"
         )
 
     @property
@@ -322,9 +349,9 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
         Used consistently in logging and admin displays.
         """
         return (
-            str(self.email) if self.email
-            else str(self.phone) if self.phone
-            else "No Email or Phone"
+            str(self.email)
+            if self.email
+            else str(self.phone) if self.phone else "No Email or Phone"
         )
 
     def clean(self):
@@ -344,77 +371,99 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
             if self.auth_provider != self.PROVIDER_GOOGLE:
                 if self.email and self.phone:
                     raise ValidationError(
-                        _('Please provide either an Email '
-                          'Address or a Phone Number, '
-                          'Not Both.')
+                        _(
+                            "Please provide either an Email "
+                            "Address or a Phone Number, "
+                            "Not Both."
+                        )
                     )
                 if not self.email and not self.phone:
-                    raise ValidationError(
-                        _('Either Email or Phone is required.')
+                    raise ValidationError(_("Either Email or Phone is required."))
+
+            if self.auth_provider == "email" and not self.email:
+                raise ValidationError(
+                    {
+                        "auth_provider": _(
+                            'Auth provider "email" requires an email '
+                            "address to be provided."
+                        ),
+                    }
+                )
+            if self.auth_provider == "phone" and not self.phone:
+                raise ValidationError(
+                    {
+                        "auth_provider": _(
+                            'Auth provider "phone" requires a phone '
+                            "number to be provided."
+                        ),
+                    }
+                )
+            if self.auth_provider == "email" and self.email and self.phone:
+                raise ValidationError(
+                    _(
+                        "Email auth provider should not have "
+                        "a phone number. Use email only."
                     )
-
-            if self.auth_provider == 'email' and not self.email:
-                raise ValidationError({
-                    'auth_provider': _(
-                        'Auth provider "email" requires an email '
-                        'address to be provided.'
-                    ),
-                })
-            if self.auth_provider == 'phone' and not self.phone:
-                raise ValidationError({
-                    'auth_provider': _(
-                        'Auth provider "phone" requires a phone '
-                        'number to be provided.'
-                    ),
-                })
-            if (self.auth_provider == 'email' and self.email and self.phone):
-                raise ValidationError(
-                    _('Email auth provider should not have '
-                      'a phone number. Use email only.')
                 )
-            if (self.auth_provider == 'phone' and self.phone and self.email):
+            if self.auth_provider == "phone" and self.phone and self.email:
                 raise ValidationError(
-                    _('Phone auth provider should not have '
-                      'an email address. Use phone only.')
+                    _(
+                        "Phone auth provider should not have "
+                        "an email address. Use phone only."
+                    )
                 )
 
-            if (self.auth_provider == self.PROVIDER_GOOGLE and not self.email):
+            if self.auth_provider == self.PROVIDER_GOOGLE and not self.email:
                 raise ValidationError(
-                    _('Google authentication requires an email address.')
+                    _("Google authentication requires an email address.")
                 )
 
-            if (self.email and UnifiedUser.objects.filter(email=self.email).exists()):
-                raise ValidationError({'email': _('This email is already in use.')})
+            if self.email and UnifiedUser.objects.filter(email=self.email).exists():
+                raise ValidationError({"email": _("This email is already in use.")})
 
-            if (self.phone and UnifiedUser.objects.filter(phone=self.phone).exists()):
-                raise ValidationError({'phone': _('This phone number is already in use.')})
+            if self.phone and UnifiedUser.objects.filter(phone=self.phone).exists():
+                raise ValidationError(
+                    {"phone": _("This phone number is already in use.")}
+                )
 
             valid_roles = dict(self.ROLE_CHOICES).keys()
             if self.role not in valid_roles:
-                raise ValidationError({
-                    'role': _(
-                        'Invalid role value. Must be one of: '
-                        + ', '.join(valid_roles)
-                    )
-                })
+                raise ValidationError(
+                    {
+                        "role": _(
+                            "Invalid role value. Must be one of: "
+                            + ", ".join(valid_roles)
+                        )
+                    }
+                )
 
         else:
             # EXISTING USER — IMMUTABILITY GUARDS
             existing = UnifiedUser.objects.all_with_deleted().get(pk=self.pk)
 
-            if (existing.email is not None and self.email != existing.email):
-                raise ValidationError({'email': _('Email cannot be changed after user creation.')})
+            if existing.email is not None and self.email != existing.email:
+                raise ValidationError(
+                    {"email": _("Email cannot be changed after user creation.")}
+                )
 
-            if (existing.phone is not None and self.phone != existing.phone):
-                raise ValidationError({'phone': _('Phone cannot be changed after user creation.')})
+            if existing.phone is not None and self.phone != existing.phone:
+                raise ValidationError(
+                    {"phone": _("Phone cannot be changed after user creation.")}
+                )
 
             if self.role != existing.role:
-                raise ValidationError({'role': _('Role cannot be changed after user creation.')})
+                raise ValidationError(
+                    {"role": _("Role cannot be changed after user creation.")}
+                )
 
             if self.auth_provider != existing.auth_provider:
-                raise ValidationError({
-                    'auth_provider': _('Auth provider cannot be changed after user creation.')
-                })
+                raise ValidationError(
+                    {
+                        "auth_provider": _(
+                            "Auth provider cannot be changed after user creation."
+                        )
+                    }
+                )
 
             logger.info("Details updated for user: %s", existing.identifying_info)
 
@@ -436,7 +485,9 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
         super().save(*args, **kwargs)
         logger.info(
             "Saved UnifiedUser %s [%s] member_id=%s",
-            self.pk, self.auth_provider, self.member_id,
+            self.pk,
+            self.auth_provider,
+            self.member_id,
         )
 
     def is_owner(self, user):
