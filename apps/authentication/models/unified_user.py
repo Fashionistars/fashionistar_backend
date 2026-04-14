@@ -24,6 +24,7 @@ import logging
 from apps.authentication.managers import CustomUserManager
 from apps.common.models import HardDeleteMixin, SoftDeleteModel, TimeStampedModel
 from auditlog.registry import auditlog
+from cloudinary.models import CloudinaryField
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
@@ -217,20 +218,23 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
     last_name = models.CharField(_("last name"), max_length=150, blank=True, null=True)
 
     # --- ARCHITECTURE NOTE ---
-    # avatar is now a plain URLField that stores the Cloudinary HTTPS secure_url.
+    # avatar uses CloudinaryField (enterprise pattern — stores public_id in Cloudinary).
     # Uploads go through the two-phase direct-upload pattern:
     #   1. Frontend calls POST /api/v1/upload/presign/ → gets a signed upload token
     #   2. Frontend POSTs file DIRECTLY to Cloudinary (bypasses Django server)
-    #   3. Cloudinary calls our webhook → Celery task saves the secure_url here
-    # This eliminates all synchronous cloudinary.uploader.upload() inside save().
-    avatar = models.FileField(
-        max_length=500,
+    #   3. Cloudinary calls our webhook → Celery task saves the public_id here
+    # In serializers: use avatar.url to get the full HTTPS secure_url.
+    # In admin: CloudinaryField renders a file picker widget + live preview.
+    avatar = CloudinaryField(
+        "avatar",
+        folder="fashionistar/avatars/",
         blank=True,
         null=True,
         help_text=(
-            "Cloudinary HTTPS secure_url for user avatar. "
+            "Cloudinary image public_id. "
             "Set via the /api/v1/upload/presign/ → direct upload → webhook flow. "
-            "Paste a Cloudinary URL directly in the admin if needed."
+            "Use .url in serializers to retrieve the full HTTPS secure_url. "
+            "In admin: use the file picker widget to upload directly to Cloudinary."
         ),
     )
     bio = models.TextField(
@@ -321,7 +325,8 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
             ),
             models.Index(fields=["is_staff"], name="uu_is_staff_idx"),
             models.Index(fields=["auth_provider"], name="uu_auth_provider_idx"),
-            models.Index(fields=["avatar"], name="uu_avatar_idx"),
+            # Note: CloudinaryField uses a CharField internally — index on the stored public_id
+            # models.Index(fields=["avatar"], name="uu_avatar_idx"),  # disabled: low-cardinality
             models.Index(fields=["member_id"], name="uu_member_id_idx"),
             models.Index(fields=["country"], name="uu_country_idx"),
             models.Index(
@@ -475,8 +480,8 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
             self.email = None
         if not self.phone:
             self.phone = None
-        if not self.avatar:
-            self.avatar = None
+        # CloudinaryField: do NOT set to None — Cloudinary manages empty state
+        # avatar is stored as public_id string; blank string == no avatar
 
         if self._state.adding and not self.member_id:
             self.member_id = generate_member_id()

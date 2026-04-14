@@ -44,6 +44,7 @@ from apps.authentication.serializers.password import (  # noqa: F401
 
 # ── Profile ───────────────────────────────────────────────────────────────────
 from apps.authentication.serializers.profile import (  # noqa: F401
+    MeSerializer,
     ProtectedUserSerializer,
     UserProfileSerializer,
     UserSerializer,         # alias for UserProfileSerializer
@@ -74,6 +75,7 @@ __all__ = [
     "PasswordResetConfirmPhoneSerializer",
     "PasswordChangeSerializer",
     # Profile
+    "MeSerializer",
     "ProtectedUserSerializer",
     "UserProfileSerializer",
     "UserSerializer",

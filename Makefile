@@ -479,19 +479,19 @@ dashboards: ## 📊 Show all service URLs
 #   2. In Terminal B: make ngrok-asgi       (tunnel → :8001)
 #      OR combine:    make asgi-tunnel
 
-NGROK := C:\tools\ngrok\ngrok.exe
+NGROK := $(shell command -v ngrok 2>/dev/null || echo "C:/Users/FASHIONISTAR/AppData/Local/Microsoft/WindowsApps/ngrok.exe")
 
 ngrok-dev: ## 🔗 Start ngrok tunnel → localhost:8000 (Django WSGI/dev)
 	@echo "$(CYAN)Starting ngrok tunnel → http://localhost:8000 ...$(NC)"
 	@echo "$(YELLOW)  Webhook URL: https://<tunnel>.ngrok-free.app/api/v1/upload/webhook/cloudinary/$(NC)"
-	@echo "$(YELLOW)  ngrok UI:    http://127.0.0.1:4040$(NC)"
-	$(NGROK) http 8000 --log stdout
+	@echo "$(YELLOW)  ngrok Web UI: http://127.0.0.1:4040$(NC)"
+	$(NGROK) http 8000
 
 ngrok-asgi: ## 🔗 Start ngrok tunnel → localhost:8001 (Uvicorn ASGI/WebSocket)
 	@echo "$(CYAN)Starting ngrok tunnel → http://localhost:8001 (ASGI) ...$(NC)"
 	@echo "$(YELLOW)  Webhook URL: https://<tunnel>.ngrok-free.app/api/v1/upload/webhook/cloudinary/$(NC)"
-	@echo "$(YELLOW)  ngrok UI:    http://127.0.0.1:4040$(NC)"
-	$(NGROK) http 8001 --log stdout
+	@echo "$(YELLOW)  ngrok Web UI: http://127.0.0.1:4040$(NC)"
+	$(NGROK) http 8001
 
 ngrok-url: ## 🔍 Print current active ngrok public URL (must already be running)
 	@echo "$(CYAN)Active ngrok tunnels:$(NC)"

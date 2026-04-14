@@ -51,11 +51,7 @@ class UserSelector(BaseSelector):
         Returns:
             Optional[UnifiedUser]: User or None.
         """
-        return (
-            cls.model.objects
-            .filter(email__iexact=email.strip())
-            .first()
-        )
+        return cls.model.objects.filter(email__iexact=email.strip()).first()
 
     @classmethod
     def get_by_phone(cls, phone: str) -> Optional[UnifiedUser]:
@@ -68,7 +64,7 @@ class UserSelector(BaseSelector):
         Returns:
             Optional[UnifiedUser]: User or None.
         """
-        return cls.model.objects.filter(phone_number=phone).first()
+        return cls.model.objects.filter(phone=phone).first()
 
     @classmethod
     def get_by_email_or_phone(cls, identifier: str) -> Optional[UnifiedUser]:
@@ -81,11 +77,9 @@ class UserSelector(BaseSelector):
         Returns:
             Optional[UnifiedUser]: User or None.
         """
-        return (
-            cls.model.objects
-            .filter(Q(email__iexact=identifier) | Q(phone_number=identifier))
-            .first()
-        )
+        return cls.model.objects.filter(
+            Q(email=identifier) if "@" in identifier else Q(phone=identifier)
+        ).first()
 
     @classmethod
     def get_by_id_safe(cls, user_id) -> Optional[UnifiedUser]:
@@ -100,8 +94,13 @@ class UserSelector(BaseSelector):
         """
         try:
             return cls.model.objects.only(
-                'id', 'email', 'phone_number', 'role',
-                'is_active', 'is_verified', 'auth_provider',
+                "id",
+                "email",
+                "phone",
+                "role",
+                "is_active",
+                "is_verified",
+                "auth_provider",
             ).get(pk=user_id)
         except (cls.model.DoesNotExist, ValueError, TypeError):
             return None
@@ -113,30 +112,22 @@ class UserSelector(BaseSelector):
     @classmethod
     def get_vendors(cls) -> QuerySet:
         """All active, verified vendor accounts."""
-        return (
-            cls.model.objects
-            .filter(role='vendor', is_active=True, is_verified=True)
-            .order_by('-date_joined')
-        )
+        return cls.model.objects.filter(
+            role="vendor", is_active=True, is_verified=True
+        ).order_by("-date_joined")
 
     @classmethod
-    def get_customers(cls) -> QuerySet:
-        """All active customer accounts."""
-        return (
-            cls.model.objects
-            .filter(role='customer', is_active=True)
-            .order_by('-date_joined')
+    def get_clients(cls) -> QuerySet:
+        """All active client accounts."""
+        return cls.model.objects.filter(role="client", is_active=True).order_by(
+            "-date_joined"
         )
 
     @classmethod
     def get_active_staff(cls) -> QuerySet:
         """All active staff/admin accounts."""
-        return (
-            cls.model.objects
-            .filter(
-                is_active=True,
-                role__in=['admin', 'super_admin', 'staff', 'moderator']
-            )
+        return cls.model.objects.filter(
+            is_active=True, role__in=["admin", "super_admin", "staff", "moderator"]
         )
 
     @classmethod
@@ -160,18 +151,16 @@ class UserSelector(BaseSelector):
     async def aget_by_phone(cls, phone: str) -> Optional[UnifiedUser]:
         """Async phone lookup."""
         try:
-            return await cls.model.objects.aget(phone_number=phone)
+            return await cls.model.objects.aget(phone=phone)
         except cls.model.DoesNotExist:
             return None
 
     @classmethod
-    async def aget_by_email_or_phone(
-        cls, identifier: str
-    ) -> Optional[UnifiedUser]:
+    async def aget_by_email_or_phone(cls, identifier: str) -> Optional[UnifiedUser]:
         """Async email-or-phone lookup."""
         try:
             return await cls.model.objects.aget(
-                Q(email__iexact=identifier) | Q(phone_number=identifier)
+                Q(email=identifier) if "@" in identifier else Q(phone=identifier)
             )
         except cls.model.DoesNotExist:
             return None
