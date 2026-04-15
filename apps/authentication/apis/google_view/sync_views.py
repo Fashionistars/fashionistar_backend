@@ -54,10 +54,11 @@ class GoogleAuthView(generics.CreateAPIView):
     Error 401 — Invalid or expired Google token.
     Error 500 — Unexpected server error.
     """
-    serializer_class   = GoogleAuthSerializer
+
+    serializer_class = GoogleAuthSerializer
     permission_classes = [AllowAny]
-    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
-    throttle_classes   = [BurstRateThrottle]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+    throttle_classes = [BurstRateThrottle]
 
     def create(self, request, *args, **kwargs) -> Response:
         """Verifies Google ID token and returns JWT access + refresh tokens."""
@@ -67,18 +68,18 @@ class GoogleAuthView(generics.CreateAPIView):
 
         try:
             result = SyncGoogleAuthService.verify_and_login(
-                token=data['id_token'],
-                role=data.get('role', 'client'),
-                ip_address=request.META.get('REMOTE_ADDR'),
-                user_agent=request.META.get('HTTP_USER_AGENT', ''),
+                token=data["id_token"],
+                role=data.get("role", "client"),
+                ip_address=request.META.get("REMOTE_ADDR"),
+                user_agent=request.META.get("HTTP_USER_AGENT", ""),
             )
         except ValueError as exc:
             logger.warning("⚠️ GoogleAuthView: invalid token — %s", exc)
             return Response(
                 {
-                    "status":  "error",
+                    "status": "error",
                     "message": "Invalid or expired Google token. Please try signing in again.",
-                    "code":    "invalid_google_token",
+                    "code": "invalid_google_token",
                 },
                 status=status.HTTP_401_UNAUTHORIZED,
             )
@@ -86,23 +87,24 @@ class GoogleAuthView(generics.CreateAPIView):
             logger.error("❌ GoogleAuthView unexpected error: %s", exc, exc_info=True)
             return Response(
                 {
-                    "status":  "error",
+                    "status": "error",
                     "message": "Google authentication failed. Please try again.",
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        user       = result['user']
-        tokens     = result['tokens']
-        is_new     = result['is_new']
+        user = result["user"]
+        tokens = result["tokens"]
+        is_new = result["is_new"]
 
         # ── Register UserSession + LoginEvent on_commit ─────────────────────
         # CRITICAL: on_commit() MUST be inside explicit atomic() block.
         # In autocommit mode on_commit fires immediately without rollback guard.
         from rest_framework_simplejwt.tokens import RefreshToken as _RefTok
         from apps.authentication.models import UserSession, LoginEvent
+
         try:
-            refresh_obj = _RefTok(tokens['refresh'])
+            refresh_obj = _RefTok(tokens["refresh"])
             with transaction.atomic():
                 transaction.on_commit(
                     lambda: UserSession.create_from_token(
@@ -114,50 +116,73 @@ class GoogleAuthView(generics.CreateAPIView):
                 transaction.on_commit(
                     lambda: LoginEvent.record(
                         user=user,
-                        ip_address=request.META.get('REMOTE_ADDR', '0.0.0.0'),
-                        user_agent=request.META.get('HTTP_USER_AGENT', ''),
+                        ip_address=request.META.get("REMOTE_ADDR", "0.0.0.0"),
+                        user_agent=request.META.get("HTTP_USER_AGENT", ""),
                         auth_method=LoginEvent.METHOD_GOOGLE,
                         outcome=LoginEvent.OUTCOME_SUCCESS,
                         is_successful=True,
                     )
                 )
         except Exception as sess_exc:
-            logger.warning("⚠️ GoogleAuthView: session/event record failed: %s", sess_exc)
+            logger.warning(
+                "⚠️ GoogleAuthView: session/event record failed: %s", sess_exc
+            )
 
         # ── Differentiated logging for register vs login ─────────────────────
         if is_new:
             logger.info(
                 "🆕 Google REGISTER: user_id=%s email=%s role=%s",
-                user.id, user.email, user.role,
+                user.id,
+                user.email,
+                user.role,
             )
         else:
             logger.info(
                 "✅ Google LOGIN: user_id=%s email=%s",
-                user.id, user.email,
+                user.id,
+                user.email,
             )
 
         return Response(
             {
-                "status":  "success",
+                "status": "success",
                 # Human-readable message for AuthAlert pop-up display
                 "message": (
                     "Welcome to FASHIONISTAR! Your account has been created via Google."
-                    if is_new else
-                    "Welcome back! Google sign-in successful."
+                    if is_new
+                    else "Welcome back! Google sign-in successful."
                 ),
                 # Frontend differentiator: show onboarding for new, dashboard for returning
-                "is_new":   is_new,
+                "is_new": is_new,
                 "redirect": "/dashboard?welcome=true" if is_new else "/dashboard",
-                "tokens":   tokens,
+                "tokens": {
+                    "access": str(tokens["access"]),
+                    "refresh": str(tokens["refresh"]),
+                },
+                # ── Flat top-level tokens for LoginResponseSchema.transform() ──
+                # The schema merges tokens.access/refresh to top-level access/refresh
+                # when tokens block is present. This ensures Zustand store
+                # always receives access + refresh regardless of response shape.
                 "user": {
-                    "id":          str(user.id),
-                    "member_id":   user.member_id,
-                    "email":       user.email,
-                    "first_name":  user.first_name,
-                    "last_name":   user.last_name,
-                    "role":        user.role,
-                    "is_verified": user.is_verified,
-                    "avatar":      user.avatar,
+                    # ✅ KEY FIX: 'id' not 'user_id' — matches Zod user.id (required)
+                    "id":            str(user.id),
+                    "member_id":     user.member_id,
+                    "email":         user.email if user.email else None,
+                    # ✅ KEY FIX: omit phone if null/empty — Zod z.string().optional()
+                    # accepts undefined but rejects null. Set to empty string if no phone.
+                    "phone":         str(user.phone) if user.phone else "",
+                    "first_name":    user.first_name or "",
+                    "last_name":     user.last_name or "",
+                    "role":          user.role,
+                    "is_verified":   user.is_verified,
+                    "is_staff":      user.is_staff,
+                    "avatar":        (
+                        str(user.avatar.url) if hasattr(user.avatar, 'url') and user.avatar
+                        else None
+                    ),
+                    "date_joined":   (
+                        user.date_joined.isoformat() if user.date_joined else None
+                    ),
                 },
             },
             # 201 Created for new registration, 200 OK for returning login

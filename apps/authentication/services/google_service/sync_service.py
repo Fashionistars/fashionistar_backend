@@ -169,14 +169,15 @@ class SyncGoogleAuthService:
 
                         def _emit():
                             event_bus.emit('user.registered', **{
-                                'user_id':  str(user.pk),
-                                'email':    user.email,
-                                'role':     user.role,
-                                'provider': 'google',
-                                'member_id': user.member_id,
+                                'user_uuid':     str(user.pk),    # ← MUST be user_uuid (handler arg name)
+                                'email':         user.email,
+                                'role':          user.role,
+                                'auth_provider': 'google',         # ← MUST be auth_provider (handler arg name)
+                                'member_id':     user.member_id,
                             })
 
                         transaction.on_commit(_emit)
+
                     except Exception as event_exc:
                         logger.warning(
                             "⚠️ EventBus emit failed for user %s: %s", email, event_exc
