@@ -24,29 +24,62 @@ from apps.common.managers.sms import SMSManager
 logger = logging.getLogger(__name__)
 
 @shared_task(bind=True, retry_backoff=True, max_retries=3)
-def send_email_task(self, subject: str, recipients: list[str], template_name: str, context: dict, attachments: list[tuple] | None = None) -> str:
+def send_email_task(
+    self,
+    subject: str,
+    recipients: list[str],
+    template_name: str,
+    context: dict,
+    attachments: list[tuple] | None = None,
+) -> str:
     """
     Sends an email asynchronously using Celery, leveraging the EmailManager.
     Handles potential template errors and retries.
 
+    DEBUG mode: when settings.DEBUG=True, the rendered HTML body is logged
+    to the Celery worker terminal at DEBUG level for live template inspection.
+    This makes it easy to verify email template rendering without a real SMTP
+    server — just watch the `make celery` terminal.
+
     Args:
-        self (celery.Task): The Celery task instance.
-        subject (str): Email subject.
-        recipients (list[str]): List of recipient email addresses.
-        template_name (str): Path to the HTML email template.
-        context (dict): Dictionary of data to pass to the template.
-        attachments (list[tuple] | None): Optional list of attachments (filename, content, mimetype).
+        self:          The Celery task instance.
+        subject:       Email subject.
+        recipients:    List of recipient email addresses.
+        template_name: Path to the HTML email template.
+        context:       Dictionary of data to pass to the template.
+        attachments:   Optional list of (filename, content, mimetype) tuples.
 
     Returns:
         str: A success message, or raises an exception on failure.
-
-    Raises:
-        TemplateDoesNotExist: If the specified template does not exist. The task will NOT be retried.
-        Exception: If an error occurs during email sending, the task will be retried with exponential backoff.
     """
     try:
-        logger.info("📧 [Celery] Sending email → recipients=%s template=%s",
-                    recipients, template_name)
+        logger.info(
+            "📧 [Celery] Sending email\n"
+            "  ├── template  : %s\n"
+            "  ├── subject   : %s\n"
+            "  └── recipients: %s",
+            template_name, subject, recipients,
+        )
+
+        # ── DEBUG: render and print template to Celery terminal ──────────
+        # This makes it trivial to verify template context / rendering
+        # without needing a real SMTP server or Mailgun/SendGrid sandbox.
+        from django.conf import settings as _settings
+        if getattr(_settings, 'DEBUG', False):
+            try:
+                from django.template.loader import render_to_string
+                rendered = render_to_string(template_name=template_name, context=context)
+                logger.debug(
+                    "📄 [Celery][DEBUG] Template rendered — %s\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "%s\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                    template_name,
+                    rendered[:4000],  # cap at 4000 chars to avoid log flooding
+                )
+            except Exception as render_exc:
+                logger.warning("[Celery][DEBUG] Could not pre-render template for logging: %s", render_exc)
+
         EmailManager.send_mail(
             subject=subject,
             recipients=recipients,
@@ -54,22 +87,29 @@ def send_email_task(self, subject: str, recipients: list[str], template_name: st
             context=context,
             attachments=attachments,
         )
-        logger.info("✅ [Celery] Email sent → %s", recipients)
+        logger.info(
+            "✅ [Celery] Email sent successfully\n"
+            "  ├── template  : %s\n"
+            "  └── recipients: %s",
+            template_name, recipients,
+        )
         return f"Email sent successfully to {recipients}"
 
     except (TemplateDoesNotExist, EmailManagerError) as exc:
         # Template missing or invalid args — retrying won't help.
-        # EmailManagerError wraps TemplateDoesNotExist inside EmailManager.
-        logger.error("🚨 [Celery] Template/config error: %s — %s",
-                     template_name, exc, exc_info=True)
+        logger.error(
+            "🚨 [Celery] Template/config error: %s — %s",
+            template_name, exc, exc_info=True,
+        )
         raise  # Fail the task permanently — no retry
 
     except Exception as exc:
         logger.warning(
             "⚠️ [Celery] Email send failed (attempt %s/%s) → %s: %s",
-            self.request.retries + 1, self.max_retries + 1, recipients, exc
+            self.request.retries + 1, self.max_retries + 1, recipients, exc,
         )
         raise self.retry(exc=exc, countdown=30 * (2 ** self.request.retries))
+
 
 
 @shared_task(bind=True, retry_backoff=True, max_retries=3)

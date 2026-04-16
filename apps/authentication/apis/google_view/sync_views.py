@@ -164,23 +164,24 @@ class GoogleAuthView(generics.CreateAPIView):
                 # when tokens block is present. This ensures Zustand store
                 # always receives access + refresh regardless of response shape.
                 "user": {
-                    # ✅ KEY FIX: 'id' not 'user_id' — matches Zod user.id (required)
-                    "id":            str(user.id),
-                    "member_id":     user.member_id,
-                    "email":         user.email if user.email else None,
+                    # ✅ KEY FIX: 'user_id' not 'id' — matches Zod user.id (required)
+                    "user_id": str(user.id),
+                    "member_id": user.member_id,
+                    "email": user.email if user.email else None,
                     # ✅ KEY FIX: omit phone if null/empty — Zod z.string().optional()
                     # accepts undefined but rejects null. Set to empty string if no phone.
-                    "phone":         str(user.phone) if user.phone else "",
-                    "first_name":    user.first_name or "",
-                    "last_name":     user.last_name or "",
-                    "role":          user.role,
-                    "is_verified":   user.is_verified,
-                    "is_staff":      user.is_staff,
-                    "avatar":        (
-                        str(user.avatar.url) if hasattr(user.avatar, 'url') and user.avatar
+                    "phone": str(user.phone) if user.phone else "",
+                    "first_name": user.first_name or "",
+                    "last_name": user.last_name or "",
+                    "role": user.role,
+                    "is_verified": user.is_verified,
+                    "is_staff": user.is_staff,
+                    "avatar": (
+                        str(user.avatar.url)
+                        if hasattr(user.avatar, "url") and user.avatar
                         else None
                     ),
-                    "date_joined":   (
+                    "date_joined": (
                         user.date_joined.isoformat() if user.date_joined else None
                     ),
                 },
