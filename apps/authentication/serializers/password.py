@@ -109,7 +109,7 @@ class PasswordResetConfirmPhoneSerializer(serializers.Serializer):
     Serializer for confirming password reset via phone OTP.
 
     OTP-ONLY design (mirrors VerifyOTPView pattern exactly):
-      - Client sends ONLY: otp + password + password2.
+      - Client sends ONLY: otp + new_password + new_password_confirm.
       - phone is NOT required in the body — the service discovers the user
         via OTPService.verify_by_otp_sync(otp, purpose='password_reset'),
         which uses an O(1) SHA-256 hash index lookup in Redis:
@@ -121,6 +121,9 @@ class PasswordResetConfirmPhoneSerializer(serializers.Serializer):
       Primary  : otp:{user_id}:password_reset:{snippet}
                  Value = "{encrypted_otp}|{sha256_hex}"
       Secondary: otp_hash:{sha256_hex}  →  primary_key  (TTL = 300 s)
+
+    Field names match Zod PasswordResetConfirmPhoneSchema exactly:
+      Frontend sends: { otp, new_password, new_password_confirm }
     """
     otp = serializers.CharField(
         required=True,
@@ -128,13 +131,13 @@ class PasswordResetConfirmPhoneSerializer(serializers.Serializer):
         max_length=6,
         help_text="6-digit OTP received via SMS",
     )
-    password = serializers.CharField(
+    new_password = serializers.CharField(
         write_only=True,
         required=True,
         validators=[validate_password],
         help_text="New password",
     )
-    password2 = serializers.CharField(
+    new_password_confirm = serializers.CharField(
         write_only=True,
         required=True,
         help_text="Confirm new password",
@@ -148,9 +151,9 @@ class PasswordResetConfirmPhoneSerializer(serializers.Serializer):
             from django.conf import settings as _s
             _base = getattr(_s, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
 
-            if attrs["password"] != attrs["password2"]:
+            if attrs["new_password"] != attrs["new_password_confirm"]:
                 raise serializers.ValidationError(
-                    {"password": _("Passwords do not match.")}
+                    {"new_password": _("Passwords do not match.")}
                 )
 
             otp = attrs.get("otp", "")

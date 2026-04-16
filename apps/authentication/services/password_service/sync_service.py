@@ -142,27 +142,38 @@ class SyncPasswordService:
                 reset_link = f"{settings.FRONTEND_URL}/auth/reset-password?uid={uid}&token={token}"
 
                 _site_url = getattr(settings, 'FRONTEND_URL', 'https://fashionistar.net').rstrip('/')
-                send_email_task.delay(
+
+                # ✅ Wrap in on_commit so the Celery task fires AFTER the DB transaction
+                # commits. Without this, Celery runs before the reset token is stored,
+                # causing the email to be dispatched but the template/link to be stale.
+                _email_ctx = {
+                    "user": {
+                        "first_name": getattr(user, "first_name", "") or "",
+                        "email":      getattr(user, "email", "") or "",
+                    },
+                    "reset_url": reset_link,
+                    "SITE_URL":  _site_url,
+                }
+                _email_to = user.email
+
+                transaction.on_commit(lambda: send_email_task.delay(
                     subject="Password Reset Request",
-                    recipients=[user.email],
+                    recipients=[_email_to],
                     template_name="authentication/email/password_reset.html",
-                    context={
-                        "user": {
-                            "first_name": getattr(user, "first_name", "") or "",
-                            "email": getattr(user, "email", "") or "",
-                        },
-                        "reset_url": reset_link,
-                        "SITE_URL": _site_url,
-                    }
-                )
-                logger.info("📧 Reset Email Celery task dispatched for %s", user.email)
+                    context=_email_ctx,
+                ))
+                logger.info("📧 Reset Email Celery task scheduled on_commit for %s", user.email)
 
             else:
                 # PHONE FLOW
                 otp = OTPService.generate_otp_sync(user.id, purpose='password_reset')
-                message = f"Your Password Reset Code is: {otp}. Valid for 5 minutes."
-                send_sms_task.delay(to=str(user.phone), body=message)
-                logger.info("📱 Reset SMS Celery task dispatched for %s", user.phone)
+                _otp_msg = f"Your Password Reset Code is: {otp}. Valid for 5 minutes."
+                _user_phone = str(user.phone)
+
+                transaction.on_commit(lambda: send_sms_task.delay(
+                    to=_user_phone, body=_otp_msg
+                ))
+                logger.info("📱 Reset SMS Celery task scheduled on_commit for %s", user.phone)
 
             return "If an account exists, a reset code has been sent."
 

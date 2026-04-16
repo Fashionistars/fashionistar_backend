@@ -121,6 +121,15 @@ class SyncGoogleAuthService:
                 # manager pipeline: member_id generation, unusable password,
                 # full_clean() validation.
                 with transaction.atomic():
+                    # Attempt to resolve geolocation silently
+                    geo_data = {}
+                    if ip_address:
+                        try:
+                            from apps.audit_logs.services.audit import _resolve_geo
+                            geo_data = _resolve_geo(ip_address) or {}
+                        except Exception as geo_exc:
+                            logger.warning("⚠️ Google Auth geo-resolve failed: %s", geo_exc)
+
                     user = UnifiedUser.objects.create_user(
                         email=email,
                         password=None,          # Sets unusable password hash
@@ -130,12 +139,15 @@ class SyncGoogleAuthService:
                         is_verified=True,       # Google guarantees email ownership
                         is_active=True,         # Google users skip OTP activation
                         role=role,
+                        country=geo_data.get('country', ''),
+                        city=geo_data.get('city', ''),
+                        state=geo_data.get('region', ''),
                     )
 
                     is_new = True
                     logger.info(
-                        "🆕 Google Register: new user %s (member_id=%s, role=%s)",
-                        email, user.member_id, role,
+                        "🆕 Google Register: new user %s (member_id=%s, role=%s, country=%s)",
+                        email, user.member_id, role, geo_data.get('country', 'Unknown')
                     )
 
                     # ── 4. Google Avatar → Cloudinary (fire-and-forget Celery) ──
@@ -200,7 +212,23 @@ class SyncGoogleAuthService:
                         email, update_fields,
                     )
 
-            # ── 7. Issue JWT tokens ────────────────────────────────────────
+            # ── 7. Update last_login ─────────────────────────────────────────────────
+            # Explicitly update Django's last_login field for Google OAuth users.
+            # This bypasses the normal authenticate() signal path, so it MUST be
+            # called manually. Non-fatal: wrapped in try/except to never block auth.
+            try:
+                from django.contrib.auth.models import update_last_login as _ull
+                _ull(None, user)
+                logger.info(
+                    "🗓️ last_login updated for Google user user_id=%s is_new=%s",
+                    user.id, is_new,
+                )
+            except Exception as ll_exc:
+                logger.warning(
+                    "⚠️ update_last_login failed for Google user %s: %s", user.id, ll_exc
+                )
+
+            # ── 8. Issue JWT tokens ────────────────────────────────────────
             refresh = RefreshToken.for_user(user)
             tokens = {
                 'access':  str(refresh.access_token),
