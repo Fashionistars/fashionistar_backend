@@ -267,7 +267,7 @@ class PasswordResetConfirmEmailView(APIView):
                     "code": "invalid_token",
                     "actions": {
                         "request_new_reset":   "/api/v1/password/reset-request/",
-                        "forgot_password_page": f"{_base}/forgot-password",
+                        "forgot_password_page": f"{_base}/auth/forgot-password",
                     },
                 },
                 status=status.HTTP_400_BAD_REQUEST,
@@ -346,7 +346,8 @@ class PasswordResetConfirmPhoneView(APIView):
                     "message": "Invalid or expired OTP. Please request a new code.",
                     "code": "invalid_otp",
                     "actions": {
-                        "resend_otp":        f"{_base}/resend-otp",
+                        "resend_otp":        f"{_base}/auth/forgot-password",
+                        "confirm_phone_page": f"{_base}/auth/forgot-password/confirm-phone",
                         "request_new_reset": "/api/v1/password/reset-request/",
                     },
                 },

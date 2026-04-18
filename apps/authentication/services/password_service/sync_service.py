@@ -139,7 +139,10 @@ class SyncPasswordService:
                 # EMAIL FLOW
                 token = default_token_generator.make_token(user)
                 uid = urlsafe_base64_encode(force_bytes(user.pk))
-                reset_link = f"{settings.FRONTEND_URL}/auth/reset-password?uid={uid}&token={token}"
+                reset_link = (
+                    f"{settings.FRONTEND_URL.rstrip('/')}"
+                    f"/auth/forgot-password/confirm-email/{uid}/{token}"
+                )
 
                 _site_url = getattr(settings, 'FRONTEND_URL', 'https://fashionistar.net').rstrip('/')
 

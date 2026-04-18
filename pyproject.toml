@@ -17,6 +17,7 @@ dependencies = [
     "dj-database-url",
     # Auth & Security
     "djangorestframework-simplejwt",
+    "argon2-cffi",
     "PyJWT",
     "cryptography",
     "pycryptodome",

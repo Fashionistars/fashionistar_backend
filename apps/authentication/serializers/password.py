@@ -163,7 +163,8 @@ class PasswordResetConfirmPhoneSerializer(serializers.Serializer):
                         "OTP must be exactly 6 numeric digits. "
                         "Didn't receive it? Request a new one."
                     ),
-                    "resend_otp_url":    f"{_base}/resend-otp",
+                    "resend_otp_url":    f"{_base}/auth/forgot-password",
+                    "confirm_phone_page": f"{_base}/auth/forgot-password/confirm-phone",
                     "reset_request_url": "/api/v1/password/reset-request/",
                 })
 

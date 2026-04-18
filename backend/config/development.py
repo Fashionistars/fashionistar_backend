@@ -12,7 +12,7 @@ To use:
 Key differences from production:
   - DEBUG = True (shows error pages with tracebacks)
   - EMAIL_BACKEND = console (see emails in terminal — perfect for testing)
-  - CORS_ALLOW_ALL_ORIGINS = True (open for local frontend)
+  - Explicit localhost/tunnel CORS + CSRF allowlists
   - BrowsableAPIRenderer enabled
   - No HTTPS/HSTS enforcement
 """
@@ -41,7 +41,7 @@ ALLOWED_HOSTS = ['*']
 _frontend_tunnel = env("FRONTEND_TUNNEL_URL", default=None)  # noqa: F405
 _backend_tunnel  = env("BACKEND_TUNNEL_URL", default=None)   # noqa: F405
 
-_csrf_origins = [
+_csrf_origins = build_origin_list(  # noqa: F405
     'http://localhost:8000',
     'http://127.0.0.1:8000',
     'http://localhost:8001',       # Uvicorn ASGI
@@ -51,13 +51,18 @@ _csrf_origins = [
     'http://localhost:3000',       # Next.js frontend
     'http://localhost:3001',       # Next.js frontend alt port
     'http://localhost:3002',
-]
-if _frontend_tunnel:
-    _csrf_origins.append(_frontend_tunnel)
-if _backend_tunnel:
-    _csrf_origins.append(_backend_tunnel)
+    'http://127.0.0.1:3002',
+    'http://0.0.0.0:3000',
+    'http://0.0.0.0:3001',
+    'http://0.0.0.0:3002',
+    FRONTEND_URL,  # noqa: F405
+    _frontend_tunnel,
+)
 
-CSRF_TRUSTED_ORIGINS = _csrf_origins
+CSRF_TRUSTED_ORIGINS = build_origin_list(  # noqa: F405
+    *CSRF_TRUSTED_ORIGINS,
+    *_csrf_origins,
+)
 
 
 # =============================================================================
@@ -69,10 +74,24 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 
 # =============================================================================
-# CORS — Open for local frontend dev
+# CORS — Explicit localhost/tunnel origins for frontend dev
 # =============================================================================
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGINS = build_origin_list(  # noqa: F405
+    *CORS_ALLOWED_ORIGINS,
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:3001',
+    'http://127.0.0.1:3001',
+    'http://localhost:3002',
+    'http://127.0.0.1:3002',
+    'http://0.0.0.0:3000',
+    'http://0.0.0.0:3001',
+    'http://0.0.0.0:3002',
+    FRONTEND_URL,  # noqa: F405
+    _frontend_tunnel,
+)
 
 
 # =============================================================================

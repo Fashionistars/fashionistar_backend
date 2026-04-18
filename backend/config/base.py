@@ -32,6 +32,18 @@ env.read_env()
 # BASE_DIR → fashionistar_backend/  (root of the Django project)
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
+def build_origin_list(*values) -> list[str]:
+    origins: list[str] = []
+    for value in values:
+        if not value:
+            continue
+
+        normalized = str(value).strip().rstrip("/")
+        if normalized and normalized not in origins:
+            origins.append(normalized)
+
+    return origins
+
 
 # =============================================================================
 # SECURITY
@@ -63,23 +75,31 @@ ALLOWED_HOSTS = env.list(
     ],
 )
 
+FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3000")
+BACKEND_URL = env("BACKEND_URL", default="http://localhost:8000")
+FRONTEND_TUNNEL_URL = env("FRONTEND_TUNNEL_URL", default="")
+BACKEND_TUNNEL_URL = env("BACKEND_TUNNEL_URL", default="")
+
+DEFAULT_FRONTEND_ORIGINS = build_origin_list(
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+    "http://localhost:3002",
+    "http://127.0.0.1:3002",
+    FRONTEND_URL,
+    FRONTEND_TUNNEL_URL,
+)
+
 CSRF_TRUSTED_ORIGINS = env.list(
     "CSRF_TRUSTED_ORIGINS",
-    default=[
-        "http://localhost:3000",
-        "http://localhost:8000",
-        "http://localhost:8001",
-    ],  # Add other origins as needed
+    default=DEFAULT_FRONTEND_ORIGINS,
 )
 
 SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin-allow-popups"
 
 # Admin URL (secret to prevent enumeration)
 DJANGO_SECRET_ADMIN_URL = env("DJANGO_SECRET_ADMIN_URL", default="admin/")
-
-# Site URL for email links, OTP callbacks, etc.
-FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3000")
-BACKEND_URL = env("BACKEND_URL", default="http://localhost:8000")
 
 
 
@@ -233,11 +253,22 @@ AUTHENTICATION_BACKENDS = [
     "apps.authentication.backends.SoftDeleteAwareModelBackend",
 ]
 
+PASSWORD_HASHERS = [
+    "django.contrib.auth.hashers.Argon2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher",
+    "django.contrib.auth.hashers.BCryptSHA256PasswordHasher",
+    "django.contrib.auth.hashers.ScryptPasswordHasher",
+]
+
 AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
     },
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": 8},
+    },
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
@@ -460,9 +491,11 @@ SWAGGER_SETTINGS = {
 # =============================================================================
 # CORS
 # =============================================================================
-# Overridden per-environment in development.py / production.py
-CORS_ALLOW_ALL_ORIGINS = True  # Dev default — MUST be False in production
-
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOWED_ORIGINS = env.list(
+    "CORS_ALLOWED_ORIGINS",
+    default=DEFAULT_FRONTEND_ORIGINS,
+)
 
 CORS_ALLOW_HEADERS = [
     "accept",
