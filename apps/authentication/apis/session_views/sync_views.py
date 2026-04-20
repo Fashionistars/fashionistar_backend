@@ -32,18 +32,19 @@ from apps.authentication.serializers import (
     LoginEventSerializer,
 )
 
-logger = logging.getLogger('application')
+logger = logging.getLogger("application")
 
 
 def _get_current_jti(request) -> str | None:
     """Extract the JTI claim from the current request's JWT access token."""
     try:
         from rest_framework_simplejwt.authentication import JWTAuthentication
+
         auth = JWTAuthentication()
         validated_token = auth.get_validated_token(
             auth.get_raw_token(auth.get_header(request))
         )
-        return str(validated_token.get('jti', ''))
+        return str(validated_token.get("jti", ""))
     except Exception:
         return None
 
@@ -51,6 +52,7 @@ def _get_current_jti(request) -> str | None:
 # ===========================================================================
 # GET /api/v1/auth/sessions/
 # ===========================================================================
+
 
 class SessionListView(APIView):
     """
@@ -64,7 +66,7 @@ class SessionListView(APIView):
     """
 
     permission_classes = [IsVerifiedUser]
-    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     def get(self, request):
         current_jti = _get_current_jti(request)
@@ -80,8 +82,8 @@ class SessionListView(APIView):
 
         return Response(
             {
-                "status":  "success",
-                "count":   len(serializer.data),
+                "status": "success",
+                "count": len(serializer.data),
                 "results": serializer.data,
             },
             status=status.HTTP_200_OK,
@@ -91,6 +93,7 @@ class SessionListView(APIView):
 # ===========================================================================
 # DELETE /api/v1/auth/sessions/<str:session_id>/
 # ===========================================================================
+
 
 class SessionRevokeView(APIView):
     """
@@ -103,7 +106,7 @@ class SessionRevokeView(APIView):
     """
 
     permission_classes = [IsVerifiedUser]
-    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     def delete(self, request, session_id: str):
         """
@@ -115,50 +118,67 @@ class SessionRevokeView(APIView):
         from apps.authentication.models import UserSession
 
         try:
-            session = UserSession.objects.get(pk=session_id, user=request.user)
-        except UserSession.DoesNotExist:
-            return Response(
-                {"status": "error", "message": "Session not found."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        except (ValueError, Exception) as e:
-            # Invalid UUID format (e.g. '999999' instead of a UUID7) —
-            # treat as not found rather than leaking DB error details.
-            logger.debug(
-                "SessionRevokeView: invalid session_id format '%s': %s",
-                session_id, e,
-            )
-            return Response(
-                {"status": "error", "message": "Session not found."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        jti = session.jti
-
-        with transaction.atomic():
-            # Blacklist the refresh token so it can't be refreshed again
-            try:
-                from rest_framework_simplejwt.token_blacklist.models import (
-                    OutstandingToken, BlacklistedToken
-                )
-                outstanding = OutstandingToken.objects.filter(jti=jti).first()
-                if outstanding:
-                    BlacklistedToken.objects.get_or_create(token=outstanding)
-                    logger.info(
-                        "🔒 Session %s blacklisted (JTI=%s) for user=%s",
-                        session_id, jti, request.user.pk,
+            with transaction.atomic():
+                # ── select_for_update(): Acquires a row-level DB lock ──────────────
+                # Prevents concurrent DELETE on the same session from two simultaneous
+                # requests (e.g. user double-clicking "Revoke" or retry storms at
+                # 100k RPS). The second request will block until the first completes,
+                # then see DoesNotExist → return 404 correctly.
+                try:
+                    session = UserSession.objects.select_for_update(nowait=False).get(
+                        pk=session_id, user=request.user
                     )
-            except Exception as bl_exc:
-                logger.warning(
-                    "⚠️ Could not blacklist JTI=%s for session=%s: %s",
-                    jti, session_id, bl_exc,
-                )
+                except UserSession.DoesNotExist:
+                    return Response(
+                        {"status": "error", "message": "Session not found."},
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
+                except (ValueError, Exception) as e:
+                    # Invalid UUID format (e.g. '999999' instead of a UUID7) —
+                    # treat as not found rather than leaking DB error details.
+                    logger.debug(
+                        "SessionRevokeView: invalid session_id format '%s': %s",
+                        session_id,
+                        e,
+                    )
+                    return Response(
+                        {"status": "error", "message": "Session not found."},
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
 
-            session.delete()
+                jti = session.jti
 
-        logger.info(
-            "✅ Session %s revoked for user=%s", session_id, request.user.pk
-        )
+                # Blacklist the refresh token so it can't be refreshed again
+                try:
+                    from rest_framework_simplejwt.token_blacklist.models import (
+                        OutstandingToken,
+                        BlacklistedToken,
+                    )
+
+                    outstanding = OutstandingToken.objects.filter(jti=jti).first()
+                    if outstanding:
+                        BlacklistedToken.objects.get_or_create(token=outstanding)
+                        logger.info(
+                            "🔒 Session %s blacklisted (JTI=%s) for user=%s",
+                            session_id,
+                            jti,
+                            request.user.pk,
+                        )
+                except Exception as bl_exc:
+                    logger.warning(
+                        "⚠️ Could not blacklist JTI=%s for session=%s: %s",
+                        jti,
+                        session_id,
+                        bl_exc,
+                    )
+
+                session.delete()
+
+        except Exception as exc:
+            logger.error("SessionRevokeView.delete failed: %s", exc, exc_info=True)
+            raise
+
+        logger.info("✅ Session %s revoked for user=%s", session_id, request.user.pk)
         return Response(
             {"status": "success", "message": "Session revoked successfully."},
             status=status.HTTP_200_OK,
@@ -168,6 +188,7 @@ class SessionRevokeView(APIView):
 # ===========================================================================
 # POST /api/v1/auth/sessions/revoke-others/
 # ===========================================================================
+
 
 class SessionRevokeOthersView(APIView):
     """
@@ -181,7 +202,7 @@ class SessionRevokeOthersView(APIView):
     """
 
     permission_classes = [IsVerifiedUser]
-    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     def post(self, request):
         from apps.authentication.models import UserSession
@@ -199,9 +220,13 @@ class SessionRevokeOthersView(APIView):
             for session in other_sessions:
                 try:
                     from rest_framework_simplejwt.token_blacklist.models import (
-                        OutstandingToken, BlacklistedToken
+                        OutstandingToken,
+                        BlacklistedToken,
                     )
-                    outstanding = OutstandingToken.objects.filter(jti=session.jti).first()
+
+                    outstanding = OutstandingToken.objects.filter(
+                        jti=session.jti
+                    ).first()
                     if outstanding:
                         BlacklistedToken.objects.get_or_create(token=outstanding)
                 except Exception as bl_exc:
@@ -214,11 +239,12 @@ class SessionRevokeOthersView(APIView):
 
         logger.info(
             "✅ RevokeOthers: %d sessions terminated for user=%s",
-            revoked_count, request.user.pk,
+            revoked_count,
+            request.user.pk,
         )
         return Response(
             {
-                "status":  "success",
+                "status": "success",
                 "message": f"{revoked_count} other session(s) terminated.",
                 "terminated_count": revoked_count,
             },
@@ -229,6 +255,7 @@ class SessionRevokeOthersView(APIView):
 # ===========================================================================
 # GET  /api/v1/auth/login-events/
 # ===========================================================================
+
 
 class LoginEventListView(APIView):
     """
@@ -242,7 +269,7 @@ class LoginEventListView(APIView):
     """
 
     permission_classes = [IsVerifiedUser]
-    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     def get(self, request):
         # Use selector for optimized DB query
@@ -256,8 +283,8 @@ class LoginEventListView(APIView):
 
         return Response(
             {
-                "status":  "success",
-                "count":   len(serializer.data),
+                "status": "success",
+                "count": len(serializer.data),
                 "results": serializer.data,
             },
             status=status.HTTP_200_OK,

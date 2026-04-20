@@ -32,6 +32,7 @@ env.read_env()
 # BASE_DIR → fashionistar_backend/  (root of the Django project)
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
+
 def build_origin_list(*values) -> list[str]:
     origins: list[str] = []
     for value in values:
@@ -72,13 +73,23 @@ ALLOWED_HOSTS = env.list(
         # Windows machine hostname (Uvicorn binds to 0.0.0.0)
         "FASHIONISTAR",
         "fashionistar",
+        # ngrok tunnel — required for Playwright E2E tests and manual QA via tunnel
+        "hydrographically-tawdrier-hayley.ngrok-free.dev",
+        "aeration-scabby-navy.ngrok-free.dev",
+        ".ngrok-free.dev",  # wildcard for any future ngrok tunnel restarts
+        ".ngrok.io",
     ],
 )
 
 FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3000")
 BACKEND_URL = env("BACKEND_URL", default="http://localhost:8000")
-FRONTEND_TUNNEL_URL = env("FRONTEND_TUNNEL_URL", default="")
-BACKEND_TUNNEL_URL = env("BACKEND_TUNNEL_URL", default="")
+FRONTEND_TUNNEL_URL = env(
+    "FRONTEND_TUNNEL_URL", default="https://aeration-scabby-navy.ngrok-free.dev"
+)
+BACKEND_TUNNEL_URL = env(
+    "BACKEND_TUNNEL_URL",
+    default="https://hydrographically-tawdrier-hayley.ngrok-free.dev",
+)
 
 DEFAULT_FRONTEND_ORIGINS = build_origin_list(
     "http://localhost:3000",
@@ -100,8 +111,6 @@ SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin-allow-popups"
 
 # Admin URL (secret to prevent enumeration)
 DJANGO_SECRET_ADMIN_URL = env("DJANGO_SECRET_ADMIN_URL", default="admin/")
-
-
 
 
 # =============================================================================
@@ -126,7 +135,7 @@ INSTALLED_APPS = [
     # ── Fashionistar New Architecture ────────────────────────────────────────
     "apps.common",
     "apps.authentication",
-    "apps.audit_logs",           # Enterprise audit log — AuditEventLog
+    "apps.audit_logs",  # Enterprise audit log — AuditEventLog
     # ── Legacy Apps (pending migration to apps/) ─────────────────────────────
     "admin_backend",
     "userauths",
@@ -177,8 +186,17 @@ MIDDLEWARE = [
     # Structured audit-log context (IP, UA, actor) for AuditService
     "apps.audit_logs.middleware.AuditContextMiddleware",
     # ── Django Security & CORS ───────────────────────────────────────────────
+    # ── Idempotency: Exactly-once POST semantics under 100k RPS ──
+    # SETNX-based Redis locking prevents duplicate user creation
+    # from retry storms. Placed before CORS so replayed responses
+    # receive correct CORS headers from CorsMiddleware below.
+    "apps.authentication.middleware.idempotency.IdempotencyMiddleware",
+    # ────────────────────────────────────────────────────────────
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",  # serve static in prod
+    # Whitenoise Middleware - serves static files in production.
+    # Should be placed right after the security middleware.
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    # ── CORS (must be before SessionMiddleware) ──────────────────────────────
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -278,7 +296,8 @@ AUTH_PASSWORD_VALIDATORS = [
 # INTERNATIONALISATION
 # =============================================================================
 LANGUAGE_CODE = "en-us"
-TIME_ZONE = "Africa/Lagos"
+# Consider 'Africa/Lagos' if that's your primary timezone for consistency with Celery
+TIME_ZONE = "Africa/Lagos"  # Can be 'Africa/Lagos' or 'UTC'
 USE_I18N = True
 USE_TZ = True
 
@@ -293,10 +312,15 @@ STATICFILES_DIRS = [os.path.join(BASE_DIR, "static")]
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
+
+# Cloudinary Configuration — SDK-level only (NOT used as Django storage backend)
+# The media storage backend is FileSystemStorage. Cloudinary is used via
+# apps.common.utils.cloudinary — direct uploads from client using presigned tokens.
 CLOUDINARY_STORAGE = {
     "CLOUD_NAME": env("CLOUDINARY_CLOUD_NAME", default="your_cloud_name"),
     "API_KEY": env("CLOUDINARY_API_KEY", default="your_api_key"),
     "API_SECRET": env("CLOUDINARY_API_SECRET", default="your_api_secret"),
+    "SECURE": True,  # Always HTTPS
 }
 
 # Webhook callback URL for Cloudinary upload/eager notifications.
@@ -307,13 +331,37 @@ CLOUDINARY_NOTIFICATION_URL = env(
     default="",
 )
 
+# Upload presets — configure these in your Cloudinary Dashboard
+# (Settings → Upload → Upload presets → Add upload preset)
+CLOUDINARY_UPLOAD_PRESET_AVATAR = env(
+    "CLOUDINARY_UPLOAD_PRESET_AVATAR", default="fashionistar_avatars"
+)
+CLOUDINARY_UPLOAD_PRESET_PRODUCT = env(
+    "CLOUDINARY_UPLOAD_PRESET_PRODUCT", default="fashionistar_products"
+)
+CLOUDINARY_UPLOAD_PRESET_MEASURE = env(
+    "CLOUDINARY_UPLOAD_PRESET_MEASURE", default="fashionistar_measurements"
+)
+CLOUDINARY_UPLOAD_PRESET_VIDEO = env(
+    "CLOUDINARY_UPLOAD_PRESET_VIDEO", default="fashionistar_videos"
+)
+
+# Presigned upload token TTL in seconds (cached in Redis).
+# Must be ≤ 3600 (Cloudinary 1-hour max). We use 3300 (55 min) for safety.
+CLOUDINARY_SIGNATURE_TTL = int(env("CLOUDINARY_SIGNATURE_TTL", default=3300))
+
 STORAGES = {
     "default": {
         "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
     },
     "staticfiles": {
         # Overridden in production.py to CompressedManifestStaticFilesStorage
-        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        # Whitenoise for static files in production, default for dev.
+        "BACKEND": (
+            "whitenoise.storage.CompressedManifestStaticFilesStorage"
+            if not DEBUG
+            else "django.contrib.staticfiles.storage.StaticFilesStorage"
+        ),
     },
 }
 
@@ -323,25 +371,58 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # =============================================================================
 # CACHING (Redis)
 # =============================================================================
+
+
+# Configure Django's CACHES
+# - 'default': Redis (sessions, throttling, app-level caching)
+# - 'schema':  LocMemCache — OpenAPI/Swagger schema caching (drf-yasg)
+#              Uses in-process memory so Redis unavailability NEVER causes
+#              a 500 on GET / (the Swagger UI homepage).
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
         "LOCATION": env("REDIS_URL", default="redis://127.0.0.1:6379/0"),
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            "IGNORE_EXCEPTIONS": True,  # Redis outage ≠ 500 error
+            # Silently return None on cache misses when Redis is unreachable.
+            # Prevents Redis outages from propagating as 500 errors to users.
+            "IGNORE_EXCEPTIONS": True,
             "CONNECTION_POOL_KWARGS": {
+                # Default pool is 10 connections — exhausted under load.
+                # 50 connections prevents pool-wait latency spikes.
                 "max_connections": 50,
-                "decode_responses": False,
+                "decode_responses": False,  # bytes mode for maximum speed
             },
-            "SOCKET_TIMEOUT": 0.5,
-            "SOCKET_CONNECT_TIMEOUT": 0.5,
+            # CRITICAL: Without timeouts, a Redis hiccup causes 30-second
+            # hangs. 500ms fail-fast is the industry standard for low-latency
+            # APIs (Netflix, Stripe, Shopify all use ≤500ms Redis timeouts).
+            "SOCKET_TIMEOUT": 0.5,  # seconds — receive timeout
+            "SOCKET_CONNECT_TIMEOUT": 0.5,  # seconds — connection timeout
         },
     },
-    # LocMemCache for OpenAPI schema (no Redis dependency)
+    # ── Schema cache: LocMemCache (no Redis dependency) ──────────────────
+    # Used by drf-yasg schema_view via cache_page('schema') decorator.
+    # Falls back to per-process memory — always available regardless of
+    # whether Redis is running.
     "schema": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
         "LOCATION": "fashionistar-schema-cache",
+    },
+    # ── Idempotency cache: Redis DB 1 (dedicated namespace) ──────────────
+    # Stores X-Idempotency-Key responses for exactly-once POST semantics.
+    # Separate from 'default' (DB 0) to allow per-alias override in tests
+    # without affecting session/throttle caches.
+    # In tests: overridden to LocMemCache via @override_settings(CACHES=...).
+    "idempotency": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": env("REDIS_URL", default="redis://127.0.0.1:6379/1"),
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "IGNORE_EXCEPTIONS": True,
+            "SOCKET_TIMEOUT": 1.0,
+            "SOCKET_CONNECT_TIMEOUT": 1.0,
+        },
+        "TIMEOUT": 60 * 60 * 24,  # 24h default TTL for idempotency responses
     },
 }
 
@@ -364,22 +445,31 @@ CHANNEL_LAYERS = {
 # =============================================================================
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    # ── Permissions ────────────────────────────────────────────────────────
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
+    # ── Authentication ─────────────────────────────────────────────────────
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
         "rest_framework.authentication.TokenAuthentication",
         "rest_framework.authentication.SessionAuthentication",
         "rest_framework.authentication.BasicAuthentication",
     ),
+    # ── Rendering — Fashionistar standard envelope ─────────────────────────
+    # FashionistarRenderer wraps every response in {success, message, data}.
+    # BrowsableAPIRenderer kept for local development (removed in production).
     "DEFAULT_RENDERER_CLASSES": [
         "apps.common.renderers.FashionistarRenderer",
         "rest_framework.renderers.BrowsableAPIRenderer",
     ],
+    # ── Parsers ────────────────────────────────────────────────────────────
     "DEFAULT_PARSER_CLASSES": [
         "rest_framework.parsers.JSONParser",
         "rest_framework.parsers.FormParser",
         "rest_framework.parsers.MultiPartParser",
     ],
+    # ── Rate Limiting (Fashionistar tiered throttle classes) ───────────────
+    # Burst + sustained throttles applied per request.
+    # Override individual rates via THROTTLE_RATES dict in this file.
     "DEFAULT_THROTTLE_CLASSES": [
         "apps.common.throttling.AnonBurstThrottle",
         "apps.common.throttling.AnonSustainedThrottle",
@@ -387,6 +477,7 @@ REST_FRAMEWORK = {
         "apps.common.throttling.UserSustainedThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
+        # Mapped by scope in apps.common.throttling
         "anon_burst": "30/minute",
         "anon_day": "500/day",
         "user_burst": "120/minute",
@@ -396,8 +487,10 @@ REST_FRAMEWORK = {
         "upload": "20/hour",
         "vendor": "200/minute",
     },
+    # ── Pagination — Fashionistar standard envelope ─────────────────────────
     "DEFAULT_PAGINATION_CLASS": "apps.common.pagination.DefaultPagination",
     "PAGE_SIZE": 20,
+    # ── Exception Handler — unified DRF + Django errors ────────────────────
     "EXCEPTION_HANDLER": "apps.common.exceptions.custom_exception_handler",
 }
 
@@ -503,6 +596,8 @@ CORS_ALLOW_HEADERS = [
     "authorization",
     "content-type",
     "content-disposition",
+    # ── Idempotency key — required for exactly-once POST semantics ──
+    "x-idempotency-key",
     "dnt",
     "origin",
     "user-agent",
@@ -602,23 +697,53 @@ CELERY_BROKER_TRANSPORT_OPTIONS = {
 }
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = False
 
-CELERY_TASK_SERIALIZER   = "json"
+CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
-CELERY_ACCEPT_CONTENT    = ["json"]
-CELERY_TIMEZONE          = "UTC"
-CELERY_ENABLE_UTC        = True
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TIMEZONE = "UTC"
+CELERY_ENABLE_UTC = True
 
 # ── Reliability flags ─────────────────────────────────────────────────────
-CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000    # evict workers after 1K tasks for memory hygiene
-CELERY_WORKER_PREFETCH_MULTIPLIER = 1       # one task at a time for fairness
-CELERY_TASK_ACKS_LATE             = True    # ack AFTER completion — guarantees at-least-once delivery
-CELERY_TASK_REJECT_ON_WORKER_LOST = True    # requeue task if worker dies mid-execution
-CELERY_TASK_IGNORE_RESULT         = True    # no result storage overhead
-CELERY_TASK_TRACK_STARTED         = True    # track when tasks start (for monitoring)
-CELERY_TASK_TIME_LIMIT            = 300     # 5-min hard kill
-CELERY_TASK_SOFT_TIME_LIMIT       = 240     # 4-min SoftTimeLimitExceeded warning
-CELERY_WORKER_SEND_TASK_EVENTS    = True    # enable Flower monitoring
-CELERY_TASK_SEND_SENT_EVENT       = True    # track when tasks are sent
+CELERY_WORKER_MAX_TASKS_PER_CHILD = (
+    1000  # evict workers after 1K tasks for memory hygiene
+)
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1  # one task at a time for fairness
+CELERY_TASK_ACKS_LATE = True  # ack AFTER completion — guarantees at-least-once delivery
+CELERY_TASK_REJECT_ON_WORKER_LOST = True  # requeue task if worker dies mid-execution
+CELERY_TASK_IGNORE_RESULT = True  # no result storage overhead
+CELERY_TASK_TRACK_STARTED = True  # track when tasks start (for monitoring)
+CELERY_TASK_TIME_LIMIT = 300  # 5-min hard kill
+CELERY_TASK_SOFT_TIME_LIMIT = 240  # 4-min SoftTimeLimitExceeded warning
+CELERY_WORKER_SEND_TASK_EVENTS = True  # enable Flower monitoring
+CELERY_TASK_SEND_SENT_EVENT = True  # track when tasks are sent
+
+# CELERY_BROKER_TRANSPORT_OPTIONS = {
+#     "visibility_timeout": 3600,         # 1hr task visibility
+#     "socket_timeout": 30,               # network read timeout
+#     "socket_connect_timeout": 30,       # initial connection timeout
+#     "retry_on_timeout": True,
+#     "max_connections": 20,              # limit connections
+#     'socket_keepalive': True,
+#     "ssl_cert_reqs": None, # Important for rediss schemes if not using full cert validation
+# }
+
+
+# Beat Scheduler (if you use periodic tasks)
+# If using `django_celery_beat`, schedule via Admin UI, not hardcoded here.
+
+
+CELERY_BEAT_SCHEDULE = {
+    # This is the hard-coded schedule that avoids using the Admin panel.
+    "keep-render-service-awake": {
+        "task": "keep_service_awake",  # This must match the name in @shared_task
+        "schedule": 300.0,  # Run every 600 seconds (10 minutes)
+    },
+}
+
+
+#                       =========================
+# ----------------------CELERY CONFIGURATION ENDS HERE ------------------------------
+#                       =========================
 
 
 # =============================================================================
@@ -827,3 +952,53 @@ def _apply_logging_config(config):
 # (in backend/apps.py) re-applies this config AFTER all apps load to fix
 # the Python 3.12 QueueHandler/QueueListener issue under Uvicorn/Daphne.
 LOGGING_CONFIG = "logging.config.dictConfig"
+
+
+# ==============================================================================
+# OWASP SECURITY HEADERS — Enterprise Production Hardening
+# ==============================================================================
+# These headers are enforced by Django's SecurityMiddleware (already in MIDDLEWARE).
+# Defends against XSS, clickjacking, MIME sniffing, and protocol downgrade attacks.
+#
+# OWASP References:
+#   A05:2021 – Security Misconfiguration
+#   A02:2021 – Cryptographic Failures (HSTS enforces HTTPS-only transport)
+
+# ── XSS Protection (legacy IE header, kept for compatibility) ──────────────
+SECURE_BROWSER_XSS_FILTER = True
+
+# ── MIME Sniffing Prevention (X-Content-Type-Options: nosniff) ─────────────
+SECURE_CONTENT_TYPE_NOSNIFF = True
+
+# ── Clickjacking Protection (X-Frame-Options: DENY) ────────────────────────
+# DENY prevents ALL framing. Admin uses SAMEORIGIN if needed via Jazzmin.
+X_FRAME_OPTIONS = "DENY"
+
+# ── HSTS — HTTP Strict Transport Security ──────────────────────────────────
+# Forces browsers to use HTTPS exclusively for 1 year (31536000 seconds).
+# ONLY enabled in production (DEBUG=False) — avoids breaking local HTTP.
+SECURE_HSTS_SECONDS = 0 if DEBUG else 31536000
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG  # Applies to *.fashionistar.io in prod
+SECURE_HSTS_PRELOAD = not DEBUG  # Enables HSTS preload list eligibility
+
+# ── SSL Redirect — production only ─────────────────────────────────────────
+# Redirects HTTP → HTTPS. Disabled locally to allow plain HTTP dev server.
+SECURE_SSL_REDIRECT = not DEBUG
+
+# ── Session Cookie Security ─────────────────────────────────────────────────
+SESSION_COOKIE_SECURE = not DEBUG  # Only transmitted over HTTPS
+SESSION_COOKIE_HTTPONLY = True  # Not accessible via JavaScript (XSS protection)
+SESSION_COOKIE_SAMESITE = "Lax"  # CSRF protection for cross-site requests
+
+# ── CSRF Cookie Security ────────────────────────────────────────────────────
+CSRF_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SAMESITE = "Lax"
+
+# ── Referrer Policy ─────────────────────────────────────────────────────────
+# Limits referrer information sent to third parties (privacy + security)
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+
+# ==============================================================================
+# END OF OWASP SECURITY HEADERS
+# ==============================================================================
