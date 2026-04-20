@@ -24,6 +24,15 @@ from backend.config.base import *  # noqa: F401,F403
 # =============================================================================
 DEBUG = True
 
+# Development must explicitly neutralize the security flags computed in base.py
+# so local HTTP and tunnel-driven QA flows behave like a true dev environment.
+SECURE_HSTS_SECONDS = 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+SECURE_HSTS_PRELOAD = False
+SECURE_SSL_REDIRECT = False
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
+
 # Admin URL (use default for local)
 DJANGO_SECRET_ADMIN_URL = env("DJANGO_SECRET_ADMIN_URL", default="admin/")  # noqa: F405
 
@@ -51,10 +60,13 @@ _csrf_origins = build_origin_list(  # noqa: F405
     'http://localhost:3000',       # Next.js frontend
     'http://localhost:3001',       # Next.js frontend alt port
     'http://localhost:3002',
+    'http://localhost:3100',       # Isolated live-E2E frontend instance
     'http://127.0.0.1:3002',
+    'http://127.0.0.1:3100',
     'http://0.0.0.0:3000',
     'http://0.0.0.0:3001',
     'http://0.0.0.0:3002',
+    'http://0.0.0.0:3100',
     FRONTEND_URL,  # noqa: F405
     _frontend_tunnel,
 )
@@ -86,9 +98,12 @@ CORS_ALLOWED_ORIGINS = build_origin_list(  # noqa: F405
     'http://127.0.0.1:3001',
     'http://localhost:3002',
     'http://127.0.0.1:3002',
+    'http://localhost:3100',
+    'http://127.0.0.1:3100',
     'http://0.0.0.0:3000',
     'http://0.0.0.0:3001',
     'http://0.0.0.0:3002',
+    'http://0.0.0.0:3100',
     FRONTEND_URL,  # noqa: F405
     _frontend_tunnel,
 )

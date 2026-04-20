@@ -46,6 +46,30 @@ def build_origin_list(*values) -> list[str]:
     return origins
 
 
+def read_debug_flag(default: bool = False) -> bool:
+    """
+    Read DEBUG defensively.
+
+    Some host shells export DEBUG with non-Django values such as "release",
+    which breaks Env.bool() during import. We normalize common boolean strings
+    and safely fall back for anything else so settings import never crashes.
+    """
+    raw_value = env("DEBUG", default=None)
+
+    if raw_value is None:
+        return default
+
+    normalized = str(raw_value).strip().lower()
+
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+
+    return default
+
+
 # =============================================================================
 # SECURITY
 # =============================================================================
@@ -53,6 +77,12 @@ SECRET_KEY = env(
     "SECRET_KEY",
     default="django-insecure-b*tuoe%^o+=^35$0fufrm=oamh^(o0tabn39(7ni12(i-oup+4",
 )
+
+# Base settings must always define DEBUG because this module is imported before
+# environment-specific overrides. Development/production settings can still
+# override DEBUG after import, but base.py needs a safe default for any values
+# computed during import time.
+DEBUG = read_debug_flag(default=False)
 
 ALLOWED_HOSTS = env.list(
     "ALLOWED_HOSTS",
@@ -891,10 +921,10 @@ JAZZMIN_UI_TWEAKS = {
 
 from backend.config.logging_config import build_logging_config
 
-# DEBUG is declared at the top of each env-specific settings file (dev/prod).
-# base.py does NOT set DEBUG itself — it is provided by the inheriting module.
-# We use a safe fallback here so Django's check framework can import base alone.
-_debug_mode = locals().get("DEBUG", True)
+# LOGGING is computed in base so Django and Celery can boot even when this
+# module is imported directly. Environment-specific settings still rebuild the
+# final LOGGING dict with their own debug/production preferences.
+_debug_mode = DEBUG
 
 LOGGING = build_logging_config(
     debug=_debug_mode,

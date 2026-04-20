@@ -1,6 +1,22 @@
 .PHONY: help install install-dev dev run run-asgi run-daphne asgi wsgi uvicorn daphne migrate test lint clean shell docker-build docker-up docker-down start-redis stop-redis stress-redis stress-health test-auth test-common test-store test-vendor test-customer test-payments test-async test-unit test-integration test-smoke test-cov cov-html
 .DEFAULT_GOAL := help
 
+# Default to development settings for local make workflows while still allowing
+# overrides like: `make DJANGO_SETTINGS_MODULE=backend.config.production <target>`.
+DJANGO_SETTINGS_MODULE ?= backend.config.development
+export DJANGO_SETTINGS_MODULE
+
+# Keep uv cache inside the repo so local Windows/dev-sandbox runs never depend
+# on a global AppData cache with different filesystem permissions.
+UV_CACHE_DIR ?= $(subst /,\,$(CURDIR))\.uv-cache
+export UV_CACHE_DIR
+
+# Windows `make` recipes run through cmd.exe in this repo, so Redis/bootstrap
+# helpers need Windows-friendly commands instead of POSIX shell fragments.
+TMP_REDIS_DIR := $(subst /,\,$(abspath ../.tmp_redis))
+TMP_REDIS_EXE := $(TMP_REDIS_DIR)\redis-server.exe
+ENSURE_TMP_REDIS = powershell -NoProfile -ExecutionPolicy Bypass -Command "if ((Test-NetConnection -ComputerName 127.0.0.1 -Port 6379 -WarningAction SilentlyContinue).TcpTestSucceeded) { exit 0 }; if (Test-Path '$(TMP_REDIS_EXE)') { Start-Process -FilePath '$(TMP_REDIS_EXE)' -ArgumentList '--port','6379' -WorkingDirectory '$(TMP_REDIS_DIR)' -WindowStyle Hidden; Start-Sleep -Seconds 1 } else { Write-Host 'Portable Redis not found at $(TMP_REDIS_EXE)' }"
+
 # ─── Colors ───
 CYAN    := \033[0;36m
 GREEN   := \033[0;32m
@@ -41,7 +57,7 @@ dev: ## Start Django development server (sync WSGI — port 8000, console email)
 	@echo "$(YELLOW)  Settings: backend.config.development$(NC)"
 	@echo "$(YELLOW)  Email:    console (OTP printed to this terminal)$(NC)"
 	@echo "$(YELLOW)  URL:      http://127.0.0.1:8000/$(NC)"
-	DJANGO_SETTINGS_MODULE=backend.config.development uv run manage.py runserver --settings=backend.config.development
+	uv run manage.py runserver --settings=$(DJANGO_SETTINGS_MODULE)
 
 # ── ASGI / Uvicorn / Daphne shortcuts ──────────────────────────────────────
 asgi: run-asgi ## Alias: start ASGI server with Uvicorn (same as run-asgi)
@@ -51,7 +67,7 @@ uvicorn: ## Start Uvicorn ASGI (dev, port 8001, console email, access logs)
 	@echo "$(YELLOW)  Settings: backend.config.development (ALLOWED_HOSTS=*)$(NC)"
 	@echo "$(YELLOW)  URL:      http://127.0.0.1:8001/ or http://localhost:8001/$(NC)"
 	@echo "$(YELLOW)  Logs:     Access log printed here (ALL requests — 2xx, 4xx, 5xx)$(NC)"
-	DJANGO_SETTINGS_MODULE=backend.config.development uv run uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto --log-config uvicorn_log_config.json
+	uv run uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto --log-config uvicorn_log_config.json
 
 wsgi: ## Start Gunicorn WSGI (sync production — port 8000)
 	@echo "$(CYAN)Starting Gunicorn WSGI server...$(NC)"
@@ -61,22 +77,21 @@ daphne: run-daphne ## Alias: start Daphne ASGI (same as run-daphne)
 
 run-asgi: ## Start ASGI + Uvicorn (auto-starts Redis first)
 	@echo "$(CYAN)Ensuring Redis is running ...$(NC)"
-	@if [ -d '../.tmp_redis' ]; then cd ../.tmp_redis && ./redis-server.exe --port 6379 & sleep 1; fi
+	@$(ENSURE_TMP_REDIS)
 	@echo "$(CYAN)Starting Uvicorn ASGI server (access logs on)...$(NC)"
-	DJANGO_SETTINGS_MODULE=backend.config.development uv run uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto --log-config uvicorn_log_config.json
+	uv run uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto --log-config uvicorn_log_config.json
 
 run-daphne: ## Start Daphne ASGI (WebSocket — auto-starts Redis first)
 	@echo "$(CYAN)Ensuring Redis is running ...$(NC)"
-	@if [ -d '../.tmp_redis' ]; then cd ../.tmp_redis && ./redis-server.exe --port 6379 & sleep 1; fi
+	@$(ENSURE_TMP_REDIS)
 	@echo "$(CYAN)Starting Daphne ASGI server (development settings)...$(NC)"
-	DJANGO_SETTINGS_MODULE=backend.config.development uv run daphne -b 0.0.0.0 -p 8001 backend.asgi:application
+	uv run daphne -b 0.0.0.0 -p 8001 backend.asgi:application
 
 shell: ## Open Django interactive shell (development settings)
-	DJANGO_SETTINGS_MODULE=backend.config.development uv run manage.py shell
+	uv run manage.py shell --settings=$(DJANGO_SETTINGS_MODULE)
 
 shell-plus: ## Open enhanced Django shell (requires django-extensions)
-	DJANGO_SETTINGS_MODULE=backend.config.development uv run manage.py shell_plus --ipython 2>/dev/null || \
-		DJANGO_SETTINGS_MODULE=backend.config.development uv run manage.py shell
+	uv run manage.py shell_plus --ipython --settings=$(DJANGO_SETTINGS_MODULE) 2>NUL || uv run manage.py shell --settings=$(DJANGO_SETTINGS_MODULE)
 
 # ═══════════════════════════════════════════════════════════════
 ##@ Database & Migrations
@@ -123,13 +138,13 @@ db-shell: ## Open database shell (dbshell)
 # ═══════════════════════════════════════════════════════════════
 
 superuser: ## Create a Django superuser (interactive — uses UnifiedUser via correct settings)
-	DJANGO_SETTINGS_MODULE=backend.config.development uv run manage.py createsuperuser
+	uv run manage.py createsuperuser --settings=$(DJANGO_SETTINGS_MODULE)
 
 su: ## Create UnifiedUser superuser non-interactively (make su EMAIL=x PASS=y)
-	DJANGO_SETTINGS_MODULE=backend.config.development uv run scripts/create_superuser.py "$(EMAIL)" "$(PASS)"
+	uv run scripts/create_superuser.py "$(EMAIL)" "$(PASS)"
 
 changepass: ## Change a UnifiedUser password (uses correct settings)
-	DJANGO_SETTINGS_MODULE=backend.config.development uv run manage.py changepassword
+	uv run manage.py changepassword --settings=$(DJANGO_SETTINGS_MODULE)
 
 static: ## Collect static files
 	@echo "$(CYAN)Collecting static files...$(NC)"
@@ -187,18 +202,18 @@ test-watch: ## Run tests in watch mode (requires pytest-watch)
 
 celery: ## Start Celery worker — general queue (dev settings, console email)
 	@echo "$(CYAN)Ensuring Redis is running ...$(NC)"
-	@if [ -d '../.tmp_redis' ]; then cd ../.tmp_redis && ./redis-server.exe --port 6379 & sleep 1; fi
+	@$(ENSURE_TMP_REDIS)
 	@echo "$(CYAN)Starting Celery worker (DJANGO_SETTINGS_MODULE=development)...$(NC)"
 	@echo "$(YELLOW)  Pool:  solo (Windows-safe: no prefork shared memory)&$(NC)"
 	@echo "$(YELLOW)  Email: console.EmailBackend (OTP printed to THIS terminal)$(NC)"
-	DJANGO_SETTINGS_MODULE=backend.config.development uv run celery -A backend worker --loglevel=info --pool=solo --events
+	uv run celery -A backend worker --loglevel=info --pool=solo --events
 
 celery-emails: ## Start Celery worker for email queue (dev, console email visible)
-	@if [ -d '../.tmp_redis' ]; then cd ../.tmp_redis && ./redis-server.exe --port 6379 & sleep 1; fi
-	DJANGO_SETTINGS_MODULE=backend.config.development uv run celery -A backend worker -Q emails --loglevel=info --pool=solo
+	@$(ENSURE_TMP_REDIS)
+	uv run celery -A backend worker -Q emails --loglevel=info --pool=solo
 
 celery-critical: ## Start Celery worker for critical queue (auto-starts Redis)
-	@if [ -d '../.tmp_redis' ]; then cd ../.tmp_redis && ./redis-server.exe --port 6379 & sleep 1; fi
+	@$(ENSURE_TMP_REDIS)
 	uv run celery -A backend worker -Q critical --loglevel=info --concurrency=2
 
 celery-analytics: ## Start Celery worker for analytics queue
@@ -320,12 +335,8 @@ infra-down: ## Stop infrastructure containers
 
 start-redis: ## Start local portable Redis server on port 6379 (background)
 	@echo "$(CYAN)Starting local portable Redis server...$(NC)"
-	@if [ -d "../.tmp_redis" ]; then \
-		cd ../.tmp_redis && ./redis-server.exe --port 6379 & \
-		echo "$(GREEN)✓ Redis started on 127.0.0.1:6379$(NC)"; \
-	else \
-		echo "$(RED)✗ Redis not found at ../.tmp_redis$(NC)"; \
-	fi
+	@$(ENSURE_TMP_REDIS)
+	@echo "$(GREEN)✓ Redis start command issued for 127.0.0.1:6379$(NC)"
 
 stop-redis: ## Stop local portable Redis server
 	@echo "$(CYAN)Stopping local portable Redis server...$(NC)"
@@ -504,14 +515,14 @@ dev-tunnel: ## 🚀 Django dev server (port 8000) — then open ngrok in new ter
 	@echo "  $(CYAN)Step 1:$(NC) Starting Django WSGI dev server on :8000 ..."
 	@echo "  $(YELLOW)To also start tunnel → open a second terminal and run:$(NC)"
 	@echo "  $(CYAN)          make ngrok-dev$(NC)"
-	DJANGO_SETTINGS_MODULE=backend.config.development uv run manage.py runserver --settings=backend.config.development
+	uv run manage.py runserver --settings=$(DJANGO_SETTINGS_MODULE)
 
 asgi-tunnel: ## 🚀 Uvicorn ASGI server (port 8001) — then open ngrok-asgi in new terminal
 	@echo "$(BOLD)$(CYAN)FASHIONISTAR — ASGI Server + Tunnel$(NC)"
 	@echo "  $(CYAN)Step 1:$(NC) Starting Uvicorn ASGI on :8001 ..."
 	@echo "  $(YELLOW)To also start tunnel → open a second terminal and run:$(NC)"
 	@echo "  $(CYAN)          make ngrok-asgi$(NC)"
-	DJANGO_SETTINGS_MODULE=backend.config.development uv run uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto --log-config uvicorn_log_config.json
+	uv run uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto --log-config uvicorn_log_config.json
 
 ngrok-inspect: ## 🔍 Open ngrok web inspector in browser (localhost:4040)
 	@echo "$(CYAN)ngrok Web Inspector: http://127.0.0.1:4040$(NC)"
