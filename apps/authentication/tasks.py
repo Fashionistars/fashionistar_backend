@@ -80,7 +80,17 @@ def send_email_task(
                 rendered = render_to_string(
                     template_name=template_name, context=context
                 )
-                logger.debug(
+                # Mirror the rendered body to stdout so local `make celery`
+                # sessions always expose OTPs/reset links for live QA flows.
+                print(
+                    "📄 [Celery][DEBUG] Template rendered — "
+                    f"{template_name}\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"{rendered[:4000]}\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                    flush=True,
+                )
+                logger.info(
                     "📄 [Celery][DEBUG] Template rendered — %s\n"
                     "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
                     "%s\n"
@@ -150,6 +160,31 @@ def send_sms_task(self, to: str, body: str) -> str:
     """
     try:
         logger.info("📱 [Celery] Sending SMS → to=%s", to)
+
+        # In DEBUG mode, print the raw SMS body so local QA can recover OTPs
+        # from the Celery terminal without depending on a real handset inbox.
+        from django.conf import settings as _settings
+
+        if getattr(_settings, "DEBUG", False):
+            # Keep a plain stdout copy in addition to structured logging so the
+            # live browser runner can scrape OTPs from the Celery terminal log.
+            print(
+                "📄 [Celery][DEBUG] SMS body for "
+                f"{to}\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"{body}\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                flush=True,
+            )
+            logger.info(
+                "📄 [Celery][DEBUG] SMS body for %s\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "%s\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                to,
+                body,
+            )
+
         message_sid = SMSManager.send_sms(to=to, body=body)
         logger.info("✅ [Celery] SMS sent → %s (SID: %s)", to, message_sid)
         return message_sid
