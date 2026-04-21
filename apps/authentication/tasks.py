@@ -80,6 +80,18 @@ def send_email_task(
                 rendered = render_to_string(
                     template_name=template_name, context=context
                 )
+                debug_artifacts: list[str] = []
+                if context.get("otp") is not None:
+                    debug_artifacts.append(
+                        "🔢 [Celery][DEBUG] OTP for "
+                        f"{template_name}: {context['otp']}"
+                    )
+                if isinstance(context.get("reset_url"), str):
+                    debug_artifacts.append(
+                        "🔗 [Celery][DEBUG] Reset URL for "
+                        f"{template_name}: {context['reset_url']}"
+                    )
+
                 # Mirror the rendered body to stdout so local `make celery`
                 # sessions always expose OTPs/reset links for live QA flows.
                 print(
@@ -90,6 +102,8 @@ def send_email_task(
                     "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
                     flush=True,
                 )
+                for artifact in debug_artifacts:
+                    print(artifact, flush=True)
                 logger.info(
                     "📄 [Celery][DEBUG] Template rendered — %s\n"
                     "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -98,6 +112,8 @@ def send_email_task(
                     template_name,
                     rendered[:4000],  # cap at 4000 chars to avoid log flooding
                 )
+                for artifact in debug_artifacts:
+                    logger.info("%s", artifact)
             except Exception as render_exc:
                 logger.warning(
                     "[Celery][DEBUG] Could not pre-render template for logging: %s",
