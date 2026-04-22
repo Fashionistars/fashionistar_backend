@@ -168,24 +168,8 @@ INSTALLED_APPS = [
     "apps.audit_logs",  # Enterprise audit log — AuditEventLog
     "apps.client",      # Phase 2: Client domain (profiles, addresses)
     "apps.vendor",      # Phase 2: Vendor domain (stores, setup, payouts)
-    # ── Legacy Apps (pending migration to apps/) ─────────────────────────────
+    # ── Remaining legacy dependency retained intentionally ───────────────────
     "admin_backend",
-    "userauths",
-    "store",
-    "vendor",
-    "customer",
-    "addon",
-    "api",
-    "ShopCart",
-    "checkout",
-    "notification",
-    "createOrder",
-    "chat",
-    "measurements",
-    "Blog",
-    "Homepage",
-    "Paystack_Webhoook_Prod",
-    "utilities",
     # ── Third Party ──────────────────────────────────────────────────────────
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",  # JWT logout blacklisting

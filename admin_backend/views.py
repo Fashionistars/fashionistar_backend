@@ -40,6 +40,15 @@ class CollectionsViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
     parser_classes = (parsers.MultiPartParser, parsers.FormParser)
 
+    def get_object(self):
+        slug = self.kwargs.get('slug')
+        if not slug:
+            return super().get_object()
+        try:
+            return Collections.objects.get(slug=slug)
+        except Collections.DoesNotExist:
+            raise Http404
+
     def create(self, request, *args, **kwargs):
         """
         Create a new Collection instance.
@@ -181,6 +190,15 @@ class BrandViewSet(viewsets.ModelViewSet):
     serializer_class = BrandSerializer
     permission_classes = [AllowAny]
     parser_classes = (parsers.MultiPartParser, parsers.FormParser)
+
+    def get_object(self):
+        slug = self.kwargs.get('slug')
+        if not slug:
+            return super().get_object()
+        try:
+            return Brand.objects.get(slug=slug)
+        except Brand.DoesNotExist:
+            raise Http404
 
     def create(self, request, *args, **kwargs):
         """

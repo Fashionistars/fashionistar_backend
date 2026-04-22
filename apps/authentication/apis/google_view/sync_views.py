@@ -29,7 +29,11 @@ from rest_framework.response import Response
 
 from apps.authentication.serializers import GoogleAuthSerializer
 from apps.authentication.services.google_service import SyncGoogleAuthService
+from apps.authentication.services.profile_service.profile_service import (
+    get_post_auth_state,
+)
 from apps.authentication.throttles import BurstRateThrottle
+from apps.client.tasks import provision_client_defaults
 from apps.common.renderers import CustomJSONRenderer
 
 logger = logging.getLogger(__name__)
@@ -96,6 +100,7 @@ class GoogleAuthView(generics.CreateAPIView):
         user = result["user"]
         tokens = result["tokens"]
         is_new = result["is_new"]
+        auth_state = get_post_auth_state(user=user)
 
         # ── Register UserSession + LoginEvent on_commit ─────────────────────
         # CRITICAL: on_commit() MUST be inside explicit atomic() block.
@@ -106,6 +111,10 @@ class GoogleAuthView(generics.CreateAPIView):
         try:
             refresh_obj = _RefTok(tokens["refresh"])
             with transaction.atomic():
+                if is_new and user.role == "client":
+                    transaction.on_commit(
+                        lambda: provision_client_defaults.delay(str(user.pk))
+                    )
                 transaction.on_commit(
                     lambda: UserSession.create_from_token(
                         user=user,
@@ -154,11 +163,18 @@ class GoogleAuthView(generics.CreateAPIView):
                 ),
                 # Frontend differentiator: show onboarding for new, dashboard for returning
                 "is_new": is_new,
-                "redirect": "/dashboard?welcome=true" if is_new else "/dashboard",
+                "redirect": (
+                    f'{auth_state["dashboard_entrypoint"]}?welcome=true'
+                    if is_new
+                    else auth_state["dashboard_entrypoint"]
+                ),
                 "tokens": {
                     "access": str(tokens["access"]),
                     "refresh": str(tokens["refresh"]),
                 },
+                "access": str(tokens["access"]),
+                "refresh": str(tokens["refresh"]),
+                **auth_state,
                 # ── Flat top-level tokens for LoginResponseSchema.transform() ──
                 # The schema merges tokens.access/refresh to top-level access/refresh
                 # when tokens block is present. This ensures Zustand store
@@ -183,6 +199,9 @@ class GoogleAuthView(generics.CreateAPIView):
                     ),
                     "date_joined": (
                         user.date_joined.isoformat() if user.date_joined else None
+                    ),
+                    "last_login": (
+                        user.last_login.isoformat() if user.last_login else None
                     ),
                 },
             },

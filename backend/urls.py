@@ -55,13 +55,9 @@ urlpatterns = [
    path('swagger<format>/', schema_view.without_ui(cache_timeout=0), name='schema-json'),
    path('', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
    path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
-    
-   # API V1 Urls
-   path("", include("api.urls")),
 
    # Admin URL
    path('admin/', admin.site.urls),
-   path("auth/", include("userauths.urls")),
 
    # ── New Modular Monolith (v1) ──────────────────────────────────────────
    path('api/', include('apps.authentication.urls', namespace='authentication')),
@@ -79,26 +75,6 @@ urlpatterns = [
    path("api/v1/ninja/", ninja_api.urls),
 
    path("admin_backend/", include("admin_backend.urls")),
-
-
-   #  VENDORS   /  SHOP   /  SELLER 
-   path("", include("vendor.urls")),
-   path("", include("vendor.new_urls")),  ######  NEW URLS
-
-   #  CLIENTS   /  CUSTOMER   /  USER 
-   path("", include("customer.urls")),
-   path("", include("store.urls")),
-
-
-
-   path("", include("measurements.urls")),
-   path("", include("Blog.urls")),
-   path("", include("Homepage.urls")),
-
-
-   # path("", include('transaction.urls')),
-   path("", include('Paystack_Webhoook_Prod.urls')),
-
 ]
 
 
