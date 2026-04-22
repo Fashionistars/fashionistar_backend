@@ -68,6 +68,12 @@ urlpatterns = [
    # ── Common Utilities (health check, Cloudinary presign, Cloudinary webhook, metrics, etc.) ────────────────────────
    path('api/', include('apps.common.urls', namespace='common')),
 
+   # ── Phase 2: Client Domain (DRF sync) ─────────────────────────────────────
+   path('api/v1/client/', include('apps.client.urls', namespace='client')),
+
+   # ── Phase 2: Vendor Domain (DRF sync) ─────────────────────────────────────
+   path('api/v1/vendor/', include('apps.vendor.urls', namespace='vendor')),
+
    path("admin_backend/", include("admin_backend.urls")),
 
 

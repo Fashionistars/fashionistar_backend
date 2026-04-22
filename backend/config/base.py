@@ -166,6 +166,8 @@ INSTALLED_APPS = [
     "apps.common",
     "apps.authentication",
     "apps.audit_logs",  # Enterprise audit log — AuditEventLog
+    "apps.client",      # Phase 2: Client domain (profiles, addresses)
+    "apps.vendor",      # Phase 2: Vendor domain (stores, setup, payouts)
     # ── Legacy Apps (pending migration to apps/) ─────────────────────────────
     "admin_backend",
     "userauths",
