@@ -47,11 +47,18 @@ from apps.authentication.serializers import (
 from apps.authentication.services.auth_service import SyncAuthService
 from apps.authentication.services.google_service import SyncGoogleAuthService
 from apps.authentication.services.otp import OTPService
+from apps.authentication.services.profile_service.profile_service import (
+    get_post_auth_state,
+)
 from apps.authentication.services.registration import RegistrationService
 from apps.authentication.throttles import BurstRateThrottle, SustainedRateThrottle
 from apps.common.renderers import CustomJSONRenderer
 
 logger = logging.getLogger(__name__)
+
+
+def _build_auth_response_state(user: UnifiedUser) -> Dict[str, Any]:
+    return get_post_auth_state(user=user)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -249,6 +256,7 @@ class LoginView(generics.GenericAPIView):
                 request=request,
             )
             user = result['user']
+            auth_state = _build_auth_response_state(user)
 
             logger.info(
                 "✅ LoginView: login successful for %s (id=%s role=%s)",
@@ -263,6 +271,7 @@ class LoginView(generics.GenericAPIView):
                     "identifying_info": user.identifying_info,
                     "access":           result['access'],
                     "refresh":          result['refresh'],
+                    **auth_state,
                 },
                 status=status.HTTP_200_OK,
             )
@@ -420,6 +429,15 @@ class VerifyOTPView(generics.GenericAPIView):
             if changed:
                 user.save(update_fields=changed)
 
+            from apps.common.events import event_bus
+            event_bus.emit_on_commit(
+                "user.verified",
+                user_uuid=str(user.id),
+                role=str(user.role or ""),
+                email=str(user.email) if user.email else None,
+                phone=str(user.phone) if user.phone else None,
+            )
+
             logger.info(
                 "✅ Account verified: id=%s identifier=%s",
                 user.id, user.identifying_info,
@@ -430,6 +448,7 @@ class VerifyOTPView(generics.GenericAPIView):
             from django.contrib.auth.models import update_last_login
             refresh = RefreshToken.for_user(user)
             update_last_login(None, user)
+            auth_state = _build_auth_response_state(user)
 
             return Response(
                 {
@@ -439,6 +458,7 @@ class VerifyOTPView(generics.GenericAPIView):
                     "identifying_info": user.identifying_info,
                     "access":           str(refresh.access_token),
                     "refresh":          str(refresh),
+                    **auth_state,
                 },
                 status=status.HTTP_200_OK,
             )
@@ -554,6 +574,7 @@ class GoogleAuthView(generics.CreateAPIView):
         user       = result['user']
         tokens     = result['tokens']
         is_new     = result['is_new']
+        auth_state = _build_auth_response_state(user)
 
         # ── Create UserSession record on_commit ──────────────────────────
         from rest_framework_simplejwt.tokens import RefreshToken as _RefTok
@@ -595,14 +616,16 @@ class GoogleAuthView(generics.CreateAPIView):
                 "message": "Google registration successful." if is_new else "Google login successful.",
                 "is_new":  is_new,
                 "tokens":  tokens,
+                **auth_state,
                 "user": {
-                    "id":         str(user.id),
+                    "user_id":    str(user.id),
                     "member_id":  user.member_id,
                     "email":      user.email,
                     "first_name": user.first_name,
                     "last_name":  user.last_name,
                     "role":       user.role,
                     "is_verified": user.is_verified,
+                    "is_staff":    user.is_staff,
                     "avatar":     user.avatar,
                 },
             },

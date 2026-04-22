@@ -13,7 +13,7 @@ from typing import Any
 
 from django.db import transaction
 
-from apps.common.events import EventBus
+from apps.common.events import event_bus
 
 logger = logging.getLogger(__name__)
 
@@ -81,14 +81,12 @@ class ClientProfileService:
         profile.update_completeness()
 
         # ── Emit event after DB commit ───────────────────────────
-        transaction.on_commit(lambda: EventBus.emit(
+        event_bus.emit_on_commit(
             "client.profile.updated",
-            {
-                "user_id": str(user.pk),
-                "profile_id": str(profile.pk),
-                "fields": list(data.keys()),
-            },
-        ))
+            user_id=str(user.pk),
+            profile_id=str(profile.pk),
+            fields=list(update_fields),
+        )
 
         logger.info(
             "ClientProfileService.update_profile: updated profile %s for user %s",

@@ -179,16 +179,22 @@ class SyncGoogleAuthService:
                     try:
                         from apps.common.events import event_bus
 
-                        def _emit():
-                            event_bus.emit('user.registered', **{
-                                'user_uuid':     str(user.pk),    # ← MUST be user_uuid (handler arg name)
-                                'email':         user.email,
-                                'role':          user.role,
-                                'auth_provider': 'google',         # ← MUST be auth_provider (handler arg name)
-                                'member_id':     user.member_id,
-                            })
-
-                        transaction.on_commit(_emit)
+                        event_bus.emit_on_commit(
+                            'user.registered',
+                            user_uuid=str(user.pk),
+                            email=user.email,
+                            role=user.role,
+                            auth_provider='google',
+                            member_id=user.member_id,
+                        )
+                        event_bus.emit_on_commit(
+                            'user.verified',
+                            user_uuid=str(user.pk),
+                            email=user.email,
+                            role=user.role,
+                            auth_provider='google',
+                            member_id=user.member_id,
+                        )
 
                     except Exception as event_exc:
                         logger.warning(

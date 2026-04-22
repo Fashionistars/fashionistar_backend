@@ -9,7 +9,7 @@ Authentication: JWT Bearer.
 import logging
 
 from ninja import Router
-from ninja.security import HttpBearer
+from ninja.errors import HttpError
 
 from apps.vendor.services.vendor_dashboard_service import VendorDashboardService
 from apps.vendor.services.vendor_service import VendorService
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 router = Router(tags=["Vendor — Async Dashboard"])
 
 
-@router.get("/dashboard/", response=VendorDashboardOut, auth=HttpBearer())
+@router.get("/dashboard/", response=VendorDashboardOut)
 async def get_vendor_dashboard(request):
     """
     GET /api/v1/ninja/vendor/dashboard/
@@ -38,7 +38,7 @@ async def get_vendor_dashboard(request):
     return summary
 
 
-@router.get("/profile/", response=VendorProfileOut, auth=HttpBearer())
+@router.get("/profile/", response=VendorProfileOut)
 async def get_vendor_profile_async(request):
     """
     GET /api/v1/ninja/vendor/profile/
@@ -46,13 +46,11 @@ async def get_vendor_profile_async(request):
     Async read of the vendor's own store profile.
     """
     from apps.vendor.selectors.vendor_selectors import aget_vendor_profile_or_none
-    from apps.vendor.services.vendor_provisioning_service import VendorProvisioningService
-    from asgiref.sync import sync_to_async
 
     user = request.auth
     profile = await aget_vendor_profile_or_none(user)
     if profile is None:
-        profile = await sync_to_async(VendorProvisioningService.provision)(user)
+        raise HttpError(404, "Vendor setup is required before profile access.")
 
     return VendorProfileOut(
         id=profile.pk,
@@ -76,7 +74,7 @@ async def get_vendor_profile_async(request):
     )
 
 
-@router.patch("/profile/", response=VendorProfileOut, auth=HttpBearer())
+@router.patch("/profile/", response=VendorProfileOut)
 async def update_vendor_profile_async(request, payload: VendorProfileUpdateIn):
     """
     PATCH /api/v1/ninja/vendor/profile/
@@ -91,7 +89,7 @@ async def update_vendor_profile_async(request, payload: VendorProfileUpdateIn):
     return await get_vendor_profile_async(request)
 
 
-@router.post("/payout/", auth=HttpBearer())
+@router.post("/payout/")
 async def save_payout_async(request, payload: VendorPayoutIn):
     """
     POST /api/v1/ninja/vendor/payout/

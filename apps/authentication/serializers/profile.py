@@ -28,6 +28,9 @@ Null / blank rules (match model definition):
 from rest_framework import serializers
 
 from apps.authentication.models import UnifiedUser
+from apps.authentication.services.profile_service.profile_service import (
+    get_post_auth_state,
+)
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -115,6 +118,10 @@ class MeSerializer(serializers.ModelSerializer):
     phone = PhoneField(read_only=True)
     avatar = AvatarURLField(read_only=True)
     identifying_info = serializers.SerializerMethodField()
+    has_client_profile = serializers.SerializerMethodField()
+    has_vendor_profile = serializers.SerializerMethodField()
+    vendor_onboarding_status = serializers.SerializerMethodField()
+    dashboard_entrypoint = serializers.SerializerMethodField()
 
     # Blank → empty-string fields (model: blank=True, null=True)
     first_name = serializers.CharField(default="", allow_blank=True, read_only=True)
@@ -142,6 +149,10 @@ class MeSerializer(serializers.ModelSerializer):
             "is_verified",  # bool
             "is_active",  # bool
             "is_staff",  # bool
+            "has_client_profile",
+            "has_vendor_profile",
+            "vendor_onboarding_status",
+            "dashboard_entrypoint",
             # ── Profile / Location ───────────────────────────────────────
             "avatar",  # str | null  (Cloudinary URL)
             "bio",  # str  (empty when not set)
@@ -166,6 +177,18 @@ class MeSerializer(serializers.ModelSerializer):
         Mirrors the model's identifying_info property.
         """
         return obj.identifying_info
+
+    def get_has_client_profile(self, obj):
+        return get_post_auth_state(user=obj)["has_client_profile"]
+
+    def get_has_vendor_profile(self, obj):
+        return get_post_auth_state(user=obj)["has_vendor_profile"]
+
+    def get_vendor_onboarding_status(self, obj):
+        return get_post_auth_state(user=obj)["vendor_onboarding_status"]
+
+    def get_dashboard_entrypoint(self, obj):
+        return get_post_auth_state(user=obj)["dashboard_entrypoint"]
 
 
 # ══════════════════════════════════════════════════════════════════════

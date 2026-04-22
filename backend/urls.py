@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from backend.ninja_api import ninja_api
 
 # ── Custom error handlers (JSON for API, HTML for browser) ──────────────────
 handler400 = 'backend.error_views.bad_request_handler'
@@ -72,7 +73,10 @@ urlpatterns = [
    path('api/v1/client/', include('apps.client.urls', namespace='client')),
 
    # ── Phase 2: Vendor Domain (DRF sync) ─────────────────────────────────────
-   path('api/v1/vendor/', include('apps.vendor.urls', namespace='vendor')),
+   path('api/v1/vendor/', include('apps.vendor.urls', namespace='vendor_domain')),
+
+   # ── Phase 2: Central Async Ninja API (/api/v1/ninja/*) ───────────────────
+   path("api/v1/ninja/", ninja_api.urls),
 
    path("admin_backend/", include("admin_backend.urls")),
 

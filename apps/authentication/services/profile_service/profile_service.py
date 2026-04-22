@@ -107,7 +107,7 @@ def update_user_profile(
 
 def get_client_profile(*, user: "UnifiedUser") -> "ClientProfile":
     """Get or create the ClientProfile for a given user."""
-    from apps.authentication.models import ClientProfile
+    from apps.client.models import ClientProfile
     return ClientProfile.get_or_create_for_user(user)
 
 
@@ -117,7 +117,7 @@ def update_client_profile(
     data: dict[str, Any],
 ) -> "ClientProfile":
     """Partially update a user ClientProfile with validated data."""
-    from apps.authentication.models import ClientProfile
+    from apps.client.models import ClientProfile
 
     profile = ClientProfile.get_or_create_for_user(user)
     update_fields_clean = {
@@ -139,3 +139,50 @@ def update_client_profile(
         list(update_fields_clean.keys()),
     )
     return profile
+
+
+def get_post_auth_state(*, user: "UnifiedUser") -> dict[str, Any]:
+    """
+    Return the post-auth routing state consumed by the frontend.
+
+    The frontend uses this to decide between `/client/dashboard`,
+    `/vendor/setup`, and `/vendor/dashboard`.
+    """
+    from apps.client.selectors.client_selectors import get_client_profile_or_none
+    from apps.vendor.selectors.vendor_selectors import (
+        get_vendor_profile_or_none,
+        get_vendor_setup_state,
+    )
+
+    has_client_profile = bool(get_client_profile_or_none(user)) if user.role == "client" else False
+    vendor_profile = get_vendor_profile_or_none(user) if user.role == "vendor" else None
+    has_vendor_profile = vendor_profile is not None
+
+    vendor_onboarding_status = None
+    dashboard_entrypoint = "/client/dashboard"
+
+    if user.role == "vendor":
+        if not vendor_profile:
+            vendor_onboarding_status = "not_started"
+            dashboard_entrypoint = "/vendor/setup"
+        else:
+            setup_state = get_vendor_setup_state(vendor_profile)
+            if setup_state and not setup_state.profile_complete:
+                vendor_onboarding_status = "draft"
+                dashboard_entrypoint = "/vendor/setup"
+            elif vendor_profile.is_verified and vendor_profile.is_active:
+                vendor_onboarding_status = "active"
+                dashboard_entrypoint = "/vendor/dashboard"
+            elif vendor_profile.is_active:
+                vendor_onboarding_status = "submitted"
+                dashboard_entrypoint = "/vendor/dashboard"
+            else:
+                vendor_onboarding_status = "restricted"
+                dashboard_entrypoint = "/vendor/dashboard"
+
+    return {
+        "has_client_profile": has_client_profile,
+        "has_vendor_profile": has_vendor_profile,
+        "vendor_onboarding_status": vendor_onboarding_status,
+        "dashboard_entrypoint": dashboard_entrypoint,
+    }

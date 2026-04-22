@@ -85,6 +85,25 @@ class VendorProfileUpdateSerializer(serializers.Serializer):
     website_url   = serializers.URLField(required=False, allow_blank=True)
 
 
+class VendorSetupSerializer(serializers.Serializer):
+    """
+    Minimal setup payload required to create the first vendor profile.
+    """
+
+    store_name = serializers.CharField(max_length=150)
+    description = serializers.CharField(max_length=2000)
+    tagline = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    logo_url = serializers.URLField(required=False, allow_blank=True)
+    cover_url = serializers.URLField(required=False, allow_blank=True)
+    city = serializers.CharField(max_length=100)
+    state = serializers.CharField(max_length=100)
+    country = serializers.CharField(max_length=100, required=False, allow_blank=True, default="Nigeria")
+    instagram_url = serializers.URLField(required=False, allow_blank=True)
+    tiktok_url = serializers.URLField(required=False, allow_blank=True)
+    twitter_url = serializers.URLField(required=False, allow_blank=True)
+    website_url = serializers.URLField(required=False, allow_blank=True)
+
+
 class VendorPayoutDetailsSerializer(serializers.Serializer):
     """Input serializer for POST /vendor/payout/."""
     bank_name      = serializers.CharField(max_length=150)

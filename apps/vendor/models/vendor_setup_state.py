@@ -23,7 +23,7 @@ class VendorSetupState(TimeStampedModel):
     """
 
     vendor = models.OneToOneField(
-        "vendor.VendorProfile",
+        "vendor_domain.VendorProfile",
         on_delete=models.CASCADE,
         related_name="setup_state",
         help_text="The VendorProfile this setup state belongs to.",

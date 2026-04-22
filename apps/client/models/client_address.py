@@ -29,7 +29,7 @@ class ClientAddress(TimeStampedModel, SoftDeleteModel):
         max_length=80,
         blank=True,
         default="Home",
-        help_text='Short label: "Home", "Office", "Mum's place".',
+        help_text="Short label: 'Home', 'Office', or 'Mum\\'s place'.",
     )
 
     # ── Address fields ────────────────────────────────────────────

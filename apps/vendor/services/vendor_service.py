@@ -12,7 +12,7 @@ from typing import Any
 
 from django.db import transaction
 
-from apps.common.events import EventBus
+from apps.common.events import event_bus
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +26,9 @@ class VendorService:
 
     @classmethod
     def get_profile(cls, user) -> "VendorProfile":  # noqa: F821
-        """Get or create the VendorProfile for `user`."""
+        """Return the existing VendorProfile for ``user``."""
         from apps.vendor.models import VendorProfile
-        return VendorProfile.get_or_create_for_user(user)
+        return VendorProfile.objects.get(user=user)
 
     # ── Update Profile ─────────────────────────────────────────────
 
@@ -42,7 +42,7 @@ class VendorService:
         """
         from apps.vendor.models import VendorProfile, VendorSetupState
 
-        profile = VendorProfile.get_or_create_for_user(user)
+        profile = VendorProfile.objects.select_for_update().get(user=user)
 
         allowed_fields = {
             "store_name",
@@ -79,14 +79,12 @@ class VendorService:
             except Exception:
                 pass  # VendorSetupState may not exist yet — provisioner handles this
 
-        transaction.on_commit(lambda: EventBus.emit(
+        event_bus.emit_on_commit(
             "vendor.profile.updated",
-            {
-                "user_id": str(user.pk),
-                "profile_id": str(profile.pk),
-                "fields": list(data.keys()),
-            },
-        ))
+            user_id=str(user.pk),
+            profile_id=str(profile.pk),
+            fields=list(update_fields),
+        )
 
         logger.info(
             "VendorService.update_profile: updated profile %s for user %s",
@@ -106,7 +104,7 @@ class VendorService:
         """
         from apps.vendor.models import VendorProfile, VendorPayoutProfile
 
-        profile = VendorProfile.get_or_create_for_user(user)
+        profile = VendorProfile.objects.select_for_update().get(user=user)
 
         # Encrypt account number
         account_number = data.pop("account_number", "")

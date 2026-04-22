@@ -25,9 +25,11 @@ from apps.vendor.selectors.vendor_selectors import (
 from apps.vendor.serializers.profile_serializers import (
     VendorPayoutDetailsSerializer,
     VendorProfileOutputSerializer,
+    VendorSetupSerializer,
     VendorProfileUpdateSerializer,
     VendorSetupStateSerializer,
 )
+from apps.vendor.services.vendor_provisioning_service import VendorProvisioningService
 from apps.vendor.services.vendor_service import VendorService
 
 logger = logging.getLogger(__name__)
@@ -43,7 +45,14 @@ class VendorProfileView(APIView):
     def get(self, request):
         profile = get_vendor_profile_or_none(request.user)
         if profile is None:
-            profile = VendorService.get_profile(request.user)
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Vendor setup is required before profile access.",
+                    "code": "vendor_setup_required",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
         return Response({
             "status": "success",
             "message": "Vendor profile retrieved.",
@@ -53,10 +62,20 @@ class VendorProfileView(APIView):
     def patch(self, request):
         serializer = VendorProfileUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        profile = VendorService.update_profile(
-            user=request.user,
-            data=serializer.validated_data,
-        )
+        try:
+            profile = VendorService.update_profile(
+                user=request.user,
+                data=serializer.validated_data,
+            )
+        except Exception:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Vendor setup is required before profile updates.",
+                    "code": "vendor_setup_required",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
         return Response({
             "status": "success",
             "message": "Profile updated successfully.",
@@ -66,7 +85,8 @@ class VendorProfileView(APIView):
 
 class VendorSetupStateView(APIView):
     """
-    GET /api/v1/vendor/setup/ — retrieve onboarding setup state
+    GET  /api/v1/vendor/setup/ — retrieve onboarding setup state
+    POST /api/v1/vendor/setup/ — create/update the first vendor setup record
     """
     permission_classes = [IsAuthenticated, IsVendor]
 
@@ -93,6 +113,32 @@ class VendorSetupStateView(APIView):
             "data": VendorSetupStateSerializer(setup).data,
         })
 
+    def post(self, request):
+        serializer = VendorSetupSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        profile = VendorProvisioningService.provision(
+            request.user,
+            data=serializer.validated_data,
+        )
+        setup = get_vendor_setup_state(profile)
+
+        return Response(
+            {
+                "status": "success",
+                "message": "Vendor setup saved successfully.",
+                "data": {
+                    "profile": VendorProfileOutputSerializer(profile).data,
+                    "setup_state": (
+                        VendorSetupStateSerializer(setup).data
+                        if setup is not None
+                        else None
+                    ),
+                },
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
 
 class VendorPayoutView(APIView):
     """
@@ -103,10 +149,20 @@ class VendorPayoutView(APIView):
     def post(self, request):
         serializer = VendorPayoutDetailsSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        payout = VendorService.save_payout_details(
-            user=request.user,
-            data=dict(serializer.validated_data),
-        )
+        try:
+            payout = VendorService.save_payout_details(
+                user=request.user,
+                data=dict(serializer.validated_data),
+            )
+        except Exception:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Vendor setup is required before payout details can be saved.",
+                    "code": "vendor_setup_required",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
         return Response({
             "status": "success",
             "message": "Payout details saved.",

@@ -13,6 +13,47 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task(
+    name="client.provision_defaults",
+    bind=True,
+    max_retries=0,
+    ignore_result=True,
+    soft_time_limit=30,
+    time_limit=60,
+)
+def provision_client_defaults(self, user_id: str) -> None:
+    """
+    Idempotently create the default client-domain records for a new user.
+
+    This is intentionally asynchronous so registration/login never waits
+    on client profile provisioning.
+    """
+    try:
+        from apps.authentication.models import UnifiedUser
+        from apps.client.services.client_provisioning_service import (
+            ClientProvisioningService,
+        )
+
+        user = UnifiedUser.objects.get(pk=user_id)
+        if getattr(user, "role", None) != "client":
+            logger.warning(
+                "client.provision_defaults: user %s is not a client, skipping.",
+                user_id,
+            )
+            return
+
+        ClientProvisioningService.provision(user)
+        logger.info(
+            "client.provision_defaults: ensured client defaults for user %s",
+            user_id,
+        )
+    except Exception:
+        logger.exception(
+            "client.provision_defaults: error while provisioning user_id=%s",
+            user_id,
+        )
+
+
+@shared_task(
     name="client.send_welcome_email",
     bind=True,
     max_retries=0,

@@ -29,8 +29,8 @@ from .login_event import LoginEvent            # noqa: F401
 # ── Biometrics ────────────────────────────────────────────────────────────────
 from .biometric_credential import BiometricCredential  # noqa: F401
 
-# ── Client Profile ────────────────────────────────────────────────────────────
-from .client_profile import ClientProfile      # noqa: F401
+# ── Client Profile (moved to apps.client, re-exported here for compatibility) ─
+from apps.client.models import ClientProfile      # noqa: F401
 
 __all__ = [
     # Core Identity

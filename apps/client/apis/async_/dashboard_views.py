@@ -12,7 +12,6 @@ Authentication: JWT Bearer (via NinjaJWT or shared auth middleware).
 import logging
 
 from ninja import Router
-from ninja.security import HttpBearer
 
 from apps.client.services.client_dashboard_service import ClientDashboardService
 from apps.client.services.client_profile_service import ClientProfileService
@@ -32,7 +31,7 @@ router = Router(tags=["Client — Async Dashboard"])
 
 # ── Dashboard Summary ──────────────────────────────────────────────────
 
-@router.get("/dashboard/", response=DashboardOut, auth=HttpBearer())
+@router.get("/dashboard/", response=DashboardOut)
 async def get_client_dashboard(request):
     """
     GET /api/v1/ninja/client/dashboard/
@@ -47,7 +46,7 @@ async def get_client_dashboard(request):
 
 # ── Profile ────────────────────────────────────────────────────────────
 
-@router.get("/profile/", response=ProfileOut, auth=HttpBearer())
+@router.get("/profile/", response=ProfileOut)
 async def get_client_profile_async(request):
     """
     GET /api/v1/ninja/client/profile/
@@ -104,7 +103,7 @@ async def get_client_profile_async(request):
     )
 
 
-@router.patch("/profile/", response=ProfileOut, auth=HttpBearer())
+@router.patch("/profile/", response=ProfileOut)
 async def update_client_profile_async(request, payload: ProfileUpdateIn):
     """
     PATCH /api/v1/ninja/client/profile/
