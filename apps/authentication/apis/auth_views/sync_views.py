@@ -1,4 +1,4 @@
-# apps/authentication/apis/auth_views/sync_views.py
+U# apps/authentication/apis/auth_views/sync_views.py
 """
 FASHIONISTAR — Synchronous Authentication Views (DRF / WSGI)
 =============================================================
@@ -524,113 +524,113 @@ class ResendOTPView(generics.GenericAPIView):
             )
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-#  GOOGLE AUTH VIEW
-# ═══════════════════════════════════════════════════════════════════════════
+# # ═══════════════════════════════════════════════════════════════════════════
+# #  GOOGLE AUTH VIEW
+# # ═══════════════════════════════════════════════════════════════════════════
 
-class GoogleAuthView(generics.CreateAPIView):
-    """
-    POST /api/v1/auth/google/
+# class GoogleAuthView(generics.CreateAPIView):
+#     """
+#     POST /api/v1/auth/google/
 
-    Google OAuth2 sign-in via ID token from the frontend.
+#     Google OAuth2 sign-in via ID token from the frontend.
 
-    Request Body:
-        id_token (str): Google ID token from frontend OAuth2 flow.
-        role     (str): 'vendor' or 'client' (for new registrations).
+#     Request Body:
+#         id_token (str): Google ID token from frontend OAuth2 flow.
+#         role     (str): 'vendor' or 'client' (for new registrations).
 
-    Success Response 200:
-        { "message": "Google Login Successful", "tokens": {...}, "user": {...} }
-    """
-    serializer_class   = GoogleAuthSerializer
-    permission_classes = [AllowAny]
-    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
-    throttle_classes   = [BurstRateThrottle]
+#     Success Response 200:
+#         { "message": "Google Login Successful", "tokens": {...}, "user": {...} }
+#     """
+#     serializer_class   = GoogleAuthSerializer
+#     permission_classes = [AllowAny]
+#     renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
+#     throttle_classes   = [BurstRateThrottle]
 
-    def create(self, request, *args, **kwargs) -> Response:
-        """Verifies Google ID token and returns JWT access + refresh tokens."""
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
+#     def create(self, request, *args, **kwargs) -> Response:
+#         """Verifies Google ID token and returns JWT access + refresh tokens."""
+#         serializer = self.get_serializer(data=request.data)
+#         serializer.is_valid(raise_exception=True)
+#         data = serializer.validated_data
 
-        try:
-            result = SyncGoogleAuthService.verify_and_login(
-                token=data['id_token'],
-                role=data.get('role', 'client'),
-                ip_address=request.META.get('REMOTE_ADDR'),
-                user_agent=request.META.get('HTTP_USER_AGENT', ''),
-            )
-        except ValueError as exc:
-            return Response(
-                {"status": "error", "message": str(exc), "code": "invalid_google_token"},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
-        except Exception as exc:
-            logger.error("❌ GoogleAuthView error: %s", exc, exc_info=True)
-            return Response(
-                {"status": "error", "message": "Google authentication failed."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+#         try:
+#             result = SyncGoogleAuthService.verify_and_login(
+#                 token=data['id_token'],
+#                 role=data.get('role', 'client'),
+#                 ip_address=request.META.get('REMOTE_ADDR'),
+#                 user_agent=request.META.get('HTTP_USER_AGENT', ''),
+#             )
+#         except ValueError as exc:
+#             return Response(
+#                 {"status": "error", "message": str(exc), "code": "invalid_google_token"},
+#                 status=status.HTTP_401_UNAUTHORIZED,
+#             )
+#         except Exception as exc:
+#             logger.error("❌ GoogleAuthView error: %s", exc, exc_info=True)
+#             return Response(
+#                 {"status": "error", "message": "Google authentication failed."},
+#                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#             )
 
-        user       = result['user']
-        tokens     = result['tokens']
-        is_new     = result['is_new']
-        auth_state = _build_auth_response_state(user)
+#         user       = result['user']
+#         tokens     = result['tokens']
+#         is_new     = result['is_new']
+#         auth_state = _build_auth_response_state(user)
 
-        # ── Create UserSession record on_commit ──────────────────────────
-        from rest_framework_simplejwt.tokens import RefreshToken as _RefTok
-        from apps.authentication.models import UserSession, LoginEvent
-        # CRITICAL FIX: on_commit() MUST be inside explicit atomic() block.
-        # In autocommit mode on_commit fires immediately -- not after commit.
-        try:
-            refresh_obj = _RefTok(tokens['refresh'])
-            with transaction.atomic():
-                transaction.on_commit(
-                    lambda: UserSession.create_from_token(
-                        user=user,
-                        refresh_token=refresh_obj,
-                        request=request,
-                    )
-                )
-                transaction.on_commit(
-                    lambda: LoginEvent.record(
-                        user=user,
-                        ip_address=request.META.get('REMOTE_ADDR', '0.0.0.0'),
-                        user_agent=request.META.get('HTTP_USER_AGENT', ''),
-                        auth_method=LoginEvent.METHOD_GOOGLE,
-                        outcome=LoginEvent.OUTCOME_SUCCESS,
-                        is_successful=True,
-                    )
-                )
-        except Exception as sess_exc:
-            logger.warning("⚠️ GoogleAuthView: session/event record failed: %s", sess_exc)
+#         # ── Create UserSession record on_commit ──────────────────────────
+#         from rest_framework_simplejwt.tokens import RefreshToken as _RefTok
+#         from apps.authentication.models import UserSession, LoginEvent
+#         # CRITICAL FIX: on_commit() MUST be inside explicit atomic() block.
+#         # In autocommit mode on_commit fires immediately -- not after commit.
+#         try:
+#             refresh_obj = _RefTok(tokens['refresh'])
+#             with transaction.atomic():
+#                 transaction.on_commit(
+#                     lambda: UserSession.create_from_token(
+#                         user=user,
+#                         refresh_token=refresh_obj,
+#                         request=request,
+#                     )
+#                 )
+#                 transaction.on_commit(
+#                     lambda: LoginEvent.record(
+#                         user=user,
+#                         ip_address=request.META.get('REMOTE_ADDR', '0.0.0.0'),
+#                         user_agent=request.META.get('HTTP_USER_AGENT', ''),
+#                         auth_method=LoginEvent.METHOD_GOOGLE,
+#                         outcome=LoginEvent.OUTCOME_SUCCESS,
+#                         is_successful=True,
+#                     )
+#                 )
+#         except Exception as sess_exc:
+#             logger.warning("⚠️ GoogleAuthView: session/event record failed: %s", sess_exc)
 
-        logger.info(
-            "✅ Google %s: user_id=%s email=%s is_new=%s",
-            "register" if is_new else "login",
-            user.id, user.email, is_new,
-        )
+#         logger.info(
+#             "✅ Google %s: user_id=%s email=%s is_new=%s",
+#             "register" if is_new else "login",
+#             user.id, user.email, is_new,
+#         )
 
-        return Response(
-            {
-                "status":  "success",
-                "message": "Google registration successful." if is_new else "Google login successful.",
-                "is_new":  is_new,
-                "tokens":  tokens,
-                **auth_state,
-                "user": {
-                    "user_id":    str(user.id),
-                    "member_id":  user.member_id,
-                    "email":      user.email,
-                    "first_name": user.first_name,
-                    "last_name":  user.last_name,
-                    "role":       user.role,
-                    "is_verified": user.is_verified,
-                    "is_staff":    user.is_staff,
-                    "avatar":     user.avatar,
-                },
-            },
-            status=status.HTTP_201_CREATED if is_new else status.HTTP_200_OK,
-        )
+#         return Response(
+#             {
+#                 "status":  "success",
+#                 "message": "Google registration successful." if is_new else "Google login successful.",
+#                 "is_new":  is_new,
+#                 "tokens":  tokens,
+#                 **auth_state,
+#                 "user": {
+#                     "user_id":    str(user.id),
+#                     "member_id":  user.member_id,
+#                     "email":      user.email,
+#                     "first_name": user.first_name,
+#                     "last_name":  user.last_name,
+#                     "role":       user.role,
+#                     "is_verified": user.is_verified,
+#                     "is_staff":    user.is_staff,
+#                     "avatar":     user.avatar,
+#                 },
+#             },
+#             status=status.HTTP_201_CREATED if is_new else status.HTTP_200_OK,
+#         )
 
 
 # ═══════════════════════════════════════════════════════════════════════════

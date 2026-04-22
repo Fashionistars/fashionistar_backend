@@ -127,7 +127,7 @@ class UserSelector(BaseSelector):
     def get_active_staff(cls) -> QuerySet:
         """All active staff/admin accounts."""
         return cls.model.objects.filter(
-            is_active=True, role__in=["admin", "super_admin", "staff", "moderator"]
+            is_active=True, role__in=["admin", "super_admin", "staff", "moderator", "editor"]
         )
 
     @classmethod
