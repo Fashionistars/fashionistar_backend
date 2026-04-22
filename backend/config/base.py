@@ -168,8 +168,8 @@ INSTALLED_APPS = [
     "apps.audit_logs",  # Enterprise audit log — AuditEventLog
     "apps.client",      # Phase 2: Client domain (profiles, addresses)
     "apps.vendor",      # Phase 2: Vendor domain (stores, setup, payouts)
-    # ── Remaining legacy dependency retained intentionally ───────────────────
-    "admin_backend",
+    # ── Modular admin backend migrated into apps/ ───────────────────────────
+    "apps.admin_backend",
     # ── Third Party ──────────────────────────────────────────────────────────
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",  # JWT logout blacklisting

@@ -51,7 +51,7 @@ class SMSManager:
     Key Features:
     1.  **Dynamic Provider Selection via Backend**:
         It does not hardcode the provider (Twilio, Termii, etc.). Instead, it 
-        delegates the "How" of sending to `admin_backend.backends.sms_backends.DatabaseConfiguredSMSBackend`.
+        delegates the "How" of sending to `apps.admin_backend.backends.sms_backends.DatabaseConfiguredSMSBackend`.
         This enables admin-controlled switching of providers at runtime without 
         deploying new code.
         
@@ -104,7 +104,7 @@ class SMSManager:
             # -----------------------------------------------------------------
             # We import the backend dynamically here to avoid circular dependencies
             # during app initialization.
-            from admin_backend.backends.sms_backends import DatabaseConfiguredSMSBackend
+            from apps.admin_backend.backends.sms_backends import DatabaseConfiguredSMSBackend
             backend = DatabaseConfiguredSMSBackend()
 
             # -----------------------------------------------------------------
@@ -194,7 +194,7 @@ class SMSManager:
 
         try:
             # Import Backend
-            from admin_backend.backends.sms_backends import DatabaseConfiguredSMSBackend
+            from apps.admin_backend.backends.sms_backends import DatabaseConfiguredSMSBackend
             backend = DatabaseConfiguredSMSBackend()
             
             logger.info(f"🚀 Starting bulk SMS send. Batch size: {len(messages)} messages.")

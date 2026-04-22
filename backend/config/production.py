@@ -50,7 +50,7 @@ X_FRAME_OPTIONS = 'DENY'                     # Prevent clickjacking
 # EMAIL — Real backend in production
 # =============================================================================
 # Use the Database-configured backend (Admin sets SMTP/Mailgun/Zoho)
-EMAIL_BACKEND = 'admin_backend.backends.email_backends.DatabaseConfiguredEmailBackend'
+EMAIL_BACKEND = 'apps.admin_backend.backends.email_backends.DatabaseConfiguredEmailBackend'
 
 # Fallback: to use Mailgun directly (requires MAILGUN_API_KEY in .env):
 # EMAIL_BACKEND = 'anymail.backends.mailgun.EmailBackend'

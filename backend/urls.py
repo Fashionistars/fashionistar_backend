@@ -74,7 +74,7 @@ urlpatterns = [
    # ── Phase 2: Central Async Ninja API (/api/v1/ninja/*) ───────────────────
    path("api/v1/ninja/", ninja_api.urls),
 
-   path("admin_backend/", include("admin_backend.urls")),
+   path("admin_backend/", include("apps.admin_backend.urls")),
 ]
 
 

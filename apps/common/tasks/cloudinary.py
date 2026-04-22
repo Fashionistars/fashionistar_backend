@@ -190,21 +190,21 @@ _WEBHOOK_ROUTES: list[tuple[str, str, str, callable, str]] = [
     ),
     (
         "/categories/images/",
-        "admin_backend.models.category.Category",
+        "apps.admin_backend.models.category.Category",
         "id",
         _extract_short_id,
         "category",                   # ← LIVE (admin_backend app exists)
     ),
     (
         "/brands/images/",
-        "admin_backend.models.brand.Brand",
+        "apps.admin_backend.models.brand.Brand",
         "id",
         _extract_short_id,
         "brand",                      # ← LIVE (admin_backend app exists)
     ),
     (
         "/collections/images/",
-        "admin_backend.models.collection.Collections",
+        "apps.admin_backend.models.collection.Collections",
         "id",
         _extract_short_id,
         "collection",                 # ← LIVE (admin_backend app exists)
