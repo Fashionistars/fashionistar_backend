@@ -12,6 +12,7 @@ handler500 = 'backend.error_views.server_error_handler'
 
 
 # drf-yasg: OpenAPI/Swagger schema generation
+from fashionistar_backend.apps.common.views import HealthCheckView
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
@@ -51,11 +52,21 @@ def health_check(request):
     }, status=200 if db_ok else 503)
 
 urlpatterns = [
-    path("health/", health_check, name="health"),
+   path("health/", health_check, name="health"),
    path('swagger<format>/', schema_view.without_ui(cache_timeout=0), name='schema-json'),
    path('', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
    path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
 
+
+
+    # ── Health Check ─────────────────────────────────────────────────────────
+  # GET /api/v1/health/
+  # Used by: AWS ELB, Render.com, Kubernetes probes, Uptime Robot
+  path("v1/health/", HealthCheckView.as_view(), name="health-check"),
+
+
+
+    
    # Admin URL
    path('admin/', admin.site.urls),
 

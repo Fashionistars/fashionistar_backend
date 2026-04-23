@@ -1,4 +1,4 @@
-# admin_backend/signals.py
+# apps/admin_backend/signals.py
 from django.conf import settings
 from django.db.models.signals import post_migrate
 from django.dispatch import receiver

@@ -1,4 +1,4 @@
-# middleware.py
+# apps/admin_backend/middleware.py
 from django.http import HttpResponsePermanentRedirect
 
 class AppendSlashMiddleware:

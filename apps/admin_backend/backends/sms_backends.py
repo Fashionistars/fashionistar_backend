@@ -1,4 +1,4 @@
-# admin_backend/backends/sms_backends.py
+# apps/admin_backend/backends/sms_backends.py
 
 import logging
 from django.apps import apps

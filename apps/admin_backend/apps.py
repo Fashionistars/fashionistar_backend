@@ -1,4 +1,4 @@
-# admin_backend/apps.py
+# apps/admin_backend/apps.py
 from django.apps import AppConfig
 
 

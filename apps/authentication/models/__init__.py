@@ -14,7 +14,7 @@ of how Django is invoked (uv run, manage.py, pytest, bash, PowerShell, etc.)
 """
 
 # ── Core Identity ─────────────────────────────────────────────────────────────
-from .unified_user import (  # noqa: F401
+from apps.authentication.models.unified_user import (  # noqa: F401
     UnifiedUser,
     MemberIDCounter,
     generate_member_id,
@@ -23,11 +23,11 @@ from .unified_user import (  # noqa: F401
 )
 
 # ── Session & Events ─────────────────────────────────────────────────────────
-from .user_session import UserSession          # noqa: F401
-from .login_event import LoginEvent            # noqa: F401
+from apps.authentication.models.user_session import UserSession          # noqa: F401
+from apps.authentication.models.login_event import LoginEvent            # noqa: F401
 
 # ── Biometrics ────────────────────────────────────────────────────────────────
-from .biometric_credential import BiometricCredential  # noqa: F401
+from apps.authentication.models.biometric_credential import BiometricCredential  # noqa: F401
 
 # ── Client Profile (moved to apps.client, re-exported here for compatibility) ─
 from apps.client.models import ClientProfile      # noqa: F401
