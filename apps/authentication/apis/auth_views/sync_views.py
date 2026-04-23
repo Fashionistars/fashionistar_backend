@@ -27,6 +27,7 @@ Why generics over APIView?
 import logging
 from typing import Any, Dict
 
+from django.conf import settings as _s
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from rest_framework import generics, serializers as drf_serializers, status
@@ -52,7 +53,36 @@ from apps.authentication.services.registration import RegistrationService
 from apps.authentication.throttles import BurstRateThrottle, SustainedRateThrottle
 from apps.common.renderers import CustomJSONRenderer
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('application')
+
+
+# ── Cookie helpers ───────────────────────────────────────────────────────
+def _set_refresh_cookie(response, refresh_token_str: str) -> None:
+    """
+    Split-token pattern (Auth0 / Supabase style):
+      - Access token  → JSON body + sessionStorage (short-lived)
+      - Refresh token → HttpOnly cookie (long-lived, NOT accessible by JS)
+
+    SameSite=Lax: works cross-site for top-level navigations (Vercel → Render),
+    but blocks CSRF POST from third-party sites.
+    """
+    max_age     = getattr(_s, 'REFRESH_TOKEN_COOKIE_MAX_AGE', 60 * 60 * 24 * 30)
+    cookie_name = getattr(_s, 'REFRESH_TOKEN_COOKIE_NAME', 'fashionistar_rt')
+    response.set_cookie(
+        key=cookie_name,
+        value=refresh_token_str,
+        max_age=max_age,
+        httponly=True,
+        secure=not _s.DEBUG,
+        samesite='Lax',
+        path='/',
+    )
+
+
+def _clear_refresh_cookie(response) -> None:
+    """Remove the refresh token cookie on logout."""
+    cookie_name = getattr(_s, 'REFRESH_TOKEN_COOKIE_NAME', 'fashionistar_rt')
+    response.delete_cookie(cookie_name, path='/')
 
 
 def _build_auth_response_state(user: UnifiedUser) -> Dict[str, Any]:
@@ -234,6 +264,7 @@ class LoginView(generics.GenericAPIView):
             SoftDeletedUserError,
             AccountNotVerifiedError,
             AccountDeactivatedError,
+            AccountInactiveError,
             InvalidCredentialsError,
         )
         try:
@@ -261,7 +292,7 @@ class LoginView(generics.GenericAPIView):
                 user.identifying_info, user.id, user.role,
             )
 
-            return Response(
+            response = Response(
                 {
                     "message":          "Login successful.",
                     "user_id":          str(user.id),
@@ -273,6 +304,11 @@ class LoginView(generics.GenericAPIView):
                 },
                 status=status.HTTP_200_OK,
             )
+            # ── Mirror refresh token into HttpOnly cookie (XSS-resistant) ──
+            # Web browsers use the cookie for silent refresh; API clients use
+            # the JSON body field. Both are kept to support both use-cases.
+            _set_refresh_cookie(response, result['refresh'])
+            return response
 
         except SoftDeletedUserError as exc:
             logger.warning(
@@ -294,9 +330,9 @@ class LoginView(generics.GenericAPIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        except AccountDeactivatedError as exc:
+        except (AccountDeactivatedError, AccountInactiveError) as exc:
             logger.warning(
-                "⛔ LoginView: deactivated account attempt — %s",
+                "⛔ LoginView: deactivated/inactive account attempt — %s",
                 request.data.get('email_or_phone', ''),
             )
             return Response(
@@ -448,18 +484,21 @@ class VerifyOTPView(generics.GenericAPIView):
             update_last_login(None, user)
             auth_state = _build_auth_response_state(user)
 
-            return Response(
+            refresh_str = str(refresh)
+            response = Response(
                 {
                     "message":          "Your account has been successfully verified.",
                     "user_id":          str(user.id),
                     "role":             user.role,
                     "identifying_info": user.identifying_info,
                     "access":           str(refresh.access_token),
-                    "refresh":          str(refresh),
+                    "refresh":          refresh_str,
                     **auth_state,
                 },
                 status=status.HTTP_200_OK,
             )
+            _set_refresh_cookie(response, refresh_str)
+            return response
 
         except drf_serializers.ValidationError as exc:
             logger.warning("⚠️ VerifyOTPView validation error: %s", exc.detail)
@@ -596,10 +635,12 @@ class LogoutView(generics.GenericAPIView):
                 "Logout: refresh token blacklisted — user_id=%s",
                 request.user.id,
             )
-            return Response(
+            response = Response(
                 {"message": "Logout Successful. Your session has been terminated."},
                 status=status.HTTP_200_OK,
             )
+            _clear_refresh_cookie(response)  # Invalidate HttpOnly cookie
+            return response
 
         except TokenError as exc:
             logger.warning(
@@ -686,7 +727,9 @@ class MeView(generics.RetrieveAPIView):
                 "role":        user.role,
                 "is_verified": user.is_verified,
                 "is_staff":    user.is_staff,
-                "avatar":      user.avatar,
+                # CloudinaryField stores a public_id; .url gives the full HTTPS secure_url.
+                # Never return the raw field object — the frontend expects a string or null.
+                "avatar":      str(user.avatar.url) if user.avatar else None,
                 "date_joined": user.date_joined.isoformat() if user.date_joined else None,
             },
             status=status.HTTP_200_OK,

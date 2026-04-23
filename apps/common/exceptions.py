@@ -332,10 +332,12 @@ def custom_exception_handler(exc: Exception, context: dict) -> Optional[Response
                 message = exc_message
                 break
 
-        # For Throttled: include wait time in message
+        # For Throttled: include wait time in message AND set Retry-After HTTP header
+        # RFC 7231 §7.1.3 — clients MUST respect Retry-After on 429 responses.
         if isinstance(exc, Throttled) and exc.wait is not None:
             wait_secs = int(exc.wait) + 1
             message = f"Too many requests. Retry after {wait_secs} seconds."
+            response["Retry-After"] = str(wait_secs)
 
         # Security event logging
         if http_status_code in (401, 403):

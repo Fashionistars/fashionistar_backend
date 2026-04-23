@@ -625,6 +625,15 @@ CORS_ALLOW_HEADERS = [
 
 CORS_ALLOW_METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
 
+# Required for HttpOnly refresh-token cookie to be sent on cross-origin requests.
+# Without this the browser strips the cookie from every CORS preflight.
+CORS_ALLOW_CREDENTIALS = True
+
+# Refresh-token HttpOnly cookie name + lifetime (used by LoginView / VerifyOTPView).
+# Name is intentionally generic to reduce attacker reconnaissance.
+REFRESH_TOKEN_COOKIE_NAME    = "fashionistar_rt"
+REFRESH_TOKEN_COOKIE_MAX_AGE = 60 * 60 * 24 * 30   # 30 days — mirrors SIMPLE_JWT lifetime
+
 
 # =============================================================================
 # PAYSTACK
