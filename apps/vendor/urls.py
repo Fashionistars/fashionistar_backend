@@ -46,6 +46,13 @@ at prefix: /api/v1/ninja/vendor/
 """
 from django.urls import path
 
+from apps.vendor.apis.sync.product_views import (
+    VendorOrderStatusUpdateView,
+    VendorProductCreateView,
+    VendorProductDeleteView,
+    VendorProductFilterView,
+    VendorProductUpdateView,
+)
 from apps.vendor.apis.sync.analytics_views import (
     VendorAnalyticsSummaryView,
     VendorCouponListView,
@@ -73,7 +80,7 @@ from apps.vendor.apis.sync.profile_views import (
     VendorVerifyPinView,
 )
 
-app_name = "vendor"
+app_name = "vendor_domain"
 
 urlpatterns = [
     # ── Profile & Onboarding ─────────────────────────────────────
@@ -93,14 +100,20 @@ urlpatterns = [
     path("analytics/distribution/",  VendorPaymentDistributionView.as_view(), name="analytics-distribution"),
 
     # ── Products ─────────────────────────────────────────────────
-    path("products/",           VendorProductListView.as_view(),        name="products"),
-    path("products/low-stock/", VendorLowStockView.as_view(),           name="products-low-stock"),
-    path("products/top/",       VendorTopSellingProductsView.as_view(), name="products-top"),
+    path("products/",                          VendorProductListView.as_view(),        name="products"),
+    path("products/create/",                   VendorProductCreateView.as_view(),      name="product-create"),
+    path("products/filter/",                   VendorProductFilterView.as_view(),      name="product-filter"),
+    path("products/low-stock/",                VendorLowStockView.as_view(),           name="products-low-stock"),
+    path("products/top/",                      VendorTopSellingProductsView.as_view(), name="products-top"),
+    path("products/<str:product_pid>/edit/",   VendorProductUpdateView.as_view(),      name="product-edit"),
+    path("products/<str:product_pid>/delete/", VendorProductDeleteView.as_view(),      name="product-delete"),
 
     # ── Orders ───────────────────────────────────────────────────
-    path("orders/",                    VendorOrderListView.as_view(),          name="orders"),
-    path("orders/status-counts/",      VendorOrderStatusCountsView.as_view(),  name="orders-status-counts"),
-    path("orders/<int:order_id>/",     VendorOrderDetailView.as_view(),        name="order-detail"),
+    path("orders/",                             VendorOrderListView.as_view(),          name="orders"),
+    path("orders/status-counts/",               VendorOrderStatusCountsView.as_view(),  name="orders-status-counts"),
+    path("orders/<int:order_id>/",              VendorOrderDetailView.as_view(),        name="order-detail"),
+    path("orders/<int:order_id>/status/",       VendorOrderStatusUpdateView.as_view(),  name="order-status-update"),
+
 
     # ── Earnings ─────────────────────────────────────────────────
     path("earnings/",  VendorEarningTrackerView.as_view(), name="earnings"),
