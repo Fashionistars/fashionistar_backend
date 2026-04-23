@@ -15,10 +15,9 @@ Endpoints:
 """
 import logging
 
-from rest_framework import status
+from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.views import APIView
 
 from apps.common.permissions import IsVendor
 from apps.vendor.selectors.vendor_selectors import (
@@ -39,7 +38,7 @@ from apps.vendor.services.vendor_service import VendorService
 logger = logging.getLogger(__name__)
 
 
-class VendorProfileView(APIView):
+class VendorProfileView(generics.GenericAPIView):
     """
     GET  /api/v1/vendor/profile/ — retrieve vendor store profile
     PATCH /api/v1/vendor/profile/ — update store profile
@@ -91,7 +90,7 @@ class VendorProfileView(APIView):
         })
 
 
-class VendorSetupStateView(APIView):
+class VendorSetupStateView(generics.GenericAPIView):
     """
     GET  /api/v1/vendor/setup/ — retrieve onboarding setup state
     POST /api/v1/vendor/setup/ — create/update the first vendor setup record
@@ -160,7 +159,7 @@ class VendorSetupStateView(APIView):
         )
 
 
-class VendorPayoutView(APIView):
+class VendorPayoutView(generics.GenericAPIView):
     """
     POST /api/v1/vendor/payout/ — save bank / payout account details
     """
@@ -199,7 +198,7 @@ class VendorPayoutView(APIView):
         }, status=status.HTTP_201_CREATED)
 
 
-class VendorSetPinView(APIView):
+class VendorSetPinView(generics.GenericAPIView):
     """
     POST /api/v1/vendor/pin/set/ — set 4-digit payout confirmation PIN
     """
@@ -227,7 +226,7 @@ class VendorSetPinView(APIView):
         return Response({"status": "success", "message": "Transaction PIN set."})
 
 
-class VendorVerifyPinView(APIView):
+class VendorVerifyPinView(generics.GenericAPIView):
     """
     POST /api/v1/vendor/pin/verify/ — verify payout PIN before withdrawal
     """

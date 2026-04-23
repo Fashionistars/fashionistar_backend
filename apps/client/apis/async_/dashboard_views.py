@@ -4,11 +4,15 @@ Client Dashboard — Django-Ninja Async Router.
 
 Mounted at: /api/v1/ninja/client/
 
-All handlers are async — do NOT block the event loop with sync ORM calls.
-Use `await` with async ORM methods (aget, acount, etc.).
+Read handlers use native async ORM.
+Transaction-heavy writes stay in sync services and are called explicitly
+through a thread-pool bridge during transition. This avoids `sync_to_async`
+and keeps atomic write logic inside the existing sync service layer.
 
 Authentication: JWT Bearer (via NinjaJWT or shared auth middleware).
 """
+import asyncio
+import functools
 import logging
 
 from ninja import Router
@@ -27,6 +31,17 @@ logger = logging.getLogger(__name__)
 # This router is registered on the root Ninja API inside `backend/urls.py`
 # under the /api/v1/ninja/client/ prefix.
 router = Router(tags=["Client — Async Dashboard"])
+
+
+def _run_sync(func, *args, **kwargs):
+    """
+    Execute a synchronous service method without `sync_to_async`.
+
+    This is only used for transitional sync write paths that still depend on
+    `transaction.atomic()` in the service layer.
+    """
+    loop = asyncio.get_running_loop()
+    return loop.run_in_executor(None, functools.partial(func, *args, **kwargs))
 
 
 # ── Dashboard Summary ──────────────────────────────────────────────────
@@ -56,12 +71,11 @@ async def get_client_profile_async(request):
     """
     from apps.client.selectors.client_selectors import aget_client_profile_or_none
     from apps.client.services.client_provisioning_service import ClientProvisioningService
-    from asgiref.sync import sync_to_async
 
     user = request.auth
     profile = await aget_client_profile_or_none(user)
     if profile is None:
-        profile = await sync_to_async(ClientProvisioningService.provision)(user)
+        profile = await ClientProvisioningService.aprovision(user)
 
     # Build addresses list
     from apps.client.models import ClientAddress
@@ -111,12 +125,9 @@ async def update_client_profile_async(request, payload: ProfileUpdateIn):
     Async partial update of the client profile.
     Only sends fields that are not None.
     """
-    from asgiref.sync import sync_to_async
-
     user = request.auth
     data = payload.dict(exclude_none=True)
 
-    update_fn = sync_to_async(ClientProfileService.update_profile)
-    profile = await update_fn(user=user, data=data)
+    profile = await _run_sync(ClientProfileService.update_profile, user=user, data=data)
 
     return await get_client_profile_async(request)

@@ -13,17 +13,16 @@ Endpoints:
 """
 import logging
 
-from rest_framework import status
+from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.views import APIView
 
 from apps.common.permissions import IsClient
 
 logger = logging.getLogger(__name__)
 
 
-class ProductReviewListView(APIView):
+class ProductReviewListView(generics.GenericAPIView):
     """
     GET /api/v1/home/reviews/<uuid:product_id>/
 
@@ -59,7 +58,7 @@ class ProductReviewListView(APIView):
         })
 
 
-class ClientReviewCreateView(APIView):
+class ClientReviewCreateView(generics.GenericAPIView):
     """
     POST /api/v1/client/reviews/create/
 

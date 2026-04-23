@@ -13,17 +13,16 @@ Endpoints:
 """
 import logging
 
-from rest_framework import status
+from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.views import APIView
 
 from apps.common.permissions import IsClient
 
 logger = logging.getLogger(__name__)
 
 
-class ClientOrderListView(APIView):
+class ClientOrderListView(generics.GenericAPIView):
     """
     GET /api/v1/client/orders/
 
@@ -51,7 +50,7 @@ class ClientOrderListView(APIView):
         })
 
 
-class ClientOrderDetailView(APIView):
+class ClientOrderDetailView(generics.GenericAPIView):
     """
     GET /api/v1/client/orders/<str:oid>/
 

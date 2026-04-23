@@ -45,3 +45,27 @@ class ClientProvisioningService:
             )
 
         return profile
+
+    @staticmethod
+    async def aprovision(user) -> "ClientProfile":  # noqa: F821
+        """
+        Async-native variant used by Ninja read endpoints.
+
+        This avoids `sync_to_async` while keeping provisioning idempotent.
+        """
+        from apps.client.models import ClientProfile
+
+        profile, created = await ClientProfile.objects.aget_or_create(user=user)
+
+        if created:
+            logger.info(
+                "ClientProvisioningService: asynchronously created ClientProfile for user %s",
+                user.pk,
+            )
+        else:
+            logger.debug(
+                "ClientProvisioningService: ClientProfile already exists for user %s",
+                user.pk,
+            )
+
+        return profile

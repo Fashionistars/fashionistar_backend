@@ -14,10 +14,9 @@ Endpoints:
 """
 import logging
 
-from rest_framework import status
+from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.views import APIView
 
 from apps.client.selectors.client_selectors import (
     get_client_profile_or_none,
@@ -35,7 +34,7 @@ from apps.common.permissions import IsClient, IsVerifiedUser
 logger = logging.getLogger(__name__)
 
 
-class ClientProfileView(APIView):
+class ClientProfileView(generics.GenericAPIView):
     """
     GET  /api/v1/client/profile/ — retrieve profile
     PATCH /api/v1/client/profile/ — update profile
@@ -68,7 +67,7 @@ class ClientProfileView(APIView):
         })
 
 
-class ClientAddressListCreateView(APIView):
+class ClientAddressListCreateView(generics.GenericAPIView):
     """
     GET  /api/v1/client/addresses/ — list saved addresses
     POST /api/v1/client/addresses/ — add new address
@@ -99,7 +98,7 @@ class ClientAddressListCreateView(APIView):
         )
 
 
-class ClientAddressDetailView(APIView):
+class ClientAddressDetailView(generics.GenericAPIView):
     """
     DELETE /api/v1/client/addresses/{id}/ — soft-delete address
     """
@@ -125,7 +124,7 @@ class ClientAddressDetailView(APIView):
             }, status=status.HTTP_404_NOT_FOUND)
 
 
-class ClientAddressSetDefaultView(APIView):
+class ClientAddressSetDefaultView(generics.GenericAPIView):
     """
     POST /api/v1/client/addresses/{id}/set-default/
     """
