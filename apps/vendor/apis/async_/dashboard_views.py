@@ -201,3 +201,25 @@ async def verify_transaction_pin(request, payload: VendorPinVerifyIn):
     if not valid:
         raise HttpError(401, "Invalid PIN.")
     return {"status": "success", "message": "PIN verified."}
+
+
+# ── Analytics ──────────────────────────────────────────────────────────────
+
+
+@router.get("/analytics/")
+async def get_vendor_analytics(request):
+    """
+    GET /api/v1/ninja/vendor/analytics/
+
+    Full async analytics: revenue trends, top products, order counts, top categories.
+    All 4 queries run concurrently via asyncio.gather() in VendorDashboardService.
+    """
+    user = request.auth
+    try:
+        summary = await VendorDashboardService.get_analytics_summary(user)
+        return {"status": "success", "data": summary}
+    except ValueError as exc:
+        raise HttpError(404, str(exc))
+    except Exception:
+        logger.exception("get_vendor_analytics: unexpected error for user=%s", getattr(user, "pk", "?"))
+        raise HttpError(500, "Analytics fetch failed.")

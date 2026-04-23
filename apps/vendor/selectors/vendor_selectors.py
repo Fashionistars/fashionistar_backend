@@ -242,3 +242,84 @@ async def aget_vendor_wallet_data(vendor_profile) -> dict[str, Any]:
     except Exception as exc:
         logger.error("aget_vendor_wallet_data vendor=%s: %s", vendor_profile.pk, exc)
         return {"balance": 0.0, "recent_transactions": []}
+
+
+async def aget_vendor_revenue_trends(vendor_profile, months: int = 6) -> list[dict]:
+    """
+    Async: monthly revenue over the last N months.
+    Uses vendor.vendor_orders reverse FK with Django 6.0 async ORM.
+    """
+    from datetime import timedelta
+    from django.utils import timezone
+    from django.db.models import Sum
+    from django.db.models.functions import ExtractMonth
+    try:
+        cutoff = timezone.now() - timedelta(days=months * 30)
+        qs = (
+            vendor_profile.vendor_orders
+            .filter(payment_status="paid", date__gte=cutoff)
+            .annotate(month=ExtractMonth("date"))
+            .values("month")
+            .annotate(total_revenue=Sum("total"))
+            .order_by("month")
+        )
+        return [row async for row in qs]
+    except Exception as exc:
+        logger.error("aget_vendor_revenue_trends vendor=%s: %s", vendor_profile.pk, exc)
+        return []
+
+
+async def aget_vendor_top_selling_products(vendor_profile, limit: int = 5) -> list[dict]:
+    """
+    Async: top-selling products by total quantity sold.
+    Traversal: vendor_products → order_item_product__qty.
+    """
+    from django.db.models import Sum
+    try:
+        qs = (
+            vendor_profile.vendor_products
+            .annotate(total_qty=Sum("order_item_product__qty"))
+            .order_by("-total_qty")
+            .values("id", "title", "price", "stock_qty", "total_qty")[:limit]
+        )
+        return [row async for row in qs]
+    except Exception as exc:
+        logger.error("aget_vendor_top_selling_products vendor=%s: %s", vendor_profile.pk, exc)
+        return []
+
+
+async def aget_vendor_order_status_counts(vendor_profile) -> list[dict]:
+    """
+    Async: count of orders grouped by payment_status.
+    Uses vendor.vendor_orders reverse FK.
+    """
+    from django.db.models import Count
+    try:
+        qs = (
+            vendor_profile.vendor_orders
+            .values("payment_status")
+            .annotate(count=Count("id"))
+        )
+        return [row async for row in qs]
+    except Exception as exc:
+        logger.error("aget_vendor_order_status_counts vendor=%s: %s", vendor_profile.pk, exc)
+        return []
+
+
+async def aget_vendor_top_categories(vendor_profile, limit: int = 5) -> list[dict]:
+    """
+    Async: top product categories by sales revenue.
+    Traversal: vendor_products → category__name / order_item_product__total.
+    """
+    from django.db.models import Sum
+    try:
+        qs = (
+            vendor_profile.vendor_products
+            .values("category__name")
+            .annotate(sales=Sum("order_item_product__total"))
+            .order_by("-sales")[:limit]
+        )
+        return [row async for row in qs]
+    except Exception as exc:
+        logger.error("aget_vendor_top_categories vendor=%s: %s", vendor_profile.pk, exc)
+        return []
