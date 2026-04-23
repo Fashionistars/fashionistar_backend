@@ -10,7 +10,7 @@ Endpoints:
   POST /api/v1/upload/webhook/cloudinary/     — Cloudinary HMAC-signed event receiver
 """
 from django.urls import path
-# from apps.common.views import HealthCheckView, CloudinaryPresignView, CloudinaryWebhookView
+from apps.common.views import CloudinaryPresignView, CloudinaryWebhookView
 
 app_name = "common"  # matches namespace='common' in backend/urls.py
 

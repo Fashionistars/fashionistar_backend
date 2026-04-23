@@ -6,9 +6,12 @@ URL prefix: /api/v1/vendor/
 
 Endpoints:
   GET    /api/v1/vendor/profile/     — retrieve my store profile
-  PATCH  /api/v1/vendor/profile/     — update profile
+  PATCH  /api/v1/vendor/profile/     — update profile (scalar fields + M2M collections)
   GET    /api/v1/vendor/setup/       — get onboarding setup state
+  POST   /api/v1/vendor/setup/       — create/update first-time vendor setup
   POST   /api/v1/vendor/payout/      — save bank / payout details
+  POST   /api/v1/vendor/pin/set/     — set 4-digit transaction PIN
+  POST   /api/v1/vendor/pin/verify/  — verify 4-digit PIN before payout
 """
 import logging
 
@@ -28,6 +31,7 @@ from apps.vendor.serializers.profile_serializers import (
     VendorSetupSerializer,
     VendorProfileUpdateSerializer,
     VendorSetupStateSerializer,
+    VendorTransactionPinSerializer,
 )
 from apps.vendor.services.vendor_provisioning_service import VendorProvisioningService
 from apps.vendor.services.vendor_service import VendorService
@@ -67,14 +71,18 @@ class VendorProfileView(APIView):
                 user=request.user,
                 data=serializer.validated_data,
             )
-        except Exception:
+        except Exception as exc:
+            logger.exception(
+                "VendorProfileView.patch: error for user=%s: %s",
+                request.user.pk, exc,
+            )
             return Response(
                 {
                     "status": "error",
-                    "message": "Vendor setup is required before profile updates.",
+                    "message": "Vendor profile update failed. Ensure vendor setup is complete.",
                     "code": "vendor_setup_required",
                 },
-                status=status.HTTP_404_NOT_FOUND,
+                status=status.HTTP_400_BAD_REQUEST,
             )
         return Response({
             "status": "success",
@@ -93,7 +101,19 @@ class VendorSetupStateView(APIView):
     def get(self, request):
         profile = get_vendor_profile_or_none(request.user)
         if profile is None:
-            profile = VendorService.get_profile(request.user)
+            # Vendor registered but profile not yet provisioned
+            return Response({
+                "status": "success",
+                "data": {
+                    "current_step": 1,
+                    "completion_percentage": 0,
+                    "profile_complete": False,
+                    "bank_details": False,
+                    "id_verified": False,   # informational
+                    "first_product": False,
+                    "onboarding_done": False,
+                },
+            })
         setup = get_vendor_setup_state(profile)
         if setup is None:
             return Response({
@@ -154,22 +174,75 @@ class VendorPayoutView(APIView):
                 user=request.user,
                 data=dict(serializer.validated_data),
             )
-        except Exception:
+        except Exception as exc:
+            logger.exception(
+                "VendorPayoutView.post: error for user=%s: %s",
+                request.user.pk, exc,
+            )
             return Response(
                 {
                     "status": "error",
-                    "message": "Vendor setup is required before payout details can be saved.",
+                    "message": "Payout details save failed. Ensure vendor setup is complete.",
                     "code": "vendor_setup_required",
                 },
-                status=status.HTTP_404_NOT_FOUND,
+                status=status.HTTP_400_BAD_REQUEST,
             )
         return Response({
             "status": "success",
             "message": "Payout details saved.",
             "data": {
-                "bank_name": payout.bank_name,
-                "account_name": payout.account_name,
+                "bank_name":     payout.bank_name,
+                "account_name":  payout.account_name,
                 "account_last4": payout.account_last4,
-                "is_verified": payout.is_verified,
+                "is_verified":   payout.is_verified,
             },
         }, status=status.HTTP_201_CREATED)
+
+
+class VendorSetPinView(APIView):
+    """
+    POST /api/v1/vendor/pin/set/ — set 4-digit payout confirmation PIN
+    """
+    permission_classes = [IsAuthenticated, IsVendor]
+
+    def post(self, request):
+        serializer = VendorTransactionPinSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            VendorService.set_transaction_pin(
+                user=request.user,
+                raw_pin=serializer.validated_data["pin"],
+            )
+        except ValueError as exc:
+            return Response(
+                {"status": "error", "message": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as exc:
+            logger.exception("VendorSetPinView.post: error for user=%s: %s", request.user.pk, exc)
+            return Response(
+                {"status": "error", "message": "PIN update failed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response({"status": "success", "message": "Transaction PIN set."})
+
+
+class VendorVerifyPinView(APIView):
+    """
+    POST /api/v1/vendor/pin/verify/ — verify payout PIN before withdrawal
+    """
+    permission_classes = [IsAuthenticated, IsVendor]
+
+    def post(self, request):
+        serializer = VendorTransactionPinSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        is_valid = VendorService.verify_transaction_pin(
+            user=request.user,
+            raw_pin=serializer.validated_data["pin"],
+        )
+        if not is_valid:
+            return Response(
+                {"status": "error", "message": "Invalid PIN.", "code": "invalid_pin"},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        return Response({"status": "success", "message": "PIN verified."})
