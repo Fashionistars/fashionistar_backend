@@ -1,6 +1,7 @@
 # utilities/tasks.py
-import requests
 import logging
+
+import httpx
 from celery import shared_task
 from django.conf import settings
 
@@ -19,10 +20,10 @@ def keep_service_awake():
         return
 
     try:
-        response = requests.get(site_url, timeout=15)
+        response = httpx.get(site_url, timeout=15)
         if response.status_code == 200:
             logger.info(f"Successfully pinged {site_url} to keep service awake.")
         else:
             logger.error(f"Failed to ping {site_url}. Status: {response.status_code}")
-    except requests.exceptions.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"An error occurred while pinging {site_url}: {e}")

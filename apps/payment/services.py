@@ -7,11 +7,16 @@ import secrets
 from decimal import Decimal
 from typing import Any
 
-import requests
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import transaction as db_transaction
 
+from apps.common.http import (
+    ProviderAsyncHTTPClient,
+    ProviderHTTPError,
+    ProviderSyncHTTPClient,
+    RetryPolicy,
+)
 from apps.payment.models import (
     PaymentIntent,
     PaymentIntentStatus,
@@ -27,20 +32,118 @@ from apps.wallet.services import EscrowService, WalletProvisioningService
 
 class PaystackClient:
     base_url = "https://api.paystack.co"
+    retry_policy = RetryPolicy(max_attempts=2)
 
-    @staticmethod
-    def _headers() -> dict[str, str]:
-        return {
+    @classmethod
+    def _headers(cls, *, idempotency_key: str = "") -> dict[str, str]:
+        headers = {
             "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
             "Content-Type": "application/json",
         }
+        if idempotency_key:
+            headers["Idempotency-Key"] = idempotency_key
+        return headers
 
     @staticmethod
     def _kobo(amount: Decimal) -> int:
         return int((amount * Decimal("100")).quantize(Decimal("1")))
 
     @classmethod
-    def initialize_transaction(cls, *, email: str, amount: Decimal, reference: str, currency: str = "NGN", metadata: dict | None = None) -> dict:
+    def _sync_client(cls) -> ProviderSyncHTTPClient:
+        return ProviderSyncHTTPClient(
+            provider=PaymentProviderCode.PAYSTACK,
+            base_url=cls.base_url,
+            retry_policy=cls.retry_policy,
+        )
+
+    @classmethod
+    def _async_client(cls) -> ProviderAsyncHTTPClient:
+        return ProviderAsyncHTTPClient(
+            provider=PaymentProviderCode.PAYSTACK,
+            base_url=cls.base_url,
+            retry_policy=cls.retry_policy,
+        )
+
+    @staticmethod
+    def _log_provider_call(
+        *,
+        action: str,
+        reference: str = "",
+        success: bool,
+        request_payload: dict | None = None,
+        response_payload: dict | None = None,
+        error_message: str = "",
+    ) -> None:
+        PaymentProviderLog.objects.create(
+            provider=PaymentProviderCode.PAYSTACK,
+            action=action,
+            reference=reference,
+            success=success,
+            request_payload=request_payload or {},
+            response_payload=response_payload or {},
+            error_message=error_message,
+        )
+
+    @staticmethod
+    async def _alog_provider_call(
+        *,
+        action: str,
+        reference: str = "",
+        success: bool,
+        request_payload: dict | None = None,
+        response_payload: dict | None = None,
+        error_message: str = "",
+    ) -> None:
+        await PaymentProviderLog.objects.acreate(
+            provider=PaymentProviderCode.PAYSTACK,
+            action=action,
+            reference=reference,
+            success=success,
+            request_payload=request_payload or {},
+            response_payload=response_payload or {},
+            error_message=error_message,
+        )
+
+    @classmethod
+    def _raise_provider_error(
+        cls,
+        *,
+        exc: ProviderHTTPError,
+        action: str,
+        reference: str = "",
+        request_payload: dict | None = None,
+    ) -> None:
+        cls._log_provider_call(
+            action=action,
+            reference=reference,
+            success=False,
+            request_payload=request_payload,
+            response_payload=exc.response_payload,
+            error_message=str(exc),
+        )
+        raise ValidationError(str(exc)) from exc
+
+    @classmethod
+    async def _araise_provider_error(
+        cls,
+        *,
+        exc: ProviderHTTPError,
+        action: str,
+        reference: str = "",
+        request_payload: dict | None = None,
+    ) -> None:
+        await cls._alog_provider_call(
+            action=action,
+            reference=reference,
+            success=False,
+            request_payload=request_payload,
+            response_payload=exc.response_payload,
+            error_message=str(exc),
+        )
+        raise ValidationError(str(exc)) from exc
+
+    @classmethod
+    def initialize_transaction(cls, *, email: str, amount: Decimal, reference: str, currency: str = "NGN", metadata: dict | None = None, idempotency_key: str = "") -> dict:
         payload = {
             "email": email,
             "amount": cls._kobo(amount),
@@ -49,31 +152,152 @@ class PaystackClient:
             "channels": ["bank", "card", "ussd", "mobile_money", "bank_transfer", "qr"],
             "metadata": metadata or {},
         }
-        res = requests.post(f"{cls.base_url}/transaction/initialize", headers=cls._headers(), json=payload, timeout=30)
-        data = res.json()
-        PaymentProviderLog.objects.create(provider=PaymentProviderCode.PAYSTACK, action="transaction.initialize", reference=reference, success=bool(data.get("status")), request_payload=payload, response_payload=data)
+        action = "transaction.initialize"
+        try:
+            res = cls._sync_client().request(
+                "POST",
+                "/transaction/initialize",
+                action=action,
+                reference=reference,
+                idempotency_key=idempotency_key,
+                headers=cls._headers(idempotency_key=idempotency_key),
+                json=payload,
+            )
+        except ProviderHTTPError as exc:
+            cls._raise_provider_error(action=action, reference=reference, request_payload=payload, exc=exc)
+        data = res.data
+        cls._log_provider_call(action=action, reference=reference, success=bool(data.get("status")), request_payload=payload, response_payload=data)
         return data
 
     @classmethod
     def verify_payment(cls, reference: str) -> dict:
-        res = requests.get(f"{cls.base_url}/transaction/verify/{reference}", headers=cls._headers(), timeout=30)
-        data = res.json()
-        PaymentProviderLog.objects.create(provider=PaymentProviderCode.PAYSTACK, action="transaction.verify", reference=reference, success=bool(data.get("status")), response_payload=data)
+        action = "transaction.verify"
+        try:
+            res = cls._sync_client().request(
+                "GET",
+                f"/transaction/verify/{reference}",
+                action=action,
+                reference=reference,
+                headers=cls._headers(),
+            )
+        except ProviderHTTPError as exc:
+            cls._raise_provider_error(action=action, reference=reference, exc=exc)
+        data = res.data
+        cls._log_provider_call(action=action, reference=reference, success=bool(data.get("status")), response_payload=data)
         return data
 
     @classmethod
     def list_banks(cls) -> dict:
-        res = requests.get(f"{cls.base_url}/bank", headers=cls._headers(), timeout=30)
-        data = res.json()
-        PaymentProviderLog.objects.create(provider=PaymentProviderCode.PAYSTACK, action="bank.list", success=bool(data.get("status")), response_payload=data)
+        action = "bank.list"
+        try:
+            res = cls._sync_client().request(
+                "GET",
+                "/bank",
+                action=action,
+                headers=cls._headers(),
+            )
+        except ProviderHTTPError as exc:
+            cls._raise_provider_error(action=action, exc=exc)
+        data = res.data
+        cls._log_provider_call(action=action, success=bool(data.get("status")), response_payload=data)
         return data
 
     @classmethod
-    def create_transfer_recipient(cls, *, name: str, account_number: str, bank_code: str, currency: str = "NGN") -> dict:
+    def create_transfer_recipient(cls, *, name: str, account_number: str, bank_code: str, currency: str = "NGN", idempotency_key: str = "") -> dict:
         payload = {"type": "nuban", "name": name, "account_number": account_number, "bank_code": bank_code, "currency": currency}
-        res = requests.post(f"{cls.base_url}/transferrecipient", headers=cls._headers(), json=payload, timeout=30)
-        data = res.json()
-        PaymentProviderLog.objects.create(provider=PaymentProviderCode.PAYSTACK, action="transferrecipient.create", success=bool(data.get("status")), request_payload=payload, response_payload=data)
+        action = "transferrecipient.create"
+        try:
+            res = cls._sync_client().request(
+                "POST",
+                "/transferrecipient",
+                action=action,
+                idempotency_key=idempotency_key,
+                headers=cls._headers(idempotency_key=idempotency_key),
+                json=payload,
+            )
+        except ProviderHTTPError as exc:
+            cls._raise_provider_error(action=action, request_payload=payload, exc=exc)
+        data = res.data
+        cls._log_provider_call(action=action, success=bool(data.get("status")), request_payload=payload, response_payload=data)
+        return data
+
+    @classmethod
+    async def ainitialize_transaction(cls, *, email: str, amount: Decimal, reference: str, currency: str = "NGN", metadata: dict | None = None, idempotency_key: str = "") -> dict:
+        payload = {
+            "email": email,
+            "amount": cls._kobo(amount),
+            "reference": reference,
+            "currency": currency,
+            "channels": ["bank", "card", "ussd", "mobile_money", "bank_transfer", "qr"],
+            "metadata": metadata or {},
+        }
+        action = "transaction.initialize"
+        try:
+            res = await cls._async_client().request(
+                "POST",
+                "/transaction/initialize",
+                action=action,
+                reference=reference,
+                idempotency_key=idempotency_key,
+                headers=cls._headers(idempotency_key=idempotency_key),
+                json=payload,
+            )
+        except ProviderHTTPError as exc:
+            await cls._araise_provider_error(action=action, reference=reference, request_payload=payload, exc=exc)
+        data = res.data
+        await cls._alog_provider_call(action=action, reference=reference, success=bool(data.get("status")), request_payload=payload, response_payload=data)
+        return data
+
+    @classmethod
+    async def averify_payment(cls, reference: str) -> dict:
+        action = "transaction.verify"
+        try:
+            res = await cls._async_client().request(
+                "GET",
+                f"/transaction/verify/{reference}",
+                action=action,
+                reference=reference,
+                headers=cls._headers(),
+            )
+        except ProviderHTTPError as exc:
+            await cls._araise_provider_error(action=action, reference=reference, exc=exc)
+        data = res.data
+        await cls._alog_provider_call(action=action, reference=reference, success=bool(data.get("status")), response_payload=data)
+        return data
+
+    @classmethod
+    async def alist_banks(cls) -> dict:
+        action = "bank.list"
+        try:
+            res = await cls._async_client().request(
+                "GET",
+                "/bank",
+                action=action,
+                headers=cls._headers(),
+            )
+        except ProviderHTTPError as exc:
+            await cls._araise_provider_error(action=action, exc=exc)
+        data = res.data
+        await cls._alog_provider_call(action=action, success=bool(data.get("status")), response_payload=data)
+        return data
+
+    @classmethod
+    async def acreate_transfer_recipient(cls, *, name: str, account_number: str, bank_code: str, currency: str = "NGN", idempotency_key: str = "") -> dict:
+        payload = {"type": "nuban", "name": name, "account_number": account_number, "bank_code": bank_code, "currency": currency}
+        action = "transferrecipient.create"
+        try:
+            res = await cls._async_client().request(
+                "POST",
+                "/transferrecipient",
+                action=action,
+                idempotency_key=idempotency_key,
+                headers=cls._headers(idempotency_key=idempotency_key),
+                json=payload,
+            )
+        except ProviderHTTPError as exc:
+            await cls._araise_provider_error(action=action, request_payload=payload, exc=exc)
+        data = res.data
+        await cls._alog_provider_call(action=action, success=bool(data.get("status")), request_payload=payload, response_payload=data)
         return data
 
     @staticmethod
@@ -88,40 +312,41 @@ class PaymentIntentService:
         return f"{prefix}_{secrets.token_urlsafe(24)}"
 
     @classmethod
-    @db_transaction.atomic
     def initialize_paystack(cls, *, user, amount: Decimal, purpose: str, currency: str = "NGN", order_id: str = "", measurement_request_id: str = "", idempotency_key: str = "", metadata: dict | None = None) -> PaymentIntent:
         reference = cls.make_reference()
-        intent = PaymentIntent.objects.create(
-            user=user,
-            provider=PaymentProviderCode.PAYSTACK,
-            purpose=purpose,
-            amount=amount,
-            currency=currency,
-            status=PaymentIntentStatus.PENDING,
-            reference=reference,
-            order_id=order_id,
-            measurement_request_id=measurement_request_id,
-            idempotency_key=idempotency_key,
-            metadata=metadata or {},
-        )
         response = PaystackClient.initialize_transaction(
             email=str(user.email),
             amount=amount,
             reference=reference,
             currency=currency,
+            idempotency_key=idempotency_key,
             metadata={"purpose": purpose, "order_id": order_id, "measurement_request_id": measurement_request_id, **(metadata or {})},
         )
-        intent.provider_response = response
-        if response.get("status"):
-            data = response.get("data") or {}
-            intent.status = PaymentIntentStatus.INITIALIZED
-            intent.provider_reference = data.get("reference", reference)
-            intent.authorization_url = data.get("authorization_url", "")
-            intent.access_code = data.get("access_code", "")
-        else:
-            intent.status = PaymentIntentStatus.FAILED
-        intent.save(update_fields=["provider_response", "status", "provider_reference", "authorization_url", "access_code", "updated_at"])
-        return intent
+        with db_transaction.atomic():
+            intent = PaymentIntent.objects.create(
+                user=user,
+                provider=PaymentProviderCode.PAYSTACK,
+                purpose=purpose,
+                amount=amount,
+                currency=currency,
+                status=PaymentIntentStatus.PENDING,
+                reference=reference,
+                order_id=order_id,
+                measurement_request_id=measurement_request_id,
+                idempotency_key=idempotency_key,
+                metadata=metadata or {},
+                provider_response=response,
+            )
+            if response.get("status"):
+                data = response.get("data") or {}
+                intent.status = PaymentIntentStatus.INITIALIZED
+                intent.provider_reference = data.get("reference", reference)
+                intent.authorization_url = data.get("authorization_url", "")
+                intent.access_code = data.get("access_code", "")
+            else:
+                intent.status = PaymentIntentStatus.FAILED
+            intent.save(update_fields=["provider_response", "status", "provider_reference", "authorization_url", "access_code", "updated_at"])
+            return intent
 
     @classmethod
     @db_transaction.atomic
@@ -213,11 +438,12 @@ class PaystackWebhookService:
 class TransferRecipientService:
     @staticmethod
     @db_transaction.atomic
-    def create_for_user(*, user, account_number: str, account_name: str, bank_code: str, bank_name: str) -> PaystackTransferRecipient:
+    def create_for_user(*, user, account_number: str, account_name: str, bank_code: str, bank_name: str, idempotency_key: str = "") -> PaystackTransferRecipient:
         response = PaystackClient.create_transfer_recipient(
             name=account_name,
             account_number=account_number,
             bank_code=bank_code,
+            idempotency_key=idempotency_key,
         )
         if not response.get("status"):
             raise ValidationError(response.get("message", "Paystack recipient creation failed."))

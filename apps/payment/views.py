@@ -22,11 +22,14 @@ class PaystackInitializeView(generics.GenericAPIView):
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        intent = PaymentIntentService.initialize_paystack(
-            user=request.user,
-            idempotency_key=request.headers.get("Idempotency-Key", ""),
-            **serializer.validated_data,
-        )
+        try:
+            intent = PaymentIntentService.initialize_paystack(
+                user=request.user,
+                idempotency_key=request.headers.get("Idempotency-Key", ""),
+                **serializer.validated_data,
+            )
+        except ValidationError as exc:
+            return Response({"status": "error", "message": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response({"status": "success", "data": PaymentIntentSerializer(intent).data}, status=status.HTTP_201_CREATED)
 
 
@@ -34,7 +37,10 @@ class PaystackVerifyView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, reference: str):
-        response = PaystackClient.verify_payment(reference)
+        try:
+            response = PaystackClient.verify_payment(reference)
+        except ValidationError as exc:
+            return Response({"status": "error", "message": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         if response.get("status") and (response.get("data") or {}).get("status") == "success":
             intent = PaymentIntent.objects.get(reference=reference, user=request.user)
             PaymentIntentService.mark_success(intent, response)
@@ -61,7 +67,10 @@ class PaystackBanksView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return Response(PaystackClient.list_banks())
+        try:
+            return Response(PaystackClient.list_banks())
+        except ValidationError as exc:
+            return Response({"status": "error", "message": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class PaystackTransferRecipientView(generics.GenericAPIView):
@@ -72,7 +81,11 @@ class PaystackTransferRecipientView(generics.GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
-            recipient = TransferRecipientService.create_for_user(user=request.user, **serializer.validated_data)
+            recipient = TransferRecipientService.create_for_user(
+                user=request.user,
+                idempotency_key=request.headers.get("Idempotency-Key", ""),
+                **serializer.validated_data,
+            )
         except ValidationError as exc:
             return Response({"status": "error", "message": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response({"status": "success", "data": PaystackTransferRecipientSerializer(recipient).data}, status=status.HTTP_201_CREATED)

@@ -6,10 +6,28 @@ from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 
-from apps.payment.models import PaymentIntent, PaymentIntentStatus, PaymentPurpose, PaymentWebhookEvent
-from apps.payment.services import PaystackClient, PaystackWebhookService
+from apps.common.http import ProviderTimeoutError
+from apps.payment.models import (
+    PaymentIntent,
+    PaymentIntentStatus,
+    PaymentProviderLog,
+    PaymentPurpose,
+    PaymentWebhookEvent,
+)
+from apps.payment.services import PaystackClient, PaystackWebhookService, PaymentIntentService
+
+
+class TimeoutPaystackTransport:
+    def request(self, *args, **kwargs):
+        raise ProviderTimeoutError(
+            provider="paystack",
+            action=kwargs.get("action", "transaction.initialize"),
+            message="provider timed out",
+            reference=kwargs.get("reference", ""),
+        )
 
 
 class PaystackWebhookServiceTests(TestCase):
@@ -42,3 +60,23 @@ class PaystackWebhookServiceTests(TestCase):
         self.assertEqual(PaymentWebhookEvent.objects.count(), 1)
         self.intent.refresh_from_db()
         self.assertEqual(self.intent.status, PaymentIntentStatus.SUCCEEDED)
+
+    @patch.object(PaystackClient, "_sync_client", return_value=TimeoutPaystackTransport())
+    def test_initialize_timeout_does_not_create_partial_payment_intent(self, _mock_client):
+        before_count = PaymentIntent.objects.count()
+
+        with self.assertRaises(ValidationError):
+            PaymentIntentService.initialize_paystack(
+                user=self.user,
+                amount=Decimal("1500.00"),
+                purpose=PaymentPurpose.WALLET_TOPUP,
+                idempotency_key="idem-timeout-001",
+            )
+
+        self.assertEqual(PaymentIntent.objects.count(), before_count)
+        failure_log = PaymentProviderLog.objects.filter(
+            provider="paystack",
+            action="transaction.initialize",
+            success=False,
+        ).latest("created_at")
+        self.assertIn("provider timed out", failure_log.error_message)
