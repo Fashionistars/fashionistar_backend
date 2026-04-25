@@ -168,6 +168,9 @@ INSTALLED_APPS = [
     "apps.audit_logs",  # Enterprise audit log — AuditEventLog
     "apps.client",      # Phase 2: Client domain (profiles, addresses)
     "apps.vendor",      # Phase 2: Vendor domain (stores, setup, payouts)
+    "apps.transactions",  # Financial ledger, commissions, disputes, audit trail
+    "apps.wallet",        # Role wallets, escrow, PINs, company wallet
+    "apps.payment",       # Paystack/provider intents and webhooks
     # ── Modular admin backend migrated into apps/ ───────────────────────────
     "apps.admin_backend",
     # ── Third Party ──────────────────────────────────────────────────────────

@@ -80,6 +80,10 @@ urlpatterns = [
     path("api/v1/client/", include("apps.client.urls", namespace="client")),
     # ── Phase 2: Vendor Domain (DRF sync) ─────────────────────────────────────
     path("api/v1/vendor/", include("apps.vendor.urls", namespace="vendor_domain")),
+    # ── Financial Domains: wallet custody, internal ledger, provider payments ─
+    path("api/v1/wallet/", include("apps.wallet.urls", namespace="wallet")),
+    path("api/v1/transactions/", include("apps.transactions.urls", namespace="transactions")),
+    path("api/v1/payment/", include("apps.payment.urls", namespace="payment")),
     # ── Phase 2: Central Async Ninja API (/api/v1/ninja/*) ───────────────────
     path("api/v1/ninja/", ninja_api.urls),
     path("admin_backend/", include("apps.admin_backend.urls")),
