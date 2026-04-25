@@ -29,6 +29,7 @@ class ClientOrderListView(generics.GenericAPIView):
     Return all paid orders for the authenticated client.
     Prefetches orderitems to avoid N+1 on order detail pages.
     """
+
     permission_classes = [IsAuthenticated, IsClient]
 
     def get(self, request):
@@ -36,18 +37,23 @@ class ClientOrderListView(generics.GenericAPIView):
         from store.serializers import CartOrderSerializer
 
         orders = (
-            CartOrder.objects
-            .filter(buyer=request.user, payment_status="paid")
+            CartOrder.objects.filter(buyer=request.user, payment_status="paid")
             .prefetch_related("orderitem")
             .order_by("-date")
         )
         serializer = CartOrderSerializer(orders, many=True)
-        logger.info("ClientOrderListView: %d orders for user=%s", orders.count(), request.user.email)
-        return Response({
-            "status": "success",
-            "count": orders.count(),
-            "data": serializer.data,
-        })
+        logger.info(
+            "ClientOrderListView: %d orders for user=%s",
+            orders.count(),
+            request.user.email,
+        )
+        return Response(
+            {
+                "status": "success",
+                "count": orders.count(),
+                "data": serializer.data,
+            }
+        )
 
 
 class ClientOrderDetailView(generics.GenericAPIView):
@@ -57,6 +63,7 @@ class ClientOrderDetailView(generics.GenericAPIView):
     Return detail for a single paid order scoped to this client.
     Uses oid (order identifier) — not PK — for public safety.
     """
+
     permission_classes = [IsAuthenticated, IsClient]
 
     def get(self, request, oid: str):
@@ -64,13 +71,15 @@ class ClientOrderDetailView(generics.GenericAPIView):
         from store.serializers import CartOrderSerializer
 
         try:
-            order = (
-                CartOrder.objects
-                .prefetch_related("orderitem")
-                .get(buyer=request.user, payment_status="paid", oid=oid)
+            order = CartOrder.objects.prefetch_related("orderitem").get(
+                buyer=request.user, payment_status="paid", oid=oid
             )
         except CartOrder.DoesNotExist:
-            logger.warning("ClientOrderDetailView: oid=%s not found for user=%s", oid, request.user.email)
+            logger.warning(
+                "ClientOrderDetailView: oid=%s not found for user=%s",
+                oid,
+                request.user.email,
+            )
             return Response(
                 {"status": "error", "message": "Order not found."},
                 status=status.HTTP_404_NOT_FOUND,

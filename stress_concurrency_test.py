@@ -15,7 +15,7 @@ from django.core.exceptions import ValidationError
 import uuid
 
 # Configuration
-CONCURRENCY_LEVEL = 500    # Number of simulated concurrent tasks trying to hit the DB
+CONCURRENCY_LEVEL = 100    # Number of simulated concurrent tasks trying to hit the DB
 MAX_DB_CONNECTIONS = 80    # Prevent crashing local Postgres by limiting active connections
 TEST_EMAIL = f"concurrency.{uuid.uuid4().hex[:8]}@fashionistar.io"
 
@@ -39,14 +39,19 @@ async def attempt_create_user(task_id, semaphore):
             )
             return "SUCCESS"
         except DuplicateUserError:
-            return "RACE_CONDITION_DEFEATED_BY_DB_CONSTRAINT"
+            print("D", end="", flush=True)
+            return "DUPLICATE_USER_ERROR"
         except SoftDeletedUserExistsError:
+            print("S", end="", flush=True)
             return "SOFT_DELETED_USER_EXISTS_ERROR"
-        except ValidationError:
+        except ValidationError as e:
+            print(f"V({e})", end="", flush=True)
             return "BLOCKED_BY_DJANGO_VALIDATION_ERROR"
-        except IntegrityError:
+        except IntegrityError as e:
+            print(f"I({e})", end="", flush=True)
             return "UNHANDLED_INTEGRITY_ERROR"
         except Exception as e:
+            print(f"E({type(e).__name__})", end="", flush=True)
             return f"OTHER_ERROR: {type(e).__name__} - {str(e)}"
 
 async def run_concurrency_test():

@@ -17,19 +17,21 @@ from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 
+api_info = openapi.Info(
+    title="FASHIONISTAR E-commerce Backend APIs",
+    default_version="v1",
+    description="API documentation for FASHIONISTAR E-commerce Backend",
+    terms_of_service="https://www.google.com/policies/terms/",
+    contact=openapi.Contact(email="fashionistarclothings@outlook.com"),
+    license=openapi.License(name="BSD License"),
+)
+
 # ── Schema view ─────────────────────────────────────────────────────────────
 # cache_class uses 'schema' LocMemCache (settings.CACHES['schema']) so the
 # Swagger UI homepage does NOT touch Redis. Redis downtime in dev/staging
 # will never cause a 500 on GET /.
 schema_view = get_schema_view(
-    openapi.Info(
-        title="FASHIONISTAR E-commerce Backend APIs",
-        default_version="v1",
-        description="API documentation for FASHIONISTAR E-commerce Backend",
-        terms_of_service="https://www.google.com/policies/terms/",
-        contact=openapi.Contact(email="fashionistarclothings@outlook.com"),
-        license=openapi.License(name="BSD License"),
-    ),
+    api_info,
     public=True,
     permission_classes=(permissions.AllowAny,),
 )

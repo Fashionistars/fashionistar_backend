@@ -257,20 +257,27 @@ def upload_to_cloudinary_from_admin_sync(
     eager  = config.get("eager", [])
 
     # Read file content (Django's upload file is a file-like object)
-    file_obj.seek(0)
+    if hasattr(file_obj, "seek"):
+        file_obj.seek(0)
 
-    result = cloudinary.uploader.upload(
-        file_obj,
-        folder=folder,
-        resource_type="auto",   # Cloudinary auto-detects image vs video vs raw
-        eager=eager,
-        eager_async=True,       # Non-blocking — triggers in background
-        use_filename=True,
-        unique_filename=True,
-        overwrite=False,
-        quality="auto",
-        fetch_format="auto",
-    )
+    try:
+        result = cloudinary.uploader.upload(
+            file_obj,
+            folder=folder,
+            resource_type="auto",   # Cloudinary auto-detects image vs video vs raw
+            eager=eager,
+            eager_async=True,       # Non-blocking — triggers in background
+            use_filename=True,
+            unique_filename=True,
+            overwrite=False,
+            quality="auto",
+            fetch_format="auto",
+        )
+    finally:
+        # Crucial for preventing "Empty file" errors when Django's save_model
+        # attempts to pass this file_obj to the default storage backend afterwards.
+        if hasattr(file_obj, "seek"):
+            file_obj.seek(0)
 
     secure_url = result.get("secure_url", "")
     if not secure_url:

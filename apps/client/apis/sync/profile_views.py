@@ -39,6 +39,7 @@ class ClientProfileView(generics.GenericAPIView):
     GET  /api/v1/client/profile/ — retrieve profile
     PATCH /api/v1/client/profile/ — update profile
     """
+
     permission_classes = [IsAuthenticated, IsClient]
 
     def get(self, request):
@@ -47,11 +48,13 @@ class ClientProfileView(generics.GenericAPIView):
             # Auto-provision and return empty profile
             profile = ClientProfileService.get_profile(request.user)
         serializer = ClientProfileOutputSerializer(profile)
-        return Response({
-            "status": "success",
-            "message": "Profile retrieved successfully.",
-            "data": serializer.data,
-        })
+        return Response(
+            {
+                "status": "success",
+                "message": "Profile retrieved successfully.",
+                "data": serializer.data,
+            }
+        )
 
     def patch(self, request):
         serializer = ClientProfileUpdateSerializer(data=request.data)
@@ -60,11 +63,13 @@ class ClientProfileView(generics.GenericAPIView):
             user=request.user,
             data=serializer.validated_data,
         )
-        return Response({
-            "status": "success",
-            "message": "Profile updated successfully.",
-            "data": ClientProfileOutputSerializer(profile).data,
-        })
+        return Response(
+            {
+                "status": "success",
+                "message": "Profile updated successfully.",
+                "data": ClientProfileOutputSerializer(profile).data,
+            }
+        )
 
 
 class ClientAddressListCreateView(generics.GenericAPIView):
@@ -72,14 +77,17 @@ class ClientAddressListCreateView(generics.GenericAPIView):
     GET  /api/v1/client/addresses/ — list saved addresses
     POST /api/v1/client/addresses/ — add new address
     """
+
     permission_classes = [IsAuthenticated, IsClient]
 
     def get(self, request):
         addresses = list_client_addresses(request.user)
-        return Response({
-            "status": "success",
-            "data": ClientAddressSerializer(addresses, many=True).data,
-        })
+        return Response(
+            {
+                "status": "success",
+                "data": ClientAddressSerializer(addresses, many=True).data,
+            }
+        )
 
     def post(self, request):
         serializer = AddressCreateSerializer(data=request.data)
@@ -102,6 +110,7 @@ class ClientAddressDetailView(generics.GenericAPIView):
     """
     DELETE /api/v1/client/addresses/{id}/ — soft-delete address
     """
+
     permission_classes = [IsAuthenticated, IsClient]
 
     def delete(self, request, address_id):
@@ -109,25 +118,33 @@ class ClientAddressDetailView(generics.GenericAPIView):
             ClientProfileService.delete_address(
                 user=request.user, address_id=address_id
             )
-            return Response({
-                "status": "success",
-                "message": "Address removed.",
-            }, status=status.HTTP_200_OK)
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Address removed.",
+                },
+                status=status.HTTP_200_OK,
+            )
         except Exception as e:
             logger.warning(
                 "ClientAddressDetailView.delete: not found: %s — %s",
-                address_id, e,
+                address_id,
+                e,
             )
-            return Response({
-                "status": "error",
-                "message": "Address not found.",
-            }, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Address not found.",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
 
 class ClientAddressSetDefaultView(generics.GenericAPIView):
     """
     POST /api/v1/client/addresses/{id}/set-default/
     """
+
     permission_classes = [IsAuthenticated, IsClient]
 
     def post(self, request, address_id):
@@ -135,16 +152,22 @@ class ClientAddressSetDefaultView(generics.GenericAPIView):
             address = ClientProfileService.set_default_address(
                 user=request.user, address_id=address_id
             )
-            return Response({
-                "status": "success",
-                "message": "Default address updated.",
-                "data": ClientAddressSerializer(address).data,
-            })
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Default address updated.",
+                    "data": ClientAddressSerializer(address).data,
+                }
+            )
         except Exception as e:
             logger.warning(
-                "ClientAddressSetDefaultView: error — %s", e,
+                "ClientAddressSetDefaultView: error — %s",
+                e,
             )
-            return Response({
-                "status": "error",
-                "message": "Address not found.",
-            }, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Address not found.",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )

@@ -588,6 +588,7 @@ SPECTACULAR_SETTINGS = {
 }
 
 SWAGGER_SETTINGS = {
+    "DEFAULT_INFO": "backend.urls.api_info",
     "USE_SESSION_AUTH": True,
     "relative_paths": False,
     "DISPLAY_OPERATION_ID": False,

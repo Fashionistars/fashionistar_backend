@@ -22,6 +22,7 @@ from django.contrib.auth.base_user import BaseUserManager
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
+from django.core.exceptions import ValidationError
 
 from apps.common.managers.soft_delete import SoftDeleteQuerySet
 
@@ -198,15 +199,36 @@ class CustomUserManager(BaseUserManager):
             user = self.model(email=email, phone=phone, **extra_fields)
             user.set_password(password)
 
-            # ── Savepoint guard (async) ───────────────────────────────────
-            # Django's async ORM uses the same savepoint mechanism as sync.
-            # Wrapping asave() ensures an IntegrityError only kills the
-            # savepoint, not the entire outer transaction.
-            async with transaction.atomic():  # type: ignore[attr-defined]
-                await user.asave(using=self._db)
+            # 3. Save User inside a nested transaction savepoint to isolate IntegrityErrors.
+            from asgiref.sync import sync_to_async
+            def _save_user():
+                with transaction.atomic():
+                    user.save(using=self._db)
+                
+            await sync_to_async(_save_user, thread_sensitive=False)()
 
             logger.info("✅ Created user (async): email=%s", email or phone)
             return user
+
+        except ValidationError as exc:
+            # Check if it's a uniqueness error from clean()
+            is_duplicate = False
+            if hasattr(exc, 'message_dict'):
+                for field, errors in exc.message_dict.items():
+                    if any('already in use' in str(e) for e in errors):
+                        is_duplicate = True
+            
+            if is_duplicate:
+                # Double check if it's actually soft-deleted
+                existing = await self.all_with_deleted().filter(
+                    Q(email=email) | Q(phone=phone)
+                ).afirst()
+                if existing and existing.is_deleted:
+                    raise SoftDeletedUserExistsError() from exc
+                raise DuplicateUserError() from exc
+                
+            logger.error("ValidationError creating user (async): %s", exc)
+            raise
 
         except IntegrityError as exc:
             exc_str = str(exc).upper()
@@ -224,6 +246,7 @@ class CustomUserManager(BaseUserManager):
             raise
 
         except Exception as exc:
+            print(f"[{email}] Exception caught! {exc}")
             logger.error("Error creating user (async): %s", exc)
             raise
 

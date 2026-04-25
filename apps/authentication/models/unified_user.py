@@ -68,13 +68,6 @@ class MemberIDCounter(models.Model):
     def next_value(cls):
         """
         Atomically increment and return the next sequence number.
-
-        Returns:
-            int: The next available counter value (1-indexed).
-
-        Raises:
-            OverflowError: If the counter would exceed the maximum
-                representable value for the digit width (9999).
         """
         max_value = 12**MEMBER_ID_DIGITS - 1  # 999999
 
@@ -480,8 +473,6 @@ class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMix
             self.email = None
         if not self.phone:
             self.phone = None
-        # CloudinaryField: do NOT set to None — Cloudinary manages empty state
-        # avatar is stored as public_id string; blank string == no avatar
 
         if self._state.adding and not self.member_id:
             self.member_id = generate_member_id()

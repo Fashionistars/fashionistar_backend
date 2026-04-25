@@ -31,7 +31,8 @@ from datetime import timedelta
 
 from django.db.models import Avg, Count, Q, Sum
 from django.utils import timezone
-from rest_framework import generics, status
+from rest_framework import status
+from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -59,7 +60,7 @@ def _get_profile_or_404(user):
 # ══════════════════════════════════════════════════════════════════
 
 
-class VendorAnalyticsSummaryView(generics.GenericAPIView):
+class VendorAnalyticsSummaryView(APIView):
     """
     GET /api/v1/vendor/analytics/
 
@@ -94,7 +95,7 @@ class VendorAnalyticsSummaryView(generics.GenericAPIView):
         return Response({"status": "success", "data": data})
 
 
-class VendorRevenueChart(generics.GenericAPIView):
+class VendorRevenueChart(APIView):
     """
     GET /api/v1/vendor/analytics/revenue/?months=6
 
@@ -114,7 +115,7 @@ class VendorRevenueChart(generics.GenericAPIView):
         return Response({"status": "success", "data": trends})
 
 
-class VendorMonthlyOrderChart(generics.GenericAPIView):
+class VendorMonthlyOrderChart(APIView):
     """
     GET /api/v1/vendor/analytics/orders/
 
@@ -143,7 +144,7 @@ class VendorMonthlyOrderChart(generics.GenericAPIView):
         return Response({"status": "success", "data": chart})
 
 
-class VendorMonthlyProductChart(generics.GenericAPIView):
+class VendorMonthlyProductChart(APIView):
     """
     GET /api/v1/vendor/analytics/products/
 
@@ -172,7 +173,7 @@ class VendorMonthlyProductChart(generics.GenericAPIView):
         return Response({"status": "success", "data": chart})
 
 
-class VendorEarningTrackerView(generics.GenericAPIView):
+class VendorEarningTrackerView(APIView):
     """
     GET /api/v1/vendor/earnings/
 
@@ -214,7 +215,7 @@ class VendorEarningTrackerView(generics.GenericAPIView):
         return Response({"status": "success", "data": data})
 
 
-class VendorCustomerBehaviorView(generics.GenericAPIView):
+class VendorCustomerBehaviorView(APIView):
     """
     GET /api/v1/vendor/analytics/customers/
 
@@ -237,7 +238,7 @@ class VendorCustomerBehaviorView(generics.GenericAPIView):
         return Response({"status": "success", "data": data})
 
 
-class VendorTopCategoriesView(generics.GenericAPIView):
+class VendorTopCategoriesView(APIView):
     """
     GET /api/v1/vendor/analytics/categories/
 
@@ -257,7 +258,7 @@ class VendorTopCategoriesView(generics.GenericAPIView):
         return Response({"status": "success", "data": data})
 
 
-class VendorPaymentDistributionView(generics.GenericAPIView):
+class VendorPaymentDistributionView(APIView):
     """
     GET /api/v1/vendor/analytics/distribution/
 
@@ -281,7 +282,7 @@ class VendorPaymentDistributionView(generics.GenericAPIView):
 # ══════════════════════════════════════════════════════════════════
 
 
-class VendorProductListView(generics.GenericAPIView):
+class VendorProductListView(APIView):
     """
     GET /api/v1/vendor/products/
     GET /api/v1/vendor/products/?search=<query>&status=<status>
@@ -320,7 +321,7 @@ class VendorProductListView(generics.GenericAPIView):
         })
 
 
-class VendorLowStockView(generics.GenericAPIView):
+class VendorLowStockView(APIView):
     """
     GET /api/v1/vendor/products/low-stock/?threshold=5
 
@@ -344,7 +345,7 @@ class VendorLowStockView(generics.GenericAPIView):
         })
 
 
-class VendorTopSellingProductsView(generics.GenericAPIView):
+class VendorTopSellingProductsView(APIView):
     """
     GET /api/v1/vendor/products/top/?limit=5
 
@@ -371,7 +372,7 @@ class VendorTopSellingProductsView(generics.GenericAPIView):
 # ══════════════════════════════════════════════════════════════════
 
 
-class VendorOrderListView(generics.GenericAPIView):
+class VendorOrderListView(APIView):
     """
     GET /api/v1/vendor/orders/
     GET /api/v1/vendor/orders/?payment_status=paid&order_status=Processing
@@ -410,7 +411,7 @@ class VendorOrderListView(generics.GenericAPIView):
         })
 
 
-class VendorOrderDetailView(generics.GenericAPIView):
+class VendorOrderDetailView(APIView):
     """
     GET /api/v1/vendor/orders/<int:order_id>/
 
@@ -445,7 +446,7 @@ class VendorOrderDetailView(generics.GenericAPIView):
         return Response({"status": "success", "data": data})
 
 
-class VendorOrderStatusCountsView(generics.GenericAPIView):
+class VendorOrderStatusCountsView(APIView):
     """
     GET /api/v1/vendor/orders/status-counts/
 
@@ -468,7 +469,7 @@ class VendorOrderStatusCountsView(generics.GenericAPIView):
 # ══════════════════════════════════════════════════════════════════
 
 
-class VendorReviewListView(generics.GenericAPIView):
+class VendorReviewListView(APIView):
     """
     GET /api/v1/vendor/reviews/
 
@@ -499,7 +500,7 @@ class VendorReviewListView(generics.GenericAPIView):
         })
 
 
-class VendorReviewDetailView(generics.GenericAPIView):
+class VendorReviewDetailView(APIView):
     """
     GET /api/v1/vendor/reviews/<int:review_id>/
 
@@ -543,7 +544,7 @@ class VendorReviewDetailView(generics.GenericAPIView):
 # ══════════════════════════════════════════════════════════════════
 
 
-class VendorCouponListView(generics.GenericAPIView):
+class VendorCouponListView(APIView):
     """
     GET /api/v1/vendor/coupons/
     GET /api/v1/vendor/coupons/?active=true
