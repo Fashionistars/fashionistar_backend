@@ -86,8 +86,6 @@ urlpatterns = [
     path("api/v1/payment/", include("apps.payment.urls", namespace="payment")),
     # ── Canonical Catalog Domain: category, brand, collection, discovery metadata ─
     path("api/v1/catalog/", include("apps.catalog.urls", namespace="catalog")),
-    # Temporary frontend/mobile compatibility alias while old homepage consumers migrate.
-    path("api/v1/homepage/", include(("apps.catalog.urls", "catalog"), namespace="catalog_homepage_alias")),
     # ── Phase 2: Central Async Ninja API (/api/v1/ninja/*) ───────────────────
     path("api/v1/ninja/", ninja_api.urls),
     path("admin_backend/", include("apps.admin_backend.urls")),

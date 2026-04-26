@@ -87,7 +87,7 @@ class VendorService:
         # ── Collections M2M (e.g. ["ready-to-wear", "accessories"]) ──
         # The caller passes collection PKs or UUIDs as a list.
         if "collection_ids" in data:
-            from apps.admin_backend.models import Collections as CollectionModel
+            from apps.catalog.models import Collections as CollectionModel
             ids = data["collection_ids"]
             if isinstance(ids, list) and ids:
                 qs = CollectionModel.objects.filter(pk__in=ids)

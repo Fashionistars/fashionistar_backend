@@ -545,95 +545,6 @@ class SessionRevokeOthersView(APIView):
 # ===========================================================================
 
 
-class LoginEventListView(APIView):
-    """
-    Return the last 10 login events (attempts) for the authenticated user.
-
-    Useful for the Security Dashboard "Recent Login Activity" section.
-    Analogous to Binance's "Login Activity" and Google's "Recent Security Events".
-
-    Uses LoginEventSerializer for validated, Swagger-documented responses.
-    Uses get_login_events() selector for optimized ORM query with select_related.
-    """
-
-    permission_classes = [IsVerifiedUser]
-    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
-
-    def get(self, request):
-        # Use selector for optimized DB query
-        events = get_login_events(user=request.user, limit=10)
-
-        serializer = LoginEventSerializer(
-            events,
-            many=True,
-            context={"request": request},
-        )
-
-        return Response(
-            {
-                "status": "success",
-                "count": len(serializer.data),
-                "results": serializer.data,
-            },
-            status=status.HTTP_200_OK,
-        )
-    Logout all other devices — keeps only the current session.
-
-    Useful when a user suspects their account is compromised on another device.
-    All other sessions except the current request's session are blacklisted
-    and deleted in a single atomic transaction.
-
-    Returns the count of sessions terminated.
-    """
-    permission_classes = [IsVerifiedUser]
-    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
-
-    @extend_schema(
-        summary="Revoke all other sessions",
-        description="Terminates all active sessions for this account except for the current one.",
-        responses={200: None}
-    )
-    def post(self, request, *args, **kwargs):
-        """Terminates other sessions in a transaction."""
-        from apps.authentication.models import UserSession
-        current_jti = _get_current_jti(request)
-
-        # All sessions except the one that matches the current token
-        other_sessions = UserSession.objects.filter(user=request.user)
-        if current_jti:
-            other_sessions = other_sessions.exclude(jti=current_jti)
-
-        revoked_count = 0
-        with transaction.atomic():
-            for session in other_sessions:
-                try:
-                    from rest_framework_simplejwt.token_blacklist.models import (
-                        OutstandingToken,
-                        BlacklistedToken,
-                    )
-                    outstanding = OutstandingToken.objects.filter(jti=session.jti).first()
-                    if outstanding:
-                        BlacklistedToken.objects.get_or_create(token=outstanding)
-                except Exception as bl_exc:
-                    logger.warning("⚠️ Could not blacklist JTI=%s: %s", session.jti, bl_exc)
-                revoked_count += 1
-            other_sessions.delete()
-
-        logger.info(
-            "✅ RevokeOthers: %d sessions terminated for user=%s",
-            revoked_count, request.user.pk,
-        )
-        return success_response(
-            data={"terminated_count": revoked_count},
-            message=f"{revoked_count} other session(s) terminated successfully."
-        )
-
-
-# ===========================================================================
-# GET  /api/v1/auth/login-events/
-# ===========================================================================
-
-
 class LoginEventListView(generics.ListAPIView):
     """
     Return the last 10 login events (attempts) for the authenticated user.
@@ -668,4 +579,3 @@ class LoginEventListView(generics.ListAPIView):
             },
             message="Login history retrieved successfully."
         )
-

@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from drf_spectacular.utils import extend_schema
 from rest_framework import generics, status
+from rest_framework.renderers import BrowsableAPIRenderer
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from apps.common.renderers import CustomJSONRenderer
 from apps.common.reference_data.banks import get_banks
 from apps.common.reference_data.countries import get_countries
 from apps.common.reference_data.locations import get_cities, get_lgas, get_states

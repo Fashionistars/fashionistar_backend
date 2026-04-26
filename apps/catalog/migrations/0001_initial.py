@@ -1,0 +1,154 @@
+import django.db.models.deletion
+import django.utils.timezone
+import uuid
+import uuid6
+from django.conf import settings
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    initial = True
+
+    dependencies = [
+        ("admin_backend", "0002_initial"),
+        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
+    ]
+
+    operations = [
+        migrations.SeparateDatabaseAndState(
+            database_operations=[],
+            state_operations=[
+                migrations.CreateModel(
+                    name="Brand",
+                    fields=[
+                        ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                        ("title", models.CharField(max_length=100)),
+                        ("description", models.TextField(blank=True, null=True)),
+                        ("image", models.ImageField(blank=True, default="brand.jpg", null=True, upload_to="brand_images/")),
+                        ("cloudinary_url", models.URLField(blank=True, help_text="Canonical Cloudinary URL populated by the media pipeline.", max_length=800, null=True)),
+                        ("active", models.BooleanField(db_index=True, default=True)),
+                        ("slug", models.SlugField(blank=True, db_index=True, null=True, unique=True)),
+                        ("created_at", models.DateTimeField(default=django.utils.timezone.now)),
+                        ("updated_at", models.DateTimeField(auto_now=True)),
+                        ("user", models.ForeignKey(blank=True, db_index=True, help_text="Staff user who last created or curated this brand.", null=True, on_delete=django.db.models.deletion.SET_NULL, related_name="catalog_brands", to=settings.AUTH_USER_MODEL)),
+                    ],
+                    options={
+                        "verbose_name": "Catalog Brand",
+                        "verbose_name_plural": "Catalog Brands",
+                        "db_table": "admin_backend_brand",
+                        "managed": False,
+                    },
+                ),
+                migrations.CreateModel(
+                    name="Category",
+                    fields=[
+                        ("id", models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
+                        ("name", models.CharField(db_index=True, max_length=100, unique=True)),
+                        ("image", models.ImageField(blank=True, default="category.jpg", null=True, upload_to="category_images/")),
+                        ("cloudinary_url", models.URLField(blank=True, help_text="Canonical Cloudinary URL populated by the media pipeline.", max_length=800, null=True)),
+                        ("active", models.BooleanField(db_index=True, default=True)),
+                        ("slug", models.SlugField(blank=True, db_index=True, null=True, unique=True)),
+                        ("created_at", models.DateTimeField(default=django.utils.timezone.now)),
+                        ("updated_at", models.DateTimeField(auto_now=True)),
+                        ("user", models.ForeignKey(blank=True, db_index=True, help_text="Staff user who last created or curated this category.", null=True, on_delete=django.db.models.deletion.SET_NULL, related_name="catalog_categories", to=settings.AUTH_USER_MODEL)),
+                    ],
+                    options={
+                        "verbose_name": "Catalog Category",
+                        "verbose_name_plural": "Catalog Categories",
+                        "db_table": "admin_backend_category",
+                        "managed": False,
+                        "indexes": [
+                            models.Index(fields=["name"], name="category_name_idx"),
+                            models.Index(fields=["slug"], name="category_slug_idx"),
+                        ],
+                    },
+                ),
+                migrations.CreateModel(
+                    name="Collections",
+                    fields=[
+                        ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                        ("title", models.CharField(blank=True, max_length=255, null=True)),
+                        ("sub_title", models.CharField(blank=True, max_length=255, null=True)),
+                        ("description", models.TextField(blank=True, null=True)),
+                        ("slug", models.SlugField(blank=True, db_index=True, null=True, unique=True)),
+                        ("background_image", models.ImageField(blank=True, null=True, upload_to="gallery/bg_img/")),
+                        ("image", models.ImageField(blank=True, null=True, upload_to="gallery/product_img/")),
+                        ("cloudinary_url", models.URLField(blank=True, help_text="Main collection image populated by the media pipeline.", max_length=800, null=True)),
+                        ("background_cloudinary_url", models.URLField(blank=True, help_text="Collection background image populated by the media pipeline.", max_length=800, null=True)),
+                        ("created_at", models.DateTimeField(default=django.utils.timezone.now)),
+                        ("updated_at", models.DateTimeField(auto_now=True)),
+                        ("user", models.ForeignKey(blank=True, db_index=True, help_text="Staff user who last created or curated this collection.", null=True, on_delete=django.db.models.deletion.SET_NULL, related_name="catalog_collections", to=settings.AUTH_USER_MODEL)),
+                    ],
+                    options={
+                        "verbose_name": "Catalog Collection",
+                        "verbose_name_plural": "Catalog Collections",
+                        "db_table": "admin_backend_collections",
+                        "managed": False,
+                    },
+                ),
+            ],
+        ),
+        migrations.CreateModel(
+            name="BlogPost",
+            fields=[
+                ("id", models.UUIDField(default=uuid6.uuid7, editable=False, primary_key=True, serialize=False)),
+                ("created_at", models.DateTimeField(auto_now_add=True, db_index=True, help_text="Timestamp when the record was created.")),
+                ("updated_at", models.DateTimeField(auto_now=True, help_text="Timestamp when the record was last updated.")),
+                ("is_deleted", models.BooleanField(db_index=True, default=False, help_text="Flag indicating if the record is soft-deleted.")),
+                ("deleted_at", models.DateTimeField(blank=True, help_text="Timestamp of soft deletion.", null=True)),
+                ("title", models.CharField(db_index=True, max_length=255)),
+                ("slug", models.SlugField(db_index=True, max_length=280, unique=True)),
+                ("excerpt", models.TextField(blank=True)),
+                ("content", models.TextField()),
+                ("featured_image", models.ImageField(blank=True, null=True, upload_to="catalog/blog/featured/")),
+                ("featured_image_cloudinary_url", models.URLField(blank=True, max_length=800, null=True)),
+                ("status", models.CharField(choices=[("draft", "Draft"), ("review", "Review"), ("published", "Published"), ("archived", "Archived")], db_index=True, default="draft", max_length=20)),
+                ("tags", models.JSONField(blank=True, default=list)),
+                ("seo_title", models.CharField(blank=True, max_length=180)),
+                ("seo_description", models.CharField(blank=True, max_length=320)),
+                ("is_featured", models.BooleanField(db_index=True, default=False)),
+                ("published_at", models.DateTimeField(blank=True, db_index=True, null=True)),
+                ("view_count", models.PositiveBigIntegerField(default=0)),
+                ("author", models.ForeignKey(blank=True, help_text="Author is retained as nullable to preserve published history.", null=True, on_delete=django.db.models.deletion.SET_NULL, related_name="catalog_blog_posts", to=settings.AUTH_USER_MODEL)),
+                ("category", models.ForeignKey(blank=True, help_text="Optional catalog category used for discovery and SEO.", null=True, on_delete=django.db.models.deletion.SET_NULL, related_name="blog_posts", to="catalog.category")),
+            ],
+            options={
+                "verbose_name": "Catalog Blog Post",
+                "verbose_name_plural": "Catalog Blog Posts",
+                "db_table": "catalog_blog_posts",
+                "ordering": ("-published_at", "-created_at"),
+            },
+        ),
+        migrations.CreateModel(
+            name="BlogMedia",
+            fields=[
+                ("id", models.UUIDField(default=uuid6.uuid7, editable=False, primary_key=True, serialize=False)),
+                ("created_at", models.DateTimeField(auto_now_add=True, db_index=True, help_text="Timestamp when the record was created.")),
+                ("updated_at", models.DateTimeField(auto_now=True, help_text="Timestamp when the record was last updated.")),
+                ("is_deleted", models.BooleanField(db_index=True, default=False, help_text="Flag indicating if the record is soft-deleted.")),
+                ("deleted_at", models.DateTimeField(blank=True, help_text="Timestamp of soft deletion.", null=True)),
+                ("image", models.ImageField(blank=True, null=True, upload_to="catalog/blog/gallery/")),
+                ("cloudinary_url", models.URLField(blank=True, max_length=800, null=True)),
+                ("public_id", models.CharField(blank=True, max_length=255)),
+                ("alt_text", models.CharField(blank=True, max_length=180)),
+                ("sort_order", models.PositiveIntegerField(db_index=True, default=0)),
+                ("post", models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name="gallery_media", to="catalog.blogpost")),
+                ("uploaded_by", models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name="catalog_blog_media_uploads", to=settings.AUTH_USER_MODEL)),
+            ],
+            options={
+                "verbose_name": "Catalog Blog Media",
+                "verbose_name_plural": "Catalog Blog Media",
+                "db_table": "catalog_blog_media",
+                "ordering": ("sort_order", "created_at"),
+            },
+        ),
+        migrations.AddIndex(
+            model_name="blogpost",
+            index=models.Index(fields=["status", "published_at"], name="catalog_blog_publish_idx"),
+        ),
+        migrations.AddIndex(
+            model_name="blogpost",
+            index=models.Index(fields=["slug"], name="catalog_blog_slug_idx"),
+        ),
+    ]

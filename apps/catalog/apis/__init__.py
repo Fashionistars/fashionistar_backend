@@ -1,4 +1,6 @@
-from .sync.catalog_views import (
+from .sync import (
+    CatalogBlogDetailView,
+    CatalogBlogListCreateView,
     CatalogBrandDetailView,
     CatalogBrandListCreateView,
     CatalogCategoryDetailView,
@@ -8,6 +10,8 @@ from .sync.catalog_views import (
 )
 
 __all__ = [
+    "CatalogBlogDetailView",
+    "CatalogBlogListCreateView",
     "CatalogBrandDetailView",
     "CatalogBrandListCreateView",
     "CatalogCategoryDetailView",

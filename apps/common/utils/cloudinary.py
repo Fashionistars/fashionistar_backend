@@ -56,7 +56,7 @@ logger = logging.getLogger(__name__)
 
 # ─── Asset type → folder/preset/eager mapping ────────────────────────────────
 # One entry per upload use-case discovered across the codebase:
-#   admin_backend: Category.image, Brand.image, Collections.image / background_image
+#   catalog: Category.image, Brand.image, Collections.image / background_image, BlogPost.featured_image
 #   userauths:     Profile.image
 #   store:         Product.image, Gallery.image, Color.image
 #   vendor:        Vendor.image

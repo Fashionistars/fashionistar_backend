@@ -11,7 +11,7 @@ Architecture decisions:
   ─ CASCADE vs SET_NULL decisions:
       user → CASCADE  (profile is meaningless without a user)
       vendor FKs from other models → SET_NULL (order/review should survive vendor deletion)
-  ─ Collections: M2M to admin_backend.Collections (admin-managed dropdown on setup page)
+  ─ Collections: M2M to catalog.Collections (admin-managed dropdown on setup page)
   ─ No raw SQL. Only ORM with select_related / prefetch_related / values().
 """
 import logging
@@ -74,9 +74,9 @@ class VendorProfile(TimeStampedModel, SoftDeleteModel):
     description = models.TextField(max_length=2000, blank=True, default="")
 
     # ── Collections (Admin-managed; vendor selects at setup) ───────
-    # Admin creates Collections in admin_backend. Vendor picks ≥1 during setup.
+    # Admin creates Collections in catalog. Vendor picks one or more during setup.
     collections = models.ManyToManyField(
-        "admin_backend.Collections",
+        "catalog.Collections",
         blank=True,
         related_name="vendor_collections",  # CORRECT: reflects the reverse M2M direction.
         help_text=(

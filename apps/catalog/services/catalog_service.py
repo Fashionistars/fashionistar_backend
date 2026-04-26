@@ -26,6 +26,12 @@ class CatalogAuditService:
             resource_id=str(resource_id),
             old_values=old_values,
             new_values=new_values,
-            metadata={"domain": "catalog"},
+            metadata={
+                "domain": "catalog",
+                "request_path": getattr(request, "path", ""),
+                "request_method": getattr(request, "method", ""),
+                "correlation_id": getattr(request, "headers", {}).get("X-Correlation-ID", ""),
+                "idempotency_key": getattr(request, "headers", {}).get("Idempotency-Key", ""),
+            },
             is_compliance=True,
         )

@@ -1,5 +1,7 @@
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 
+from apps.common.permissions import IsVerifiedUser
+
 
 class IsCatalogStaffOrReadOnly(BasePermission):
     """
@@ -13,6 +15,9 @@ class IsCatalogStaffOrReadOnly(BasePermission):
 
         user = getattr(request, "user", None)
         if not user or not getattr(user, "is_authenticated", False):
+            return False
+
+        if not IsVerifiedUser().has_permission(request, view):
             return False
 
         role = str(getattr(user, "role", "") or "").upper()

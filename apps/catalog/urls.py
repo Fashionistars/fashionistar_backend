@@ -1,6 +1,8 @@
 from django.urls import path
 
 from apps.catalog.apis.sync import (
+    CatalogBlogDetailView,
+    CatalogBlogListCreateView,
     CatalogBrandDetailView,
     CatalogBrandListCreateView,
     CatalogCategoryDetailView,
@@ -18,4 +20,6 @@ urlpatterns = [
     path("brands/<slug:slug>/", CatalogBrandDetailView.as_view(), name="brand-detail"),
     path("collections/", CatalogCollectionListCreateView.as_view(), name="collection-list"),
     path("collections/<slug:slug>/", CatalogCollectionDetailView.as_view(), name="collection-detail"),
+    path("blog/", CatalogBlogListCreateView.as_view(), name="blog-list"),
+    path("blog/<slug:slug>/", CatalogBlogDetailView.as_view(), name="blog-detail"),
 ]

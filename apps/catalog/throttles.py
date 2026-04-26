@@ -1,5 +1,5 @@
-from rest_framework.throttling import UserRateThrottle
+from apps.common.throttling import UserBurstThrottle
 
 
-class CatalogWriteThrottle(UserRateThrottle):
-    scope = "catalog_write"
+class CatalogWriteThrottle(UserBurstThrottle):
+    """Catalog uses the shared authenticated burst budget from apps.common."""

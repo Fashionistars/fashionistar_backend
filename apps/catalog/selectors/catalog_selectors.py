@@ -1,4 +1,6 @@
-from apps.admin_backend.models import Brand, Category, Collections
+from django.utils import timezone
+
+from apps.catalog.models import BlogPost, BlogPostStatus, Brand, Category, Collections
 
 
 class CatalogSelector:
@@ -39,3 +41,37 @@ class CatalogSelector:
             )
             .order_by("-created_at")
         )
+
+    @staticmethod
+    def blog_posts(*, include_drafts: bool = False):
+        queryset = (
+            BlogPost.objects.select_related("author", "category")
+            .prefetch_related("gallery_media")
+            .only(
+                "id",
+                "author",
+                "category",
+                "title",
+                "slug",
+                "excerpt",
+                "content",
+                "featured_image",
+                "featured_image_cloudinary_url",
+                "status",
+                "tags",
+                "seo_title",
+                "seo_description",
+                "is_featured",
+                "published_at",
+                "view_count",
+                "created_at",
+                "updated_at",
+            )
+        )
+        if include_drafts:
+            return queryset.order_by("-updated_at")
+        return queryset.filter(
+            status=BlogPostStatus.PUBLISHED,
+            published_at__lte=timezone.now(),
+            is_deleted=False,
+        ).order_by("-is_featured", "-published_at", "-created_at")
