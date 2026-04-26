@@ -48,7 +48,9 @@ class ReferenceLgasView(generics.GenericAPIView):
     serializer_class = ReferenceLgaSerializer
     permission_classes = [AllowAny]
 
-    def get(self, request, country_code: str, state_code: str, *args, **kwargs) -> Response:
+    def get(
+        self, request, country_code: str, state_code: str, *args, **kwargs
+    ) -> Response:
         path_serializer = StatePathSerializer(
             data={"country_code": country_code, "state_code": state_code}
         )
@@ -87,7 +89,15 @@ class ReferenceStateLgaCitiesView(generics.GenericAPIView):
     serializer_class = ReferenceCitySerializer
     permission_classes = [AllowAny]
 
-    def get(self, request, country_code: str, state_code: str, lga_code: str, *args, **kwargs) -> Response:
+    def get(
+        self,
+        request,
+        country_code: str,
+        state_code: str,
+        lga_code: str,
+        *args,
+        **kwargs,
+    ) -> Response:
         path_serializer = LgaPathSerializer(
             data={
                 "country_code": country_code,
@@ -110,9 +120,77 @@ class ReferenceBanksView(generics.GenericAPIView):
     permission_classes = [AllowAny]
 
     def get(self, request, *args, **kwargs) -> Response:
-        query_serializer = BankQuerySerializer(data={"country": request.query_params.get("country", "NG")})
+        query_serializer = BankQuerySerializer(
+            data={"country": request.query_params.get("country", "NG")}
+        )
         query_serializer.is_valid(raise_exception=True)
         banks = get_banks(query_serializer.validated_data["country"])
         serializer = self.get_serializer(banks, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+
+    @extend_schema(
+        summary="List cities in an LGA",
+        description="Returns cities for the specific country, state, and LGA path.",
+        responses={200: ReferenceCitySerializer(many=True)},
+    )
+    def get(
+        self,
+        request,
+        country_code: str,
+        state_code: str,
+        lga_code: str,
+        *args,
+        **kwargs,
+    ):
+        path_serializer = LgaPathSerializer(
+            data={
+                "country_code": country_code,
+                "state_code": state_code,
+                "lga_code": lga_code,
+            }
+        )
+        path_serializer.is_valid(raise_exception=True)
+        cities = get_cities(
+            path_serializer.validated_data["country_code"],
+            state_ref=path_serializer.validated_data["state_code"],
+            lga_ref=path_serializer.validated_data["lga_code"],
+        )
+        serializer = self.get_serializer(cities, many=True)
+        return success_response(
+            data=serializer.data, message="Cities retrieved successfully."
+        )
+
+
+# ===========================================================================
+# FINANCIAL INSTITUTIONS
+# ===========================================================================
+
+
+class ReferenceBanksView(generics.GenericAPIView):
+    """
+    GET /api/v1/reference/banks/
+
+    Returns a list of banks for a given country for transfer operations.
+    """
+
+    serializer_class = ReferenceBankSerializer
+    permission_classes = [AllowAny]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+
+    @extend_schema(
+        summary="List banks",
+        description="Returns a list of banks for the specified country (default: NG).",
+        responses={200: ReferenceBankSerializer(many=True)},
+    )
+    def get(self, request, *args, **kwargs):
+        query_serializer = BankQuerySerializer(
+            data={"country": request.query_params.get("country", "NG")}
+        )
+        query_serializer.is_valid(raise_exception=True)
+        banks = get_banks(query_serializer.validated_data["country"])
+        serializer = self.get_serializer(banks, many=True)
+        return success_response(
+            data=serializer.data, message="Banks retrieved successfully."
+        )

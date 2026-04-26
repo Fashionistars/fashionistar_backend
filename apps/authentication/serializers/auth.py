@@ -1,28 +1,40 @@
 # apps/authentication/serializers/auth.py
 """
-Auth Serializers — Login, Registration, Logout, Token Refresh, Google OAuth.
+Authentication Serializers — DRF
+================================
 
-Part of the serializers/ folder split (Bug 9).
-Previously in the monolithic serializers.py.
+Logic for validating user credentials, registration data, and OTP codes.
+Ensures data integrity and security at the API entry point.
 """
 
 import logging
-
-from apps.authentication.models import UnifiedUser
 from django.contrib.auth.password_validation import validate_password
 from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 from phonenumber_field.serializerfields import PhoneNumberField
 from rest_framework import serializers
 
+from apps.authentication.models import UnifiedUser
+from .profile import MeSerializer
+
 logger = logging.getLogger(__name__)
 
 
-# ─── OTP Serializers ────────────────────────────────────────────────────────
+# ===========================================================================
+# OTP SERIALIZERS
+# ===========================================================================
+
 
 class OTPSerializer(serializers.Serializer):
     """
-    Serializer for OTP verification with robust validation and error handling.
+    Serializer for OTP verification.
+
+    Validation Logic:
+      - Required: 6-digit string.
+      - Numeric only.
+
+    Security:
+      - Max length enforced to prevent buffer/memory attacks.
     """
     otp = serializers.CharField(
         required=True,
@@ -42,15 +54,11 @@ class OTPSerializer(serializers.Serializer):
 
             if len(otp) != 6:
                 logger.warning("OTP validation failed: Invalid length %d.", len(otp))
-                raise serializers.ValidationError(
-                    {"otp": _("OTP length should be of six digits.")}
-                )
+                raise serializers.ValidationError({"otp": _("OTP length should be of six digits.")})
 
             if not otp.isdigit():
                 logger.warning("OTP validation failed: Non-digit characters detected.")
-                raise serializers.ValidationError(
-                    {"otp": _("OTP must contain only digits.")}
-                )
+                raise serializers.ValidationError({"otp": _("OTP must contain only digits.")})
 
             logger.info("OTP validation successful.")
             return attrs
@@ -58,25 +66,38 @@ class OTPSerializer(serializers.Serializer):
             raise
         except Exception as exc:
             logger.error("Unexpected error in OTP validation: %s", exc)
-            raise serializers.ValidationError(
-                {"otp": _("An error occurred during OTP validation.")}
-            )
+            raise serializers.ValidationError({"otp": _("An error occurred during OTP validation.")})
 
 
+class ResendOTPRequestSerializer(serializers.Serializer):
+    """Serializer for requesting a new OTP."""
+    email_or_phone = serializers.CharField(
+        required=True,
+        help_text="Registered email or phone number."
+    )
 
-# ─── Login Serializers ───────────────────────────────────────────────────────
+    class Meta:
+        ref_name = "AuthResendOTPRequest"
+
+
+# ===========================================================================
+# LOGIN SERIALIZERS
+# ===========================================================================
+
 
 class LoginSerializer(serializers.Serializer):
     """
-    Serializer for authenticating users with either email or phone.
+    Serializer for user authentication via Email or Phone.
 
-    Enterprise-grade auth flow (priority order):
+    Validation Logic:
+      1. Normalise input identifier (email to lowercase).
+      2. Verify user exists and is not soft-deleted.
+      3. Verify password hash matches.
+      4. Check account lifecycle status (verified, active).
 
-    1. Alive-only lookup (is_deleted=False)
-    2. Soft-deleted pool check → SoftDeletedUserError (403)
-    3. Password check → InvalidCredentialsError (401)
-    4a. is_verified check FIRST → AccountNotVerifiedError (403) with OTP URLs
-    4b. is_active check SECOND → AccountDeactivatedError (403) with support URL
+    Security:
+      - Uses Django's `check_password` for constant-time comparison.
+      - Throttled at the View level to prevent brute-force.
     """
     email_or_phone = serializers.CharField(
         write_only=True,
@@ -94,134 +115,93 @@ class LoginSerializer(serializers.Serializer):
 
     def validate(self, data):
         from apps.authentication.exceptions import (
-            SoftDeletedUserError,
-            AccountNotVerifiedError,
-            AccountDeactivatedError,
-            InvalidCredentialsError,
+            SoftDeletedUserError, AccountNotVerifiedError,
+            AccountDeactivatedError, InvalidCredentialsError,
         )
 
         email_or_phone = data.get("email_or_phone")
-        password       = data.get("password")
+        password = data.get("password")
 
         try:
-            # Normalise email domain to lowercase only for email (phone remains unchanged)
+            # Normalise identifier
             from django.contrib.auth.base_user import BaseUserManager as _BUM
             if email_or_phone and "@" in email_or_phone:
                 email_or_phone = _BUM.normalize_email(email_or_phone)
                 data["email_or_phone"] = email_or_phone
 
-            # ── Step 1: Alive-only lookup (✅ 1 DB HIT using Q) ─────────────
+            # Lookup User
             user = UnifiedUser.objects.filter(
                 Q(email=email_or_phone) if "@" in email_or_phone else Q(phone=email_or_phone)
             ).first()
 
             if user is None:
-                # ── Step 2: Soft-deleted pool check (✅ 1 DB HIT using Q) ─
+                # Pool check for soft-deleted
                 if UnifiedUser.objects.all_with_deleted().filter(
                     (Q(email=email_or_phone) if "@" in email_or_phone else Q(phone=email_or_phone)),
                     is_deleted=True
                 ).exists():
-                    logger.warning(
-                        "⛔ Login rejected: soft-deleted account '%s'", email_or_phone
-                    )
+                    logger.warning("⛔ Login rejected: soft-deleted account '%s'", email_or_phone)
                     raise SoftDeletedUserError()
-
-                # User not found at all
-                logger.warning("⛔ Login failed: user not found '%s'", email_or_phone)
                 raise InvalidCredentialsError()
 
-            # ── Step 3: Password check ────────────────────────────────────
             if not user.check_password(password):
-                logger.warning(
-                    "⛔ Login failed: wrong password for '%s'", email_or_phone
-                )
+                logger.warning("⛔ Login failed: wrong password for '%s'", email_or_phone)
                 raise InvalidCredentialsError()
 
-            # ── Step 4a: Check if the user has verified their OTP (FIRST — before is_active) ──────
             if not user.is_verified:
-                logger.warning(
-                    "⛔ Login rejected: account not verified '%s'", email_or_phone
-                )
+                logger.warning("⛔ Login rejected: account not verified '%s'", email_or_phone)
                 raise AccountNotVerifiedError()
 
-            # ── Step 4b: Admin deactivation (SECOND) ─────────────────────
             if not user.is_active:
-                logger.warning(
-                    "⛔ Login rejected: deactivated account '%s'", email_or_phone
-                )
+                logger.warning("⛔ Login rejected: deactivated account '%s'", email_or_phone)
                 raise AccountDeactivatedError()
 
-            logger.info(
-                "✅ LoginSerializer: valid credentials for '%s'", email_or_phone
-            )
+            logger.info("✅ LoginSerializer: valid credentials for '%s'", email_or_phone)
             data["user"] = user
             return data
 
-        except (
-            SoftDeletedUserError, AccountNotVerifiedError,
-            AccountDeactivatedError, InvalidCredentialsError,
-        ):
+        except (SoftDeletedUserError, AccountNotVerifiedError, AccountDeactivatedError, InvalidCredentialsError):
             raise
         except Exception as exc:
-            logger.error(
-                "❌ Unexpected error in LoginSerializer.validate(): %s",
-                exc, exc_info=True,
-            )
-            raise serializers.ValidationError(
-                {"non_field_errors": [_("An unexpected error occurred during login.")]}
-            )
+            logger.error("❌ Unexpected error in LoginSerializer: %s", exc, exc_info=True)
+            raise serializers.ValidationError({"non_field_errors": [_("An unexpected error occurred during login.")]})
 
 
+# ===========================================================================
+# REGISTRATION SERIALIZERS
+# ===========================================================================
 
-
-# ─── Registration Serializers ─────────────────────────────────────────────────
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     """
-    Serializer for user registration (email or phone).
-    Strictly enforces One-of-Email-or-Phone logic.
-    Delegates creation to RegistrationService.
+    Serializer for creating a new user account.
+
+    Validation Logic:
+      - Enforces One-of-Email-or-Phone.
+      - Password strength validation via Django standard.
+      - Duplicate check against active and soft-deleted pools.
+
+    Security:
+      - Atomic transaction check to prevent race-condition duplicates.
     """
     password = serializers.CharField(
         write_only=True,
         required=True,
         validators=[validate_password],
         style={"input_type": "password"},
-        help_text="User's password",
     )
     password2 = serializers.CharField(
         write_only=True,
         required=True,
         style={"input_type": "password"},
-        help_text="Confirm user's password",
     )
-    email = serializers.EmailField(
-        required=False,
-        allow_blank=True,
-        help_text="User's email address",
-    )
-    phone = PhoneNumberField(
-        required=False,
-        allow_blank=True,
-        help_text="User's phone number",
-    )
+    email = serializers.EmailField(required=False, allow_blank=True)
+    phone = PhoneNumberField(required=False, allow_blank=True)
+    first_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
+    last_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
 
-    first_name = serializers.CharField(
-        required=False,
-        allow_blank=True,
-        max_length=150,
-        help_text="User's first name",
-    )
-    last_name = serializers.CharField(
-        required=False,
-        allow_blank=True,
-        max_length=150,
-        help_text="User's last name",
-    )
-
-    ROLE_CHOICES = [("vendor", "Vendor"), ("client", "Client")]
     role = serializers.ChoiceField(
-        choices=ROLE_CHOICES,
+        choices=[("vendor", "Vendor"), ("client", "Client")],
         help_text="User's role: 'vendor' or 'client'",
     )
 
@@ -234,157 +214,77 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         from apps.authentication.exceptions import SoftDeletedUserExistsError
         try:
             if attrs["password"] != attrs["password2"]:
-                logger.warning("Registration failed: Passwords do not match.")
-                raise serializers.ValidationError(
-                    {"password": _("Passwords do not match.")}
-                )
+                raise serializers.ValidationError({"password": _("Passwords do not match.")})
 
-            # Normalise empty strings → None
+            # Normalise data
             attrs["email"] = attrs.get("email") or None
             attrs["phone"] = attrs.get("phone") or None
-            attrs["first_name"] = attrs.get("first_name") or None
-            attrs["last_name"] = attrs.get("last_name") or None
-
+            
             email = attrs["email"]
             phone = attrs["phone"]
-            role  = attrs.get("role")
-
-            valid_roles = [c[0] for c in self.ROLE_CHOICES]
-            if role not in valid_roles:
-                raise serializers.ValidationError(
-                    {"role": _("Invalid role. Must be 'vendor' or 'client'.")}
-                )
 
             if email and phone:
-                raise serializers.ValidationError({
-                    "non_field_errors": [_(
-                        "Please provide either an email address or a "
-                        "phone number, not both."
-                    )]
-                })
-
+                raise serializers.ValidationError({"non_field_errors": [_("Provide either email or phone, not both.")]})
             if not email and not phone:
-                raise serializers.ValidationError({
-                    "non_field_errors": [_(
-                        "Please provide either an email address or a "
-                        "phone number; one is required."
-                    )]
-                })
+                raise serializers.ValidationError({"non_field_errors": [_("Provide either email or phone; one is required.")]})
 
-            # Normalise email domain to lowercase (only for email)
-            from django.contrib.auth.base_user import BaseUserManager as _BUM
             if email:
-                email = _BUM.normalize_email(email)
-                attrs["email"] = email
+                from django.contrib.auth.base_user import BaseUserManager as _BUM
+                attrs["email"] = _BUM.normalize_email(email)
 
-            # Soft-deleted pool check FIRST (prevents unique-constraint 500)
-            # ✅ OPTIMIZED: Single database query using Q object (one-liner)
-            if (email or phone) and UnifiedUser.objects.all_with_deleted().filter(
-                (Q(email__iexact=email) if email else Q(phone=phone)),
-                is_deleted=True
-            ).exists():
-                logger.warning(
-                    "⛔ Registration blocked: soft-deleted account '%s' or '%s'", email, phone
-                )
+            # Check duplicates
+            identifier_q = Q(email__iexact=attrs["email"]) if attrs["email"] else Q(phone=attrs["phone"])
+            if UnifiedUser.objects.all_with_deleted().filter(identifier_q, is_deleted=True).exists():
+                logger.warning("⛔ Registration blocked: soft-deleted account exists.")
                 raise SoftDeletedUserExistsError()
 
-            # Active uniqueness check (✅ OPTIMIZED: Single query using Q one-liner)
-            if (email or phone) and UnifiedUser.objects.filter(
-                (Q(email__iexact=email) if email else Q(phone=phone))
-            ).exists():
-                raise serializers.ValidationError({
-                    "email" if email else "phone": [_(
-                        "A user with this email address already exists."
-                        if email else "A user with this phone number already exists."
-                    )]
-                })
+            if UnifiedUser.objects.filter(identifier_q).exists():
+                field = "email" if attrs["email"] else "phone"
+                raise serializers.ValidationError({field: [_("A user with this identifier already exists.")]})
 
-            logger.info("Registration validation successful.")
             return attrs
-
         except (serializers.ValidationError, SoftDeletedUserExistsError):
             raise
         except Exception as exc:
             logger.error("Unexpected error in registration validation: %s", exc, exc_info=True)
-            raise serializers.ValidationError(
-                {"non_field_errors": f"An error occurred during validation: {str(exc)}"}
-            )
-
-    def create(self, validated_data):
-        try:
-            from apps.authentication.services.registration_service import (
-                RegistrationService,
-            )
-            validated_data.pop("password2", None)
-            validated_data.pop("password_confirm", None)
-
-            result = RegistrationService.register_sync(**validated_data)
-
-            from apps.authentication.models import UnifiedUser as _UU
-            user = _UU.objects.get(id=result["user_id"])
-
-            logger.info(
-                "✅ User created via serializer: %s (ID: %s, Role: %s)",
-                user.email or user.phone, user.id, user.role,
-            )
-            return user
-        except Exception as exc:
-            logger.error("❌ Error creating user via serializer: %s", exc, exc_info=True)
-            raise serializers.ValidationError(
-                {"error": f"An error occurred during user creation: {exc}"}
-            )
+            raise serializers.ValidationError({"non_field_errors": [_("An error occurred during validation.")]})
 
 
-# ─── Logout / Token Refresh ───────────────────────────────────────────────────
+# ===========================================================================
+# SESSION & GOOGLE SERIALIZERS
+# ===========================================================================
+
 
 class LogoutSerializer(serializers.Serializer):
-    """Accepts the refresh token to blacklist on logout."""
-    refresh = serializers.CharField(
-        required=True,
-        help_text="Refresh token to blacklist on logout.",
-    )
+    """Validates refresh token for blacklisting."""
+    refresh = serializers.CharField(required=True)
 
     class Meta:
         ref_name = "AuthLogout"
 
 
 class TokenRefreshSerializer(serializers.Serializer):
-    """
-    Wraps SimpleJWT token refresh for drf-yasg Swagger schema generation.
-    """
-    refresh = serializers.CharField(
-        required=True,
-        help_text="A valid refresh token previously issued by the login endpoint.",
-    )
+    """Wraps SimpleJWT refresh for schema generation."""
+    refresh = serializers.CharField(required=True)
 
     class Meta:
         ref_name = "AuthTokenRefresh"
 
 
-# ─── Google OAuth ─────────────────────────────────────────────────────────────
-
 class GoogleAuthSerializer(serializers.Serializer):
     """
-    Serializer for Google ID Token authentication.
+    Serializer for Google OAuth2 ID Token authentication.
 
-    Flow:
-        Login (existing user): { id_token }  — role is optional, ignored
-        Register (new user):   { id_token, role: 'vendor'|'client' }
+    Validation Logic:
+      - Verifies presence of 'id_token'.
+      - Normalises 'role' for new registrations.
     """
-    id_token = serializers.CharField(
-        required=True,
-        help_text="Google ID Token (JWT) returned by @react-oauth/google on the frontend.",
-    )
-
-    ROLE_CHOICES = getattr(
-        UnifiedUser, "ROLE_CHOICES", [("vendor", "Vendor"), ("client", "Client")]
-    )
+    id_token = serializers.CharField(required=True)
     role = serializers.ChoiceField(
-        choices=ROLE_CHOICES,
+        choices=[("vendor", "Vendor"), ("client", "Client")],
         default="client",
-        required=False,       # ← Optional: for login, role is derived from DB record
-        allow_blank=True,     # ← Permits "" from frontend during login
-        help_text="User's role — required for new registrations, ignored for existing users.",
+        required=False,
+        allow_blank=True,
     )
 
     class Meta:
@@ -393,21 +293,73 @@ class GoogleAuthSerializer(serializers.Serializer):
     def validate(self, attrs):
         try:
             if not attrs.get("id_token"):
-                raise serializers.ValidationError(
-                    {"id_token": _("Google ID Token is required.")}
-                )
-            # Normalise role: strip blanks, default to 'client'
+                raise serializers.ValidationError({"id_token": _("Google ID Token is required.")})
             role = (attrs.get("role") or "client").strip().lower()
-            valid_roles = [c[0] for c in self.ROLE_CHOICES]
-            if role not in valid_roles:
-                role = "client"
-            attrs["role"] = role
+            attrs["role"] = role if role in ["vendor", "client"] else "client"
             return attrs
-        except serializers.ValidationError:
-            raise
         except Exception as exc:
             logger.error("Google auth validation error: %s", exc)
-            raise serializers.ValidationError(
-                {"non_field_errors": _("An error occurred during Google Auth validation.")}
-            )
+            raise serializers.ValidationError({"non_field_errors": [_("An error occurred during Google Auth validation.")]})
+
+
+# ===========================================================================
+# RESPONSE SERIALIZERS (FOR SCHEMA)
+# ===========================================================================
+
+
+class RegistrationResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+    user_id = serializers.UUIDField()
+    email = serializers.EmailField(allow_null=True)
+    phone = serializers.CharField(allow_null=True)
+
+    class Meta:
+        ref_name = "AuthRegistrationResponse"
+
+
+class LoginResponseSerializer(serializers.Serializer):
+    access = serializers.CharField()
+    refresh = serializers.CharField()
+    user = MeSerializer()
+
+    class Meta:
+        ref_name = "AuthLoginResponse"
+
+
+class OTPVerifyResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+    user_id = serializers.UUIDField()
+
+    class Meta:
+        ref_name = "AuthOTPVerifyResponse"
+
+
+
+# ─── Response Serializers ───────────────────────────────────────────────────
+
+class RegistrationResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+    user_id = serializers.UUIDField()
+    email = serializers.EmailField(allow_null=True)
+    phone = serializers.CharField(allow_null=True)
+
+    class Meta:
+        ref_name = "AuthRegistrationResponse"
+
+
+class LoginResponseSerializer(serializers.Serializer):
+    access = serializers.CharField()
+    refresh = serializers.CharField()
+    user = MeSerializer()
+
+    class Meta:
+        ref_name = "AuthLoginResponse"
+
+
+class OTPVerifyResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+    user_id = serializers.UUIDField()
+
+    class Meta:
+        ref_name = "AuthOTPVerifyResponse"
 

@@ -3,6 +3,325 @@
 Synchronous Password Management Views — Enterprise Edition
 =========================================================
 
+Endpoints:
+  POST /api/v1/password/reset-request/
+  POST /api/v1/password/reset-confirm/<uidb64>/<token>/
+  POST /api/v1/password/reset-phone-confirm/
+  POST /api/v1/password/change/
+"""
+import logging
+import uuid
+from drf_spectacular.utils import extend_schema
+from django.db import transaction
+from rest_framework import generics, status
+from rest_framework.permissions import AllowAny
+from rest_framework.renderers import BrowsableAPIRenderer
+from rest_framework.response import Response
+
+from apps.authentication.serializers import (
+    PasswordChangeSerializer,
+    PasswordResetConfirmEmailSerializer,
+    PasswordResetConfirmPhoneSerializer,
+    PasswordResetRequestSerializer,
+)
+from apps.authentication.services.password_service import (
+    SyncPasswordService,
+)
+from apps.common.permissions import (
+    IsVerifiedUser,
+    RateLimitPermission,
+    require_verification,
+)
+from apps.common.renderers import CustomJSONRenderer
+from apps.common.responses import error_response, success_response
+
+logger = logging.getLogger('application')
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _get_client_ip(request) -> str:
+    xff = request.META.get("HTTP_X_FORWARDED_FOR", "")
+    return xff.split(",")[0].strip() if xff else request.META.get("REMOTE_ADDR", "")
+
+
+def _audit_log(
+    *,
+    event_type_name: str,
+    action: str,
+    request,
+    actor=None,
+    metadata: dict | None = None,
+    severity_name: str = "INFO",
+    is_compliance: bool = True,
+):
+    try:
+        from apps.audit_logs.services import AuditService
+        from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
+
+        event_type = getattr(EventType, event_type_name, None)
+        severity   = getattr(SeverityLevel, severity_name, SeverityLevel.INFO)
+
+        if event_type is None:
+            logger.warning("_audit_log: unknown event_type_name='%s'", event_type_name)
+            return
+
+        AuditService.log(
+            event_type=event_type,
+            event_category=EventCategory.SECURITY,
+            severity=severity,
+            action=action,
+            request=request,
+            actor=actor,
+            actor_email=getattr(actor, "email", None) if actor else None,
+            ip_address=_get_client_ip(request),
+            metadata=metadata or {},
+            is_compliance=is_compliance,
+        )
+    except Exception as exc:
+        logger.warning("_audit_log call failed (%s). event=%s", exc, event_type_name)
+
+
+# ===========================================================================
+# POST /api/v1/password/reset-request/
+# ===========================================================================
+
+
+class PasswordResetRequestView(generics.GenericAPIView):
+    """
+    Initiate a password reset — email or phone.
+
+    Flow:
+      1. Receive identifier (email or phone).
+      2. service.request_reset() — checks existence, sends code/link.
+      3. Always return 200 (Success) to prevent user enumeration.
+
+    Rate limited by RateLimitPermission to prevent brute-force identifier guessing.
+    """
+    serializer_class = PasswordResetRequestSerializer
+    permission_classes = [AllowAny, RateLimitPermission]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+    throttle_scope = 'password_reset'
+
+    def post(self, request, *args, **kwargs):
+        request_id = str(uuid.uuid4())[:8]
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email_or_phone = serializer.validated_data["email_or_phone"]
+
+        try:
+            message = SyncPasswordService.request_reset(email_or_phone)
+            _audit_log(
+                event_type_name="PASSWORD_RESET_REQUEST",
+                action=f"Password reset requested for: {email_or_phone}",
+                request=request,
+                metadata={"email_or_phone": email_or_phone, "request_id": request_id},
+                is_compliance=True,
+            )
+            return success_response(message=message, status=status.HTTP_200_OK)
+
+        except Exception as exc:
+            logger.error("[%s] PasswordResetRequest error: %s", request_id, exc)
+            return success_response(
+                message="If an account exists, a reset code has been sent.",
+                status=status.HTTP_200_OK,
+            )
+
+
+# ===========================================================================
+# POST /api/v1/password/reset-confirm/<uidb64>/<token>/
+# ===========================================================================
+
+
+class PasswordResetConfirmEmailView(generics.GenericAPIView):
+    """
+    Finalise an email-based password reset.
+
+    URL parameters uidb64 and token are validated against Django's
+    default_token_generator.
+
+    On success:  audit event PASSWORD_RESET_COMPLETED (compliance=True)
+    """
+    serializer_class = PasswordResetConfirmEmailSerializer
+    permission_classes = [AllowAny]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+
+    def post(self, request, uidb64, token, *args, **kwargs):
+        request_id = str(uuid.uuid4())[:8]
+        data = {**request.data, "uidb64": uidb64, "token": token}
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            service_payload = {
+                "uidb64": uidb64,
+                "token": token,
+                "new_password": serializer.validated_data["password"],
+            }
+            msg = SyncPasswordService.confirm_reset(service_payload)
+            _audit_log(
+                event_type_name="PASSWORD_RESET_DONE",
+                action="Password reset completed via email magic link",
+                request=request,
+                metadata={"method": "email", "uidb64": uidb64, "request_id": request_id},
+                is_compliance=True,
+            )
+            return success_response(message=msg, status=status.HTTP_200_OK)
+
+        except Exception as exc:
+            logger.warning("[%s] PasswordResetConfirmEmail failed: %s", request_id, exc)
+            from django.conf import settings as _s
+            _base = getattr(_s, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
+            return error_response(
+                message="Invalid or expired reset link.",
+                code="invalid_token",
+                status=status.HTTP_400_BAD_REQUEST,
+                errors={
+                    "actions": {
+                        "request_new_reset": "/api/v1/password/reset-request/",
+                        "forgot_password_page": f"{_base}/auth/forgot-password",
+                    }
+                }
+            )
+
+
+# ===========================================================================
+# POST /api/v1/password/reset-phone-confirm/
+# ===========================================================================
+
+
+class PasswordResetConfirmPhoneView(generics.GenericAPIView):
+    """
+    Finalise a phone-based password reset via OTP.
+
+    Body:
+      otp       — 6-digit code sent via SMS
+      password  — new password
+      password2 — confirmation
+
+    On success:  audit event PASSWORD_RESET_COMPLETED (compliance=True)
+    """
+    serializer_class = PasswordResetConfirmPhoneSerializer
+    permission_classes = [AllowAny]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+
+    def post(self, request, *args, **kwargs):
+        request_id = str(uuid.uuid4())[:8]
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        vd = serializer.validated_data
+        service_payload = {
+            "token": vd["otp"],
+            "new_password": vd["new_password"],
+        }
+
+        try:
+            msg = SyncPasswordService.confirm_reset(service_payload)
+            _audit_log(
+                event_type_name="PASSWORD_RESET_DONE",
+                action="Password reset completed via phone OTP",
+                request=request,
+                metadata={"method": "phone", "request_id": request_id},
+                is_compliance=True,
+            )
+            return success_response(message=msg, status=status.HTTP_200_OK)
+
+        except Exception as exc:
+            logger.warning("[%s] PasswordResetConfirmPhone failed: %s", request_id, exc)
+            from django.conf import settings as _s
+            _base = getattr(_s, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
+            return error_response(
+                message="Invalid or expired OTP.",
+                code="invalid_otp",
+                status=status.HTTP_400_BAD_REQUEST,
+                errors={
+                    "actions": {
+                        "resend_otp": f"{_base}/auth/forgot-password",
+                        "request_new_reset": "/api/v1/password/reset-request/",
+                    }
+                }
+            )
+
+
+# ===========================================================================
+# POST /api/v1/password/change/
+# ===========================================================================
+
+
+class ChangePasswordView(generics.GenericAPIView):
+    """
+    Authenticated user changes their own password from the dashboard.
+
+    Permission gate (strictest possible for account-mutating actions):
+      IsVerifiedUser  — user must be authenticated, active, AND OTP-verified.
+
+    Flow:
+      1. Validate old password + new password (DRF serializer).
+      2. transaction.atomic() — set new password and save().
+      3. AuditService.log(PASSWORD_CHANGED) — compliance record.
+      4. transaction.on_commit() — fire confirmation email via Celery.
+    """
+    serializer_class = PasswordChangeSerializer
+    permission_classes = [IsVerifiedUser]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+
+    @require_verification
+    def post(self, request, *args, **kwargs):
+        request_id = str(uuid.uuid4())[:8]
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        vd = serializer.validated_data
+        user = request.user
+
+        try:
+            with transaction.atomic():
+                user.set_password(vd["new_password"])
+                user.save(update_fields=["password", "updated_at"])
+
+                logger.info(
+                    "[%s] ChangePassword: password updated for user=%s",
+                    request_id, getattr(user, "email", user.pk),
+                )
+
+                _audit_log(
+                    event_type_name="PASSWORD_CHANGED",
+                    action=f"Password changed by user {user.pk}",
+                    request=request,
+                    actor=user,
+                    metadata={"user_id": str(user.pk), "request_id": request_id},
+                    is_compliance=True,
+                )
+
+                if getattr(user, "email", None):
+                    from apps.authentication.tasks import send_email_task
+                    _user_email = user.email
+                    _user_ctx = {
+                        "user_first_name": getattr(user, "first_name", ""),
+                        "user_email": _user_email,
+                    }
+                    transaction.on_commit(lambda: send_email_task.delay(
+                        subject="Password Changed — Fashionistar",
+                        recipients=[_user_email],
+                        template_name="authentication/email/password_changed.html",
+                        context=_user_ctx,
+                    ))
+
+            return success_response(message="Password changed successfully.", status=status.HTTP_200_OK)
+
+        except Exception as exc:
+            logger.error("[%s] ChangePassword error: %s", request_id, exc)
+            return error_response(message="Unable to change password.", status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# apps/authentication/apis/password_views/sync_views.py
+"""
+Synchronous Password Management Views — Enterprise Edition
+=========================================================
+
 Endpoints covered:
   POST /api/v1/password/reset-request/
       → initiate email or phone-based reset (anonymous, rate-limited)
@@ -468,3 +787,59 @@ class ChangePasswordView(APIView):
                 _ERROR("Unable to change password. Please try again."),
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+      2. transaction.atomic() — set new password and save().
+      3. AuditService.log(PASSWORD_CHANGED) — compliance record.
+      4. transaction.on_commit() — fire confirmation email via Celery.
+    """
+    serializer_class = PasswordChangeSerializer
+    permission_classes = [IsVerifiedUser]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+
+    @require_verification
+    def post(self, request, *args, **kwargs):
+        request_id = str(uuid.uuid4())[:8]
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        vd = serializer.validated_data
+        user = request.user
+
+        try:
+            with transaction.atomic():
+                user.set_password(vd["new_password"])
+                user.save(update_fields=["password", "updated_at"])
+
+                logger.info(
+                    "[%s] ChangePassword: password updated for user=%s",
+                    request_id, getattr(user, "email", user.pk),
+                )
+
+                _audit_log(
+                    event_type_name="PASSWORD_CHANGED",
+                    action=f"Password changed by user {user.pk}",
+                    request=request,
+                    actor=user,
+                    metadata={"user_id": str(user.pk), "request_id": request_id},
+                    is_compliance=True,
+                )
+
+                if getattr(user, "email", None):
+                    from apps.authentication.tasks import send_email_task
+                    _user_email = user.email
+                    _user_ctx = {
+                        "user_first_name": getattr(user, "first_name", ""),
+                        "user_email": _user_email,
+                    }
+                    transaction.on_commit(lambda: send_email_task.delay(
+                        subject="Password Changed — Fashionistar",
+                        recipients=[_user_email],
+                        template_name="authentication/email/password_changed.html",
+                        context=_user_ctx,
+                    ))
+
+            return success_response(message="Password changed successfully.", status=status.HTTP_200_OK)
+
+        except Exception as exc:
+            logger.error("[%s] ChangePassword error: %s", request_id, exc)
+            return error_response(message="Unable to change password.", status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+

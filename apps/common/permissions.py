@@ -764,20 +764,17 @@ def require_verification(func):
     permissions are already enforced by DRF.
     """
     from functools import wraps
-    from rest_framework.response import Response
+    from apps.common.renderers import error_response
     from rest_framework import status
 
     @wraps(func)
     def wrapper(self, request, *args, **kwargs):
         permission = IsVerifiedUser()
         if not permission.has_permission(request, self):
-            return Response(
-                {
-                    "status": "error",
-                    "message": permission.message,
-                    "code": "account_not_verified",
-                },
+            return error_response(
+                message=permission.message,
                 status=status.HTTP_403_FORBIDDEN,
+                code="account_not_verified"
             )
         return func(self, request, *args, **kwargs)
 

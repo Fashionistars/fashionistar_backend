@@ -30,3 +30,15 @@ class TransactionDisputeSerializer(serializers.ModelSerializer):
 
 class RefundSerializer(serializers.Serializer):
     hold_reference = serializers.CharField(max_length=120)
+
+
+class RefundResponseSerializer(serializers.Serializer):
+    hold_reference = serializers.CharField()
+    status = serializers.CharField()
+
+
+class TransactionSummarySerializer(serializers.Serializer):
+    total_inflow = serializers.DecimalField(max_digits=20, decimal_places=2)
+    total_outflow = serializers.DecimalField(max_digits=20, decimal_places=2)
+    net_balance = serializers.DecimalField(max_digits=20, decimal_places=2)
+    count = serializers.IntegerField()

@@ -50,3 +50,34 @@ class WalletHoldSerializer(serializers.ModelSerializer):
     class Meta:
         model = WalletHold
         fields = ["id", "amount", "released_amount", "refunded_amount", "reference", "order_id", "status", "created_at"]
+
+
+class WalletTransferSerializer(serializers.Serializer):
+    """
+    Serializer for P2P fund transfers.
+    Validates receiver existence, positive amount, and PIN format.
+    """
+    receiver_id = serializers.UUIDField(help_text="ID of the user receiving the funds.")
+    amount = serializers.DecimalField(
+        max_digits=20,
+        decimal_places=2,
+        min_value=0.01,
+        help_text="Amount to transfer (min 0.01).",
+    )
+    transaction_password = serializers.CharField(
+        min_length=4,
+        max_length=10,
+        help_text="4-digit transaction PIN for authorization.",
+    )
+
+
+class WalletPinVerifyResponseSerializer(serializers.Serializer):
+    valid = serializers.BooleanField()
+
+
+class EscrowReleaseResponseSerializer(serializers.Serializer):
+    status = serializers.CharField()
+    released_amount = serializers.DecimalField(max_digits=20, decimal_places=2)
+    fee_amount = serializers.DecimalField(max_digits=20, decimal_places=2)
+    net_amount = serializers.DecimalField(max_digits=20, decimal_places=2)
+    reference = serializers.CharField()

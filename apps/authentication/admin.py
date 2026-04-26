@@ -69,7 +69,12 @@ from apps.common.admin_import_export import (
     EnterpriseModelResource,
 )
 from apps.audit_logs.mixins import AuditedModelAdmin
-from apps.authentication.models import UnifiedUser, BiometricCredential
+from apps.authentication.models import (
+    UnifiedUser,
+    BiometricCredential,
+    LoginEvent,
+    UserSession,
+)
 
 logger = logging.getLogger('application')
 
@@ -564,6 +569,40 @@ class BiometricInline(admin.TabularInline):
     verbose_name_plural = "WebAuthn / Biometric Credentials"
 
 
+class LoginEventInline(admin.TabularInline):
+    """
+    Read-only history of login attempts for the user.
+    """
+    model = LoginEvent
+    extra = 0
+    can_delete = False
+    classes = ("collapse",)
+    readonly_fields = ("ip_address", "user_agent", "country", "city", "status", "created_at")
+    show_change_link = True
+    verbose_name = "Login History"
+    verbose_name_plural = "Login History"
+
+    def has_add_permission(self, request, obj=None): return False
+    def has_change_permission(self, request, obj=None): return False
+
+
+class UserSessionInline(admin.TabularInline):
+    """
+    Active sessions for the user. Staff can terminate them by deleting rows.
+    """
+    model = UserSession
+    extra = 0
+    can_delete = True
+    classes = ("collapse",)
+    readonly_fields = ("jti", "device_name", "ip_address", "country", "expires_at", "last_used_at")
+    show_change_link = True
+    verbose_name = "Active Session"
+    verbose_name_plural = "Active Sessions"
+
+    def has_add_permission(self, request, obj=None): return False
+    def has_change_permission(self, request, obj=None): return False
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # 4.  ADMIN CLASS — UnifiedUserAdmin  (Enterprise Edition)
 # ═══════════════════════════════════════════════════════════════════════════
@@ -620,10 +659,14 @@ class UnifiedUserAdmin(
     inlines = [BiometricInline]
 
     def get_inlines(self, request, obj=None):
-        """Hide biometric inline when creating a new user."""
-        if obj is None:
-            return []
-        return super().get_inlines(request, obj)
+        """
+        Dynamically include LoginEvent and UserSession as inlines if the user exists.
+        Avoids redundant queries on 'add' pages.
+        """
+        inlines = super().get_inlines(request, obj)
+        if obj:
+            return list(inlines) + [LoginEventInline, UserSessionInline]
+        return inlines
 
     # ── Performance (1M+ users) ──────────────────────────────────────────
     list_per_page = 25
@@ -1490,7 +1533,7 @@ class CustomLogEntryAdmin(LogEntryAdmin):
 # 9.  LOGIN EVENT ADMIN — Binance-style Security Audit Log
 # ═══════════════════════════════════════════════════════════════════════════
 
-@admin.register(__import__('apps.authentication.models', fromlist=['LoginEvent']).LoginEvent)
+@admin.register(LoginEvent)
 class LoginEventAdmin(admin.ModelAdmin):
     """
     Read-only admin for the LoginEvent security audit log.
@@ -1656,7 +1699,7 @@ class LoginEventAdmin(admin.ModelAdmin):
 # 10.  USER SESSION ADMIN — Telegram-style Active Sessions Dashboard
 # ═══════════════════════════════════════════════════════════════════════════
 
-@admin.register(__import__('apps.authentication.models', fromlist=['UserSession']).UserSession)
+@admin.register(UserSession)
 class UserSessionAdmin(admin.ModelAdmin):
     """
     Admin view for UserSession — the server-side session registry.

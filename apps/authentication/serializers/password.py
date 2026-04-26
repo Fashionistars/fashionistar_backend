@@ -213,3 +213,27 @@ class PasswordChangeSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {"non_field_errors": _("An error occurred during password change.")}
             )
+
+
+# ─── Response Serializers ───────────────────────────────────────────────────
+
+class PasswordResetRequestResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+    method = serializers.CharField(help_text="email | phone")
+
+    class Meta:
+        ref_name = "AuthPasswordResetRequestResponse"
+
+
+class PasswordResetConfirmResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+
+    class Meta:
+        ref_name = "AuthPasswordResetConfirmResponse"
+
+
+class PasswordChangeResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+
+    class Meta:
+        ref_name = "AuthPasswordChangeResponse"

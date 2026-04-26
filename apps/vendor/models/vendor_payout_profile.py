@@ -21,7 +21,7 @@ class VendorPayoutProfile(TimeStampedModel, SoftDeleteModel):
 
     # ── Relationship ───────────────────────────────────────────────
     vendor = models.OneToOneField(
-        "vendor_domain.VendorProfile",
+        "vendor.VendorProfile",
         on_delete=models.CASCADE,
         related_name="payout_profile",
         help_text="The VendorProfile this payout data belongs to.",

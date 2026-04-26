@@ -2,6 +2,7 @@ from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from .views import BrandViewSet, CategoryViewSet, CollectionsViewSet
+from .delivery import DeliveryStatusUpdateView
 
 router = DefaultRouter()
 router.register(r"categories", CategoryViewSet, basename="category")
@@ -11,6 +12,7 @@ router.register(r"collections", CollectionsViewSet, basename="collection")
 app_name = "admin_backend"
 
 urlpatterns = [
+    path("delivery/<order_id>/update/", DeliveryStatusUpdateView.as_view(), name="delivery-status-update"),
     path(
         "admin/category/create/",
         CategoryViewSet.as_view({"post": "create"}),

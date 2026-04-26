@@ -1,23 +1,18 @@
 # apps/admin_backend/order_view.py
-from requests import Response
-
-# Restframework Packages
-from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.exceptions import PermissionDenied
-from rest_framework.exceptions import ValidationError, NotFound, APIException
-from rest_framework.response import Response
 from rest_framework import generics, status
+from drf_spectacular.utils import extend_schema
 
-
-from store.models import *
-from store.serializers import *
-from admin_backend.serializers import *
+from store.models import CartOrder
+from store.serializers import CartOrderSerializer
+from apps.admin_backend.serializers import AdminProfitSerializer
+from apps.common.renderers import CustomJSONRenderer, success_response
  
 
 from decimal import Decimal
 
 
 class AdminOrderListView(generics.ListAPIView):
+    renderer_classes = [CustomJSONRenderer]
     queryset = CartOrder.objects.all()
     serializer_class = CartOrderSerializer
     permission_classes = [IsAuthenticated]
@@ -37,11 +32,16 @@ class AdminOrderListView(generics.ListAPIView):
 
 
 
-class AdminProfitView(generics.RetrieveAPIView):
+class AdminProfitView(generics.GenericAPIView):
+    renderer_classes = [CustomJSONRenderer]
     permission_classes = [IsAuthenticated]
     serializer_class = AdminProfitSerializer
 
-
+    @extend_schema(
+        summary="Calculate Admin Profit",
+        description="Calculates 10% commission profit from all store orders.",
+        responses={200: AdminProfitSerializer}
+    )
     def get(self, request, *args, **kwargs):
         """
         Admin Workflow for Retrieving Profit Details:
@@ -49,39 +49,18 @@ class AdminProfitView(generics.RetrieveAPIView):
         1. Admin sends a GET request to the `/admin/profit/` endpoint.
         2. The backend calculates the total amount made from each sale.
         3. The backend returns the profit details in the response.
-
-        Example of handling the response in JavaScript:
-
-        fetch('/admin/profit/', {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + token
-            }
-        })
-        .then(response => {
-            if (response.status === 200) {
-                return response.json().then(data => {
-                    console.log('Profit Details:', data);
-                });
-            } else {
-                return response.json().then(data => {
-                    alert(data.message);
-                });
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-        });
         """
 
         if not request.user.is_staff:
             raise PermissionDenied("You do not have permission to view this resource.")
 
-        total_profit = Decimal(0.0)
+        total_profit = Decimal("0.0")
         orders = CartOrder.objects.all()
 
         for order in orders:
-            total_profit += order.total * Decimal(0.1)  # 10% profit for the company
+            total_profit += order.total * Decimal("0.1")  # 10% profit for the company
 
-        return Response({"total_profit": total_profit}, status=status.HTTP_200_OK)
+        return success_response(
+            data={"total_profit": total_profit},
+            message="Profit calculated successfully."
+        )

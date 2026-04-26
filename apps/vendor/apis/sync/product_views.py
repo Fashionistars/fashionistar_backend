@@ -1,334 +1,282 @@
 # apps/vendor/apis/sync/product_views.py
 """
-Vendor Product Management — DRF Sync Views.
+Vendor Product Management — DRF Sync Views
+==========================================
+
+Handles the lifecycle of products owned by a Vendor, including creation,
+modification, soft-deletion, and catalog filtering.
 
 URL prefix: /api/v1/vendor/
 
-Endpoints:
-  POST   /api/v1/vendor/products/create/                 — create product
-  GET    /api/v1/vendor/products/filter/                 — filter by status
-  PUT    /api/v1/vendor/products/<str:product_pid>/edit/  — full update (+ nested)
-  PATCH  /api/v1/vendor/products/<str:product_pid>/edit/  — partial update
-  DELETE /api/v1/vendor/products/<str:product_pid>/delete/ — soft-delete
-
-All views use DRF generics where possible.
-All DB access scoped via vendor_products reverse FK (no N+1).
-Nested data (specifications, colors, sizes, gallery) parsed from flat multipart keys.
+Design Principles:
+  - Scoping: All operations are strictly bound to the authenticated user's Vendor profile.
+  - Atomicity: Product mutations (create/update) are wrapped in transactions.
+  - Validation: Deep validation for nested data (specs, gallery, etc.) via serializers.
 """
-import logging
 
+import logging
 from django.db import transaction
-from rest_framework.views import APIView
-from rest_framework import status
+from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.renderers import BrowsableAPIRenderer
 
 from apps.common.permissions import IsVendor
+from apps.common.renderers import CustomJSONRenderer
+from apps.common.responses import success_response, error_response
 from apps.vendor.selectors.vendor_selectors import get_vendor_profile_or_none
+from apps.vendor.serializers.product_serializers import (
+    VendorProductSerializer,
+    VendorProductListSerializer,
+    VendorOrderStatusSerializer
+)
+from store.models import Product, CartOrder
 
 logger = logging.getLogger(__name__)
 
 
-# ── Helper ─────────────────────────────────────────────────────────────────
+# ===========================================================================
+# HELPERS
+# ===========================================================================
 
 
 def _get_profile_or_404(user):
+    """
+    Retrieves the vendor profile for the given user or raises a controlled error.
+    """
     profile = get_vendor_profile_or_none(user)
     if profile is None:
         raise ValueError("Vendor profile not found.")
     return profile
 
 
-def _parse_nested_product_data(data: dict) -> dict:
+# ===========================================================================
+# PRODUCT CREATION
+# ===========================================================================
+
+
+class VendorProductCreateView(generics.CreateAPIView):
     """
-    Parse flat multipart keys into structured nested lists.
-    e.g. 'specifications[0][title]' → [{title: ..., content: ...}]
+    Creates a new product entry for the authenticated vendor.
+
+    Flow:
+      1. Validates basic product fields.
+      2. Processes nested specifications, colors, sizes, and gallery.
+      3. Automatically associates the product with the vendor's profile.
+
+    Validation Logic:
+      - Checks if user is a registered vendor.
+      - Enforces required fields for product visibility.
+
+    Security:
+      - Requires IsAuthenticated and IsVendor.
+
+    Status Codes:
+      201 Created: Product and all related data successfully saved.
+      400 Bad Request: Validation failure.
+      404 Not Found: Vendor profile missing.
     """
-    specifications, colors, sizes, gallery = [], [], {}, []
-
-    for key, value in data.items():
-        if key.startswith("specifications") and "[title]" in key:
-            idx = key.split("[")[1].split("]")[0]
-            content = data.get(f"specifications[{idx}][content]", "")
-            specifications.append({"title": value, "content": content})
-
-        elif key.startswith("colors") and "[name]" in key:
-            idx = key.split("[")[1].split("]")[0]
-            colors.setdefault(idx, {})["name"] = value
-            colors[idx]["color_code"] = data.get(f"colors[{idx}][color_code]", "")
-            colors[idx]["image"] = data.get(f"colors[{idx}][image]", None)
-
-        elif key.startswith("sizes") and "[name]" in key:
-            idx = key.split("[")[1].split("]")[0]
-            price = data.get(f"sizes[{idx}][price]", 0)
-            sizes[idx] = {"name": value, "price": price}
-
-        elif key.startswith("gallery") and "[image]" in key:
-            gallery.append({"image": value})
-
-    return {
-        "specifications": specifications,
-        "colors": list(colors.values()),
-        "sizes": list(sizes.values()),
-        "gallery": gallery,
-    }
-
-
-def _save_nested_product_data(product, nested: dict) -> None:
-    """
-    Persist nested product children (specs, colors, sizes, gallery).
-    Imports Product-related models lazily to avoid circular imports.
-    """
-    from apps.store.models import Color, Gallery, Size, Specification  # adjust to your store app path
-
-    if nested["specifications"]:
-        Specification.objects.filter(product=product).delete()
-        Specification.objects.bulk_create(
-            [Specification(product=product, **s) for s in nested["specifications"]]
-        )
-    if nested["colors"]:
-        Color.objects.filter(product=product).delete()
-        Color.objects.bulk_create(
-            [Color(product=product, **c) for c in nested["colors"]]
-        )
-    if nested["sizes"]:
-        Size.objects.filter(product=product).delete()
-        Size.objects.bulk_create(
-            [Size(product=product, **s) for s in nested["sizes"]]
-        )
-    if nested["gallery"]:
-        Gallery.objects.filter(product=product).delete()
-        Gallery.objects.bulk_create(
-            [Gallery(product=product, **g) for g in nested["gallery"]]
-        )
-
-
-# ══════════════════════════════════════════════════════════════════
-#  Product Create
-# ══════════════════════════════════════════════════════════════════
-
-
-class VendorProductCreateView(APIView):
-    """
-    POST /api/v1/vendor/products/create/
-
-    Create a new product scoped to this vendor.
-    Accepts multipart/form-data with optional nested fields:
-      specifications[0][title], specifications[0][content]
-      colors[0][name], colors[0][color_code], colors[0][image]
-      sizes[0][name], sizes[0][price]
-      gallery[0][image]
-    """
+    serializer_class = VendorProductSerializer
     permission_classes = [IsAuthenticated, IsVendor]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     @transaction.atomic
-    def post(self, request):
+    def perform_create(self, serializer):
         try:
-            profile = _get_profile_or_404(request.user)
+            profile = _get_profile_or_404(self.request.user)
+            serializer.save(vendor=profile)
+            logger.info("Product created for vendor=%s", profile.pk)
         except ValueError as exc:
-            return Response({"status": "error", "message": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+            from rest_framework.exceptions import NotFound
+            raise NotFound(str(exc))
 
-        from apps.store.models import Product  # lazy import
-        from apps.store.serializers import ProductSerializer  # lazy import
-
-        serializer = ProductSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response({"status": "error", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
-
-        product = serializer.save(vendor=profile)
-        nested = _parse_nested_product_data(request.data)
-
-        try:
-            _save_nested_product_data(product, nested)
-        except Exception as exc:
-            logger.warning("VendorProductCreateView: nested save failed: %s", exc)
-
-        logger.info("Product created: pid=%s vendor=%s", product.pid, profile.pk)
-        return Response({
-            "status": "success",
-            "message": "Product created successfully.",
-            "data": {"pid": str(product.pid), "title": product.title},
-        }, status=status.HTTP_201_CREATED)
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return success_response(
+            data=serializer.data,
+            message="Product created successfully.",
+            status=status.HTTP_201_CREATED,
+            headers=headers
+        )
 
 
-# ══════════════════════════════════════════════════════════════════
-#  Product Update (full + partial)
-# ══════════════════════════════════════════════════════════════════
+# ===========================================================================
+# PRODUCT MODIFICATION
+# ===========================================================================
 
 
-class VendorProductUpdateView(APIView):
+class VendorProductUpdateView(generics.UpdateAPIView):
     """
-    PUT  /api/v1/vendor/products/<product_pid>/edit/  — full update
-    PATCH /api/v1/vendor/products/<product_pid>/edit/ — partial update
+    Updates an existing product's details and nested assets.
 
-    Scoped to this vendor via vendor_products reverse FK.
-    Replaces all nested specs/colors/sizes/gallery on update.
+    Validation Logic:
+      - Verifies the product PID belongs to the authenticated vendor.
+      - Validates all updated fields against the schema.
+
+    Security:
+      - Scoped to vendor_products; cannot modify products from other vendors.
+
+    Status Codes:
+      200 OK: Update successful.
+      404 Not Found: Product not found in vendor's inventory.
     """
+    serializer_class = VendorProductSerializer
     permission_classes = [IsAuthenticated, IsVendor]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+    lookup_field = 'pid'
+    lookup_url_kwarg = 'product_pid'
 
-    def _get_product(self, profile, product_pid: str):
+    def get_queryset(self):
         try:
-            return profile.vendor_products.get(pid=product_pid)
-        except Exception:
-            return None
+            profile = _get_profile_or_404(self.request.user)
+            return profile.vendor_products.all()
+        except ValueError:
+            return Product.objects.none()
 
     @transaction.atomic
-    def _handle_update(self, request, product_pid: str, partial: bool):
-        try:
-            profile = _get_profile_or_404(request.user)
-        except ValueError as exc:
-            return Response({"status": "error", "message": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+    def perform_update(self, serializer):
+        serializer.save()
+        logger.info("Product updated: pid=%s", self.kwargs.get(self.lookup_url_kwarg))
 
-        product = self._get_product(profile, product_pid)
-        if product is None:
-            return Response({"status": "error", "message": "Product not found."}, status=status.HTTP_404_NOT_FOUND)
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
 
-        from apps.store.serializers import ProductSerializer  # lazy import
+        if getattr(instance, '_prefetched_objects_cache', None):
+            instance._prefetched_objects_cache = {}
 
-        serializer = ProductSerializer(product, data=request.data, partial=partial)
-        if not serializer.is_valid():
-            return Response({"status": "error", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
-
-        product = serializer.save()
-        nested = _parse_nested_product_data(request.data)
-
-        try:
-            _save_nested_product_data(product, nested)
-        except Exception as exc:
-            logger.warning("VendorProductUpdateView: nested save failed: %s", exc)
-
-        logger.info("Product updated: pid=%s vendor=%s", product_pid, profile.pk)
-        return Response({"status": "success", "message": "Product updated."})
-
-    def put(self, request, product_pid: str):
-        return self._handle_update(request, product_pid, partial=False)
-
-    def patch(self, request, product_pid: str):
-        return self._handle_update(request, product_pid, partial=True)
+        return success_response(
+            data=serializer.data,
+            message="Product updated successfully."
+        )
 
 
-# ══════════════════════════════════════════════════════════════════
-#  Product Delete
-# ══════════════════════════════════════════════════════════════════
-
-
-class VendorProductDeleteView(APIView):
+class VendorProductDeleteView(generics.DestroyAPIView):
     """
-    DELETE /api/v1/vendor/products/<product_pid>/delete/
+    Removes a product from the vendor's catalog.
 
-    Hard-delete a vendor's own product.
-    Scoped via vendor_products reverse FK — cannot delete another vendor's product.
+    Security:
+      - Ownership check: Uses vendor_products queryset to prevent unauthorized deletions.
+
+    Status Codes:
+      200 OK: Deletion confirmed with success message.
+      404 Not Found: Target product not found.
     """
     permission_classes = [IsAuthenticated, IsVendor]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+    lookup_field = 'pid'
+    lookup_url_kwarg = 'product_pid'
 
-    @transaction.atomic
-    def delete(self, request, product_pid: str):
+    def get_queryset(self):
         try:
-            profile = _get_profile_or_404(request.user)
-        except ValueError as exc:
-            return Response({"status": "error", "message": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+            profile = _get_profile_or_404(self.request.user)
+            return profile.vendor_products.all()
+        except ValueError:
+            return Product.objects.none()
 
-        try:
-            product = profile.vendor_products.get(pid=product_pid)
-        except Exception:
-            return Response({"status": "error", "message": "Product not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        pid = str(product.pid)
-        product.delete()
-        logger.info("Product deleted: pid=%s vendor=%s", pid, profile.pk)
-        return Response({"status": "success", "message": "Product deleted."}, status=status.HTTP_200_OK)
-
-
-# ══════════════════════════════════════════════════════════════════
-#  Product Filter
-# ══════════════════════════════════════════════════════════════════
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return success_response(
+            message="Product deleted successfully.",
+            status=status.HTTP_200_OK
+        )
 
 
-class VendorProductFilterView(APIView):
+# ===========================================================================
+# CATALOG FILTERING
+# ===========================================================================
+
+
+class VendorProductFilterView(generics.ListAPIView):
     """
-    GET /api/v1/vendor/products/filter/?status=published|draft|disabled|in-review
-    GET /api/v1/vendor/products/filter/?ordering=latest|oldest
+    Provides filtered and sorted listings of a vendor's inventory.
 
-    Filter + sort vendor's own products using query params.
-    All status values: published, draft, disabled, in-review.
-    Ordering values: latest (default), oldest.
+    Query Params:
+      status (str): published, draft, disabled, in-review.
+      ordering (str): latest, oldest.
+      q (str): Keyword search in title.
+
+    Status Codes:
+      200 OK: Returns matching product list.
     """
+    serializer_class = VendorProductListSerializer
     permission_classes = [IsAuthenticated, IsVendor]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
 
-    def get(self, request):
+    def get_queryset(self):
         try:
-            profile = _get_profile_or_404(request.user)
-        except ValueError as exc:
-            return Response({"status": "error", "message": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+            profile = _get_profile_or_404(self.request.user)
+        except ValueError:
+            return Product.objects.none()
 
-        status_filter = request.query_params.get("status", "").strip()
-        ordering = request.query_params.get("ordering", "latest").strip()
+        status_filter = self.request.query_params.get("status", "").strip()
+        ordering = self.request.query_params.get("ordering", "latest").strip()
+        query = self.request.query_params.get("q", "").strip()
 
         qs = profile.vendor_products.all()
+        if query:
+            qs = qs.filter(title__icontains=query)
 
-        # Status filter
         valid_statuses = {"published", "draft", "disabled", "in-review"}
         if status_filter in valid_statuses:
             qs = qs.filter(status=status_filter)
 
-        # Ordering
-        qs = qs.order_by("date") if ordering == "oldest" else qs.order_by("-date")
-
-        products = list(
-            qs.values("pid", "title", "price", "stock_qty", "status", "category__name", "date")
-        )
-        return Response({
-            "status": "success",
-            "count": len(products),
-            "data": products,
-        })
+        if ordering == "oldest":
+            qs = qs.order_by("date")
+        else:
+            qs = qs.order_by("-date")
+        return qs
 
 
-# ══════════════════════════════════════════════════════════════════
-#  Order Status Update (vendor-side)
-# ══════════════════════════════════════════════════════════════════
+# ===========================================================================
+# ORDER STATUS MANAGEMENT
+# ===========================================================================
 
 
-class VendorOrderStatusUpdateView(APIView):
+class VendorOrderStatusUpdateView(generics.UpdateAPIView):
     """
-    PATCH /api/v1/vendor/orders/<int:order_id>/status/
+    Allows vendors to advance order fulfillment states.
 
-    Update order_status for a vendor's own order.
-    Allowed values: Pending, Processing, Shipped, Fulfilled, Cancelled.
-    Payment status (paid/unpaid) is immutable here — managed by payment gateway.
+    Validation Logic:
+      - Permitted transitions: Pending -> Processing -> Shipped -> Fulfilled.
+      - Payment status is handled by the gateway and remains immutable here.
+
+    Status Codes:
+      200 OK: State transition successful.
+      400 Bad Request: Invalid status value provided.
     """
+    serializer_class = VendorOrderStatusSerializer
     permission_classes = [IsAuthenticated, IsVendor]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+    lookup_url_kwarg = 'order_id'
+    lookup_field = 'pk'
 
-    ALLOWED_STATUSES = {"Pending", "Processing", "Shipped", "Fulfilled", "Cancelled"}
-
-    def patch(self, request, order_id: int):
+    def get_queryset(self):
         try:
-            profile = _get_profile_or_404(request.user)
-        except ValueError as exc:
-            return Response({"status": "error", "message": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+            profile = _get_profile_or_404(self.request.user)
+            return profile.vendor_orders.all()
+        except ValueError:
+            return CartOrder.objects.none()
 
-        new_status = request.data.get("order_status", "").strip()
-        if new_status not in self.ALLOWED_STATUSES:
-            return Response({
-                "status": "error",
-                "message": f"Invalid order_status. Allowed: {sorted(self.ALLOWED_STATUSES)}",
-            }, status=status.HTTP_400_BAD_REQUEST)
+    @transaction.atomic
+    def perform_update(self, serializer):
+        serializer.save()
 
-        try:
-            order = profile.vendor_orders.get(pk=order_id)
-        except Exception:
-            return Response({"status": "error", "message": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        old_status = order.order_status
-        order.order_status = new_status
-        order.save(update_fields=["order_status"])
-
-        logger.info(
-            "Order %s status changed: %s → %s by vendor=%s",
-            order_id, old_status, new_status, profile.pk,
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', True)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return success_response(
+            data=serializer.data,
+            message="Order status updated successfully."
         )
-        return Response({
-            "status": "success",
-            "message": f"Order status updated to '{new_status}'.",
-            "data": {"order_id": order_id, "order_status": new_status},
-        })
+

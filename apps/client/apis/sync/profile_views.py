@@ -1,22 +1,21 @@
 # apps/client/apis/sync/profile_views.py
 """
-Client Profile API — DRF Sync Views.
+Client Profile API — DRF Sync Views
+===================================
+
+Handles client identity, measurement profiles, and address management.
+Provides secure storage for shipping addresses and personalized data.
 
 URL prefix: /api/v1/client/
 
-Endpoints:
-  GET    /api/v1/client/profile/              — fetch my profile
-  PATCH  /api/v1/client/profile/              — update profile
-  GET    /api/v1/client/addresses/            — list addresses
-  POST   /api/v1/client/addresses/            — add address
-  DELETE /api/v1/client/addresses/{id}/       — soft-delete address
-  POST   /api/v1/client/addresses/{id}/set-default/ — set default
+Design Principles:
+  - Auto-Provisioning: Transparently creates a Client profile if missing upon first access.
+  - Multi-Tenancy: Strictly filters addresses by the authenticated user's ownership.
 """
-import logging
 
 from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
+from rest_framework.renderers import BrowsableAPIRenderer
 
 from apps.client.selectors.client_selectors import (
     get_client_profile_or_none,
@@ -29,145 +28,156 @@ from apps.client.serializers.profile_serializers import (
     ClientProfileUpdateSerializer,
 )
 from apps.client.services.client_profile_service import ClientProfileService
-from apps.common.permissions import IsClient, IsVerifiedUser
+from apps.common.permissions import IsClient
+from apps.common.renderers import CustomJSONRenderer
+from apps.common.responses import success_response, error_response
 
-logger = logging.getLogger(__name__)
+
+# ===========================================================================
+# PROFILE MANAGEMENT
+# ===========================================================================
 
 
-class ClientProfileView(generics.GenericAPIView):
+class ClientProfileView(generics.RetrieveUpdateAPIView):
     """
-    GET  /api/v1/client/profile/ — retrieve profile
-    PATCH /api/v1/client/profile/ — update profile
-    """
+    Retrieves or updates the client's personal profile.
 
+    Validation Logic:
+      - PATCH: Validates name, phone, and optional bio/avatar.
+      - Provisioning: Automatically calls ClientProfileService.get_profile if missing.
+
+    Security:
+      - Requires IsAuthenticated + IsClient.
+
+    Status Codes:
+      200 OK: Data returned/updated.
+    """
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     permission_classes = [IsAuthenticated, IsClient]
 
-    def get(self, request):
-        profile = get_client_profile_or_none(request.user)
+    def get_object(self):
+        profile = get_client_profile_or_none(self.request.user)
         if profile is None:
-            # Auto-provision and return empty profile
-            profile = ClientProfileService.get_profile(request.user)
-        serializer = ClientProfileOutputSerializer(profile)
-        return Response(
-            {
-                "status": "success",
-                "message": "Profile retrieved successfully.",
-                "data": serializer.data,
-            }
-        )
+            profile = ClientProfileService.get_profile(self.request.user)
+        return profile
 
-    def patch(self, request):
-        serializer = ClientProfileUpdateSerializer(data=request.data)
+    def get_serializer_class(self):
+        if self.request.method in ['PATCH', 'PUT']:
+            return ClientProfileUpdateSerializer
+        return ClientProfileOutputSerializer
+
+    def update(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         profile = ClientProfileService.update_profile(
             user=request.user,
             data=serializer.validated_data,
         )
-        return Response(
-            {
-                "status": "success",
-                "message": "Profile updated successfully.",
-                "data": ClientProfileOutputSerializer(profile).data,
-            }
+        return success_response(
+            data=ClientProfileOutputSerializer(profile).data,
+            message="Profile updated successfully.",
         )
 
 
-class ClientAddressListCreateView(generics.GenericAPIView):
-    """
-    GET  /api/v1/client/addresses/ — list saved addresses
-    POST /api/v1/client/addresses/ — add new address
-    """
+# ===========================================================================
+# ADDRESS BOOK
+# ===========================================================================
 
+
+class ClientAddressListCreateView(generics.ListCreateAPIView):
+    """
+    Manages the collection of shipping addresses for the client.
+
+    Validation Logic:
+      - POST: Validates street, city, state, and zip code.
+      - Scoping: get_queryset ensures only the user's addresses are listed.
+
+    Status Codes:
+      200 OK: List returned.
+      201 Created: New address saved.
+    """
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     permission_classes = [IsAuthenticated, IsClient]
 
-    def get(self, request):
-        addresses = list_client_addresses(request.user)
-        return Response(
-            {
-                "status": "success",
-                "data": ClientAddressSerializer(addresses, many=True).data,
-            }
-        )
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return AddressCreateSerializer
+        return ClientAddressSerializer
 
-    def post(self, request):
-        serializer = AddressCreateSerializer(data=request.data)
+    def get_queryset(self):
+        return list_client_addresses(self.request.user)
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         address = ClientProfileService.add_address(
             user=request.user,
             address_data=serializer.validated_data,
         )
-        return Response(
-            {
-                "status": "success",
-                "message": "Address added successfully.",
-                "data": ClientAddressSerializer(address).data,
-            },
+        return success_response(
+            data=ClientAddressSerializer(address).data,
+            message="Address added successfully.",
             status=status.HTTP_201_CREATED,
         )
 
 
-class ClientAddressDetailView(generics.GenericAPIView):
+class ClientAddressDetailView(generics.DestroyAPIView):
     """
-    DELETE /api/v1/client/addresses/{id}/ — soft-delete address
-    """
+    Soft-deletes a specific shipping address.
 
+    Validation Logic:
+      - Verifies address ownership before deletion.
+
+    Status Codes:
+      200 OK: Address removed.
+      404 Not Found: Address missing or unauthorized.
+    """
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     permission_classes = [IsAuthenticated, IsClient]
+    lookup_url_kwarg = 'address_id'
 
-    def delete(self, request, address_id):
+    def destroy(self, request, *args, **kwargs):
+        address_id = self.kwargs.get(self.lookup_url_kwarg)
         try:
             ClientProfileService.delete_address(
                 user=request.user, address_id=address_id
             )
-            return Response(
-                {
-                    "status": "success",
-                    "message": "Address removed.",
-                },
-                status=status.HTTP_200_OK,
-            )
-        except Exception as e:
-            logger.warning(
-                "ClientAddressDetailView.delete: not found: %s — %s",
-                address_id,
-                e,
-            )
-            return Response(
-                {
-                    "status": "error",
-                    "message": "Address not found.",
-                },
+            return success_response(message="Address removed.")
+        except Exception:
+            return error_response(
+                message="Address not found.",
                 status=status.HTTP_404_NOT_FOUND,
             )
 
 
 class ClientAddressSetDefaultView(generics.GenericAPIView):
     """
-    POST /api/v1/client/addresses/{id}/set-default/
-    """
+    Sets a specific address as the primary shipping destination.
 
+    Flow:
+      - Updates all other addresses to default=False.
+      - Sets target address to default=True.
+
+    Status Codes:
+      200 OK: Default updated.
+      404 Not Found: Address missing.
+    """
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     permission_classes = [IsAuthenticated, IsClient]
+    serializer_class = ClientAddressSerializer
+    lookup_url_kwarg = 'address_id'
 
     def post(self, request, address_id):
         try:
             address = ClientProfileService.set_default_address(
                 user=request.user, address_id=address_id
             )
-            return Response(
-                {
-                    "status": "success",
-                    "message": "Default address updated.",
-                    "data": ClientAddressSerializer(address).data,
-                }
+            return success_response(
+                data=ClientAddressSerializer(address).data,
+                message="Default address updated.",
             )
-        except Exception as e:
-            logger.warning(
-                "ClientAddressSetDefaultView: error — %s",
-                e,
-            )
-            return Response(
-                {
-                    "status": "error",
-                    "message": "Address not found.",
-                },
+        except Exception:
+            return error_response(
+                message="Address not found.",
                 status=status.HTTP_404_NOT_FOUND,
             )

@@ -1,53 +1,64 @@
 # apps/vendor/apis/sync/analytics_views.py
 """
-Vendor Analytics API — DRF Sync Views (Generics).
+Vendor Analytics API — DRF Sync Views
+=====================================
+
+Provides comprehensive business intelligence and auditing tools for Vendors.
+Covers sales summaries, revenue trends, product performance, and customer behavior.
 
 URL prefix: /api/v1/vendor/
 
-All views use DRF generics (never plain APIView).
-All DB access uses the service + selector layers (no inline ORM in views).
-
-Endpoints:
-  GET  /api/v1/vendor/analytics/               — full analytics summary
-  GET  /api/v1/vendor/analytics/revenue/       — monthly revenue trends (6mo)
-  GET  /api/v1/vendor/analytics/orders/        — monthly order chart
-  GET  /api/v1/vendor/analytics/products/      — monthly products chart
-  GET  /api/v1/vendor/analytics/earnings/      — today / month / year earnings
-  GET  /api/v1/vendor/analytics/customers/     — customer behaviour stats
-  GET  /api/v1/vendor/analytics/categories/    — top performing categories
-  GET  /api/v1/vendor/analytics/distribution/  — payment method distribution
-
-  GET  /api/v1/vendor/products/                — vendor's own product list
-  GET  /api/v1/vendor/products/?search=        — filter products by title/status
-  GET  /api/v1/vendor/orders/                  — vendor's own order list
-  GET  /api/v1/vendor/orders/<int:pk>/         — single order detail
-  GET  /api/v1/vendor/earnings/                — earning tracker summary
-  GET  /api/v1/vendor/reviews/                 — reviews on vendor products
-  GET  /api/v1/vendor/reviews/<int:pk>/        — single review detail
-  GET  /api/v1/vendor/coupons/                 — vendor's coupons
+Design Principles:
+  - Security: All endpoints require IsAuthenticated + Vendor-role check.
+  - Performance: Uses selectors/services; avoids complex inline ORM.
+  - Consistency: Standardized response formats via CustomJSONRenderer.
 """
+
 import logging
 from datetime import timedelta
-
 from django.db.models import Avg, Count, Q, Sum
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.views import APIView
+from rest_framework.generics import GenericAPIView, ListAPIView, RetrieveAPIView
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.renderers import BrowsableAPIRenderer
 from rest_framework.response import Response
 
-from apps.common.permissions import IsVendor
+from apps.common.renderers import CustomJSONRenderer
+from apps.common.responses import success_response, error_response
+from apps.store.models import Product
+from apps.store.models import CartOrder
 from apps.vendor.selectors.vendor_selectors import get_vendor_profile_or_none
+from apps.vendor.serializers.vendor_analytics_serializers import (
+    VendorAnalyticsSummarySerializer,
+    VendorRevenueTrendSerializer,
+    VendorMonthlyOrderSerializer,
+    VendorMonthlyProductSerializer,
+    VendorEarningTrackerSerializer,
+    VendorCustomerBehaviorSerializer,
+    VendorCategoryPerformanceSerializer,
+    VendorPaymentDistributionSerializer,
+    VendorProductListSerializer,
+    VendorOrderListSerializer,
+    VendorOrderDetailSerializer,
+    VendorReviewListSerializer,
+    VendorCouponListSerializer,
+)
 
 logger = logging.getLogger(__name__)
 
-# ── Helper ──────────────────────────────────────────────────────────────────
+
+# ===========================================================================
+# HELPERS
+# ===========================================================================
 
 
 def _get_profile_or_404(user):
     """
-    Return vendor's profile using the selector, or raise 404-like error.
-    Raises ValueError if no profile found — caller converts to 404 response.
+    Retrieves the vendor profile for the given user or raises a controlled error.
+
+    Security:
+      Ensures the user is an active Vendor before returning the profile object.
     """
     profile = get_vendor_profile_or_none(user)
     if profile is None:
@@ -55,26 +66,35 @@ def _get_profile_or_404(user):
     return profile
 
 
-# ══════════════════════════════════════════════════════════════════
-#  Analytics Views
-# ══════════════════════════════════════════════════════════════════
+# ===========================================================================
+# ANALYTICS SNAPSHOTS
+# ===========================================================================
 
 
-class VendorAnalyticsSummaryView(APIView):
+class VendorAnalyticsSummaryView(GenericAPIView):
     """
-    GET /api/v1/vendor/analytics/
+    Retrieves a high-level performance snapshot for the vendor's store.
 
-    Full analytics snapshot: today's sales, this month's sales, YTD,
-    average order value, total customers, low stock count.
-    Uses model analytics methods (reverse related_name ORM — no N+1).
+    Validation Logic:
+      - Checks for existence of vendor profile.
+      - Aggregates sales, ratings, and stock alerts.
+
+    Status Codes:
+      200 OK: Returns full metrics payload.
+      404 Not Found: Profile missing.
     """
-    permission_classes = [IsAuthenticated, IsVendor]
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+    serializer_class = VendorAnalyticsSummarySerializer
 
-    def get(self, request):
+    def get(self, request, *args, **kwargs):
         try:
             profile = _get_profile_or_404(request.user)
-        except ValueError as exc:
-            return Response({"status": "error", "message": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+        except (ValueError, AttributeError):
+            return error_response(
+                message="Vendor profile not found.",
+                status=status.HTTP_404_NOT_FOUND
+            )
 
         data = {
             "todays_sales":          str(profile.get_todays_sales()),
@@ -92,46 +112,60 @@ class VendorAnalyticsSummaryView(APIView):
             "total_revenue":         str(profile.total_revenue),
             "wallet_balance":        str(profile.wallet_balance),
         }
-        return Response({"status": "success", "data": data})
+        serializer = self.get_serializer(data)
+        return success_response(data=serializer.data)
 
 
-class VendorRevenueChart(APIView):
+class VendorRevenueChart(GenericAPIView):
     """
-    GET /api/v1/vendor/analytics/revenue/?months=6
+    Provides monthly revenue trends for charting.
 
-    Monthly revenue breakdown for the last N months.
-    Uses vendor.get_revenue_trends() — reverse vendor_orders FK.
+    Query Params:
+      months (int): Number of historical months to return (default: 6).
+
+    Status Codes:
+      200 OK: Returns trend data array.
     """
-    permission_classes = [IsAuthenticated, IsVendor]
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+    serializer_class = VendorRevenueTrendSerializer
 
-    def get(self, request):
+    def get(self, request, *args, **kwargs):
         try:
             profile = _get_profile_or_404(request.user)
-        except ValueError as exc:
-            return Response({"status": "error", "message": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+        except (ValueError, AttributeError):
+            return error_response(
+                message="Vendor profile not found.",
+                status=status.HTTP_404_NOT_FOUND
+            )
 
         months = int(request.query_params.get("months", 6))
         trends = list(profile.get_revenue_trends(months=months))
-        return Response({"status": "success", "data": trends})
+        serializer = self.get_serializer(trends, many=True)
+        return success_response(data=serializer.data)
 
 
-class VendorMonthlyOrderChart(APIView):
+# ===========================================================================
+# PERFORMANCE CHARTS
+# ===========================================================================
+
+
+class VendorMonthlyOrderChart(GenericAPIView):
     """
-    GET /api/v1/vendor/analytics/orders/
-
-    Monthly count of orders grouped by order_status for chart rendering.
-    Uses vendor_orders reverse FK.
+    Groups order volume by month and delivery status.
     """
-    permission_classes = [IsAuthenticated, IsVendor]
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+    serializer_class = VendorMonthlyOrderSerializer
 
-    def get(self, request):
+    def get(self, request, *args, **kwargs):
         try:
             profile = _get_profile_or_404(request.user)
-        except ValueError as exc:
-            return Response({"status": "error", "message": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+        except (ValueError, AttributeError):
+            return error_response(message="Vendor profile not found.", status=status.HTTP_404_NOT_FOUND)
 
         from django.db.models.functions import ExtractMonth
-        now    = timezone.now()
+        now = timezone.now()
         cutoff = now - timedelta(days=365)
         chart = list(
             profile.vendor_orders
@@ -141,28 +175,28 @@ class VendorMonthlyOrderChart(APIView):
             .annotate(count=Count("id"))
             .order_by("month")
         )
-        return Response({"status": "success", "data": chart})
+        serializer = self.get_serializer(chart, many=True)
+        return success_response(data=serializer.data)
 
 
-class VendorMonthlyProductChart(APIView):
+class VendorMonthlyProductChart(GenericAPIView):
     """
-    GET /api/v1/vendor/analytics/products/
-
-    Monthly count of products created over the last 12 months.
-    Uses vendor_products reverse FK.
+    Tracks product catalog growth over time.
     """
-    permission_classes = [IsAuthenticated, IsVendor]
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+    serializer_class = VendorMonthlyProductSerializer
 
-    def get(self, request):
+    def get(self, request, *args, **kwargs):
         try:
             profile = _get_profile_or_404(request.user)
-        except ValueError as exc:
-            return Response({"status": "error", "message": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+        except (ValueError, AttributeError):
+            return error_response(message="Vendor profile not found.", status=status.HTTP_404_NOT_FOUND)
 
         from django.db.models.functions import ExtractMonth
-        now    = timezone.now()
+        now = timezone.now()
         cutoff = now - timedelta(days=365)
-        chart  = list(
+        chart = list(
             profile.vendor_products
             .filter(date__gte=cutoff)
             .annotate(month=ExtractMonth("date"))
@@ -170,28 +204,31 @@ class VendorMonthlyProductChart(APIView):
             .annotate(count=Count("id"))
             .order_by("month")
         )
-        return Response({"status": "success", "data": chart})
+        serializer = self.get_serializer(chart, many=True)
+        return success_response(data=serializer.data)
 
 
-class VendorEarningTrackerView(APIView):
+# ===========================================================================
+# EARNINGS & BEHAVIOR
+# ===========================================================================
+
+
+class VendorEarningTrackerView(GenericAPIView):
     """
-    GET /api/v1/vendor/earnings/
-
-    Comprehensive earning tracker:
-    today / this month / last month / year / total.
-    Also returns pending_payouts (unpaid orders total).
+    Detailed earning tracker including pending payouts and historical sales.
     """
-    permission_classes = [IsAuthenticated, IsVendor]
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+    serializer_class = VendorEarningTrackerSerializer
 
-    def get(self, request):
+    def get(self, request, *args, **kwargs):
         try:
             profile = _get_profile_or_404(request.user)
-        except ValueError as exc:
-            return Response({"status": "error", "message": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+        except (ValueError, AttributeError):
+            return error_response(message="Vendor profile not found.", status=status.HTTP_404_NOT_FOUND)
 
-        now   = timezone.now()
+        now = timezone.now()
         last_month_cutoff = now.replace(day=1) - timedelta(days=1)
-
         last_month_sales = (
             profile.vendor_orders
             .filter(
@@ -212,364 +249,314 @@ class VendorEarningTrackerView(APIView):
             "wallet_balance":     str(profile.wallet_balance),
             "pending_payouts":    str(profile.get_pending_payouts()),
         }
-        return Response({"status": "success", "data": data})
+        serializer = self.get_serializer(data)
+        return success_response(data=serializer.data)
 
 
-class VendorCustomerBehaviorView(APIView):
+class VendorCustomerBehaviorView(GenericAPIView):
     """
-    GET /api/v1/vendor/analytics/customers/
-
-    Customer behaviour: hourly order distribution + new customers this month.
-    Uses vendor_orders reverse FK.
+    Analyzes customer engagement times and acquisition rates.
     """
-    permission_classes = [IsAuthenticated, IsVendor]
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+    serializer_class = VendorCustomerBehaviorSerializer
 
-    def get(self, request):
+    def get(self, request, *args, **kwargs):
         try:
             profile = _get_profile_or_404(request.user)
-        except ValueError as exc:
-            return Response({"status": "error", "message": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+        except (ValueError, AttributeError):
+            return error_response(message="Vendor profile not found.", status=status.HTTP_404_NOT_FOUND)
 
         data = {
             "hourly_distribution":      list(profile.get_customer_behavior()),
             "new_customers_this_month": profile.get_new_customers_this_month(),
             "total_customers":          profile.get_total_customers(),
         }
-        return Response({"status": "success", "data": data})
+        serializer = self.get_serializer(data)
+        return success_response(data=serializer.data)
 
 
-class VendorTopCategoriesView(APIView):
+class VendorTopCategoriesView(GenericAPIView):
     """
-    GET /api/v1/vendor/analytics/categories/
-
-    Top 5 performing categories by revenue.
-    Uses vendor_products → category__name / order_item_product__total.
+    Ranks product categories by their contribution to total revenue.
     """
-    permission_classes = [IsAuthenticated, IsVendor]
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+    serializer_class = VendorCategoryPerformanceSerializer
 
-    def get(self, request):
+    def get(self, request, *args, **kwargs):
         try:
             profile = _get_profile_or_404(request.user)
-        except ValueError as exc:
-            return Response({"status": "error", "message": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+        except (ValueError, AttributeError):
+            return error_response(message="Vendor profile not found.", status=status.HTTP_404_NOT_FOUND)
 
         limit = int(request.query_params.get("limit", 5))
-        data  = profile.get_top_performing_categories(limit=limit)
-        return Response({"status": "success", "data": data})
+        data = profile.get_top_performing_categories(limit=limit)
+        serializer = self.get_serializer(data, many=True)
+        return success_response(data=serializer.data)
 
 
-class VendorPaymentDistributionView(APIView):
+class VendorPaymentDistributionView(GenericAPIView):
     """
-    GET /api/v1/vendor/analytics/distribution/
-
-    Revenue distribution by payment_status as percentages.
-    Uses vendor_orders reverse FK.
+    Breaks down revenue by payment methods and statuses.
     """
-    permission_classes = [IsAuthenticated, IsVendor]
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+    serializer_class = VendorPaymentDistributionSerializer
 
-    def get(self, request):
+    def get(self, request, *args, **kwargs):
         try:
             profile = _get_profile_or_404(request.user)
-        except ValueError as exc:
-            return Response({"status": "error", "message": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+        except (ValueError, AttributeError):
+            return error_response(message="Vendor profile not found.", status=status.HTTP_404_NOT_FOUND)
 
         data = profile.get_payment_method_distribution()
-        return Response({"status": "success", "data": data})
+        serializer = self.get_serializer(data, many=True)
+        return success_response(data=serializer.data)
 
 
-# ══════════════════════════════════════════════════════════════════
-#  Product Views
-# ══════════════════════════════════════════════════════════════════
+# ===========================================================================
+# PRODUCT INVENTORY VIEWS
+# ===========================================================================
 
 
-class VendorProductListView(APIView):
+class VendorProductListView(ListAPIView):
     """
-    GET /api/v1/vendor/products/
-    GET /api/v1/vendor/products/?search=<query>&status=<status>
+    Standard inventory listing for the Vendor portal.
 
-    Vendor's own product list with optional title/status filtering.
-    Uses vendor_products reverse FK.
+    Supports:
+      - Search by title/description.
+      - Status filtering (active/inactive).
     """
-    permission_classes = [IsAuthenticated, IsVendor]
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+    serializer_class = VendorProductListSerializer
 
-    def get(self, request):
+    def get_queryset(self):
         try:
-            profile = _get_profile_or_404(request.user)
-        except ValueError as exc:
-            return Response({"status": "error", "message": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+            profile = _get_profile_or_404(self.request.user)
+        except (ValueError, AttributeError):
+            return Product.objects.none()
 
-        search        = request.query_params.get("search", "").strip()
-        status_filter = request.query_params.get("status", "").strip()
+        search = self.request.query_params.get("search", "").strip()
+        status_filter = self.request.query_params.get("status", "").strip()
 
         qs = profile.vendor_products.all()
-
         if search:
             qs = qs.filter(Q(title__icontains=search) | Q(description__icontains=search))
         if status_filter:
             qs = qs.filter(status=status_filter)
 
-        products = list(
-            qs.values(
-                "id", "title", "price", "stock_qty",
-                "status", "category__name", "date",
-            ).order_by("-date")
+        return qs.values("id", "title", "price", "stock_qty", "status", "category__name", "date").order_by("-date")
+
+
+class VendorLowStockView(ListAPIView):
+    """
+    Identifies products with inventory levels below the specified threshold.
+    """
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+    serializer_class = VendorProductListSerializer
+
+    def get_queryset(self):
+        try:
+            profile = _get_profile_or_404(self.request.user)
+        except (ValueError, AttributeError):
+            return Product.objects.none()
+
+        threshold = int(self.request.query_params.get("threshold", 5))
+        return profile.get_low_stock_alerts(threshold=threshold).values(
+            "id", "title", "price", "stock_qty", "status", "category__name", "date"
+        ).order_by("stock_qty")
+
+
+class VendorTopSellingProductsView(ListAPIView):
+    """
+    Lists the Vendor's highest-grossing products.
+    """
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+    serializer_class = VendorProductListSerializer
+
+    def get_queryset(self):
+        try:
+            profile = _get_profile_or_404(self.request.user)
+        except (ValueError, AttributeError):
+            return Product.objects.none()
+
+        limit = int(self.request.query_params.get("limit", 5))
+        return profile.get_top_selling_products(limit=limit).values(
+            "id", "title", "price", "stock_qty", "status", "category__name", "date"
         )
-        return Response({
-            "status": "success",
-            "count":  len(products),
-            "data":   products,
-        })
 
 
-class VendorLowStockView(APIView):
+# ===========================================================================
+# ORDER MANAGEMENT VIEWS
+# ===========================================================================
+
+
+class VendorOrderListView(ListAPIView):
     """
-    GET /api/v1/vendor/products/low-stock/?threshold=5
-
-    Products with stock quantity below the given threshold.
-    Uses vendor_products reverse FK.
+    Retrieves history of orders placed at the Vendor's store.
     """
-    permission_classes = [IsAuthenticated, IsVendor]
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+    serializer_class = VendorOrderListSerializer
 
-    def get(self, request):
+    def get_queryset(self):
         try:
-            profile = _get_profile_or_404(request.user)
-        except ValueError as exc:
-            return Response({"status": "error", "message": str(exc)}, status=status.HTTP_404_NOT_FOUND)
-
-        threshold = int(request.query_params.get("threshold", 5))
-        items     = list(profile.get_low_stock_alerts(threshold=threshold))
-        return Response({
-            "status": "success",
-            "count":  len(items),
-            "data":   items,
-        })
-
-
-class VendorTopSellingProductsView(APIView):
-    """
-    GET /api/v1/vendor/products/top/?limit=5
-
-    Top products by total quantity sold.
-    Uses vendor_products → order_item_product__qty.
-    """
-    permission_classes = [IsAuthenticated, IsVendor]
-
-    def get(self, request):
-        try:
-            profile = _get_profile_or_404(request.user)
-        except ValueError as exc:
-            return Response({"status": "error", "message": str(exc)}, status=status.HTTP_404_NOT_FOUND)
-
-        limit = int(request.query_params.get("limit", 5))
-        data  = list(profile.get_top_selling_products(limit=limit).values(
-            "id", "title", "price", "stock_qty"
-        ))
-        return Response({"status": "success", "data": data})
-
-
-# ══════════════════════════════════════════════════════════════════
-#  Order Views
-# ══════════════════════════════════════════════════════════════════
-
-
-class VendorOrderListView(APIView):
-    """
-    GET /api/v1/vendor/orders/
-    GET /api/v1/vendor/orders/?payment_status=paid&order_status=Processing
-
-    Vendor's own orders, with optional filtering by payment_status / order_status.
-    Uses vendor_orders reverse FK.
-    """
-    permission_classes = [IsAuthenticated, IsVendor]
-
-    def get(self, request):
-        try:
-            profile = _get_profile_or_404(request.user)
-        except ValueError as exc:
-            return Response({"status": "error", "message": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+            profile = _get_profile_or_404(self.request.user)
+        except (ValueError, AttributeError):
+            return CartOrder.objects.none()
 
         qs = profile.vendor_orders.all()
-
-        payment_status = request.query_params.get("payment_status", "").strip()
-        order_status   = request.query_params.get("order_status", "").strip()
+        payment_status = self.request.query_params.get("payment_status", "").strip()
+        order_status = self.request.query_params.get("order_status", "").strip()
 
         if payment_status:
             qs = qs.filter(payment_status=payment_status)
         if order_status:
             qs = qs.filter(order_status=order_status)
 
-        orders = list(
-            qs.values(
-                "id", "total", "payment_status", "order_status",
-                "date", "buyer__email",
-            ).order_by("-date")
-        )
-        return Response({
-            "status": "success",
-            "count":  len(orders),
-            "data":   orders,
-        })
+        return qs.values("id", "total", "payment_status", "order_status", "date", "buyer__email").order_by("-date")
 
 
-class VendorOrderDetailView(APIView):
+class VendorOrderDetailView(RetrieveAPIView):
     """
-    GET /api/v1/vendor/orders/<int:order_id>/
-
-    Single order detail for this vendor.
-    Uses vendor_orders reverse FK to scope the query.
+    Granular details for a specific incoming order.
     """
-    permission_classes = [IsAuthenticated, IsVendor]
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+    serializer_class = VendorOrderDetailSerializer
+    lookup_field = "id"
+    lookup_url_kwarg = "order_id"
 
-    def get(self, request, order_id: int):
+    def get_object(self):
         try:
-            profile = _get_profile_or_404(request.user)
-        except ValueError as exc:
-            return Response({"status": "error", "message": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+            profile = _get_profile_or_404(self.request.user)
+        except (ValueError, AttributeError):
+            from rest_framework.exceptions import NotFound
+            raise NotFound("Vendor profile not found.")
 
+        order_id = self.kwargs.get(self.lookup_url_kwarg)
         try:
             order = profile.vendor_orders.get(pk=order_id)
+            return {
+                "id":              order.pk,
+                "total":           str(order.total),
+                "payment_status":  order.payment_status,
+                "order_status":    order.order_status,
+                "date":            order.date,
+                "buyer_email":     getattr(order.buyer, "email", ""),
+            }
         except profile.vendor_orders.model.DoesNotExist:
-            return Response(
-                {"status": "error", "message": "Order not found or does not belong to you."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        # Return key order details; CartOrderItem is accessed via related name
-        data = {
-            "id":              order.pk,
-            "total":           str(order.total),
-            "payment_status":  order.payment_status,
-            "order_status":    order.order_status,
-            "date":            order.date,
-            "buyer_email":     getattr(order.buyer, "email", ""),
-        }
-        return Response({"status": "success", "data": data})
+            from rest_framework.exceptions import NotFound
+            raise NotFound("Order not found.")
 
 
-class VendorOrderStatusCountsView(APIView):
+class VendorOrderStatusCountsView(GenericAPIView):
     """
-    GET /api/v1/vendor/orders/status-counts/
-
-    Count of orders grouped by payment_status for dashboard badges.
+    Provides counts of orders segmented by their current fulfillment status.
     """
-    permission_classes = [IsAuthenticated, IsVendor]
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+    serializer_class = VendorPaymentDistributionSerializer
 
-    def get(self, request):
+    def get(self, request, *args, **kwargs):
         try:
             profile = _get_profile_or_404(request.user)
-        except ValueError as exc:
-            return Response({"status": "error", "message": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+        except (ValueError, AttributeError):
+            return error_response(message="Vendor profile not found.", status=status.HTTP_404_NOT_FOUND)
 
         counts = list(profile.get_order_status_counts())
-        return Response({"status": "success", "data": counts})
+        serializer = self.get_serializer(counts, many=True)
+        return success_response(data=serializer.data)
 
 
-# ══════════════════════════════════════════════════════════════════
-#  Review Views
-# ══════════════════════════════════════════════════════════════════
+# ===========================================================================
+# REVIEW & REPUTATION VIEWS
+# ===========================================================================
 
 
-class VendorReviewListView(APIView):
+class VendorReviewListView(ListAPIView):
     """
-    GET /api/v1/vendor/reviews/
-
-    Reviews on all vendor products.
-    Traversal: vendor_products → review_product.
+    Aggregates all reviews and ratings received across the entire catalog.
     """
-    permission_classes = [IsAuthenticated, IsVendor]
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+    serializer_class = VendorReviewListSerializer
 
-    def get(self, request):
+    def get_queryset(self):
         try:
-            profile = _get_profile_or_404(request.user)
-        except ValueError as exc:
-            return Response({"status": "error", "message": str(exc)}, status=status.HTTP_404_NOT_FOUND)
-
-        reviews = list(
-            profile.vendor_products.values(
+            profile = _get_profile_or_404(self.request.user)
+            return profile.vendor_products.values(
                 "review_product__id",
                 "review_product__rating",
                 "review_product__review",
                 "review_product__date",
                 "title",
             ).order_by("-review_product__date")
-        )
-        return Response({
-            "status": "success",
-            "count":  len(reviews),
-            "data":   reviews,
-        })
+        except (ValueError, AttributeError):
+            return []
 
 
-class VendorReviewDetailView(APIView):
+class VendorReviewDetailView(RetrieveAPIView):
     """
-    GET /api/v1/vendor/reviews/<int:review_id>/
-
-    Single review on a vendor product.
+    Specific review analysis and metadata.
     """
-    permission_classes = [IsAuthenticated, IsVendor]
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+    serializer_class = VendorReviewListSerializer
+    lookup_field = "review_id"
 
-    def get(self, request, review_id: int):
+    def get_object(self):
         try:
-            profile = _get_profile_or_404(request.user)
-        except ValueError as exc:
-            return Response({"status": "error", "message": str(exc)}, status=status.HTTP_404_NOT_FOUND)
-
-        try:
+            profile = _get_profile_or_404(self.request.user)
+            review_id = self.kwargs.get(self.lookup_field)
             review_data = (
                 profile.vendor_products
                 .filter(review_product__id=review_id)
                 .values(
-                    "review_product__id",
-                    "review_product__rating",
-                    "review_product__review",
-                    "review_product__date",
-                    "title",
+                    "review_product__id", "review_product__rating",
+                    "review_product__review", "review_product__date", "title",
                 )
                 .first()
             )
-        except Exception as exc:
-            logger.exception("VendorReviewDetailView: error for user=%s: %s", request.user.pk, exc)
-            review_data = None
-
-        if not review_data:
-            return Response(
-                {"status": "error", "message": "Review not found for your products."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        return Response({"status": "success", "data": review_data})
+            if not review_data:
+                from rest_framework.exceptions import NotFound
+                raise NotFound("Review not found.")
+            return review_data
+        except (ValueError, AttributeError):
+            from rest_framework.exceptions import NotFound
+            raise NotFound("Vendor profile not found.")
 
 
-# ══════════════════════════════════════════════════════════════════
-#  Coupon Views
-# ══════════════════════════════════════════════════════════════════
+# ===========================================================================
+# PROMOTIONS & COUPONS
+# ===========================================================================
 
 
-class VendorCouponListView(APIView):
+class VendorCouponListView(ListAPIView):
     """
-    GET /api/v1/vendor/coupons/
-    GET /api/v1/vendor/coupons/?active=true
+    Lists and filters Vendor-specific discount codes.
 
-    Vendor's coupons with optional active/inactive filter.
-    Uses vendor_coupons reverse FK.
+    Query Params:
+      active (bool): Filter by activation status.
     """
-    permission_classes = [IsAuthenticated, IsVendor]
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+    serializer_class = VendorCouponListSerializer
 
-    def get(self, request):
+    def get_queryset(self):
         try:
-            profile = _get_profile_or_404(request.user)
-        except ValueError as exc:
-            return Response({"status": "error", "message": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+            profile = _get_profile_or_404(self.request.user)
+            active_param = self.request.query_params.get("active", "").strip().lower()
+            qs = profile.vendor_coupons.all()
+            if active_param == "true":
+                qs = qs.filter(active=True)
+            elif active_param == "false":
+                qs = qs.filter(active=False)
 
-        active_param = request.query_params.get("active", "").strip().lower()
-        qs = profile.vendor_coupons.all()
-        if active_param == "true":
-            qs = qs.filter(active=True)
-        elif active_param == "false":
-            qs = qs.filter(active=False)
-
-        coupons = list(qs.values("id", "code", "discount", "date", "active").order_by("-date"))
-        return Response({
-            "status": "success",
-            "count":  len(coupons),
-            "data":   coupons,
-        })
+            return qs.values("id", "code", "discount", "date", "active").order_by("-date")
+        except (ValueError, AttributeError):
+            return []

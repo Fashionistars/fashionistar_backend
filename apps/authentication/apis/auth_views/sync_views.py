@@ -1,27 +1,10 @@
 # apps/authentication/apis/auth_views/sync_views.py
 """
-FASHIONISTAR — Synchronous Authentication Views (DRF / WSGI)
-=============================================================
+Authentication Views — Synchronous DRF (WSGI)
+=============================================
 
-All views use DRF generics pattern (generics.CreateAPIView /
-generics.GenericAPIView) — exactly like the legacy
-``userauths.views.RegisterViewCelery`` pattern the user requires.
-
-Architecture:
-    RegisterView     → generics.CreateAPIView   → RegistrationService.register_sync
-    VerifyOTPView    → generics.GenericAPIView   → OTPService.verify_otp_sync
-    ResendOTPView    → generics.GenericAPIView   → OTPService.resend_otp_sync
-    LoginView        → generics.GenericAPIView   → SyncAuthService.login
-    GoogleAuthView   → moved to apis/google_view/sync_views.py
-    RefreshTokenView → generics.GenericAPIView   → SimpleJWT TokenRefreshView
-    LogoutView       → generics.GenericAPIView   → RefreshToken.blacklist()
-
-Why generics over APIView?
-  - get_serializer() / get_serializer_class() hooks work out of the box
-  - Schema generation (drf-spectacular) picks up serializer automatically
-  - Consistent behaviour with the entire rest of the codebase (legacy pattern)
-  - CreateAPIView.create() provides a standardised perform_create() override point
-  - DRF browsable API renders the correct form fields automatically
+Primary authentication gateway for FASHIONISTAR.
+Handles Registration, Login, OTP Verification, and Session Management.
 """
 
 import logging
@@ -46,27 +29,33 @@ from apps.authentication.serializers import (
 )
 from apps.authentication.services.auth_service import SyncAuthService
 from apps.authentication.services.otp import OTPService
-from apps.authentication.services.profile_service.profile_service import (
-    get_post_auth_state,
-)
+from apps.authentication.services.profile_service.profile_service import get_post_auth_state
 from apps.authentication.services.registration import RegistrationService
 from apps.authentication.throttles import BurstRateThrottle, SustainedRateThrottle
+from apps.authentication.serializers.auth import (
+    RegistrationResponseSerializer,
+    LoginResponseSerializer,
+    OTPVerifyResponseSerializer,
+)
 from apps.common.renderers import CustomJSONRenderer
+from apps.common.responses import error_response, success_response
+from drf_spectacular.utils import extend_schema
 
 logger = logging.getLogger('application')
 
 
-# ── Cookie helpers ───────────────────────────────────────────────────────
+# ===========================================================================
+# INTERNAL HELPERS
+# ===========================================================================
+
+
 def _set_refresh_cookie(response, refresh_token_str: str) -> None:
     """
     Split-token pattern (Auth0 / Supabase style):
       - Access token  → JSON body + sessionStorage (short-lived)
       - Refresh token → HttpOnly cookie (long-lived, NOT accessible by JS)
-
-    SameSite=Lax: works cross-site for top-level navigations (Vercel → Render),
-    but blocks CSRF POST from third-party sites.
     """
-    max_age     = getattr(_s, 'REFRESH_TOKEN_COOKIE_MAX_AGE', 60 * 60 * 24 * 30)
+    max_age = getattr(_s, 'REFRESH_TOKEN_COOKIE_MAX_AGE', 60 * 60 * 24 * 30)
     cookie_name = getattr(_s, 'REFRESH_TOKEN_COOKIE_NAME', 'fashionistar_rt')
     response.set_cookie(
         key=cookie_name,
@@ -86,546 +75,358 @@ def _clear_refresh_cookie(response) -> None:
 
 
 def _build_auth_response_state(user: UnifiedUser) -> Dict[str, Any]:
+    """Compile post-authentication state for the user."""
     return get_post_auth_state(user=user)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-#  REGISTER VIEW — mirrors legacy RegisterViewCelery
-# ═══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
+# POST /api/v1/auth/register/
+# ===========================================================================
+
 
 class RegisterView(generics.CreateAPIView):
     """
-    POST /api/v1/auth/register/
+    Register a new user account with OTP verification.
 
-    Synchronous User Registration.
+    Flow:
+      1. Accept email/phone, password, and role (vendor/client).
+      2. Perform atomic user creation in the database.
+      3. Generate a 6-digit OTP and cache it in Redis.
+      4. Trigger asynchronous dispatch of OTP via Email or SMS.
 
-    Accepts email OR phone + password + role, creates the user inside an
-    atomic transaction, generates a 6-digit OTP, and dispatches it via
-    Email (if email provided) or SMS (if phone only).
+    Legacy Context:
+      Replaces and extends `userauths.views.RegisterViewCelery`.
 
-    Mirrors legacy:  ``userauths.views.RegisterViewCelery``
-
-    Request Body:
-        email     (str, optional)  : User email address.
-        phone     (str, optional)  : Phone in E.164 format (+234...).
-        password  (str, required)  : Min 8 chars, must contain upper/lower/digit/special.
-        password2 (str, required)  : Must match password.
-        role      (str, required)  : 'vendor' or 'client'.
-
-    Success Response 201:
-        {
-          "message": "Registration successful. Check your email/phone for OTP.",
-          "user_id": "<uuid>",
-          "email":   "user@example.com",
-          "phone":   null
-        }
-
-    Error Responses:
-        400 — Validation error (missing fields, weak password, mismatch, duplicate)
-        500 — Unexpected server error (transaction rolled back)
+    Status Codes:
+      - 201 Created: Registration successful, OTP dispatched.
+      - 400 Bad Request: Validation errors (email exists, weak password).
     """
-    serializer_class    = UserRegistrationSerializer
-    permission_classes  = [AllowAny]
-    renderer_classes    = [CustomJSONRenderer, BrowsableAPIRenderer]
-    throttle_classes    = [BurstRateThrottle]
+    serializer_class = UserRegistrationSerializer
+    permission_classes = [AllowAny]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+    throttle_classes = [BurstRateThrottle]
 
+    @extend_schema(
+        responses={201: RegistrationResponseSerializer},
+        summary="Register a new user",
+        description="Creates a new user account and sends an OTP for verification."
+    )
     def create(self, request, *args, **kwargs) -> Response:
-        """
-        Override generics.CreateAPIView.create() to:
-          1. Validate via UserRegistrationSerializer
-          2. Delegate to RegistrationService (inside atomic transaction)
-          3. Return a structured 201 response
-        """
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         return self.perform_create(serializer)
 
     @transaction.atomic
-    def perform_create(self, serializer) -> Response:  # type: ignore[override]
-        """Atomic user creation + OTP dispatch."""
+    def perform_create(self, serializer) -> Response:
         try:
             validated_data: Dict[str, Any] = dict(serializer.validated_data)
-
-            # Strip validation-only fields (not passed to the service)
             validated_data.pop('password2', None)
             validated_data.pop('password_confirm', None)
 
             result = RegistrationService.register_sync(**validated_data)
 
-            logger.info(
-                "✅ RegisterView: user_id=%s identifier=%s",
-                result.get('user_id'),
-                result.get('email') or result.get('phone'),
-            )
+            logger.info("✅ RegisterView: user_id=%s identifier=%s", result.get('user_id'), result.get('email') or result.get('phone'))
 
-            return Response(
-                {
-                    "message": result['message'],
+            return success_response(
+                data={
                     "user_id": result['user_id'],
-                    "email":   result.get('email'),
-                    "phone":   result.get('phone'),
+                    "email": result.get('email'),
+                    "phone": result.get('phone'),
                 },
+                message=result['message'],
                 status=status.HTTP_201_CREATED,
             )
 
         except drf_serializers.ValidationError as exc:
-            # DRF serializer-level validation errors (from UserRegistrationSerializer)
             logger.warning("⚠️ RegisterView DRF validation error: %s", exc.detail)
-            return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
+            return error_response(message="Validation failed", errors=exc.detail, status=status.HTTP_400_BAD_REQUEST)
 
         except DjangoValidationError as exc:
-            # django.core.exceptions.ValidationError from model.full_clean()
-            # Triggered e.g. when a concurrent request sneaks past the serializer
-            # uniqueness check and the DB unique constraint fires on save().
-            # Convert to a clean 400 with human-readable field errors.
             transaction.set_rollback(True)
-            if hasattr(exc, 'message_dict'):
-                error_detail = exc.message_dict   # {'email': ['Already exists.']}
-            else:
-                error_detail = {'error': exc.messages}
-            # Flatten single-item lists for cleaner UX
-            flat = {
-                field: msgs[0] if isinstance(msgs, list) and len(msgs) == 1 else msgs
-                for field, msgs in error_detail.items()
-            }
-            logger.warning(
-                "⚠️ RegisterView model validation error (duplicate/race-condition): %s",
-                flat,
-            )
-            return Response(flat, status=status.HTTP_400_BAD_REQUEST)
+            error_detail = exc.message_dict if hasattr(exc, 'message_dict') else {'error': exc.messages}
+            flat = {field: msgs[0] if isinstance(msgs, list) and len(msgs) == 1 else msgs for field, msgs in error_detail.items()}
+            logger.warning("⚠️ RegisterView model validation error: %s", flat)
+            return error_response(message="Registration validation error", errors=flat, status=status.HTTP_400_BAD_REQUEST)
 
         except Exception as exc:
             transaction.set_rollback(True)
             logger.error("❌ RegisterView error: %s", str(exc), exc_info=True)
-            return Response(
-                {
-                    "error": (
-                        "An error occurred during registration. "
-                        "Please verify your input or contact support."
-                    )
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+            return error_response(message="Registration failed. Please try again.", status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-#  LOGIN VIEW
-# ═══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
+# POST /api/v1/auth/login/
+# ===========================================================================
+
 
 class LoginView(generics.GenericAPIView):
     """
-    POST /api/v1/auth/login/
+    Authenticate user and issue JWT session tokens.
 
-    Synchronous Login — email/phone + password → JWT tokens.
+    Flow:
+      1. Validate credentials (email/phone + password).
+      2. Check account status (verified, active, not soft-deleted).
+      3. Record LoginEvent and trigger audit logging.
+      4. Issue access token (JSON) and refresh token (HttpOnly Cookie).
 
-    Request Body:
-        email_or_phone (str): Registered email or international phone number.
-        password       (str): User password.
+    Audit & Compliance:
+      Every attempt is logged in `LoginEvent` with IP and UserAgent details.
 
-    Success Response 200:
-        {
-          "message": "Login Successful",
-          "user_id": "<uuid>",
-          "role":    "client",
-          "identifying_info": "user@example.com",
-          "access":  "<JWT access token>",
-          "refresh": "<JWT refresh token>"
-        }
-
-    Error Responses:
-        400 — Validation error or wrong credentials
-        403 — User not verified / account inactive
-        500 — Unexpected server error
+    Status Codes:
+      - 200 OK: Authentication successful.
+      - 401 Unauthorized: Invalid credentials.
+      - 403 Forbidden: Account unverified or deactivated.
     """
-    serializer_class   = LoginSerializer
+    serializer_class = LoginSerializer
     permission_classes = [AllowAny]
-    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
-    throttle_classes   = [BurstRateThrottle, SustainedRateThrottle]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+    throttle_classes = [BurstRateThrottle, SustainedRateThrottle]
 
+    @extend_schema(
+        responses={200: LoginResponseSerializer},
+        summary="Login user",
+        description="Authenticates user and returns JWT tokens + HttpOnly cookie."
+    )
     def post(self, request, *args, **kwargs) -> Response:
-        """
-        Full enterprise-grade login via SyncAuthService.
-
-        SyncAuthService.login() performs (in order):
-          1. Soft-delete pre-check → SoftDeletedUserError (403)
-          2. Django authenticate() → password verification
-          3. is_verified check    → AccountNotVerifiedError (403) with OTP URLs
-          4. is_active check      → AccountDeactivatedError (403) with support URL
-          5. Invalid credentials  → InvalidCredentialsError (401)
-          6. LoginEvent INSERT (every attempt — success AND failure)
-          7. AuditService.log()  (async via Celery on_commit)
-          8. UserSession.create_from_token() via transaction.on_commit()
-          9. lifecycle_counter Celery task (fire-and-forget)
-
-        This provides a complete, tamper-proof audit trail for every login
-        attempt — critical for SIEM dashboards and compliance requirements.
-        """
         from apps.authentication.exceptions import (
-            SoftDeletedUserError,
-            AccountNotVerifiedError,
-            AccountDeactivatedError,
-            AccountInactiveError,
+            SoftDeletedUserError, AccountNotVerifiedError,
+            AccountDeactivatedError, AccountInactiveError,
             InvalidCredentialsError,
         )
         try:
-            # ── Step 1: Field validation (email_or_phone + password format) ──
             serializer = self.get_serializer(data=request.data)
             if not serializer.is_valid():
                 raise drf_serializers.ValidationError(serializer.errors)
 
-            email_or_phone = serializer.validated_data.get('email_or_phone')
-            password       = serializer.validated_data.get('password')
-
-            # ── Step 2: Full audit-logged auth via SyncAuthService ───────────
-            # This is where LoginEvent, UserSession, AuditLog are ALL recorded.
-            # SyncAuthService.login() raises typed exceptions for every failure.
             result = SyncAuthService.login(
-                email_or_phone=email_or_phone,
-                password=password,
+                email_or_phone=serializer.validated_data.get('email_or_phone'),
+                password=serializer.validated_data.get('password'),
                 request=request,
             )
             user = result['user']
             auth_state = _build_auth_response_state(user)
 
-            logger.info(
-                "✅ LoginView: login successful for %s (id=%s role=%s)",
-                user.identifying_info, user.id, user.role,
-            )
+            logger.info("✅ LoginView: login successful for %s", user.identifying_info)
 
-            response = Response(
-                {
-                    "message":          "Login successful.",
-                    "user_id":          str(user.id),
-                    "role":             user.role,
+            response = success_response(
+                data={
+                    "user_id": str(user.id),
+                    "role": user.role,
                     "identifying_info": user.identifying_info,
-                    "access":           result['access'],
-                    "refresh":          result['refresh'],
+                    "access": result['access'],
+                    "refresh": result['refresh'],
                     **auth_state,
                 },
+                message="Login successful.",
                 status=status.HTTP_200_OK,
             )
-            # ── Mirror refresh token into HttpOnly cookie (XSS-resistant) ──
-            # Web browsers use the cookie for silent refresh; API clients use
-            # the JSON body field. Both are kept to support both use-cases.
             _set_refresh_cookie(response, result['refresh'])
             return response
 
         except SoftDeletedUserError as exc:
-            logger.warning(
-                "⛔ LoginView: soft-deleted account attempt — %s",
-                request.data.get('email_or_phone', ''),
-            )
-            return Response(
-                {"success": False, "message": str(exc.detail), "code": exc.default_code},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
+            return error_response(message=str(exc.detail), code=exc.default_code, status=status.HTTP_403_FORBIDDEN)
         except AccountNotVerifiedError as exc:
-            logger.warning(
-                "⛔ LoginView: unverified account attempt — %s",
-                request.data.get('email_or_phone', ''),
-            )
-            return Response(
-                {"success": False, "message": str(exc.detail), "code": exc.default_code},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
+            return error_response(message=str(exc.detail), code=exc.default_code, status=status.HTTP_403_FORBIDDEN)
         except (AccountDeactivatedError, AccountInactiveError) as exc:
-            logger.warning(
-                "⛔ LoginView: deactivated/inactive account attempt — %s",
-                request.data.get('email_or_phone', ''),
-            )
-            return Response(
-                {"success": False, "message": str(exc.detail), "code": exc.default_code},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
+            return error_response(message=str(exc.detail), code=exc.default_code, status=status.HTTP_403_FORBIDDEN)
         except InvalidCredentialsError as exc:
-            return Response(
-                {"success": False, "message": str(exc.detail), "code": exc.default_code},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
-
+            return error_response(message=str(exc.detail), code=exc.default_code, status=status.HTTP_401_UNAUTHORIZED)
         except drf_serializers.ValidationError as exc:
-            logger.warning("⚠️ LoginView validation error: %s", exc.detail)
-            return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
-
+            return error_response(message="Validation failed", errors=exc.detail, status=status.HTTP_400_BAD_REQUEST)
         except Exception as exc:
-            logger.error(
-                "❌ LoginView unexpected error: %s", str(exc), exc_info=True
-            )
-            return Response(
-                {"success": False, "error": "An error occurred during login. Please try again."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+            logger.error("❌ LoginView unexpected error: %s", str(exc), exc_info=True)
+            return error_response(message="Login failed. Please try again.", status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+# ===========================================================================
+# POST /api/v1/auth/verify-otp/
+# ===========================================================================
 
-# ═══════════════════════════════════════════════════════════════════════════
-#  VERIFY OTP VIEW — mirrors legacy VerifyOTPView
-# ═══════════════════════════════════════════════════════════════════════════
 
 class VerifyOTPView(generics.GenericAPIView):
     """
-    POST /api/v1/auth/verify-otp/
+    Verify the 6-digit OTP code and activate the user account.
 
-    Synchronous OTP Verification.
+    Flow:
+      1. Accept OTP code (O(1) Redis lookup by hash).
+      2. Identify the user ID associated with the OTP.
+      3. Activate the user (is_verified=True, is_active=True).
+      4. Auto-issue JWT session tokens on successful verification.
 
-    Mirrors the legacy VerifyOTPView pattern exactly:
-      - Client sends ONLY the 6-digit OTP code (no user_id in request).
-      - Server discovers the user via O(1) SHA-256 hash index in Redis.
-      - Activates the account (is_active=True, is_verified=True).
-      - Auto-issues JWT access + refresh tokens on success.
+    Security:
+      One-time use. OTP is deleted from Redis immediately upon verification.
 
-    Request Body:
-        otp (str): 6-digit OTP code received via email or SMS.
-
-    Success Response 200:
-        {
-          "message": "Your account has been successfully verified.",
-          "user_id": "<uuid>",
-          "role":    "client",
-          "identifying_info": "user@example.com",
-          "access":  "<JWT>",
-          "refresh": "<JWT>"
-        }
-
-    Error Responses:
-        400 — Missing OTP, invalid / expired OTP
-        404 — User not found (OTP valid but user deleted mid-flow)
-        503 — Redis unavailable
-        500 — Unexpected server error
+    Status Codes:
+      - 200 OK: Verification successful, account activated.
+      - 400 Bad Request: Invalid or expired OTP.
     """
-    serializer_class   = OTPSerializer
+    serializer_class = OTPSerializer
     permission_classes = [AllowAny]
-    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
-    throttle_classes   = [BurstRateThrottle]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+    throttle_classes = [BurstRateThrottle]
 
+    @extend_schema(
+        responses={200: OTPVerifyResponseSerializer},
+        summary="Verify OTP",
+        description="Verifies the 6-digit OTP code and activates user account."
+    )
     @transaction.atomic
     def post(self, request, *args, **kwargs) -> Response:
-        """
-        Verifies OTP (OTP-only, no user_id in request) and issues JWT tokens.
-
-        Flow:
-          1. Validate OTP format via OTPSerializer (6-digit numeric).
-          2. OTPService.verify_by_otp_sync():
-               - SHA-256 hash the submitted OTP.
-               - O(1) Redis GET otp_hash:{hash} → primary_key.
-               - Parse user_id from primary_key.
-               - TTL-guard: verify primary key still alive.
-               - Atomic DEL both keys (one-time use).
-               - Returns {'user_id': ..., 'purpose': ...} or None.
-          3. Fetch User from DB using discovered user_id.
-          4. Activate account: is_active=True, is_verified=True.
-          5. Issue JWT tokens → return full response.
-
-        Mirrors legacy VerifyOTPView — client only needs the OTP code.
-        """
         try:
-            # Step 1 — Validate OTP format via serializer
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             otp_code = serializer.validated_data['otp']
 
-            # Step 2 — O(1) Redis lookup: OTP → user_id (no scan, no user_id needed)
             result = OTPService.verify_by_otp_sync(otp_code, purpose='verify')
             if not result:
-                logger.warning("⚠️ VerifyOTPView: invalid/expired OTP submitted")
-                return Response(
-                    {"error": "Invalid or expired OTP. Please request a new one."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                return error_response(message="Invalid or expired OTP.", status=status.HTTP_400_BAD_REQUEST)
 
             user_id = result['user_id']
-
-            # Step 3 — Fetch User from DB
             try:
-                user = UnifiedUser.objects.only(
-                    "id", "is_active", "is_verified", "role", "email", "phone"
-                ).get(pk=user_id)
+                user = UnifiedUser.objects.get(pk=user_id)
             except UnifiedUser.DoesNotExist:
-                logger.error(
-                    "❌ VerifyOTPView: user not found after OTP verify: %s", user_id
-                )
-                return Response(
-                    {"error": "User not found."},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
+                return error_response(message="User not found.", status=status.HTTP_404_NOT_FOUND)
 
-            # Step 4 — Activate account
-            changed = []
-            if not user.is_active:
-                user.is_active   = True
-                changed.append('is_active')
-            if not user.is_verified:
-                user.is_verified = True
-                changed.append('is_verified')
-            if changed:
-                user.save(update_fields=changed)
+            # Activate account
+            user.is_active = True
+            user.is_verified = True
+            user.save(update_fields=['is_active', 'is_verified'])
 
             from apps.common.events import event_bus
-            event_bus.emit_on_commit(
-                "user.verified",
-                user_uuid=str(user.id),
-                role=str(user.role or ""),
-                email=str(user.email) if user.email else None,
-                phone=str(user.phone) if user.phone else None,
-            )
+            event_bus.emit_on_commit("user.verified", user_uuid=str(user.id), role=user.role)
 
-            logger.info(
-                "✅ Account verified: id=%s identifier=%s",
-                user.id, user.identifying_info,
-            )
+            logger.info("✅ Account verified: id=%s", user.id)
 
-            # Step 5 — Issue JWT tokens
             from rest_framework_simplejwt.tokens import RefreshToken
             from django.contrib.auth.models import update_last_login
             refresh = RefreshToken.for_user(user)
             update_last_login(None, user)
             auth_state = _build_auth_response_state(user)
 
-            refresh_str = str(refresh)
-            response = Response(
-                {
-                    "message":          "Your account has been successfully verified.",
-                    "user_id":          str(user.id),
-                    "role":             user.role,
+            response = success_response(
+                data={
+                    "user_id": str(user.id),
+                    "role": user.role,
                     "identifying_info": user.identifying_info,
-                    "access":           str(refresh.access_token),
-                    "refresh":          refresh_str,
+                    "access": str(refresh.access_token),
+                    "refresh": str(refresh),
                     **auth_state,
                 },
+                message="Account successfully verified.",
                 status=status.HTTP_200_OK,
             )
-            _set_refresh_cookie(response, refresh_str)
+            _set_refresh_cookie(response, str(refresh))
             return response
-
-        except drf_serializers.ValidationError as exc:
-            logger.warning("⚠️ VerifyOTPView validation error: %s", exc.detail)
-            return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
 
         except Exception as exc:
             transaction.set_rollback(True)
-            logger.error(
-                "❌ VerifyOTPView unexpected error: %s", str(exc), exc_info=True
-            )
-            return Response(
-                {"error": "Verification failed. Please try again."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+            logger.error("❌ VerifyOTPView unexpected error: %s", str(exc), exc_info=True)
+            return error_response(message="Verification failed.", status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+# ===========================================================================
+# POST /api/v1/auth/resend-otp/
+# ===========================================================================
 
-# ═══════════════════════════════════════════════════════════════════════════
-#  RESEND OTP VIEW — mirrors legacy ResendOTPView
-# ═══════════════════════════════════════════════════════════════════════════
 
 class ResendOTPView(generics.GenericAPIView):
     """
-    POST /api/v1/auth/resend-otp/
+    Regenerate and resend a 6-digit OTP code.
 
-    Regenerates and resends OTP via email or SMS.
+    Flow:
+      1. Validate user existence by email or phone.
+      2. Regenerate a new secure OTP code.
+      3. Dispatch via the primary communication channel.
 
-    Request Body:
-        email_or_phone (str): Registered email or phone number.
-
-    Success Response 200:
-        { "message": "OTP resent successfully." }
+    Status Codes:
+      - 200 OK: OTP resent successfully.
+      - 400 Bad Request: Validation or throttled request.
     """
-    serializer_class   = ResendOTPRequestSerializer
+    serializer_class = ResendOTPRequestSerializer
     permission_classes = [AllowAny]
-    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
-    throttle_classes   = [BurstRateThrottle]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+    throttle_classes = [BurstRateThrottle]
 
     def post(self, request, *args, **kwargs) -> Response:
-        """Resends OTP to user's verified contact."""
         try:
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
 
-            email_or_phone = serializer.validated_data.get('email_or_phone')
-            message = OTPService.resend_otp_sync(email_or_phone=email_or_phone)
-
-            logger.info("✅ OTP resent for: %s", email_or_phone)
-            return Response({"message": message}, status=status.HTTP_200_OK)
-
-        except drf_serializers.ValidationError as exc:
-            logger.warning("⚠️ ResendOTPView validation error: %s", exc)
-            return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
+            msg = OTPService.resend_otp_sync(email_or_phone=serializer.validated_data.get('email_or_phone'))
+            return success_response(message=msg, status=status.HTTP_200_OK)
 
         except Exception as exc:
             logger.error("❌ ResendOTPView error: %s", str(exc), exc_info=True)
-            return Response(
-                {"error": "Failed to resend OTP. Please try again."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+            return error_response(message="Failed to resend OTP.", status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-#  REFRESH TOKEN VIEW
-# ═══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
+# POST /api/v1/auth/token/refresh/
+# ===========================================================================
+
 
 class RefreshTokenView(generics.GenericAPIView):
     """
-    POST /api/v1/auth/token/refresh/
+    Refresh JWT access tokens using the stored refresh token.
 
-    Refreshes a JWT access token using a valid refresh token.
+    Flow:
+      1. Extract refresh token from request body (or HttpOnly cookie).
+      2. Verify refresh token validity via SimpleJWT.
+      3. Issue new short-lived access token.
 
-    Request Body:
-        refresh (str): Valid refresh token.
-
-    Success Response 200:
-        { "access": "<new access token>" }
+    Status Codes:
+      - 200 OK: Access token refreshed.
+      - 401 Unauthorized: Invalid or expired refresh token.
     """
-    serializer_class   = TokenRefreshSerializer  # Needed for drf-yasg schema
+    serializer_class = TokenRefreshSerializer
     permission_classes = [AllowAny]
-    renderer_classes   = [CustomJSONRenderer]
+    renderer_classes = [CustomJSONRenderer]
 
     def post(self, request, *args, **kwargs) -> Response:
-        """Delegates to SimpleJWT TokenRefreshView with custom renderer."""
         from rest_framework_simplejwt.views import TokenRefreshView
-        return TokenRefreshView.as_view()(request._request)
+        from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
+
+        try:
+            refresh_response = TokenRefreshView.as_view()(request._request)
+            if refresh_response.status_code == 200:
+                return success_response(data=refresh_response.data, message="Token refreshed.")
+            return refresh_response
+        except (TokenError, InvalidToken) as exc:
+            return error_response(message="Token invalid or expired.", status=status.HTTP_401_UNAUTHORIZED)
+        except Exception as exc:
+            return error_response(message="Refresh failed.", status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-#  LOGOUT VIEW
-# ═══════════════════════════════════════════════════════════════════════════
+# ===========================================================================
+# POST /api/v1/auth/logout/
+# ===========================================================================
+
 
 class LogoutView(generics.GenericAPIView):
     """
-    POST /api/v1/auth/logout/
+    Terminate the user session and blacklist the refresh token.
 
-    Server-side logout — blacklists the refresh token so it cannot be
-    reused even if stolen.  Mirrors legacy ``userauths.views.LogoutView``.
+    Flow:
+      1. Accept current refresh token.
+      2. Blacklist the token in the database to prevent reuse.
+      3. Clear the HttpOnly session cookie.
 
-    Requires:
-        Authorization: Bearer <access_token>
-        Body: { "refresh": "<refresh_token>" }
-
-    Success Response 200:
-        { "message": "Logout Successful. Your session has been terminated." }
-
-    Error Responses:
-        400 — Token already blacklisted or missing
-        401 — Not authenticated
+    Status Codes:
+      - 200 OK: Logout successful.
+      - 401 Unauthorized: Not authenticated.
     """
-    serializer_class   = LogoutSerializer   # Needed for drf-yasg schema
+    serializer_class = LogoutSerializer
     permission_classes = [IsAuthenticated]
-    renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     def post(self, request, *args, **kwargs) -> Response:
-        """Blacklists refresh token, invalidating the server-side session."""
         from rest_framework_simplejwt.tokens import RefreshToken
         from rest_framework_simplejwt.exceptions import TokenError
-        from django.db import OperationalError as DbOperationalError
 
         try:
             refresh_token = request.data.get("refresh")
             if not refresh_token:
-                return Response(
-                    {"error": "Refresh token is required to logout."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                return error_response(message="Refresh token required.", status=status.HTTP_400_BAD_REQUEST)
 
             with transaction.atomic():
                 token = RefreshToken(refresh_token)
@@ -635,8 +436,8 @@ class LogoutView(generics.GenericAPIView):
                 "Logout: refresh token blacklisted — user_id=%s",
                 request.user.id,
             )
-            response = Response(
-                {"message": "Logout Successful. Your session has been terminated."},
+            response = success_response(
+                message="Logout Successful. Your session has been terminated.",
                 status=status.HTTP_200_OK,
             )
             _clear_refresh_cookie(response)  # Invalidate HttpOnly cookie
@@ -647,9 +448,9 @@ class LogoutView(generics.GenericAPIView):
                 "LogoutView TokenError user_id=%s: %s",
                 getattr(request.user, 'id', 'anon'), str(exc),
             )
-            return Response(
-                {"error": "Token is already invalid or has expired."},
-                status=status.HTTP_400_BAD_REQUEST,
+            return error_response(
+                message="Token is already invalid or has expired.",
+                status=status.HTTP_400_BAD_REQUEST
             )
 
         except DbOperationalError as exc:
@@ -660,9 +461,9 @@ class LogoutView(generics.GenericAPIView):
                 "LogoutView DB lock on blacklist (concurrent request) user_id=%s: %s",
                 getattr(request.user, 'id', 'anon'), str(exc),
             )
-            resp = Response(
-                {"error": "Server busy. Please retry logout in a moment."},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            resp = error_response(
+                message="Server busy. Please retry logout in a moment.",
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
             )
             resp["Retry-After"] = "1"
             return resp
@@ -671,67 +472,10 @@ class LogoutView(generics.GenericAPIView):
             logger.error(
                 "LogoutView unexpected error: %s", str(exc), exc_info=True
             )
-            return Response(
-                {"error": "An error occurred during logout. Please try again."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            return error_response(
+                message="An error occurred during logout. Please try again.",
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-#  ME VIEW — Authenticated user profile (for frontend SSR rehydration)
-# ═══════════════════════════════════════════════════════════════════════════
-
-class MeView(APIView):
-    """
-    GET /api/v1/auth/me/
-
-    Returns the authenticated user's full profile.
-
-    Used by the frontend useAuthHydration() hook to rehydrate Zustand
-    user state on page refresh — without requiring a full re-login.
-
-    Authorization: Bearer <access_token>
-
-    Success Response 200:
-        {
-          "id":          "<uuid>",
-          "member_id":   "<member_id>",
-          "email":       "user@example.com",
-          "phone":       null,
-          "first_name":  "John",
-          "last_name":   "Doe",
-          "role":        "client",
-          "is_verified": true,
-          "is_staff":    false,
-          "avatar":      null,
-          "date_joined": "2026-01-15T10:00:00Z"
-        }
-
-    Error Responses:
-        401 — Not authenticated / token expired
-    """
-    permission_classes = [IsAuthenticated]
-    renderer_classes   = [CustomJSONRenderer]
-
-    def get(self, request, *args, **kwargs) -> Response:
-        """Returns the requesting user's profile from the JWT token claim."""
-        user = request.user
-        return Response(
-            {
-                "id":          str(user.id),
-                "member_id":   user.member_id,
-                "email":       user.email,
-                "phone":       str(user.phone) if user.phone else None,
-                "first_name":  user.first_name,
-                "last_name":   user.last_name,
-                "role":        user.role,
-                "is_verified": user.is_verified,
-                "is_staff":    user.is_staff,
-                # CloudinaryField stores a public_id; .url gives the full HTTPS secure_url.
-                # Never return the raw field object — the frontend expects a string or null.
-                "avatar":      str(user.avatar.url) if user.avatar else None,
-                "date_joined": user.date_joined.isoformat() if user.date_joined else None,
-            },
-            status=status.HTTP_200_OK,
-        )
 
