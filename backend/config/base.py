@@ -170,10 +170,11 @@ INSTALLED_APPS = [
     "apps.vendor",      # Phase 2: Vendor domain (stores, setup, payouts)
     "apps.transactions",  # Financial ledger, commissions, disputes, audit trail
     "apps.wallet",        # Role wallets, escrow, PINs, company wallet
-    "apps.payment",       # Paystack/provider intents and webhooks
-    # ── Modular admin backend migrated into apps/ ───────────────────────────
-    "apps.admin_backend",
-    # ── Third Party ──────────────────────────────────────────────────────────
+        "apps.payment",       # Paystack/provider intents and webhooks
+        # ── Modular admin backend migrated into apps/ ───────────────────────────
+        "apps.admin_backend",
+        "apps.catalog",       # Canonical public commerce metadata facade
+        # ── Third Party ──────────────────────────────────────────────────────────
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",  # JWT logout blacklisting
     "corsheaders",

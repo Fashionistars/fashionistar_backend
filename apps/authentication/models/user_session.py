@@ -25,7 +25,7 @@ class UserSession(TimeStampedModel):
     Key capabilities enabled by this model:
       1. **Enumerate active sessions** — ``GET /api/v1/auth/sessions/``
          returns all of the user's live sessions: device, location, last-used.
-      2. **Revoke a specific session** — ``DELETE /api/v1/auth/sessions/{id}/``
+      2. **Revoke a specific session** — ``DELETE /api/v1/auth/sessions/{<uuid> session_id}/``
          deletes the row AND blacklists the JWT refresh token.
       3. **Logout all other devices** — ``POST /api/v1/auth/sessions/revoke-others/``
          deletes all rows except the current one AND blacklists all their tokens.
@@ -37,23 +37,23 @@ class UserSession(TimeStampedModel):
     """
 
     # ── Device / client types ─────────────────────────────────────────
-    CLIENT_WEB     = 'web'
-    CLIENT_MOBILE  = 'mobile'
-    CLIENT_API     = 'api'
-    CLIENT_UNKNOWN = 'unknown'
+    CLIENT_WEB = "web"
+    CLIENT_MOBILE = "mobile"
+    CLIENT_API = "api"
+    CLIENT_UNKNOWN = "unknown"
 
     CLIENT_TYPE_CHOICES = [
-        (CLIENT_WEB,     'Web Browser'),
-        (CLIENT_MOBILE,  'Mobile App'),
-        (CLIENT_API,     'API Client'),
-        (CLIENT_UNKNOWN, 'Unknown'),
+        (CLIENT_WEB, "Web Browser"),
+        (CLIENT_MOBILE, "Mobile App"),
+        (CLIENT_API, "API Client"),
+        (CLIENT_UNKNOWN, "Unknown"),
     ]
 
     # ── Core ──────────────────────────────────────────────────────────
     user = models.ForeignKey(
         "authentication.UnifiedUser",
         on_delete=models.CASCADE,
-        related_name='sessions',
+        related_name="sessions",
         db_index=True,
         help_text="The owner of this session.",
     )
@@ -74,22 +74,32 @@ class UserSession(TimeStampedModel):
         default=CLIENT_UNKNOWN,
         help_text="Browser / mobile app / API client.",
     )
-    browser_family = models.CharField(max_length=100, blank=True,
-        help_text="Chrome, Firefox, Safari, etc.")
-    os_family = models.CharField(max_length=100, blank=True,
-        help_text="Windows, macOS, iOS, Android, Linux, etc.")
-    device_name = models.CharField(max_length=200, blank=True,
-        help_text="Human-readable label, e.g. 'Chrome on Windows', 'iPhone 15 Pro Max'.")
+    browser_family = models.CharField(
+        max_length=100, blank=True, help_text="Chrome, Firefox, Safari, etc."
+    )
+    os_family = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Windows, macOS, iOS, Android, Linux, etc.",
+    )
+    device_name = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Human-readable label, e.g. 'Chrome on Windows', 'iPhone 15 Pro Max'.",
+    )
     user_agent = models.TextField(blank=True, help_text="Raw User-Agent string.")
 
     # ── Geolocation ───────────────────────────────────────────────────
     ip_address = models.GenericIPAddressField(
-        protocol='both', unpack_ipv4=True, null=True, blank=True,
+        protocol="both",
+        unpack_ipv4=True,
+        null=True,
+        blank=True,
         help_text="IP address at session creation (login time).",
     )
-    country      = models.CharField(max_length=100, blank=True)
+    country = models.CharField(max_length=100, blank=True)
     country_code = models.CharField(max_length=3, blank=True)
-    city         = models.CharField(max_length=100, blank=True)
+    city = models.CharField(max_length=100, blank=True)
 
     # ── Activity ──────────────────────────────────────────────────────
     last_used_at = models.DateTimeField(
@@ -97,7 +107,8 @@ class UserSession(TimeStampedModel):
         help_text="Updated on every token refresh. Stale sessions = last_used_at old.",
     )
     expires_at = models.DateTimeField(
-        null=True, blank=True,
+        null=True,
+        blank=True,
         help_text="When the refresh token expires (from JWT payload).",
     )
     is_current = models.BooleanField(
@@ -109,13 +120,13 @@ class UserSession(TimeStampedModel):
     )
 
     class Meta:
-        verbose_name        = "User Session"
+        verbose_name = "User Session"
         verbose_name_plural = "User Sessions"
-        ordering            = ["-last_used_at"]
+        ordering = ["-last_used_at"]
         indexes = [
-            models.Index(fields=['user', '-last_used_at'], name='us_user_ts_idx'),
-            models.Index(fields=['jti'],                   name='us_jti_idx'),
-            models.Index(fields=['expires_at'],            name='us_expires_idx'),
+            models.Index(fields=["user", "-last_used_at"], name="us_user_ts_idx"),
+            models.Index(fields=["jti"], name="us_jti_idx"),
+            models.Index(fields=["expires_at"], name="us_expires_idx"),
         ]
 
     def __str__(self):
@@ -131,7 +142,7 @@ class UserSession(TimeStampedModel):
         user,
         refresh_token,
         request=None,
-    ) -> 'UserSession':
+    ) -> "UserSession":
         """
         Create a new session record from a SimpleJWT RefreshToken instance.
 
@@ -151,33 +162,34 @@ class UserSession(TimeStampedModel):
         from django.utils import timezone
 
         ip_address = None
-        user_agent = ''
+        user_agent = ""
         if request:
-            forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
+            forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
             ip_address = (
-                forwarded.split(',')[0].strip()
+                forwarded.split(",")[0].strip()
                 if forwarded
-                else request.META.get('REMOTE_ADDR')
+                else request.META.get("REMOTE_ADDR")
             )
-            user_agent = request.META.get('HTTP_USER_AGENT', '')
+            user_agent = request.META.get("HTTP_USER_AGENT", "")
 
-        jti        = str(refresh_token.payload.get('jti', ''))
+        jti = str(refresh_token.payload.get("jti", ""))
         expires_at = timezone.now() + datetime.timedelta(
             seconds=int(refresh_token.lifetime.total_seconds())
         )
 
         # Build a readable device label from User-Agent
-        device_name = 'Unknown Device'
-        browser_family = ''
-        os_family = ''
+        device_name = "Unknown Device"
+        browser_family = ""
+        os_family = ""
         try:
             import user_agents as ua_parser
+
             ua = ua_parser.parse(user_agent)
             browser_family = ua.browser.family
             os_family = ua.os.family
             device_name = (
                 f"{browser_family} on {os_family}"
-                if browser_family != 'Other'
+                if browser_family != "Other"
                 else os_family
             )
         except Exception:
