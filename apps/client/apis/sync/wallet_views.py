@@ -15,7 +15,8 @@ import logging
 from decimal import Decimal, InvalidOperation
 
 from django.contrib.auth import get_user_model
-from rest_framework import generics, status
+from rest_framework.views import APIView
+from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -27,7 +28,7 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
-class ClientWalletBalanceView(generics.GenericAPIView):
+class ClientWalletBalanceView(APIView):
     """
     GET /api/v1/client/wallet/balance/
 
@@ -43,7 +44,7 @@ class ClientWalletBalanceView(generics.GenericAPIView):
         })
 
 
-class ClientWalletTransferView(generics.GenericAPIView):
+class ClientWalletTransferView(APIView):
     """
     POST /api/v1/client/wallet/transfer/
 

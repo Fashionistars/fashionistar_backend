@@ -681,7 +681,7 @@ class LogoutView(generics.GenericAPIView):
 #  ME VIEW — Authenticated user profile (for frontend SSR rehydration)
 # ═══════════════════════════════════════════════════════════════════════════
 
-class MeView(generics.RetrieveAPIView):
+class MeView(APIView):
     """
     GET /api/v1/auth/me/
 

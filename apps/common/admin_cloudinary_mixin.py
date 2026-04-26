@@ -151,6 +151,15 @@ class CloudinaryUploadAdminMixin:
                     # Fallback: set the raw field itself (older models)
                     setattr(obj, field_name, secure_url)
 
+                # ── Prevent Double Upload ───────────────────────────────────────────
+                # After successful manual upload to Cloudinary, we clear the file
+                # from form.cleaned_data. This prevents the default storage engine
+                # (which is also Cloudinary) from trying to upload the "consumed"
+                # file again during super().save_model(request, obj, form, change).
+                # This explicitly fixes the "cloudinary.exceptions.BadRequest: Empty file"
+                # error caused by re-reading an un-seekable or already-consumed stream.
+                form.cleaned_data[field_name] = None
+
                 logger.info(
                     "CloudinaryUploadAdminMixin: ✅ uploaded %s.%s → %s → %s...",
                     obj.__class__.__name__,

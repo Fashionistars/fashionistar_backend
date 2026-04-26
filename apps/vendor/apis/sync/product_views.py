@@ -18,7 +18,8 @@ Nested data (specifications, colors, sizes, gallery) parsed from flat multipart 
 import logging
 
 from django.db import transaction
-from rest_framework import generics, status
+from rest_framework.views import APIView
+from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -107,7 +108,7 @@ def _save_nested_product_data(product, nested: dict) -> None:
 # ══════════════════════════════════════════════════════════════════
 
 
-class VendorProductCreateView(generics.GenericAPIView):
+class VendorProductCreateView(APIView):
     """
     POST /api/v1/vendor/products/create/
 
@@ -155,7 +156,7 @@ class VendorProductCreateView(generics.GenericAPIView):
 # ══════════════════════════════════════════════════════════════════
 
 
-class VendorProductUpdateView(generics.GenericAPIView):
+class VendorProductUpdateView(APIView):
     """
     PUT  /api/v1/vendor/products/<product_pid>/edit/  — full update
     PATCH /api/v1/vendor/products/<product_pid>/edit/ — partial update
@@ -211,7 +212,7 @@ class VendorProductUpdateView(generics.GenericAPIView):
 # ══════════════════════════════════════════════════════════════════
 
 
-class VendorProductDeleteView(generics.GenericAPIView):
+class VendorProductDeleteView(APIView):
     """
     DELETE /api/v1/vendor/products/<product_pid>/delete/
 
@@ -243,7 +244,7 @@ class VendorProductDeleteView(generics.GenericAPIView):
 # ══════════════════════════════════════════════════════════════════
 
 
-class VendorProductFilterView(generics.GenericAPIView):
+class VendorProductFilterView(APIView):
     """
     GET /api/v1/vendor/products/filter/?status=published|draft|disabled|in-review
     GET /api/v1/vendor/products/filter/?ordering=latest|oldest
@@ -288,7 +289,7 @@ class VendorProductFilterView(generics.GenericAPIView):
 # ══════════════════════════════════════════════════════════════════
 
 
-class VendorOrderStatusUpdateView(generics.GenericAPIView):
+class VendorOrderStatusUpdateView(APIView):
     """
     PATCH /api/v1/vendor/orders/<int:order_id>/status/
 

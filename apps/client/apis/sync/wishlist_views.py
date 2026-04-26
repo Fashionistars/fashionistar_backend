@@ -13,7 +13,8 @@ Endpoints:
 """
 import logging
 
-from rest_framework import generics, status
+from rest_framework.views import APIView
+from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -22,7 +23,7 @@ from apps.common.permissions import IsClient
 logger = logging.getLogger(__name__)
 
 
-class ClientWishlistView(generics.GenericAPIView):
+class ClientWishlistView(APIView):
     """
     GET /api/v1/client/wishlist/
 
@@ -49,7 +50,7 @@ class ClientWishlistView(generics.GenericAPIView):
         })
 
 
-class ClientWishlistToggleView(generics.GenericAPIView):
+class ClientWishlistToggleView(APIView):
     """
     POST /api/v1/client/wishlist/toggle/
 
