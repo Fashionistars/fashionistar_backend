@@ -1,35 +1,20 @@
-# apps/admin_backend/order_view.py
-from rest_framework import generics, status
-from drf_spectacular.utils import extend_schema
-
-from store.models import CartOrder
-from store.serializers import CartOrderSerializer
-from apps.admin_backend.serializers import AdminProfitSerializer
-from apps.common.renderers import CustomJSONRenderer, success_response
- 
-
 from decimal import Decimal
 
+from django.apps import apps
+from drf_spectacular.utils import extend_schema
+from rest_framework import generics, status
+from rest_framework.permissions import IsAuthenticated
 
-class AdminOrderListView(generics.ListAPIView):
-    renderer_classes = [CustomJSONRenderer]
-    queryset = CartOrder.objects.all()
-    serializer_class = CartOrderSerializer
-    permission_classes = [IsAuthenticated]
+from apps.admin_backend.serializers import AdminProfitSerializer
+from apps.common.renderers import CustomJSONRenderer
+from apps.common.responses import error_response, success_response
 
-    def get_queryset(self):
-        """
-        Admin Workflow for Retrieving All Orders:
 
-        1. Admin sends a GET request to the `/admin/orders/` endpoint.
-        2. The backend retrieves all orders from the database.
-        3. The backend returns the list of orders in the response.
-        
-        """
-        if not self.request.user.is_staff:
-            raise PermissionDenied("You do not have permission to view this resource.")
-        return super().get_queryset()
-
+def _get_cart_order_model():
+    try:
+        return apps.get_model("store", "CartOrder")
+    except LookupError:
+        return None
 
 
 class AdminProfitView(generics.GenericAPIView):
@@ -39,28 +24,30 @@ class AdminProfitView(generics.GenericAPIView):
 
     @extend_schema(
         summary="Calculate Admin Profit",
-        description="Calculates 10% commission profit from all store orders.",
-        responses={200: AdminProfitSerializer}
+        description="Calculates 10% commission profit from legacy orders while apps/order migration is pending.",
+        responses={200: AdminProfitSerializer},
     )
     def get(self, request, *args, **kwargs):
-        """
-        Admin Workflow for Retrieving Profit Details:
-
-        1. Admin sends a GET request to the `/admin/profit/` endpoint.
-        2. The backend calculates the total amount made from each sale.
-        3. The backend returns the profit details in the response.
-        """
-
         if not request.user.is_staff:
-            raise PermissionDenied("You do not have permission to view this resource.")
+            return error_response(
+                message="You do not have permission to view this resource.",
+                code="permission_denied",
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        CartOrder = _get_cart_order_model()
+        if CartOrder is None:
+            return error_response(
+                message="Admin profit is temporarily unavailable while the order domain migration is completing.",
+                code="order_domain_migration_pending",
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
         total_profit = Decimal("0.0")
-        orders = CartOrder.objects.all()
-
-        for order in orders:
-            total_profit += order.total * Decimal("0.1")  # 10% profit for the company
+        for order in CartOrder.objects.all():
+            total_profit += order.total * Decimal("0.1")
 
         return success_response(
             data={"total_profit": total_profit},
-            message="Profit calculated successfully."
+            message="Profit calculated successfully.",
         )

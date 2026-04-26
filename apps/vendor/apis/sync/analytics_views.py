@@ -22,12 +22,9 @@ from rest_framework import status
 from rest_framework.generics import GenericAPIView, ListAPIView, RetrieveAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.renderers import BrowsableAPIRenderer
-from rest_framework.response import Response
 
 from apps.common.renderers import CustomJSONRenderer
 from apps.common.responses import success_response, error_response
-from apps.store.models import Product
-from apps.store.models import CartOrder
 from apps.vendor.selectors.vendor_selectors import get_vendor_profile_or_none
 from apps.vendor.serializers.vendor_analytics_serializers import (
     VendorAnalyticsSummarySerializer,
@@ -336,7 +333,7 @@ class VendorProductListView(ListAPIView):
         try:
             profile = _get_profile_or_404(self.request.user)
         except (ValueError, AttributeError):
-            return Product.objects.none()
+            return []
 
         search = self.request.query_params.get("search", "").strip()
         status_filter = self.request.query_params.get("status", "").strip()
@@ -362,7 +359,7 @@ class VendorLowStockView(ListAPIView):
         try:
             profile = _get_profile_or_404(self.request.user)
         except (ValueError, AttributeError):
-            return Product.objects.none()
+            return []
 
         threshold = int(self.request.query_params.get("threshold", 5))
         return profile.get_low_stock_alerts(threshold=threshold).values(
@@ -382,7 +379,7 @@ class VendorTopSellingProductsView(ListAPIView):
         try:
             profile = _get_profile_or_404(self.request.user)
         except (ValueError, AttributeError):
-            return Product.objects.none()
+            return []
 
         limit = int(self.request.query_params.get("limit", 5))
         return profile.get_top_selling_products(limit=limit).values(
@@ -407,7 +404,7 @@ class VendorOrderListView(ListAPIView):
         try:
             profile = _get_profile_or_404(self.request.user)
         except (ValueError, AttributeError):
-            return CartOrder.objects.none()
+            return []
 
         qs = profile.vendor_orders.all()
         payment_status = self.request.query_params.get("payment_status", "").strip()

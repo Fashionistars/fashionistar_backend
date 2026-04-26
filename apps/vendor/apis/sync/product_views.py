@@ -1,282 +1,241 @@
 # apps/vendor/apis/sync/product_views.py
-"""
-Vendor Product Management — DRF Sync Views
-==========================================
-
-Handles the lifecycle of products owned by a Vendor, including creation,
-modification, soft-deletion, and catalog filtering.
-
-URL prefix: /api/v1/vendor/
-
-Design Principles:
-  - Scoping: All operations are strictly bound to the authenticated user's Vendor profile.
-  - Atomicity: Product mutations (create/update) are wrapped in transactions.
-  - Validation: Deep validation for nested data (specs, gallery, etc.) via serializers.
-"""
+"""Vendor product management APIs."""
 
 import logging
+
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
 from rest_framework.renderers import BrowsableAPIRenderer
 
 from apps.common.permissions import IsVendor
 from apps.common.renderers import CustomJSONRenderer
-from apps.common.responses import success_response, error_response
+from apps.common.responses import error_response, success_response
+from apps.vendor.legacy_compat import LegacyCommerceUnavailable, get_legacy_store_model
 from apps.vendor.selectors.vendor_selectors import get_vendor_profile_or_none
 from apps.vendor.serializers.product_serializers import (
-    VendorProductSerializer,
+    VendorOrderStatusSerializer,
     VendorProductListSerializer,
-    VendorOrderStatusSerializer
+    VendorProductSerializer,
 )
-from store.models import Product, CartOrder
 
 logger = logging.getLogger(__name__)
 
 
-# ===========================================================================
-# HELPERS
-# ===========================================================================
-
-
 def _get_profile_or_404(user):
-    """
-    Retrieves the vendor profile for the given user or raises a controlled error.
-    """
     profile = get_vendor_profile_or_none(user)
     if profile is None:
         raise ValueError("Vendor profile not found.")
     return profile
 
 
-# ===========================================================================
-# PRODUCT CREATION
-# ===========================================================================
+def _commerce_unavailable_response(message: str):
+    return error_response(
+        message=message,
+        code="commerce_domain_migration_pending",
+        status=status.HTTP_503_SERVICE_UNAVAILABLE,
+    )
 
 
-class VendorProductCreateView(generics.CreateAPIView):
-    """
-    Creates a new product entry for the authenticated vendor.
-
-    Flow:
-      1. Validates basic product fields.
-      2. Processes nested specifications, colors, sizes, and gallery.
-      3. Automatically associates the product with the vendor's profile.
-
-    Validation Logic:
-      - Checks if user is a registered vendor.
-      - Enforces required fields for product visibility.
-
-    Security:
-      - Requires IsAuthenticated and IsVendor.
-
-    Status Codes:
-      201 Created: Product and all related data successfully saved.
-      400 Bad Request: Validation failure.
-      404 Not Found: Vendor profile missing.
-    """
+class VendorProductCreateView(generics.GenericAPIView):
     serializer_class = VendorProductSerializer
     permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     @transaction.atomic
-    def perform_create(self, serializer):
+    def post(self, request, *args, **kwargs):
         try:
-            profile = _get_profile_or_404(self.request.user)
-            serializer.save(vendor=profile)
-            logger.info("Product created for vendor=%s", profile.pk)
+            profile = _get_profile_or_404(request.user)
+            Product = get_legacy_store_model("Product")
         except ValueError as exc:
-            from rest_framework.exceptions import NotFound
-            raise NotFound(str(exc))
+            return error_response(
+                message=str(exc),
+                code="vendor_profile_not_found",
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except LegacyCommerceUnavailable:
+            logger.warning("VendorProductCreateView unavailable: legacy store app is not installed")
+            return _commerce_unavailable_response(
+                "Vendor product creation is temporarily unavailable while the product domain migration is completing."
+            )
 
-    def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
-        headers = self.get_success_headers(serializer.data)
+        product = Product.objects.create(vendor=profile, **serializer.validated_data)
+        output_serializer = self.get_serializer(product)
+        logger.info("Product created for vendor=%s", profile.pk)
         return success_response(
-            data=serializer.data,
+            data=output_serializer.data,
             message="Product created successfully.",
             status=status.HTTP_201_CREATED,
-            headers=headers
         )
 
 
-# ===========================================================================
-# PRODUCT MODIFICATION
-# ===========================================================================
-
-
-class VendorProductUpdateView(generics.UpdateAPIView):
-    """
-    Updates an existing product's details and nested assets.
-
-    Validation Logic:
-      - Verifies the product PID belongs to the authenticated vendor.
-      - Validates all updated fields against the schema.
-
-    Security:
-      - Scoped to vendor_products; cannot modify products from other vendors.
-
-    Status Codes:
-      200 OK: Update successful.
-      404 Not Found: Product not found in vendor's inventory.
-    """
+class VendorProductUpdateView(generics.GenericAPIView):
     serializer_class = VendorProductSerializer
     permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
-    lookup_field = 'pid'
-    lookup_url_kwarg = 'product_pid'
-
-    def get_queryset(self):
-        try:
-            profile = _get_profile_or_404(self.request.user)
-            return profile.vendor_products.all()
-        except ValueError:
-            return Product.objects.none()
 
     @transaction.atomic
-    def perform_update(self, serializer):
-        serializer.save()
-        logger.info("Product updated: pid=%s", self.kwargs.get(self.lookup_url_kwarg))
+    def patch(self, request, product_pid: str, *args, **kwargs):
+        try:
+            profile = _get_profile_or_404(request.user)
+            get_legacy_store_model("Product")
+        except ValueError as exc:
+            return error_response(
+                message=str(exc),
+                code="vendor_profile_not_found",
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except LegacyCommerceUnavailable:
+            logger.warning("VendorProductUpdateView unavailable: legacy store app is not installed")
+            return _commerce_unavailable_response(
+                "Vendor product updates are temporarily unavailable while the product domain migration is completing."
+            )
 
-    def update(self, request, *args, **kwargs):
-        partial = kwargs.pop('partial', False)
-        instance = self.get_object()
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        try:
+            product = profile.vendor_products.get(pid=product_pid)
+        except ObjectDoesNotExist:
+            return error_response(
+                message="Product not found.",
+                code="product_not_found",
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = self.get_serializer(product, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        self.perform_update(serializer)
-
-        if getattr(instance, '_prefetched_objects_cache', None):
-            instance._prefetched_objects_cache = {}
-
+        for attr, value in serializer.validated_data.items():
+            setattr(product, attr, value)
+        product.save()
+        logger.info("Product updated: pid=%s", product_pid)
         return success_response(
-            data=serializer.data,
-            message="Product updated successfully."
+            data=self.get_serializer(product).data,
+            message="Product updated successfully.",
         )
 
+    def put(self, request, product_pid: str, *args, **kwargs):
+        return self.patch(request, product_pid, *args, **kwargs)
 
-class VendorProductDeleteView(generics.DestroyAPIView):
-    """
-    Removes a product from the vendor's catalog.
 
-    Security:
-      - Ownership check: Uses vendor_products queryset to prevent unauthorized deletions.
-
-    Status Codes:
-      200 OK: Deletion confirmed with success message.
-      404 Not Found: Target product not found.
-    """
+class VendorProductDeleteView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
-    lookup_field = 'pid'
-    lookup_url_kwarg = 'product_pid'
 
-    def get_queryset(self):
+    def delete(self, request, product_pid: str, *args, **kwargs):
         try:
-            profile = _get_profile_or_404(self.request.user)
-            return profile.vendor_products.all()
-        except ValueError:
-            return Product.objects.none()
+            profile = _get_profile_or_404(request.user)
+            get_legacy_store_model("Product")
+        except ValueError as exc:
+            return error_response(
+                message=str(exc),
+                code="vendor_profile_not_found",
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except LegacyCommerceUnavailable:
+            logger.warning("VendorProductDeleteView unavailable: legacy store app is not installed")
+            return _commerce_unavailable_response(
+                "Vendor product deletion is temporarily unavailable while the product domain migration is completing."
+            )
 
-    def destroy(self, request, *args, **kwargs):
-        instance = self.get_object()
-        self.perform_destroy(instance)
+        try:
+            product = profile.vendor_products.get(pid=product_pid)
+        except ObjectDoesNotExist:
+            return error_response(
+                message="Product not found.",
+                code="product_not_found",
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        product.delete()
         return success_response(
             message="Product deleted successfully.",
-            status=status.HTTP_200_OK
+            status=status.HTTP_200_OK,
         )
 
 
-# ===========================================================================
-# CATALOG FILTERING
-# ===========================================================================
-
-
-class VendorProductFilterView(generics.ListAPIView):
-    """
-    Provides filtered and sorted listings of a vendor's inventory.
-
-    Query Params:
-      status (str): published, draft, disabled, in-review.
-      ordering (str): latest, oldest.
-      q (str): Keyword search in title.
-
-    Status Codes:
-      200 OK: Returns matching product list.
-    """
+class VendorProductFilterView(generics.GenericAPIView):
     serializer_class = VendorProductListSerializer
     permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
 
-    def get_queryset(self):
+    def get(self, request, *args, **kwargs):
         try:
-            profile = _get_profile_or_404(self.request.user)
-        except ValueError:
-            return Product.objects.none()
+            profile = _get_profile_or_404(request.user)
+            get_legacy_store_model("Product")
+        except ValueError as exc:
+            return error_response(
+                message=str(exc),
+                code="vendor_profile_not_found",
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except LegacyCommerceUnavailable:
+            logger.warning("VendorProductFilterView unavailable: legacy store app is not installed")
+            return _commerce_unavailable_response(
+                "Vendor product listings are temporarily unavailable while the product domain migration is completing."
+            )
 
-        status_filter = self.request.query_params.get("status", "").strip()
-        ordering = self.request.query_params.get("ordering", "latest").strip()
-        query = self.request.query_params.get("q", "").strip()
+        status_filter = request.query_params.get("status", "").strip()
+        ordering = request.query_params.get("ordering", "latest").strip()
+        query = request.query_params.get("q", "").strip()
 
-        qs = profile.vendor_products.all()
+        products = profile.vendor_products.all()
         if query:
-            qs = qs.filter(title__icontains=query)
+            products = products.filter(title__icontains=query)
+        if status_filter in {"published", "draft", "disabled", "in-review"}:
+            products = products.filter(status=status_filter)
+        products = products.order_by("date" if ordering == "oldest" else "-date")
 
-        valid_statuses = {"published", "draft", "disabled", "in-review"}
-        if status_filter in valid_statuses:
-            qs = qs.filter(status=status_filter)
-
-        if ordering == "oldest":
-            qs = qs.order_by("date")
-        else:
-            qs = qs.order_by("-date")
-        return qs
-
-
-# ===========================================================================
-# ORDER STATUS MANAGEMENT
-# ===========================================================================
+        serializer = self.get_serializer(products, many=True)
+        return success_response(
+            data=serializer.data,
+            message="Vendor products retrieved successfully.",
+        )
 
 
-class VendorOrderStatusUpdateView(generics.UpdateAPIView):
-    """
-    Allows vendors to advance order fulfillment states.
-
-    Validation Logic:
-      - Permitted transitions: Pending -> Processing -> Shipped -> Fulfilled.
-      - Payment status is handled by the gateway and remains immutable here.
-
-    Status Codes:
-      200 OK: State transition successful.
-      400 Bad Request: Invalid status value provided.
-    """
+class VendorOrderStatusUpdateView(generics.GenericAPIView):
     serializer_class = VendorOrderStatusSerializer
     permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
-    lookup_url_kwarg = 'order_id'
-    lookup_field = 'pk'
-
-    def get_queryset(self):
-        try:
-            profile = _get_profile_or_404(self.request.user)
-            return profile.vendor_orders.all()
-        except ValueError:
-            return CartOrder.objects.none()
 
     @transaction.atomic
-    def perform_update(self, serializer):
-        serializer.save()
+    def patch(self, request, order_id: int, *args, **kwargs):
+        try:
+            profile = _get_profile_or_404(request.user)
+            CartOrder = get_legacy_store_model("CartOrder")
+        except ValueError as exc:
+            return error_response(
+                message=str(exc),
+                code="vendor_profile_not_found",
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except LegacyCommerceUnavailable:
+            logger.warning("VendorOrderStatusUpdateView unavailable: legacy store app is not installed")
+            return _commerce_unavailable_response(
+                "Vendor order status updates are temporarily unavailable while the order domain migration is completing."
+            )
 
-    def update(self, request, *args, **kwargs):
-        partial = kwargs.pop('partial', True)
-        instance = self.get_object()
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer = self.get_serializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        self.perform_update(serializer)
+        try:
+            order = profile.vendor_orders.get(pk=order_id)
+        except ObjectDoesNotExist:
+            try:
+                order = CartOrder.objects.get(pk=order_id, vendor=profile)
+            except ObjectDoesNotExist:
+                return error_response(
+                    message="Order not found.",
+                    code="order_not_found",
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+        for attr, value in serializer.validated_data.items():
+            setattr(order, attr, value)
+        order.save(update_fields=list(serializer.validated_data.keys()))
         return success_response(
             data=serializer.data,
-            message="Order status updated successfully."
+            message="Order status updated successfully.",
         )
 
+    def put(self, request, order_id: int, *args, **kwargs):
+        return self.patch(request, order_id, *args, **kwargs)

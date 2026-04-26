@@ -1,4 +1,6 @@
 from django.core.exceptions import ValidationError
+from django.test import override_settings
+from django.urls import path
 from rest_framework.test import APIClient
 
 from apps.common.reference_data.banks import get_banks
@@ -11,6 +13,42 @@ from apps.common.reference_data.validators import (
     validate_state_code,
     validate_street_address,
 )
+from apps.common.reference_data.views import (
+    ReferenceBanksView,
+    ReferenceCitiesView,
+    ReferenceCountriesView,
+    ReferenceLgasView,
+    ReferenceStatesView,
+)
+
+
+urlpatterns = [
+    path(
+        "api/v1/common/reference/countries/",
+        ReferenceCountriesView.as_view(),
+        name="reference-countries",
+    ),
+    path(
+        "api/v1/common/reference/countries/<str:country_code>/states/",
+        ReferenceStatesView.as_view(),
+        name="reference-country-states",
+    ),
+    path(
+        "api/v1/common/reference/countries/<str:country_code>/states/<str:state_code>/lgas/",
+        ReferenceLgasView.as_view(),
+        name="reference-state-lgas",
+    ),
+    path(
+        "api/v1/common/reference/countries/<str:country_code>/cities/",
+        ReferenceCitiesView.as_view(),
+        name="reference-country-cities",
+    ),
+    path(
+        "api/v1/common/reference/banks/",
+        ReferenceBanksView.as_view(),
+        name="reference-banks",
+    ),
+]
 
 
 def test_reference_data_loads_full_nigeria_depth():
@@ -56,6 +94,7 @@ def test_reference_validators_reject_untrusted_values():
         raise AssertionError("Expected reference validator to reject invalid input")
 
 
+@override_settings(ROOT_URLCONF=__name__)
 def test_reference_data_endpoints_return_static_payloads():
     client = APIClient()
 
