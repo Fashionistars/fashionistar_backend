@@ -24,6 +24,12 @@ from apps.notification.models import (
 
 logger = logging.getLogger(__name__)
 
+# Module-level import so tests can patch apps.notification.services.notification_service.dispatch_notification_task
+try:
+    from apps.notification.tasks import dispatch_notification_task
+except ImportError:
+    dispatch_notification_task = None  # type: ignore[assignment]
+
 # Notification types that CANNOT be suppressed by user preferences
 _MANDATORY_TYPES = {
     NotificationType.ORDER_PLACED,
@@ -119,8 +125,8 @@ def create_notification(
     )
     # Schedule async dispatch (Celery) — fire-and-forget
     try:
-        from apps.notification.tasks import dispatch_notification_task
-        dispatch_notification_task.delay(str(notification.id))
+        if dispatch_notification_task is not None:
+            dispatch_notification_task.delay(str(notification.id))
     except Exception:
         logger.warning(
             "Could not enqueue dispatch for notification=%s. Will be retried.",

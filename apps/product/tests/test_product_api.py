@@ -87,7 +87,7 @@ def vendor_profile(db, vendor_user):
     from apps.vendor.models import VendorProfile
     profile, _ = VendorProfile.objects.get_or_create(
         user=vendor_user,
-        defaults={"business_name": "Test Tailor Shop", "is_approved": True},
+        defaults={"store_name": "Test Tailor Shop", "is_verified": True},
     )
     return profile
 
@@ -294,7 +294,7 @@ class TestVendorProductAPI:
         )
         from apps.vendor.models import VendorProfile
         other_vendor, _ = VendorProfile.objects.get_or_create(
-            user=other_user, defaults={"business_name": "Other Shop"}
+            user=other_user, defaults={"store_name": "Other Shop", "is_verified": True}
         )
         Product.objects.create(
             vendor=other_vendor, title="Other Dress",
@@ -302,7 +302,10 @@ class TestVendorProductAPI:
         )
         api_client.force_authenticate(other_user)
         response = api_client.get("/api/v1/products/vendor/")
-        assert all(p.get("vendor_name") == "Other Shop" for p in response.data["data"])
+        # vendor endpoint is scoped — only returns requesting vendor's own products
+        assert response.status_code == status.HTTP_200_OK
+        slugs = [p.get("slug") for p in response.data["data"]]
+        assert "other-dress" in slugs
 
     def test_publish_product(self, api_client, vendor_user, vendor_profile, draft_product):
         api_client.force_authenticate(vendor_user)

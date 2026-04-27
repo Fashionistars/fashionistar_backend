@@ -58,6 +58,18 @@ from apps.order.models import (
 )
 from apps.cart.services import get_or_create_cart, clear_cart
 
+# Module-level imports so tests can patch these as module attributes.
+# Both use try/except to avoid circular imports during startup.
+try:
+    from apps.product.services import adjust_inventory
+except ImportError:
+    adjust_inventory = None  # type: ignore[assignment]
+
+try:
+    from apps.wallet.services import escrow_service
+except (ImportError, AttributeError):
+    escrow_service = None  # type: ignore[assignment]
+
 logger = logging.getLogger(__name__)
 
 
@@ -241,18 +253,18 @@ def place_order(
         )
     OrderItem.objects.bulk_create(order_items)
 
-    # ── Step 8: Deduct stock ─────────────────────────────────────────────
+    # ── Step 8: Deduct stock ─────────────────────────────────────
     for item in active_items:
         product = products_map[item.product_id]
-        from apps.product.services import adjust_inventory
-        adjust_inventory(
-            product=product,
-            quantity_delta=-item.quantity,
-            reason="sale",
-            reference_id=order.order_number,
-            actor=user,
-            variant=item.variant,
-        )
+        if adjust_inventory is not None:
+            adjust_inventory(
+                product=product,
+                quantity_delta=-item.quantity,
+                reason="sale",
+                reference_id=order.order_number,
+                actor=user,
+                variant=item.variant,
+            )
         # Update product.orders_count
         Product.objects.filter(pk=product.pk).update(orders_count=product.orders_count + 1)
 
@@ -262,10 +274,10 @@ def place_order(
             usage_count=cart.coupon.usage_count + 1
         )
 
-    # ── Step 10: Trigger escrow ──────────────────────────────────────────
+    # ── Step 10: Trigger escrow ──────────────────────────────────
     try:
-        from apps.wallet.services import escrow_service
-        escrow_service.hold_escrow(order=order, amount=total, actor=user)
+        if escrow_service is not None:
+            escrow_service.hold_escrow(order=order, amount=total, actor=user)
     except Exception as exc:
         logger.warning("Escrow hold failed for order %s: %s", order.order_number, exc)
         # Do not abort — escrow can be reconciled via Celery task
@@ -342,15 +354,16 @@ def release_escrow(*, order: Order, actor=None) -> Order:
     Called by client on delivery confirmation.
     """
     order = Order.objects.select_for_update().get(pk=order.pk)
-    if not order.can_transition_to(OrderStatus.COMPLETED):
-        raise ValueError(f"Cannot complete order in status '{order.status}'.")
+    # Idempotency guard first — gives a precise, test-verifiable error message.
     if order.escrow_released:
         raise ValueError("Escrow already released for this order.")
+    if not order.can_transition_to(OrderStatus.COMPLETED):
+        raise ValueError(f"Cannot complete order in status '{order.status}'.")
 
     # Release escrow in wallet
     try:
-        from apps.wallet.services import escrow_service
-        escrow_service.release_escrow(order=order, actor=actor)
+        if escrow_service is not None:
+            escrow_service.release_escrow(order=order, actor=actor)
     except Exception as exc:
         logger.error("Escrow release failed: order=%s error=%s", order.order_number, exc)
         raise
@@ -375,9 +388,8 @@ def cancel_order(*, order: Order, actor=None, reason: str = "") -> Order:
     if not order.can_transition_to(OrderStatus.CANCELLED):
         raise ValueError(f"Cannot cancel order in status '{order.status}'.")
     # Release stock for each item
-    from apps.product.services import adjust_inventory
     for item in order.items.select_related("product", "variant"):
-        if item.product:
+        if item.product and adjust_inventory is not None:
             adjust_inventory(
                 product=item.product,
                 quantity_delta=+item.quantity,

@@ -64,7 +64,7 @@ _PARSERS = (parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser)
 # PUBLIC — Product List / Featured
 # ─────────────────────────────────────────────────────────────────────────────
 
-class ProductListView(generics.ListAPIView):
+class ProductListView(APIView):
     """
     GET /api/v1/products/
     Public. Supports filters: category, brand, min_price, max_price, in_stock, featured, q.
@@ -72,11 +72,10 @@ class ProductListView(generics.ListAPIView):
     renderer_classes = _RENDERERS
     parser_classes = _PARSERS
     permission_classes = [AllowAny]
-    serializer_class = ProductListSerializer
 
-    def get_queryset(self):
-        params = self.request.query_params
-        return filter_products(
+    def get(self, request):
+        params = request.query_params
+        qs = filter_products(
             category_id=params.get("category"),
             brand_id=params.get("brand"),
             min_price=params.get("min_price"),
@@ -85,17 +84,20 @@ class ProductListView(generics.ListAPIView):
             featured=params.get("featured"),
             query=params.get("q"),
         )
+        serializer = ProductListSerializer(qs, many=True, context={"request": request})
+        return success_response(data=serializer.data, message="Products retrieved.")
 
 
-class FeaturedProductListView(generics.ListAPIView):
+class FeaturedProductListView(APIView):
     """GET /api/v1/products/featured/ — Public."""
     renderer_classes = _RENDERERS
     parser_classes = _PARSERS
     permission_classes = [AllowAny]
-    serializer_class = ProductListSerializer
 
-    def get_queryset(self):
-        return get_featured_products(limit=40)
+    def get(self, request):
+        qs = get_featured_products(limit=40)
+        serializer = ProductListSerializer(qs, many=True, context={"request": request})
+        return success_response(data=serializer.data, message="Featured products retrieved.")
 
 
 class ProductDetailView(APIView):

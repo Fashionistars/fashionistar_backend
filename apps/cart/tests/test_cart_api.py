@@ -64,7 +64,7 @@ def vendor_profile(db, django_user_model):
     from apps.vendor.models import VendorProfile
     profile, _ = VendorProfile.objects.get_or_create(
         user=vendor_user,
-        defaults={"business_name": "Test Cart Shop", "is_approved": True},
+        defaults={"store_name": "Test Cart Shop", "is_verified": True},
     )
     return profile
 

@@ -298,7 +298,15 @@ class Product(TimeStampedModel, SoftDeleteModel):
                 counter += 1
             self.slug = slug
         if not self.sku:
-            self.sku = f"FSN-{str(self.id or uuid6.uuid7()).upper()[:12]}"
+            import uuid as _uuid
+            # Use random uuid4 suffix to avoid UNIQUE collisions on rapid creation
+            for _attempt in range(5):
+                candidate = f"FSN-{_uuid.uuid4().hex[:8].upper()}"
+                if not Product.objects.filter(sku=candidate).exists():
+                    self.sku = candidate
+                    break
+            else:
+                self.sku = f"FSN-{_uuid.uuid4().hex[:12].upper()}"
         self.in_stock = self.stock_qty > 0
         super().save(*args, **kwargs)
 
