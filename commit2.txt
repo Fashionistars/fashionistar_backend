@@ -1,0 +1,5 @@
+fix(backend): stabilize auth payload contracts and normalize collection model
+
+- Auth Payload Contracts: Reinstated 'refresh' and 'message' keys in the root authentication response payload to ensure backward compatibility with legacy client parsing.
+- Auth Error Handling: Implemented explicit drf_serializers.ValidationError catching in VerifyOTPView and ResendOTPView to return well-structured 400 Bad Request responses instead of throwing generic 500 exceptions. Added explicit cookie clearing on TokenError.
+- Data Model Normalization: Renamed Collections to Collection in apps/catalog to align with Django singular-model-name conventions, preserving the legacy catalog_collections table name and providing a backward-compatible class alias.

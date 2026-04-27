@@ -30,7 +30,7 @@ def validate_image_cover_extension(value):
     return validate_file_extension(value, "image")
 
 
-class Collections(models.Model):
+class Collection(models.Model):
     """Admin-managed merchandising collection for curated catalog discovery."""
 
     user = models.ForeignKey(
@@ -68,6 +68,7 @@ class Collections(models.Model):
 
     class Meta:
         managed = True
+        db_table = "catalog_collections"
         verbose_name = "Catalog Collection"
         verbose_name_plural = "Catalog Collections"
 
@@ -99,5 +100,5 @@ class Collections(models.Model):
         super().save(*args, **kwargs)
 
 
-# Alias for backward compatibility if needed during migration transition
+# Backward-compatible alias used by legacy imports and package exports.
 Collections = Collection

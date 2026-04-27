@@ -235,13 +235,15 @@ class LoginView(generics.GenericAPIView):
                     "role": user.role,
                     "identifying_info": user.identifying_info,
                     "access": result['access'],
+                    # Backward compatibility: legacy clients still read refresh in JSON.
+                    "refresh": result["refresh"],
+                    # Backward compatibility: some clients/tests read message from payload.
+                    "message": "Login successful.",
                     **auth_state,
                 },
                 message="Login successful.",
                 status=status.HTTP_200_OK,
             )
-            if getattr(_s, "AUTH_INCLUDE_REFRESH_IN_BODY", False):
-                response.data["data"]["refresh"] = result["refresh"]
             _set_refresh_cookie(response, result['refresh'])
             return response
 
@@ -341,6 +343,12 @@ class VerifyOTPView(generics.GenericAPIView):
             _set_refresh_cookie(response, str(refresh))
             return response
 
+        except drf_serializers.ValidationError as exc:
+            return error_response(
+                message="Validation failed",
+                errors=exc.detail,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except Exception as exc:
             transaction.set_rollback(True)
             logger.error("❌ VerifyOTPView unexpected error: %s", str(exc), exc_info=True)
@@ -378,6 +386,12 @@ class ResendOTPView(generics.GenericAPIView):
             msg = OTPService.resend_otp_sync(email_or_phone=serializer.validated_data.get('email_or_phone'))
             return success_response(message=msg, status=status.HTTP_200_OK)
 
+        except drf_serializers.ValidationError as exc:
+            return error_response(
+                message="Validation failed",
+                errors=exc.detail,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except Exception as exc:
             logger.error("❌ ResendOTPView error: %s", str(exc), exc_info=True)
             return error_response(message="Failed to resend OTP.", status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -429,7 +443,9 @@ class RefreshTokenView(generics.GenericAPIView):
                 _set_refresh_cookie(response, rotated_refresh)
             return response
         except (TokenError, InvalidToken):
-            return error_response(message="Token invalid or expired.", status=status.HTTP_401_UNAUTHORIZED)
+            response = error_response(message="Token invalid or expired.", status=status.HTTP_401_UNAUTHORIZED)
+            _clear_refresh_cookie(response)
+            return response
         except Exception:
             logger.error("RefreshTokenView unexpected error", exc_info=True)
             return error_response(message="Refresh failed.", status=status.HTTP_500_INTERNAL_SERVER_ERROR)
