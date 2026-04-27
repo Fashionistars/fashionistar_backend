@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
 # 1. PRODUCT STATUS CHOICES
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class ProductStatus(models.TextChoices):
     DRAFT = "draft", _("Draft")
     PENDING = "pending", _("Pending Review")
@@ -50,6 +51,7 @@ class ProductStatus(models.TextChoices):
 # 2. TAG
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class ProductTag(TimeStampedModel):
     """Flat taxonomy tag. Can optionally be linked to a catalog category."""
 
@@ -59,7 +61,8 @@ class ProductTag(TimeStampedModel):
     # Optional link to catalog for faceted navigation
     category = models.ForeignKey(
         "catalog.Category",
-        null=True, blank=True,
+        null=True,
+        blank=True,
         on_delete=models.SET_NULL,
         related_name="product_tags",
     )
@@ -81,6 +84,7 @@ class ProductTag(TimeStampedModel):
 # ─────────────────────────────────────────────────────────────────────────────
 # 3. PRODUCT SIZE / COLOR / SPECIFICATION
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class ProductSize(models.Model):
     name = models.CharField(max_length=30)  # e.g. XS, S, M, L, XL, XXL, Custom
@@ -143,6 +147,7 @@ class ProductFaq(TimeStampedModel):
 # 4. PRODUCT (Core)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class Product(TimeStampedModel, SoftDeleteModel):
     """
     Canonical product model for Fashionistar.
@@ -168,7 +173,9 @@ class Product(TimeStampedModel, SoftDeleteModel):
     title = models.CharField(max_length=255, db_index=True)
     slug = models.SlugField(max_length=300, unique=True, blank=True, db_index=True)
     sku = models.CharField(
-        max_length=50, unique=True, blank=True,
+        max_length=50,
+        unique=True,
+        blank=True,
         help_text="Auto-generated SKU. Unique across platform.",
     )
     description = models.TextField()
@@ -184,19 +191,22 @@ class Product(TimeStampedModel, SoftDeleteModel):
     )
     category = models.ForeignKey(
         "catalog.Category",
-        null=True, blank=True,
+        null=True,
+        blank=True,
         on_delete=models.SET_NULL,
         related_name="products",
     )
     sub_category = models.ForeignKey(
         "catalog.Category",
-        null=True, blank=True,
+        null=True,
+        blank=True,
         on_delete=models.SET_NULL,
         related_name="sub_products",
     )
     brand = models.ForeignKey(
         "catalog.Brand",
-        null=True, blank=True,
+        null=True,
+        blank=True,
         on_delete=models.SET_NULL,
         related_name="products",
     )
@@ -206,7 +216,9 @@ class Product(TimeStampedModel, SoftDeleteModel):
 
     # ── Pricing ───────────────────────────────────────────────────────────
     price = models.DecimalField(max_digits=12, decimal_places=2)
-    old_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    old_price = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True
+    )
     currency = models.CharField(max_length=3, default="NGN")
     shipping_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
@@ -226,7 +238,8 @@ class Product(TimeStampedModel, SoftDeleteModel):
     image = CloudinaryField(
         "image",
         folder="fashionistar/products/",
-        blank=True, null=True,
+        blank=True,
+        null=True,
         help_text="Primary product image. Set via direct-upload presign flow.",
     )
 
@@ -249,7 +262,9 @@ class Product(TimeStampedModel, SoftDeleteModel):
 
     # ── Platform commission ───────────────────────────────────────────────
     commission_rate = models.DecimalField(
-        max_digits=5, decimal_places=2, default=10.00,
+        max_digits=5,
+        decimal_places=2,
+        default=10.00,
         help_text="Platform commission % at time of listing. Snapshot on OrderItem.",
     )
 
@@ -261,7 +276,9 @@ class Product(TimeStampedModel, SoftDeleteModel):
         verbose_name_plural = _("Products")
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["status", "featured"], name="idx_product_status_featured"),
+            models.Index(
+                fields=["status", "featured"], name="idx_product_status_featured"
+            ),
             models.Index(fields=["vendor"], name="idx_product_vendor"),
             models.Index(fields=["category"], name="idx_product_category"),
             models.Index(fields=["slug"], name="idx_product_slug"),
@@ -296,6 +313,7 @@ class Product(TimeStampedModel, SoftDeleteModel):
 # 5. PRODUCT GALLERY MEDIA
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class ProductGalleryMedia(TimeStampedModel, SoftDeleteModel):
     """Multiple media attachments for a product. Replaces legacy Gallery model."""
 
@@ -312,9 +330,12 @@ class ProductGalleryMedia(TimeStampedModel, SoftDeleteModel):
     media = CloudinaryField(
         "media",
         folder="fashionistar/products/gallery/",
-        blank=True, null=True,
+        blank=True,
+        null=True,
     )
-    media_type = models.CharField(max_length=10, choices=MEDIA_TYPE_CHOICES, default="image")
+    media_type = models.CharField(
+        max_length=10, choices=MEDIA_TYPE_CHOICES, default="image"
+    )
     alt_text = models.CharField(max_length=200, blank=True)
     ordering = models.PositiveSmallIntegerField(default=0)
 
@@ -331,6 +352,7 @@ class ProductGalleryMedia(TimeStampedModel, SoftDeleteModel):
 # 6. PRODUCT VARIANT  (2026+)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class ProductVariant(TimeStampedModel):
     """
     Per-variant SKU with optional price override and separate stock count.
@@ -345,24 +367,32 @@ class ProductVariant(TimeStampedModel):
     )
     sku = models.CharField(max_length=80, unique=True, blank=True)
     size = models.ForeignKey(
-        ProductSize, null=True, blank=True,
+        ProductSize,
+        null=True,
+        blank=True,
         on_delete=models.SET_NULL,
         related_name="variants",
     )
     color = models.ForeignKey(
-        ProductColor, null=True, blank=True,
+        ProductColor,
+        null=True,
+        blank=True,
         on_delete=models.SET_NULL,
         related_name="variants",
     )
     price_override = models.DecimalField(
-        max_digits=12, decimal_places=2, null=True, blank=True,
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
         help_text="If set, overrides the parent product price for this variant.",
     )
     stock_qty = models.PositiveIntegerField(default=0)
     image = CloudinaryField(
         "variant_image",
         folder="fashionistar/products/variants/",
-        blank=True, null=True,
+        blank=True,
+        null=True,
     )
     is_active = models.BooleanField(default=True)
 
@@ -393,6 +423,7 @@ class ProductVariant(TimeStampedModel):
 # 7. PRODUCT INVENTORY LOG  (2026+)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class ProductInventoryLog(TimeStampedModel):
     """
     Append-only stock movement audit trail.
@@ -416,13 +447,15 @@ class ProductInventoryLog(TimeStampedModel):
     )
     variant = models.ForeignKey(
         ProductVariant,
-        null=True, blank=True,
+        null=True,
+        blank=True,
         on_delete=models.CASCADE,
         related_name="inventory_logs",
     )
     actor = models.ForeignKey(
         User,
-        null=True, blank=True,
+        null=True,
+        blank=True,
         on_delete=models.SET_NULL,
         related_name="inventory_adjustments",
     )
@@ -433,7 +466,8 @@ class ProductInventoryLog(TimeStampedModel):
     quantity_after = models.PositiveIntegerField()
     reason = models.CharField(max_length=20, choices=REASON_CHOICES)
     reference_id = models.CharField(
-        max_length=100, blank=True,
+        max_length=100,
+        blank=True,
         help_text="Order ID / return ID / manual ref for traceability.",
     )
     note = models.TextField(blank=True)
@@ -451,6 +485,7 @@ class ProductInventoryLog(TimeStampedModel):
 # 8. PRODUCT REVIEW
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class ProductReview(TimeStampedModel):
     """Client review on a product. User SET_NULL on deletion."""
 
@@ -461,7 +496,8 @@ class ProductReview(TimeStampedModel):
     )
     user = models.ForeignKey(
         User,
-        null=True, blank=True,
+        null=True,
+        blank=True,
         on_delete=models.SET_NULL,
         related_name="product_reviews",
     )
@@ -496,15 +532,24 @@ class ProductReview(TimeStampedModel):
     def save(self, *args, **kwargs):
         # Snapshot reviewer info
         if self.user and not self.reviewer_name:
-            self.reviewer_name = getattr(self.user, "full_name", "") or self.user.email
+            self.reviewer_name = (
+                getattr(self.user, "full_name", "") or self.user.email
+                if self.user.email
+                else str(self.user.phone) if self.user.phone else ""
+            )
         if self.user and not self.reviewer_email:
-            self.reviewer_email = self.user.email
+            self.reviewer_email = (
+                self.user.email
+                if self.user.email
+                else str(self.user.phone) if self.user.phone else ""
+            )
         super().save(*args, **kwargs)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 9. PRODUCT WISHLIST
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class ProductWishlist(TimeStampedModel):
     """Client wishlist entry. Deleted when user is deleted (CASCADE)."""
@@ -533,6 +578,7 @@ class ProductWishlist(TimeStampedModel):
 # 10. PRODUCT COMMISSION SNAPSHOT  (2026+)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class ProductCommissionSnapshot(TimeStampedModel):
     """
     Captures the platform commission rate at a specific point in time.
@@ -549,7 +595,8 @@ class ProductCommissionSnapshot(TimeStampedModel):
     effective_to = models.DateTimeField(null=True, blank=True)
     set_by = models.ForeignKey(
         User,
-        null=True, blank=True,
+        null=True,
+        blank=True,
         on_delete=models.SET_NULL,
         related_name="commission_adjustments",
     )
@@ -567,6 +614,7 @@ class ProductCommissionSnapshot(TimeStampedModel):
 # 11. COUPON
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class Coupon(TimeStampedModel, SoftDeleteModel):
     """Discount coupon created by a vendor or platform admin."""
 
@@ -576,28 +624,36 @@ class Coupon(TimeStampedModel, SoftDeleteModel):
     ]
 
     code = models.CharField(max_length=50, unique=True, db_index=True)
-    discount_type = models.CharField(max_length=12, choices=DISCOUNT_TYPE, default="percentage")
+    discount_type = models.CharField(
+        max_length=12, choices=DISCOUNT_TYPE, default="percentage"
+    )
     discount_value = models.DecimalField(max_digits=10, decimal_places=2)
     minimum_order = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     maximum_discount = models.DecimalField(
-        max_digits=12, decimal_places=2, null=True, blank=True,
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
         help_text="Cap for percentage coupons.",
     )
     usage_limit = models.PositiveIntegerField(
-        null=True, blank=True,
+        null=True,
+        blank=True,
         help_text="Total number of times this coupon can be used. Null = unlimited.",
     )
     usage_count = models.PositiveIntegerField(default=0)
     vendor = models.ForeignKey(
         "vendor.VendorProfile",
-        null=True, blank=True,
+        null=True,
+        blank=True,
         on_delete=models.SET_NULL,
         related_name="coupons",
         help_text="Null = platform-wide coupon.",
     )
     product = models.ForeignKey(
         Product,
-        null=True, blank=True,
+        null=True,
+        blank=True,
         on_delete=models.SET_NULL,
         related_name="coupons",
         help_text="Null = applies to all products from this vendor.",
@@ -615,17 +671,21 @@ class Coupon(TimeStampedModel, SoftDeleteModel):
 
     def is_valid(self):
         from django.utils import timezone
+
         now = timezone.now()
         expired = now > self.valid_to
         usage_exhausted = (
             self.usage_limit is not None and self.usage_count >= self.usage_limit
         )
-        return self.active and not expired and not usage_exhausted and not self.is_deleted
+        return (
+            self.active and not expired and not usage_exhausted and not self.is_deleted
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 12. DELIVERY COURIER
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class DeliveryCourier(TimeStampedModel):
     """Platform-registered delivery carrier."""
@@ -638,7 +698,8 @@ class DeliveryCourier(TimeStampedModel):
     logo = CloudinaryField(
         "logo",
         folder="fashionistar/couriers/",
-        blank=True, null=True,
+        blank=True,
+        null=True,
     )
 
     class Meta:

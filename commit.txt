@@ -1,0 +1,7 @@
+chore(backend): harden auth token transport and align domain data models
+
+- Auth Integrity: Implemented secure HTTP-only cookie transport for refresh tokens with backward compatibility.
+- Data Model Resiliency: Updated ProductReview snapshotting to fallback to user.phone.
+- API Standardization: Refactored CatalogBlogPostSerializer to delegate URL construction.
+- Code Quality: Applied strict PEP-8 formatting across apps/product and apps/catalog models.
+- Documentation: Updated project implementation plans and walkthrough artifacts.

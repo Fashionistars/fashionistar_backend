@@ -12,22 +12,16 @@ class CatalogBlogMediaSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "image",
-            "image_url",
-            "cloudinary_url",
             "public_id",
             "alt_text",
             "sort_order",
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("id", "image_url", "created_at", "updated_at")
-
-    def get_image_url(self, obj) -> str:
-        return safe_media_url(obj, "cloudinary_url", "image")
+        read_only_fields = ("id", "created_at", "updated_at")
 
 
 class CatalogBlogPostSerializer(serializers.ModelSerializer):
-    image_url = serializers.SerializerMethodField()
     category_name = serializers.CharField(source="category.name", read_only=True)
     author_name = serializers.SerializerMethodField()
     gallery_media = CatalogBlogMediaSerializer(many=True, read_only=True)
@@ -45,8 +39,6 @@ class CatalogBlogPostSerializer(serializers.ModelSerializer):
             "excerpt",
             "content",
             "featured_image",
-            "featured_image_cloudinary_url",
-            "image_url",
             "status",
             "tags",
             "seo_title",
@@ -63,16 +55,12 @@ class CatalogBlogPostSerializer(serializers.ModelSerializer):
             "author",
             "author_name",
             "slug",
-            "image_url",
             "published_at",
             "view_count",
             "gallery_media",
             "created_at",
             "updated_at",
         )
-
-    def get_image_url(self, obj) -> str:
-        return obj.image_url
 
     def get_author_name(self, obj) -> str:
         author = getattr(obj, "author", None)
@@ -84,13 +72,17 @@ class CatalogBlogPostSerializer(serializers.ModelSerializer):
     def validate_title(self, value: str) -> str:
         value = value.strip()
         if len(value) < 5:
-            raise serializers.ValidationError("Blog title must be at least 5 characters.")
+            raise serializers.ValidationError(
+                "Blog title must be at least 5 characters."
+            )
         return value
 
     def validate_content(self, value: str) -> str:
         value = value.strip()
         if len(value) < 40:
-            raise serializers.ValidationError("Blog content must be at least 40 characters.")
+            raise serializers.ValidationError(
+                "Blog content must be at least 40 characters."
+            )
         return value
 
     def validate_tags(self, value):
@@ -108,7 +100,9 @@ class CatalogBlogPostSerializer(serializers.ModelSerializer):
                 getattr(self.instance, "seo_description", ""),
             )
             if not excerpt:
-                raise serializers.ValidationError({"excerpt": "Published blog posts need an excerpt."})
+                raise serializers.ValidationError(
+                    {"excerpt": "Published blog posts need an excerpt."}
+                )
             if not seo_description:
                 raise serializers.ValidationError(
                     {"seo_description": "Published blog posts need an SEO description."}
