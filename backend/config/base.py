@@ -162,6 +162,7 @@ INSTALLED_APPS = [
     # Whitenoise MUST be before staticfiles
     "whitenoise.runserver_nostatic",
     "django.contrib.staticfiles",
+    "django.contrib.postgres",          # SearchVectorField, GinIndex, full-text search
     # ── Fashionistar New Architecture ────────────────────────────────────────
     "apps.common",
     "apps.authentication",
@@ -174,6 +175,9 @@ INSTALLED_APPS = [
         # ── Modular admin backend migrated into apps/ ───────────────────────────
         "apps.admin_backend",
         "apps.catalog",       # Canonical public commerce metadata facade
+        "apps.product",       # Phase 4: Product catalogue, variants, inventory, reviews
+        "apps.cart",          # Phase 4: Shopping cart, idempotent line items, coupon apply
+        "apps.order",         # Phase 4: Order lifecycle, status machine, escrow trigger
         # ── Third Party ──────────────────────────────────────────────────────────
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",  # JWT logout blacklisting

@@ -86,6 +86,12 @@ urlpatterns = [
     path("api/v1/payment/", include("apps.payment.urls", namespace="payment")),
     # ── Canonical Catalog Domain: category, brand, collection, discovery metadata ─
     path("api/v1/catalog/", include("apps.catalog.urls", namespace="catalog")),
+    # ── Phase 4: Product Catalogue Domain ──────────────────────────────────────
+    path("api/v1/products/", include("apps.product.urls", namespace="product")),
+    # ── Phase 4: Shopping Cart Domain ──────────────────────────────────────────
+    path("api/v1/cart/", include("apps.cart.urls", namespace="cart")),
+    # ── Phase 4: Order Lifecycle Domain ───────────────────────────────────────
+    path("api/v1/orders/", include("apps.order.urls", namespace="order")),
     # ── Phase 2: Central Async Ninja API (/api/v1/ninja/*) ───────────────────
     path("api/v1/ninja/", ninja_api.urls),
     path("admin_backend/", include("apps.admin_backend.urls")),
