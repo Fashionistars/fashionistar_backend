@@ -92,6 +92,10 @@ urlpatterns = [
     path("api/v1/cart/", include("apps.cart.urls", namespace="cart")),
     # ── Phase 4: Order Lifecycle Domain ───────────────────────────────────────
     path("api/v1/orders/", include("apps.order.urls", namespace="order")),
+    # ── Phase 4: Notification Feed Domain ─────────────────────────────────────
+    path("api/v1/notifications/", include("apps.notification.urls", namespace="notification")),
+    # ── Phase 4: Body Measurements Domain ────────────────────────────────────
+    path("api/v1/measurements/", include("apps.measurements.urls", namespace="measurements")),
     # ── Phase 2: Central Async Ninja API (/api/v1/ninja/*) ───────────────────
     path("api/v1/ninja/", ninja_api.urls),
     path("admin_backend/", include("apps.admin_backend.urls")),
