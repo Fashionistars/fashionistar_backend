@@ -74,7 +74,7 @@ class VendorProvisioningService:
 
             # ── Collections M2M ────────────────────────────────────
             if collection_ids:
-                from apps.catalog.models import Collections as CollectionModel
+                from apps.catalog.models import Collection as CollectionModel
                 qs = CollectionModel.objects.filter(pk__in=collection_ids)
                 profile.collections.set(qs)
 

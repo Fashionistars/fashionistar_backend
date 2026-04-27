@@ -1,6 +1,5 @@
 import uuid
-
-import shortuuid
+from cloudinary.models import CloudinaryField
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -22,17 +21,16 @@ class Category(models.Model):
     )
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100, unique=True, db_index=True)
-    image = models.ImageField(
-        upload_to="category_images/",
-        default="category.jpg",
-        null=True,
-        blank=True,
-    )
-    cloudinary_url = models.URLField(
-        max_length=800,
+    image = CloudinaryField(
+        "image",
+        folder="fashionistar/catalog/categories/",
         blank=True,
         null=True,
-        help_text="Canonical Cloudinary URL populated by the media pipeline.",
+        help_text=(
+            "Cloudinary image public_id. "
+            "Set via the /api/v1/upload/presign/ → direct upload → webhook flow. "
+            "Use .url in serializers to retrieve the full HTTPS secure_url."
+        ),
     )
     active = models.BooleanField(default=True, db_index=True)
     slug = models.SlugField(unique=True, blank=True, null=True, db_index=True)
@@ -40,8 +38,7 @@ class Category(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "admin_backend_category"
-        managed = False
+        managed = True
         verbose_name = "Catalog Category"
         verbose_name_plural = "Catalog Categories"
         indexes = [
@@ -76,6 +73,7 @@ class Category(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.slug and self.name:
+            import shortuuid
             uniqueid = shortuuid.uuid()[:4].lower()
             self.slug = f"{slugify(self.name)}-{uniqueid}"
         super().save(*args, **kwargs)

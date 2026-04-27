@@ -1,6 +1,5 @@
 import os
-
-import shortuuid
+from cloudinary.models import CloudinaryField
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -29,7 +28,7 @@ def validate_image_cover_extension(value):
     return validate_file_extension(value, "image")
 
 
-class Collections(models.Model):
+class Collection(models.Model):
     """Admin-managed merchandising collection for curated catalog discovery."""
 
     user = models.ForeignKey(
@@ -45,36 +44,28 @@ class Collections(models.Model):
     sub_title = models.CharField(max_length=255, null=True, blank=True)
     description = models.TextField(null=True, blank=True)
     slug = models.SlugField(unique=True, blank=True, null=True, db_index=True)
-    background_image = models.ImageField(
-        upload_to="gallery/bg_img/",
-        validators=[validate_image_cover_extension],
-        null=True,
-        blank=True,
-    )
-    image = models.ImageField(
-        upload_to="gallery/product_img/",
-        validators=[validate_image_cover_extension],
-        null=True,
-        blank=True,
-    )
-    cloudinary_url = models.URLField(
-        max_length=800,
+    
+    # --- Cloudinary-powered images ---
+    image = CloudinaryField(
+        "image",
+        folder="fashionistar/catalog/collections/",
         blank=True,
         null=True,
-        help_text="Main collection image populated by the media pipeline.",
+        help_text="Main collection image (public_id)."
     )
-    background_cloudinary_url = models.URLField(
-        max_length=800,
+    background_image = CloudinaryField(
+        "background_image",
+        folder="fashionistar/catalog/collections/backgrounds/",
         blank=True,
         null=True,
-        help_text="Collection background image populated by the media pipeline.",
+        help_text="Hero background image (public_id)."
     )
+    
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "admin_backend_collections"
-        managed = False
+        managed = True
         verbose_name = "Catalog Collection"
         verbose_name_plural = "Catalog Collections"
 
@@ -85,21 +76,29 @@ class Collections(models.Model):
         try:
             from apps.product.models import Product
         except Exception:
-            from store.models import Product
+            try:
+                from store.models import Product
+            except Exception:
+                return 0
         return Product.objects.filter(collection=self).count()
 
     def collection_products(self):
         try:
             from apps.product.models import Product
         except Exception:
-            from store.models import Product
+            try:
+                from store.models import Product
+            except Exception:
+                return []
         return Product.objects.filter(collection=self)
 
     def save(self, *args, **kwargs):
         if not self.slug and self.title:
+            import shortuuid
             uniqueid = shortuuid.uuid()[:4].lower()
             self.slug = f"{slugify(self.title)}-{uniqueid}"
         super().save(*args, **kwargs)
 
 
-Collection = Collections
+# Alias for backward compatibility if needed during migration transition
+Collections = Collection

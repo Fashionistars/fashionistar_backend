@@ -5,7 +5,6 @@ from import_export.admin import ImportExportModelAdmin
 
 from apps.audit_logs.mixins import AuditedModelAdmin
 from apps.catalog.models import Brand
-from apps.common.admin_cloudinary_mixin import CloudinaryUploadAdminMixin
 
 
 @admin.action(description="Mark selected brands as active")
@@ -43,8 +42,7 @@ class ActiveBrandFilter(admin.SimpleListFilter):
 
 
 @admin.register(Brand)
-class BrandAdmin(AuditedModelAdmin, CloudinaryUploadAdminMixin, ImportExportModelAdmin):
-    cloudinary_fields = {"image": ("fashionistar/brands/images", "brand")}
+class BrandAdmin(AuditedModelAdmin, ImportExportModelAdmin):
     form = BrandAdminForm
     list_display = ["title", "cloudinary_preview", "active", "created_at", "updated_at", "slug"]
     list_editable = ["active"]
@@ -52,14 +50,14 @@ class BrandAdmin(AuditedModelAdmin, CloudinaryUploadAdminMixin, ImportExportMode
     prepopulated_fields = {"slug": ("title",)}
     list_filter = [ActiveBrandFilter, "created_at", "updated_at"]
     actions = [make_active, make_inactive]
-    readonly_fields = ("cloudinary_preview", "cloudinary_url", "created_at", "updated_at")
+    readonly_fields = ("cloudinary_preview", "created_at", "updated_at")
 
     fieldsets = (
         ("Basic Information", {"fields": ("title", "image", "slug", "description")}),
         (
-            "Cloudinary",
+            "Cloudinary Preview",
             {
-                "fields": ("cloudinary_preview", "cloudinary_url"),
+                "fields": ("cloudinary_preview",),
                 "classes": ("collapse",),
             },
         ),
@@ -68,12 +66,12 @@ class BrandAdmin(AuditedModelAdmin, CloudinaryUploadAdminMixin, ImportExportMode
     )
 
     def cloudinary_preview(self, obj):
-        url = obj.cloudinary_url or ""
-        if not url and obj.image:
-            try:
-                url = obj.image.url
-            except Exception:
-                url = ""
+        if not obj.image:
+            return "-"
+        try:
+            url = obj.image.url
+        except Exception:
+            url = ""
         if not url:
             return "-"
         return format_html(

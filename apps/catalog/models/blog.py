@@ -1,3 +1,4 @@
+from cloudinary.models import CloudinaryField
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -36,12 +37,16 @@ class BlogPost(TimeStampedModel, SoftDeleteModel):
     slug = models.SlugField(max_length=280, unique=True, db_index=True)
     excerpt = models.TextField(blank=True)
     content = models.TextField()
-    featured_image = models.ImageField(
-        upload_to="catalog/blog/featured/",
-        null=True,
+    
+    # --- Cloudinary-powered featured image ---
+    featured_image = CloudinaryField(
+        "featured_image",
+        folder="fashionistar/catalog/blog/featured/",
         blank=True,
+        null=True,
+        help_text="Featured post image (public_id)."
     )
-    featured_image_cloudinary_url = models.URLField(max_length=800, blank=True, null=True)
+    
     status = models.CharField(
         max_length=20,
         choices=BlogPostStatus.choices,
@@ -56,7 +61,7 @@ class BlogPost(TimeStampedModel, SoftDeleteModel):
     view_count = models.PositiveBigIntegerField(default=0)
 
     class Meta:
-        db_table = "catalog_blog_posts"
+        # Default table: catalog_blogpost
         verbose_name = "Catalog Blog Post"
         verbose_name_plural = "Catalog Blog Posts"
         indexes = [
@@ -79,13 +84,9 @@ class BlogPost(TimeStampedModel, SoftDeleteModel):
 
     @property
     def image_url(self):
-        if self.featured_image_cloudinary_url:
-            return self.featured_image_cloudinary_url
+        """Return the full Cloudinary secure_url."""
         if self.featured_image:
-            try:
-                return self.featured_image.url
-            except ValueError:
-                return ""
+            return self.featured_image.url
         return ""
 
 
@@ -104,17 +105,31 @@ class BlogMedia(TimeStampedModel, SoftDeleteModel):
         on_delete=models.SET_NULL,
         related_name="catalog_blog_media_uploads",
     )
-    image = models.ImageField(upload_to="catalog/blog/gallery/", null=True, blank=True)
-    cloudinary_url = models.URLField(max_length=800, blank=True, null=True)
-    public_id = models.CharField(max_length=255, blank=True)
+    
+    # --- Cloudinary-powered media ---
+    image = CloudinaryField(
+        "image",
+        folder="fashionistar/catalog/blog/gallery/",
+        blank=True,
+        null=True,
+        help_text="Gallery image (public_id)."
+    )
+    
     alt_text = models.CharField(max_length=180, blank=True)
     sort_order = models.PositiveIntegerField(default=0, db_index=True)
 
     class Meta:
-        db_table = "catalog_blog_media"
+        # Default table: catalog_blogmedia
         verbose_name = "Catalog Blog Media"
         verbose_name_plural = "Catalog Blog Media"
         ordering = ("sort_order", "created_at")
 
     def __str__(self):
         return f"{self.post_id}:{self.sort_order}"
+    
+    @property
+    def image_url(self):
+        """Return the full Cloudinary secure_url."""
+        if self.image:
+            return self.image.url
+        return ""
