@@ -1,5 +1,6 @@
 # apps/support/models/__init__.py
 from apps.support.models.support_ticket import (
+    EscalationStatus,
     TicketStatus,
     TicketPriority,
     TicketCategory,
@@ -9,6 +10,7 @@ from apps.support.models.support_ticket import (
 )
 
 __all__ = [
+    "EscalationStatus",
     "TicketStatus",
     "TicketPriority",
     "TicketCategory",

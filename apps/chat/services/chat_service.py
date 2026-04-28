@@ -28,6 +28,11 @@ from apps.chat.models import (
     ChatEscalation,
     EscalationStatus,
 )
+from apps.chat.realtime import (
+    broadcast_message_created,
+    broadcast_messages_read,
+    broadcast_offer_updated,
+)
 
 # Module-level imports — patchable by tests
 try:
@@ -83,11 +88,11 @@ def get_or_create_conversation(
         if create_notification:
             try:
                 create_notification(
-                    user=vendor,
+                    recipient=vendor,
                     notification_type="new_conversation",
                     title="New Inquiry",
-                    message=f"{buyer.get_full_name() or buyer.email} has opened a conversation with you.",
-                    action_url=f"/vendor/messages/{conversation.id}/",
+                    body=f"{buyer.get_full_name() or buyer.email} has opened a conversation with you.",
+                    metadata={"action_url": f"/vendor/messages/{conversation.id}/"},
                 )
             except Exception as exc:  # pragma: no cover
                 logger.warning("Notification failed for new conversation: %s", exc)
@@ -136,6 +141,7 @@ def send_message(
         author.id,
         message_type,
     )
+    transaction.on_commit(lambda: broadcast_message_created(message.id))
     return message
 
 
@@ -166,6 +172,10 @@ def mark_messages_read(conversation: Conversation, reader: UnifiedUser) -> int:
     else:
         count = 0
 
+    if count:
+        transaction.on_commit(
+            lambda: broadcast_messages_read(conversation, reader.id, count)
+        )
     return count
 
 
@@ -220,11 +230,11 @@ def create_chat_offer(
     if create_notification:
         try:
             create_notification(
-                user=conversation.buyer,
+                recipient=conversation.buyer,
                 notification_type="chat_offer",
                 title="New Price Offer",
-                message=f"You have a new price offer: ₦{offered_price} for {product_title_snapshot}",
-                action_url=f"/messages/{conversation.id}/",
+                body=f"You have a new price offer: ₦{offered_price} for {product_title_snapshot}",
+                metadata={"action_url": f"/messages/{conversation.id}/"},
             )
         except Exception as exc:  # pragma: no cover
             logger.warning("Notification failed for chat offer: %s", exc)
@@ -236,6 +246,7 @@ def create_chat_offer(
         vendor.id,
         offered_price,
     )
+    transaction.on_commit(lambda: broadcast_offer_updated(offer.id))
     return offer
 
 
@@ -248,6 +259,7 @@ def accept_offer(offer: ChatOffer, buyer: UnifiedUser) -> ChatOffer:
     if buyer.id != offer.conversation.buyer_id:
         raise PermissionError("Only the conversation buyer may accept offers.")
     offer.accept(accepted_by=buyer)
+    transaction.on_commit(lambda: broadcast_offer_updated(offer.id))
     return offer
 
 
@@ -257,6 +269,7 @@ def decline_offer(offer: ChatOffer, buyer: UnifiedUser) -> ChatOffer:
     if buyer.id != offer.conversation.buyer_id:
         raise PermissionError("Only the conversation buyer may decline offers.")
     offer.decline(declined_by=buyer)
+    transaction.on_commit(lambda: broadcast_offer_updated(offer.id))
     return offer
 
 

@@ -15,5 +15,5 @@ class NotificationConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
 
     def ready(self):
-        # Import signal receivers after app registry is ready
-        import apps.notification.signals  # noqa: F401  # pylint: disable=import-outside-toplevel
+        """Keep startup side-effect free for explicit EventBus/on_commit flows."""
+        return None

@@ -1,30 +1,28 @@
 """
-ASGI config for backend project.
+ASGI application entrypoint for Fashionistar.
 
-It exposes the ASGI callable as a module-level variable named ``application``.
-
-For more information on this file, see
-https://docs.djangoproject.com/en/4.2/howto/deployment/asgi/
+HTTP requests stay on Django's standard ASGI app. WebSocket traffic is routed
+through the modular app registry with JWT query-string authentication.
 """
 
 import os
-from django.core.asgi import get_asgi_application
-
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
-django_asgi_app = get_asgi_application()
 
 from channels.routing import ProtocolTypeRouter, URLRouter
-from channels.auth import AuthMiddlewareStack
-from chat.routing import websocket_urlpatterns
+from django.core.asgi import get_asgi_application
 
-application = ProtocolTypeRouter({
-    "http": django_asgi_app,
-    "websocket": AuthMiddlewareStack(
-        URLRouter(
-            websocket_urlpatterns
-        )
-    ),
-})
+from backend.websocket_auth import JWTQueryAuthMiddleware
+from backend.websocket_routes import websocket_urlpatterns
+
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.config.development")
+
+django_asgi_app = get_asgi_application()
+
+application = ProtocolTypeRouter(
+    {
+        "http": django_asgi_app,
+        "websocket": JWTQueryAuthMiddleware(URLRouter(websocket_urlpatterns)),
+    }
+)
 
 
 

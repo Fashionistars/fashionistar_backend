@@ -21,6 +21,7 @@ from apps.notification.models import (
     NotificationPreference,
     NotificationTemplate,
 )
+from apps.notification.realtime import push_unread_badge_count
 
 logger = logging.getLogger(__name__)
 
@@ -88,10 +89,12 @@ def _get_template_content(
 @transaction.atomic
 def create_notification(
     *,
-    recipient,
+    recipient=None,
+    user=None,
     notification_type: str,
     title: str,
-    body: str,
+    body: str | None = None,
+    message: str | None = None,
     channel: str = NotificationChannel.IN_APP,
     metadata: dict | None = None,
 ) -> Notification | None:
@@ -100,6 +103,13 @@ def create_notification(
 
     Returns None if the user has opted out (and it's not a mandatory type).
     """
+    recipient = recipient or user
+    body = body or message or ""
+    metadata = metadata or {}
+
+    if recipient is None:
+        raise ValueError("recipient is required for create_notification().")
+
     if not _is_opted_in(recipient, notification_type, channel):
         logger.debug(
             "Notification suppressed: user=%s type=%s channel=%s",
@@ -115,7 +125,7 @@ def create_notification(
         channel=channel,
         title=title,
         body=body,
-        metadata=metadata or {},
+        metadata=metadata,
     )
     logger.info(
         "Notification created: id=%s type=%s user=%s",
@@ -131,6 +141,10 @@ def create_notification(
         logger.warning(
             "Could not enqueue dispatch for notification=%s. Will be retried.",
             notification.id,
+        )
+    if channel == NotificationChannel.IN_APP and notification.recipient_id:
+        transaction.on_commit(
+            lambda: push_unread_badge_count(notification.recipient_id)
         )
     return notification
 
@@ -150,7 +164,12 @@ def mark_as_read(*, user, notification_id) -> Notification | None:
     ).update(read_at=now)
     if not updated:
         return None
-    return Notification.objects.get(id=notification_id)
+    notification = Notification.objects.get(id=notification_id)
+    if notification.recipient_id:
+        transaction.on_commit(
+            lambda: push_unread_badge_count(notification.recipient_id)
+        )
+    return notification
 
 
 @transaction.atomic
@@ -163,6 +182,8 @@ def mark_all_as_read(*, user) -> int:
         read_at__isnull=True,
     ).update(read_at=now)
     logger.info("mark_all_as_read: user=%s count=%d", user, count)
+    if count:
+        transaction.on_commit(lambda: push_unread_badge_count(user.id))
     return count
 
 

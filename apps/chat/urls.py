@@ -7,6 +7,7 @@ from apps.chat.apis.sync.chat_views import (
     StartConversationView,
     ConversationDetailView,
     SendMessageView,
+    MarkConversationReadView,
     CreateOfferView,
     RespondOfferView,
     FlagConversationView,
@@ -33,6 +34,11 @@ urlpatterns = [
         "conversations/<uuid:conversation_id>/messages/",
         SendMessageView.as_view(),
         name="send-message",
+    ),
+    path(
+        "conversations/<uuid:conversation_id>/read/",
+        MarkConversationReadView.as_view(),
+        name="mark-conversation-read",
     ),
 
     # ── Offers ────────────────────────────────────────────────────────────

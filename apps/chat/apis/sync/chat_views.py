@@ -186,6 +186,28 @@ class SendMessageView(APIView):
         )
 
 
+class MarkConversationReadView(APIView):
+    """
+    POST /api/v1/chat/conversations/<conversation_id>/read/
+    Mark all unread messages in the conversation as read for the requester.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request, conversation_id: str) -> Response:
+        conversation = get_object_or_404(Conversation, id=conversation_id)
+
+        try:
+            marked_read = chat_service.mark_messages_read(conversation, request.user)
+        except PermissionError as exc:
+            return error_response(str(exc), status=status.HTTP_403_FORBIDDEN)
+
+        return success_response(
+            data={"status": "ok", "marked_read": marked_read},
+            message="Conversation marked as read.",
+        )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # OFFER
 # ─────────────────────────────────────────────────────────────────────────────
