@@ -96,6 +96,8 @@ urlpatterns = [
     path("api/v1/notifications/", include("apps.notification.urls", namespace="notification")),
     # ── Phase 4: Body Measurements Domain ────────────────────────────────────
     path("api/v1/measurements/", include("apps.measurements.urls", namespace="measurements")),
+    # ── Phase 5 (P1): Real-Time Chat Messaging Domain ────────────────────────
+    path("api/v1/chat/", include("apps.chat.urls", namespace="chat")),
     # ── Phase 2: Central Async Ninja API (/api/v1/ninja/*) ───────────────────
     path("api/v1/ninja/", ninja_api.urls),
     path("admin_backend/", include("apps.admin_backend.urls")),
