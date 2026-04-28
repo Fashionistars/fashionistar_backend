@@ -67,3 +67,11 @@ ninja_api.add_router("/client/", client_router)
 # Vendor domain: /api/v1/ninja/vendor/
 from apps.vendor.apis.async_.dashboard_views import router as vendor_router
 ninja_api.add_router("/vendor/", vendor_router)
+
+# Notification domain: /api/v1/ninja/notifications/
+from apps.notification.apis.async_.notification_views import router as notification_async_router
+ninja_api.add_router("/notifications/", notification_async_router)
+
+# Support domain: /api/v1/ninja/support/
+from apps.support.apis.async_.support_views import router as support_async_router
+ninja_api.add_router("/support/", support_async_router)

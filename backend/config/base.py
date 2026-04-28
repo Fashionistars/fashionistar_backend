@@ -181,6 +181,7 @@ INSTALLED_APPS = [
         "apps.notification",   # Phase 4: In-app, email, push, SMS notification feed
         "apps.measurements",   # Phase 4: Body measurements, checkout gate for custom tailoring
         "apps.chat",           # Phase 5 (P1): Buyer-Vendor real-time messaging, offers, moderation
+        "apps.support",        # Phase 5 (P2): Customer dispute & ticket management domain
         # ── Third Party ──────────────────────────────────────────────────────────
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",  # JWT logout blacklisting
