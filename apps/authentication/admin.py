@@ -588,13 +588,24 @@ class LoginEventInline(admin.TabularInline):
 
 class UserSessionInline(admin.TabularInline):
     """
-    Active sessions for the user. Staff can terminate them by deleting rows.
+    Active sessions for the user.
+
+    Inline rows are read-only; session termination happens from the dedicated
+    ``UserSessionAdmin`` so revocation metadata is preserved consistently.
     """
     model = UserSession
     extra = 0
-    can_delete = True
+    can_delete = False
     classes = ("collapse",)
-    readonly_fields = ("jti", "device_name", "ip_address", "country", "expires_at", "last_used_at")
+    readonly_fields = (
+        "jti",
+        "device_name",
+        "ip_address",
+        "country",
+        "expires_at",
+        "last_used_at",
+        "revoked_at",
+    )
     show_change_link = True
     verbose_name = "Active Session"
     verbose_name_plural = "Active Sessions"
@@ -1706,7 +1717,7 @@ class UserSessionAdmin(admin.ModelAdmin):
 
     Allows support staff to:
       - View every user's active sessions (device, IP, location, last-used).
-      - Manually terminate stale or suspicious sessions (delete row).
+      - Revoke stale or suspicious sessions without deleting audit history.
       - Run "terminate all sessions" bulk action.
 
     This is NOT a security UI replacement — the user-facing dashboard
@@ -1724,11 +1735,12 @@ class UserSessionAdmin(admin.ModelAdmin):
         'city',
         'last_used_at',
         'expires_at',
-        'is_expired_badge',
+        'status_badge',
     )
     list_filter = (
         'client_type',
         'country',
+        'revoked_at',
     )
     search_fields = (
         'user__email',
@@ -1745,23 +1757,37 @@ class UserSessionAdmin(admin.ModelAdmin):
     readonly_fields = (
         'user',
         'jti',
+        'refresh_token_family',
+        'fingerprint_hash',
         'client_type',
         'browser_family',
         'os_family',
         'device_name',
         'user_agent',
         'ip_address',
+        'last_seen_ip',
+        'last_seen_user_agent',
         'country',
         'country_code',
         'city',
         'last_used_at',
         'expires_at',
+        'revoked_at',
+        'revoked_reason',
         'created_at',
     )
 
     fieldsets = (
         ('Session', {
-            'fields': ('user', 'jti', 'expires_at', 'last_used_at', 'created_at'),
+            'fields': (
+                'user',
+                'jti',
+                'refresh_token_family',
+                'fingerprint_hash',
+                'expires_at',
+                'last_used_at',
+                'created_at',
+            ),
         }),
         ('Device', {
             'fields': (
@@ -1770,10 +1796,20 @@ class UserSessionAdmin(admin.ModelAdmin):
                 'browser_family',
                 'os_family',
                 'user_agent',
+                'last_seen_user_agent',
             ),
         }),
         ('Geolocation', {
-            'fields': ('ip_address', 'country', 'country_code', 'city'),
+            'fields': (
+                'ip_address',
+                'last_seen_ip',
+                'country',
+                'country_code',
+                'city',
+            ),
+        }),
+        ('Revocation', {
+            'fields': ('revoked_at', 'revoked_reason'),
         }),
     )
 
@@ -1787,11 +1823,20 @@ class UserSessionAdmin(admin.ModelAdmin):
         url = f'/admin/authentication/unifieduser/{obj.user.pk}/change/'
         return format_html('<a href="{}">{}</a>', url, identifier)
 
-    @admin.display(description='Expired?', ordering='expires_at')
-    def is_expired_badge(self, obj):
+    @admin.display(description='Status', ordering='expires_at')
+    def status_badge(self, obj):
+        import datetime as dt
+
         from django.utils import timezone as tz
         from django.utils.safestring import mark_safe
-        expired = obj.expires_at and obj.expires_at < tz.now()
+        revoked_at = getattr(obj, 'revoked_at', None)
+        if isinstance(revoked_at, dt.datetime):
+            return mark_safe(
+                '<span style="background:#6b7280;color:#fff;padding:2px 8px;'
+                'border-radius:4px;font-size:11px;font-weight:700;">REVOKED</span>'
+            )
+        expires_at = getattr(obj, 'expires_at', None)
+        expired = expires_at and expires_at < tz.now()
         if expired:
             # mark_safe used (not format_html) because the HTML is fully static —
             # no user-supplied data is interpolated, so format_html's escaping is
@@ -1805,11 +1850,26 @@ class UserSessionAdmin(admin.ModelAdmin):
             'border-radius:4px;font-size:11px;font-weight:700;">ACTIVE</span>'
         )
 
+    def is_expired_badge(self, obj):
+        """
+        Backward-compatible alias used by older tests and admin call sites.
+
+        The underlying semantics are now broader than expiry-only because
+        revoked sessions also surface a distinct badge state.
+        """
+
+        return self.status_badge(obj)
+
     # ── Bulk action ───────────────────────────────────────────────────
 
-    @admin.action(description='⛔ Terminate selected sessions (blacklist JTI + delete row)')
+    def get_queryset(self, request):
+        """Show both active and revoked sessions in the admin audit surface."""
+
+        return UserSession.all_objects.select_related('user')
+
+    @admin.action(description='⛔ Revoke selected sessions (blacklist JTI + preserve row)')
     def terminate_sessions(self, request, queryset):
-        """Blacklist the JWT JTI and delete the session row."""
+        """Blacklist the JWT JTI and mark the session row as revoked."""
         terminated = 0
         for session in queryset:
             try:
@@ -1821,12 +1881,12 @@ class UserSessionAdmin(admin.ModelAdmin):
                     BlacklistedToken.objects.get_or_create(token=outstanding)
             except Exception:
                 pass
-            session.delete()
-            terminated += 1
+            if session.revoke(reason="admin_terminated_session"):
+                terminated += 1
 
         self.message_user(
             request,
-            f'✅ {terminated} session(s) terminated and JTI(s) blacklisted.',
+            f'✅ {terminated} session(s) revoked and JTI(s) blacklisted.',
             messages.SUCCESS,
         )
 
@@ -1841,5 +1901,5 @@ class UserSessionAdmin(admin.ModelAdmin):
         return False
 
     def has_delete_permission(self, request, obj=None):
-        """Staff can delete (terminate) any session."""
-        return request.user.is_staff
+        """Physical deletion is disabled to preserve the session audit trail."""
+        return False

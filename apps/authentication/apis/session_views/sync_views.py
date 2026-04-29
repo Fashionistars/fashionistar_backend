@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from drf_spectacular.utils import extend_schema
 from rest_framework import generics, status
@@ -98,7 +99,11 @@ class SessionListView(generics.ListAPIView):
             context={"current_jti": current_jti, "request": request},
         )
         return success_response(
-            data={"count": len(serializer.data), "sessions": serializer.data},
+            data={
+                "count": len(serializer.data),
+                "results": serializer.data,
+                "sessions": serializer.data,
+            },
             message="Active sessions retrieved successfully.",
         )
 
@@ -140,7 +145,7 @@ class SessionRevokeView(generics.DestroyAPIView):
                         message="Session not found or already terminated.",
                         status=status.HTTP_404_NOT_FOUND,
                     )
-                except (TypeError, ValueError):
+                except (TypeError, ValueError, ValidationError):
                     return error_response(
                         message="Session not found.",
                         status=status.HTTP_404_NOT_FOUND,
@@ -241,6 +246,10 @@ class LoginEventListView(generics.ListAPIView):
         queryset = self.get_queryset()
         serializer = self.get_serializer(queryset, many=True)
         return success_response(
-            data={"count": len(serializer.data), "events": serializer.data},
+            data={
+                "count": len(serializer.data),
+                "results": serializer.data,
+                "events": serializer.data,
+            },
             message="Login history retrieved successfully.",
         )
