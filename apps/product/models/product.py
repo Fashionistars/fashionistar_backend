@@ -171,7 +171,7 @@ class Product(TimeStampedModel, SoftDeleteModel):
 
     # ── Identity ──────────────────────────────────────────────────────────
     title = models.CharField(max_length=255, db_index=True)
-    slug = models.SlugField(max_length=300, unique=True, blank=True, db_index=True)
+    slug = models.SlugField(max_length=500, unique=True, blank=True, db_index=True)
     sku = models.CharField(
         max_length=50,
         unique=True,
@@ -179,7 +179,7 @@ class Product(TimeStampedModel, SoftDeleteModel):
         help_text="Auto-generated SKU. Unique across platform.",
     )
     description = models.TextField()
-    short_description = models.CharField(max_length=300, blank=True)
+    short_description = models.CharField(max_length=500, blank=True)
 
     # ── Taxonomy ──────────────────────────────────────────────────────────
     vendor = models.ForeignKey(
@@ -301,12 +301,12 @@ class Product(TimeStampedModel, SoftDeleteModel):
             import uuid as _uuid
             # Use random uuid4 suffix to avoid UNIQUE collisions on rapid creation
             for _attempt in range(5):
-                candidate = f"FSN-{_uuid.uuid4().hex[:8].upper()}"
+                candidate = f"FASTAR-{_uuid.uuid4().hex[:8].upper()}"
                 if not Product.objects.filter(sku=candidate).exists():
                     self.sku = candidate
                     break
             else:
-                self.sku = f"FSN-{_uuid.uuid4().hex[:12].upper()}"
+                self.sku = f"FASTAR-{_uuid.uuid4().hex[:12].upper()}"
         self.in_stock = self.stock_qty > 0
         super().save(*args, **kwargs)
 

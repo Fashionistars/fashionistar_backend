@@ -1,7 +1,6 @@
 # apps/cart/urls.py
 from django.urls import path
 from apps.cart.apis.sync.cart_views import (
-    CartView,
     CartAddItemView,
     CartRemoveItemView,
     CartUpdateQuantityView,
@@ -14,7 +13,6 @@ from apps.cart.apis.sync.cart_views import (
 app_name = "cart"
 
 urlpatterns = [
-    path("", CartView.as_view(), name="cart-detail"),
     path("add/", CartAddItemView.as_view(), name="cart-add-item"),
     path("items/<uuid:item_id>/", CartRemoveItemView.as_view(), name="cart-remove-item"),
     path("items/<uuid:item_id>/quantity/", CartUpdateQuantityView.as_view(), name="cart-update-quantity"),

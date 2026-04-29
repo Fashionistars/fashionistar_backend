@@ -83,7 +83,7 @@ class BlogPost(TimeStampedModel, SoftDeleteModel):
         super().save(*args, **kwargs)
 
     @property
-    def image_url(self):
+    def featured_image_url(self):
         """Return the full Cloudinary secure_url."""
         if self.featured_image:
             return self.featured_image.url

@@ -61,16 +61,6 @@ def get_user_profile(*, user_id: str) -> Optional["UnifiedUser"]:
     return UserSelector.get_by_id_safe(user_id)
 
 
-def get_me_profile(*, user_id: str) -> Optional["UnifiedUser"]:
-    """
-    Fetch a user full profile for the /auth/me/ endpoint.
-    Loads all fields required by MeSerializer in one optimized query.
-    Returns None for unknown/invalid IDs.
-    """
-    from apps.authentication.selectors import UserSelector
-    return UserSelector.get_me_profile(user_id)
-
-
 def update_user_profile(
     *,
     user: "UnifiedUser",
@@ -154,8 +144,9 @@ def get_post_auth_state(*, user: "UnifiedUser") -> dict[str, Any]:
         get_vendor_setup_state,
     )
 
-    has_client_profile = bool(get_client_profile_or_none(user)) if user.role == "client" else False
+    client_profile = get_client_profile_or_none(user) if user.role == "client" else None
     vendor_profile = get_vendor_profile_or_none(user) if user.role == "vendor" else None
+    has_client_profile = client_profile is not None
     has_vendor_profile = vendor_profile is not None
 
     vendor_onboarding_status = None
@@ -183,6 +174,28 @@ def get_post_auth_state(*, user: "UnifiedUser") -> dict[str, Any]:
     return {
         "has_client_profile": has_client_profile,
         "has_vendor_profile": has_vendor_profile,
+        "client_profile": (
+            {
+                "id": str(client_profile.pk),
+                "country": client_profile.country,
+                "state": client_profile.state,
+                "preferred_size": client_profile.preferred_size,
+                "is_profile_complete": client_profile.is_profile_complete,
+            }
+            if client_profile
+            else None
+        ),
+        "vendor_profile": (
+            {
+                "id": str(vendor_profile.pk),
+                "store_name": vendor_profile.store_name,
+                "store_slug": vendor_profile.store_slug,
+                "is_active": vendor_profile.is_active,
+                "is_verified": vendor_profile.is_verified,
+            }
+            if vendor_profile
+            else None
+        ),
         "vendor_onboarding_status": vendor_onboarding_status,
         "dashboard_entrypoint": dashboard_entrypoint,
     }

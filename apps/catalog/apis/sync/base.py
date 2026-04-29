@@ -1,4 +1,4 @@
-from rest_framework import generics, parsers, status
+from rest_framework import generics, mixins, parsers, status
 from rest_framework.renderers import (
     BrowsableAPIRenderer,
     JSONRenderer,
@@ -50,9 +50,38 @@ class CatalogWriteMixin:
         )
 
 
-class CatalogListCreateAPIView(CatalogWriteMixin, generics.ListCreateAPIView):
+class CatalogListCreateAPIView(CatalogWriteMixin, mixins.CreateModelMixin, generics.GenericAPIView):
+    """Catalog write-only create view; reads live under /api/v1/ninja/catalog/."""
+
     pagination_class = None
 
+    def post(self, request, *args, **kwargs):
+        """Create a catalog resource through the configured domain service."""
 
-class CatalogRetrieveUpdateDestroyAPIView(CatalogWriteMixin, generics.RetrieveUpdateDestroyAPIView):
+        return self.create(request, *args, **kwargs)
+
+
+class CatalogRetrieveUpdateDestroyAPIView(
+    CatalogWriteMixin,
+    mixins.UpdateModelMixin,
+    mixins.DestroyModelMixin,
+    generics.GenericAPIView,
+):
+    """Catalog write-only detail view; reads live under /api/v1/ninja/catalog/."""
+
     lookup_field = "slug"
+
+    def put(self, request, *args, **kwargs):
+        """Replace a catalog resource through the configured domain service."""
+
+        return self.update(request, *args, **kwargs)
+
+    def patch(self, request, *args, **kwargs):
+        """Partially update a catalog resource through the configured service."""
+
+        return self.partial_update(request, *args, **kwargs)
+
+    def delete(self, request, *args, **kwargs):
+        """Archive a catalog resource through the configured domain service."""
+
+        return self.destroy(request, *args, **kwargs)

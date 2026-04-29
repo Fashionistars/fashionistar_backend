@@ -16,8 +16,15 @@ from apps.product.models import (
     ProductStatus,
     Coupon,
 )
+from apps.common.selectors import BaseSelector
 
 logger = logging.getLogger(__name__)
+
+
+class ProductSelector(BaseSelector):
+    """Product read selector namespace for sync DRF and async Ninja reads."""
+
+    model = Product
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -28,7 +35,7 @@ def get_published_products():
     """Base published queryset with common select/prefetch."""
     return (
         Product.objects.filter(status=ProductStatus.PUBLISHED, is_deleted=False)
-        .select_related("vendor", "category", "brand")
+        .select_related("vendor", "vendor__user", "category", "brand")
         .prefetch_related("sizes", "colors", "tags", "gallery")
         .order_by("-created_at")
     )
@@ -39,7 +46,7 @@ def get_product_detail(slug: str) -> Product | None:
     try:
         return (
             Product.objects.filter(status=ProductStatus.PUBLISHED, is_deleted=False, slug=slug)
-            .select_related("vendor", "category", "sub_category", "brand")
+            .select_related("vendor", "vendor__user", "category", "sub_category", "brand")
             .prefetch_related(
                 "sizes", "colors", "tags",
                 "gallery", "variants__size", "variants__color",
@@ -64,7 +71,7 @@ def get_products_by_category(category_id):
 def get_products_by_vendor(vendor_id):
     return (
         Product.objects.filter(vendor_id=vendor_id, is_deleted=False)
-        .select_related("category", "brand")
+        .select_related("vendor", "vendor__user", "category", "brand")
         .prefetch_related("sizes", "colors", "gallery")
         .order_by("-created_at")
     )
@@ -183,4 +190,120 @@ def get_coupon_by_code(code: str) -> Coupon | None:
     try:
         return Coupon.objects.get(code__iexact=code.strip(), is_deleted=False)
     except Coupon.DoesNotExist:
+        return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 5. ASYNC QUERYSETS FOR DJANGO-NINJA READS
+# ─────────────────────────────────────────────────────────────────────────────
+
+def afilter_products(
+    *,
+    category: str | None = None,
+    brand: str | None = None,
+    min_price=None,
+    max_price=None,
+    in_stock: bool | None = None,
+    featured: bool | None = None,
+    query: str | None = None,
+    ordering: str = "-created_at",
+):
+    """Return an async-ready published product queryset for Ninja feeds."""
+
+    qs = filter_products(
+        category_id=category,
+        brand_id=brand,
+        min_price=min_price,
+        max_price=max_price,
+        in_stock=in_stock,
+        featured=featured,
+        query=query,
+    )
+    allowed_ordering = {
+        "price": "price",
+        "-price": "-price",
+        "latest": "-created_at",
+        "oldest": "created_at",
+        "rating": "-rating",
+        "-created_at": "-created_at",
+    }
+    return qs.order_by(allowed_ordering.get(ordering, "-created_at"))
+
+
+async def aget_product_detail(slug: str) -> Product | None:
+    """Async: return full public product detail by slug, or None."""
+
+    try:
+        return await (
+            Product.objects.filter(
+                status=ProductStatus.PUBLISHED,
+                is_deleted=False,
+                slug=slug,
+            )
+            .select_related("vendor", "vendor__user", "category", "sub_category", "brand")
+            .prefetch_related(
+                "sizes",
+                "colors",
+                "tags",
+                "gallery",
+                "variants__size",
+                "variants__color",
+                "specifications",
+                "faqs",
+            )
+            .aget()
+        )
+    except Product.DoesNotExist:
+        return None
+
+
+def areviews_for_product(product_id):
+    """Return an async-ready active reviews queryset for a product."""
+
+    return get_product_reviews(product_id)
+
+
+def awishlist_for_user(user_id):
+    """Return an async-ready wishlist queryset for one user."""
+
+    return get_user_wishlist(user_id)
+
+
+def avendor_coupons(vendor_id):
+    """Return an async-ready coupon queryset for one vendor."""
+
+    return get_vendor_coupons(vendor_id)
+
+
+def avendor_products(vendor_id):
+    """Return an async-ready product queryset for one vendor profile."""
+
+    return (
+        Product.objects.filter(vendor_id=vendor_id, is_deleted=False)
+        .select_related("vendor", "vendor__user", "category", "brand")
+        .prefetch_related("sizes", "colors", "tags", "gallery")
+        .order_by("-created_at")
+    )
+
+
+async def aget_vendor_product(vendor_id, slug: str) -> Product | None:
+    """Async: return one product owned by a vendor profile, or None."""
+
+    try:
+        return await (
+            Product.objects.filter(vendor_id=vendor_id, slug=slug, is_deleted=False)
+            .select_related("vendor", "vendor__user", "category", "sub_category", "brand")
+            .prefetch_related(
+                "sizes",
+                "colors",
+                "tags",
+                "gallery",
+                "variants__size",
+                "variants__color",
+                "specifications",
+                "faqs",
+            )
+            .aget()
+        )
+    except Product.DoesNotExist:
         return None

@@ -16,8 +16,6 @@ class CatalogCategorySerializer(serializers.ModelSerializer):
             "title",
             "slug",
             "image",
-            "image_url",
-            "cloudinary_url",
             "active",
             "created_at",
             "updated_at",
@@ -25,7 +23,7 @@ class CatalogCategorySerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "slug", "image_url", "created_at", "updated_at")
 
     def get_image_url(self, obj) -> str:
-        return safe_media_url(obj, "cloudinary_url", "image")
+        return safe_media_url(obj, "image")
 
     def validate_name(self, value: str) -> str:
         value = value.strip()

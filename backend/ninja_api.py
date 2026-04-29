@@ -36,8 +36,13 @@ class AsyncJWTAuth(HttpBearer):
             if not user_id:
                 return None
 
-            # Async ORM lookup
-            user = await UnifiedUser.objects.aget(pk=user_id, is_active=True)
+            # Async ORM lookup. Reverse OneToOne profiles are hydrated here so
+            # Ninja read handlers can use request.auth.client_profile /
+            # request.auth.vendor_profile without issuing another profile query.
+            user = await (
+                UnifiedUser.objects.select_related("client_profile", "vendor_profile")
+                .aget(pk=user_id, is_active=True)
+            )
             return user
 
         except Exception:
@@ -79,3 +84,15 @@ ninja_api.add_router("/notifications/", notification_async_router)
 # Support domain: /api/v1/ninja/support/
 from apps.support.apis.async_.support_views import router as support_async_router
 ninja_api.add_router("/support/", support_async_router)
+
+# Catalog domain: /api/v1/ninja/catalog/
+from apps.catalog.apis.async_.catalog_views import router as catalog_async_router
+ninja_api.add_router("/catalog/", catalog_async_router)
+
+# Product domain: /api/v1/ninja/products/
+from apps.product.apis.async_.product_views import router as product_async_router
+ninja_api.add_router("/products/", product_async_router)
+
+# Cart domain: /api/v1/ninja/cart/
+from apps.cart.apis.async_.cart_views import router as cart_async_router
+ninja_api.add_router("/cart/", cart_async_router)

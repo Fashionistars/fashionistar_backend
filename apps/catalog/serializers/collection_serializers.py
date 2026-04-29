@@ -19,11 +19,8 @@ class CatalogCollectionSerializer(serializers.ModelSerializer):
             "sub_title",
             "description",
             "image",
-            "image_url",
-            "cloudinary_url",
+            "image",
             "background_image",
-            "background_image_url",
-            "background_cloudinary_url",
             "created_at",
             "updated_at",
         )
@@ -37,10 +34,10 @@ class CatalogCollectionSerializer(serializers.ModelSerializer):
         )
 
     def get_image_url(self, obj) -> str:
-        return safe_media_url(obj, "cloudinary_url", "image")
+        return safe_media_url(obj, "image")
 
     def get_background_image_url(self, obj) -> str:
-        return safe_media_url(obj, "background_cloudinary_url", "background_image")
+        return safe_media_url(obj, "background_image")
 
     def validate_title(self, value: str) -> str:
         value = value.strip()

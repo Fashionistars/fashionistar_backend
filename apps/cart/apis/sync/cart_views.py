@@ -13,10 +13,9 @@ from rest_framework.renderers import BrowsableAPIRenderer
 from rest_framework.views import APIView
 
 from apps.common.renderers import CustomJSONRenderer, success_response, error_response
-from apps.common.permissions import IsClient, IsAuthenticatedAndActive
+from apps.common.permissions import IsClientWithProfile, IsAuthenticatedAndActive
 from apps.cart.serializers import CartSerializer, CartItemWriteSerializer
 from apps.cart.services import (
-    get_or_create_cart,
     add_item,
     remove_item,
     update_item_quantity,
@@ -33,22 +32,6 @@ _RENDERERS = [CustomJSONRenderer, BrowsableAPIRenderer]
 _PARSERS = (parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser)
 
 
-class CartView(APIView):
-    """
-    GET  /api/v1/cart/  — Retrieve user's cart with all items.
-    """
-    renderer_classes = _RENDERERS
-    parser_classes = _PARSERS
-    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive]
-
-    def get(self, request):
-        cart = get_or_create_cart(request.user)
-        return success_response(
-            data=CartSerializer(cart, context={"request": request}).data,
-            message="Cart retrieved.",
-        )
-
-
 class CartAddItemView(APIView):
     """
     POST /api/v1/cart/add/
@@ -56,7 +39,7 @@ class CartAddItemView(APIView):
     """
     renderer_classes = _RENDERERS
     parser_classes = _PARSERS
-    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive]
+    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsClientWithProfile]
 
     def post(self, request):
         serializer = CartItemWriteSerializer(data=request.data)
@@ -75,7 +58,7 @@ class CartAddItemView(APIView):
             )
         except ValueError as exc:
             return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
-        cart = get_or_create_cart(request.user)
+        cart = item.cart
         return success_response(
             data=CartSerializer(cart, context={"request": request}).data,
             message="Item added to cart.",
@@ -87,14 +70,16 @@ class CartRemoveItemView(APIView):
     """DELETE /api/v1/cart/items/<item_id>/"""
     renderer_classes = _RENDERERS
     parser_classes = _PARSERS
-    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive]
+    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsClientWithProfile]
 
     def delete(self, request, item_id):
         try:
             remove_item(user=request.user, item_id=item_id)
         except ValueError as exc:
             return error_response(message=str(exc), status=status.HTTP_404_NOT_FOUND)
-        cart = get_or_create_cart(request.user)
+        from apps.cart.selectors import CartSelector
+
+        cart = CartSelector.for_user(request.user).get()
         return success_response(
             data=CartSerializer(cart, context={"request": request}).data,
             message="Item removed from cart.",
@@ -105,7 +90,7 @@ class CartUpdateQuantityView(APIView):
     """PATCH /api/v1/cart/items/<item_id>/quantity/"""
     renderer_classes = _RENDERERS
     parser_classes = _PARSERS
-    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive]
+    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsClientWithProfile]
 
     def patch(self, request, item_id):
         quantity = request.data.get("quantity")
@@ -119,7 +104,9 @@ class CartUpdateQuantityView(APIView):
             update_item_quantity(user=request.user, item_id=item_id, quantity=quantity)
         except ValueError as exc:
             return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
-        cart = get_or_create_cart(request.user)
+        from apps.cart.selectors import CartSelector
+
+        cart = CartSelector.for_user(request.user).get()
         return success_response(
             data=CartSerializer(cart, context={"request": request}).data,
             message="Quantity updated.",
@@ -130,14 +117,15 @@ class CartSaveForLaterView(APIView):
     """POST /api/v1/cart/items/<item_id>/save-later/"""
     renderer_classes = _RENDERERS
     parser_classes = _PARSERS
-    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive]
+    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsClientWithProfile]
 
     def post(self, request, item_id):
         try:
-            toggle_save_for_later(user=request.user, item_id=item_id)
+            item = toggle_save_for_later(user=request.user, item_id=item_id)
         except ValueError as exc:
             return error_response(message=str(exc), status=status.HTTP_404_NOT_FOUND)
-        cart = get_or_create_cart(request.user)
+        item.refresh_from_db()
+        cart = item.cart
         return success_response(
             data=CartSerializer(cart, context={"request": request}).data,
             message="Item toggled.",
@@ -151,7 +139,7 @@ class CartCouponView(APIView):
     """
     renderer_classes = _RENDERERS
     parser_classes = _PARSERS
-    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive]
+    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsClientWithProfile]
 
     def post(self, request):
         code = request.data.get("code", "").strip()
@@ -178,11 +166,13 @@ class CartClearView(APIView):
     """DELETE /api/v1/cart/clear/"""
     renderer_classes = _RENDERERS
     parser_classes = _PARSERS
-    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive]
+    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsClientWithProfile]
 
     def delete(self, request):
         clear_cart(user=request.user)
-        cart = get_or_create_cart(request.user)
+        from apps.cart.selectors import CartSelector
+
+        cart = CartSelector.for_user(request.user).get()
         return success_response(
             data=CartSerializer(cart, context={"request": request}).data,
             message="Cart cleared.",
@@ -197,7 +187,7 @@ class CartMergeView(APIView):
     """
     renderer_classes = _RENDERERS
     parser_classes = _PARSERS
-    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive]
+    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsClientWithProfile]
 
     def post(self, request):
         guest_items = request.data.get("items", [])

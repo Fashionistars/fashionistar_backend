@@ -5,6 +5,7 @@ from apps.catalog.serializers.common import safe_media_url
 
 
 class CatalogBlogMediaSerializer(serializers.ModelSerializer):
+    public_id = serializers.SerializerMethodField()
     image_url = serializers.SerializerMethodField()
 
     class Meta:
@@ -18,7 +19,13 @@ class CatalogBlogMediaSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("id", "created_at", "updated_at")
+        read_only_fields = ("id", "created_at","image", "updated_at")
+
+    def get_public_id(self, obj) -> str:
+        return str(obj.image) if obj.image else ""
+
+    def get_image_url(self, obj) -> str:
+        return safe_media_url(obj, "image")
 
 
 class CatalogBlogPostSerializer(serializers.ModelSerializer):
@@ -68,6 +75,9 @@ class CatalogBlogPostSerializer(serializers.ModelSerializer):
             return "Fashionistar Editorial"
         full_name = getattr(author, "get_full_name", lambda: "")()
         return full_name or getattr(author, "email", "") or str(author)
+
+    def get_featured_image_url(self, obj) -> str:
+        return safe_media_url(obj, "featured_image")
 
     def validate_title(self, value: str) -> str:
         value = value.strip()

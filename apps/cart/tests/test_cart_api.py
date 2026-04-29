@@ -43,13 +43,17 @@ def api_client():
 
 @pytest.fixture
 def client_user(db, django_user_model):
-    return django_user_model.objects.create_user(
+    user = django_user_model.objects.create_user(
         email="cart_client@fashionistar.test",
         password="TestPass123!",
         role="client",
         is_active=True,
         is_verified=True,
     )
+    from apps.client.models import ClientProfile
+
+    ClientProfile.objects.create(user=user)
+    return user
 
 
 @pytest.fixture
@@ -188,12 +192,14 @@ class TestCartService:
 class TestCartAPI:
 
     def test_anonymous_cannot_access_cart(self, api_client):
-        response = api_client.get("/api/v1/cart/")
+        response = api_client.get("/api/v1/ninja/cart/")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_retrieve_cart(self, api_client, client_user):
-        api_client.force_authenticate(client_user)
-        response = api_client.get("/api/v1/cart/")
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {RefreshToken.for_user(client_user).access_token}")
+        response = api_client.get("/api/v1/ninja/cart/")
         assert response.status_code == status.HTTP_200_OK
 
     def test_add_item_via_api(self, api_client, client_user, product):

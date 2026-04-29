@@ -17,8 +17,6 @@ class CatalogBrandSerializer(serializers.ModelSerializer):
             "slug",
             "description",
             "image",
-            "image_url",
-            "cloudinary_url",
             "active",
             "created_at",
             "updated_at",
@@ -26,7 +24,7 @@ class CatalogBrandSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "slug", "image_url", "created_at", "updated_at")
 
     def get_image_url(self, obj) -> str:
-        return safe_media_url(obj, "cloudinary_url", "image")
+        return safe_media_url(obj, "image")
 
     def validate_title(self, value: str) -> str:
         value = value.strip()

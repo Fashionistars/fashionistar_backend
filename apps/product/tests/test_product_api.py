@@ -18,6 +18,7 @@ from decimal import Decimal
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.product.models import (
     Product,
@@ -56,6 +57,14 @@ from apps.product.selectors import (
 @pytest.fixture
 def api_client():
     return APIClient()
+
+
+def _jwt_client(user):
+    """Return an APIClient carrying a SimpleJWT access token for Ninja reads."""
+
+    client = APIClient()
+    client.credentials(HTTP_AUTHORIZATION=f"Bearer {RefreshToken.for_user(user).access_token}")
+    return client
 
 
 @pytest.fixture
@@ -231,21 +240,21 @@ class TestProductSerializers:
 class TestPublicProductAPI:
 
     def test_list_returns_published_only(self, api_client, sample_product, draft_product):
-        url = "/api/v1/products/"
+        url = "/api/v1/ninja/products/"
         response = api_client.get(url)
         assert response.status_code == status.HTTP_200_OK
-        slugs = [p["slug"] for p in response.data["data"]]
+        slugs = [p["slug"] for p in response.json()["results"]]
         assert sample_product.slug in slugs
         assert draft_product.slug not in slugs
 
     def test_detail_returns_full_data(self, api_client, sample_product):
-        url = f"/api/v1/products/{sample_product.slug}/"
+        url = f"/api/v1/ninja/products/{sample_product.slug}/"
         response = api_client.get(url)
         assert response.status_code == status.HTTP_200_OK
-        assert response.data["data"]["slug"] == sample_product.slug
+        assert response.json()["slug"] == sample_product.slug
 
     def test_detail_404_for_unknown_slug(self, api_client):
-        response = api_client.get("/api/v1/products/nonexistent-product/")
+        response = api_client.get("/api/v1/ninja/products/nonexistent-product/")
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
     def test_featured_list(self, api_client, db, vendor_profile):
@@ -254,9 +263,9 @@ class TestPublicProductAPI:
             description="x", price=Decimal("20000"),
             status=ProductStatus.PUBLISHED, featured=True,
         )
-        response = api_client.get("/api/v1/products/featured/")
+        response = api_client.get("/api/v1/ninja/products/featured/")
         assert response.status_code == status.HTTP_200_OK
-        assert len(response.data["data"]) >= 1
+        assert len(response.json()["results"]) >= 1
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -300,11 +309,10 @@ class TestVendorProductAPI:
             vendor=other_vendor, title="Other Dress",
             description="x", price=Decimal("10000"),
         )
-        api_client.force_authenticate(other_user)
-        response = api_client.get("/api/v1/products/vendor/")
+        response = _jwt_client(other_user).get("/api/v1/ninja/products/vendor/")
         # vendor endpoint is scoped — only returns requesting vendor's own products
         assert response.status_code == status.HTTP_200_OK
-        slugs = [p.get("slug") for p in response.data["data"]]
+        slugs = [p.get("slug") for p in response.json()["results"]]
         assert "other-dress" in slugs
 
     def test_publish_product(self, api_client, vendor_user, vendor_profile, draft_product):
@@ -428,7 +436,7 @@ class TestProductServiceLayer:
 class TestPermissionMatrix:
 
     def test_anonymous_cannot_access_wishlist(self, api_client):
-        response = api_client.get("/api/v1/products/wishlist/")
+        response = api_client.get("/api/v1/ninja/products/wishlist/")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_vendor_cannot_review_product(self, api_client, vendor_user, sample_product):
