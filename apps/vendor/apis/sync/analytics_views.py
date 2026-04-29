@@ -25,6 +25,7 @@ from rest_framework.renderers import BrowsableAPIRenderer
 
 from apps.common.renderers import CustomJSONRenderer
 from apps.common.responses import success_response, error_response
+from apps.common.permissions import IsVendorWithProfile
 from apps.vendor.selectors.vendor_selectors import get_vendor_profile_or_none
 from apps.vendor.serializers.vendor_analytics_serializers import (
     VendorAnalyticsSummarySerializer,
@@ -80,7 +81,7 @@ class VendorAnalyticsSummaryView(GenericAPIView):
       200 OK: Returns full metrics payload.
       404 Not Found: Profile missing.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsVendorWithProfile]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorAnalyticsSummarySerializer
 
@@ -123,7 +124,7 @@ class VendorRevenueChart(GenericAPIView):
     Status Codes:
       200 OK: Returns trend data array.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsVendorWithProfile]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorRevenueTrendSerializer
 
@@ -151,7 +152,7 @@ class VendorMonthlyOrderChart(GenericAPIView):
     """
     Groups order volume by month and delivery status.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsVendorWithProfile]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorMonthlyOrderSerializer
 
@@ -180,7 +181,7 @@ class VendorMonthlyProductChart(GenericAPIView):
     """
     Tracks product catalog growth over time.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsVendorWithProfile]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorMonthlyProductSerializer
 
@@ -214,7 +215,7 @@ class VendorEarningTrackerView(GenericAPIView):
     """
     Detailed earning tracker including pending payouts and historical sales.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsVendorWithProfile]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorEarningTrackerSerializer
 
@@ -254,7 +255,7 @@ class VendorCustomerBehaviorView(GenericAPIView):
     """
     Analyzes customer engagement times and acquisition rates.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsVendorWithProfile]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorCustomerBehaviorSerializer
 
@@ -277,7 +278,7 @@ class VendorTopCategoriesView(GenericAPIView):
     """
     Ranks product categories by their contribution to total revenue.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsVendorWithProfile]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorCategoryPerformanceSerializer
 
@@ -297,7 +298,7 @@ class VendorPaymentDistributionView(GenericAPIView):
     """
     Breaks down revenue by payment methods and statuses.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsVendorWithProfile]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorPaymentDistributionSerializer
 
@@ -325,7 +326,7 @@ class VendorProductListView(ListAPIView):
       - Search by title/description.
       - Status filtering (active/inactive).
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsVendorWithProfile]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorProductListSerializer
 
@@ -351,7 +352,7 @@ class VendorLowStockView(ListAPIView):
     """
     Identifies products with inventory levels below the specified threshold.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsVendorWithProfile]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorProductListSerializer
 
@@ -371,7 +372,7 @@ class VendorTopSellingProductsView(ListAPIView):
     """
     Lists the Vendor's highest-grossing products.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsVendorWithProfile]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorProductListSerializer
 
@@ -396,7 +397,7 @@ class VendorOrderListView(ListAPIView):
     """
     Retrieves history of orders placed at the Vendor's store.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsVendorWithProfile]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorOrderListSerializer
 
@@ -422,7 +423,7 @@ class VendorOrderDetailView(RetrieveAPIView):
     """
     Granular details for a specific incoming order.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsVendorWithProfile]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorOrderDetailSerializer
     lookup_field = "id"
@@ -455,7 +456,7 @@ class VendorOrderStatusCountsView(GenericAPIView):
     """
     Provides counts of orders segmented by their current fulfillment status.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsVendorWithProfile]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorPaymentDistributionSerializer
 
@@ -479,7 +480,7 @@ class VendorReviewListView(ListAPIView):
     """
     Aggregates all reviews and ratings received across the entire catalog.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsVendorWithProfile]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorReviewListSerializer
 
@@ -501,7 +502,7 @@ class VendorReviewDetailView(RetrieveAPIView):
     """
     Specific review analysis and metadata.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsVendorWithProfile]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorReviewListSerializer
     lookup_field = "review_id"
@@ -540,7 +541,7 @@ class VendorCouponListView(ListAPIView):
     Query Params:
       active (bool): Filter by activation status.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsVendorWithProfile]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorCouponListSerializer
 

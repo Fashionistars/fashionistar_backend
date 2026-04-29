@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth.models import AnonymousUser
 from rest_framework.permissions import BasePermission
 
@@ -56,6 +57,23 @@ def _has_any_role(user, *roles: str) -> bool:
     """Check whether a user has any role from the provided set."""
 
     return has_any_role(_get_role(user), roles)
+
+
+def _get_reverse_relation_or_none(user, related_name: str):
+    """Return a reverse one-to-one relation when it exists, otherwise None."""
+
+    try:
+        return getattr(user, related_name)
+    except (AttributeError, ObjectDoesNotExist):
+        return None
+    except Exception as exc:  # noqa: BLE001
+        permission_logger.error(
+            "Error resolving reverse relation '%s' for %s: %s",
+            related_name,
+            getattr(user, "pk", "?"),
+            exc,
+        )
+        return None
 
 
 def _log_permission_result(user, *, label: str, granted: bool, async_mode: bool) -> None:
@@ -147,6 +165,50 @@ class IsClient(_RolePermission):
     allowed_roles = tuple(CLIENT_ROLES)
     role_label = "Client"
     message = "You must be a client to access this resource."
+
+
+class IsVendorWithProfile(_RolePermission):
+    """
+    Allow vendor-role users only after their VendorProfile exists.
+
+    Use ``IsVendor`` for onboarding/setup routes where the profile may not
+    exist yet. Use this permission for protected vendor workspaces and APIs
+    that dereference ``request.user.vendor_profile``.
+    """
+
+    allowed_roles = tuple(VENDOR_ROLES)
+    role_label = "VendorProfile"
+    message = "Vendor setup is required before accessing this resource."
+
+    def _user_has_permission(self, user) -> bool:
+        return bool(
+            _has_any_role(user, *self.allowed_roles)
+            and _get_reverse_relation_or_none(user, "vendor_profile") is not None
+        )
+
+
+class IsClientWithProfile(_RolePermission):
+    """
+    Allow client-role users only after their ClientProfile exists.
+
+    Client profile auto-provisioning should keep using ``IsClient``. Protected
+    client APIs that require ``request.user.client_profile`` should use this
+    stricter guard.
+    """
+
+    allowed_roles = tuple(CLIENT_ROLES)
+    role_label = "ClientProfile"
+    message = "Client profile setup is required before accessing this resource."
+
+    def _user_has_permission(self, user) -> bool:
+        return bool(
+            _has_any_role(user, *self.allowed_roles)
+            and _get_reverse_relation_or_none(user, "client_profile") is not None
+        )
+
+
+IsProvisionedVendor = IsVendorWithProfile
+IsProvisionedClient = IsClientWithProfile
 
 
 class IsSupport(_RolePermission):

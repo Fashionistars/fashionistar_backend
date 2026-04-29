@@ -23,7 +23,7 @@ from rest_framework.renderers import BrowsableAPIRenderer
 
 from apps.common.renderers import CustomJSONRenderer
 from apps.common.responses import success_response, error_response
-from apps.common.permissions import IsVendor
+from apps.common.permissions import IsVendor, IsVendorWithProfile
 from apps.vendor.selectors.vendor_selectors import (
     get_vendor_profile_or_none,
     get_vendor_setup_state,
@@ -62,7 +62,7 @@ class VendorProfileView(GenericAPIView):
       200 OK: Data returned/updated.
       404 Not Found: Profile missing (Setup required).
     """
-    permission_classes = [IsAuthenticated, IsVendor]
+    permission_classes = [IsAuthenticated, IsVendorWithProfile]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     
     def get_serializer_class(self):
@@ -170,7 +170,7 @@ class VendorPayoutView(GenericAPIView):
     Validation Logic:
       - Validates account number length and bank routing codes.
     """
-    permission_classes = [IsAuthenticated, IsVendor]
+    permission_classes = [IsAuthenticated, IsVendorWithProfile]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorPayoutDetailsSerializer
 
@@ -207,7 +207,7 @@ class VendorSetPinView(GenericAPIView):
     Validation Logic:
       - Enforces exactly 4 numeric digits.
     """
-    permission_classes = [IsAuthenticated, IsVendor]
+    permission_classes = [IsAuthenticated, IsVendorWithProfile]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorTransactionPinSerializer
 
@@ -231,7 +231,7 @@ class VendorVerifyPinView(GenericAPIView):
     Security:
       - Uses constant-time comparison to prevent timing attacks.
     """
-    permission_classes = [IsAuthenticated, IsVendor]
+    permission_classes = [IsAuthenticated, IsVendorWithProfile]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorTransactionPinSerializer
 
@@ -242,4 +242,3 @@ class VendorVerifyPinView(GenericAPIView):
         if not is_valid:
             return error_response(message="Invalid PIN.", code="invalid_pin", status=status.HTTP_401_UNAUTHORIZED)
         return success_response(message="PIN verified successfully.")
-

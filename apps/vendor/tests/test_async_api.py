@@ -70,3 +70,24 @@ def test_vendor_ninja_profile_rejects_client_token():
     response = _auth_client(user).get("/api/v1/ninja/vendor/profile/")
 
     assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_vendor_ninja_setup_allows_vendor_without_profile():
+    """Vendor setup reads should return the default onboarding state pre-profile."""
+
+    user = UnifiedUser.objects.create_user(
+        email="vendor.no-profile@fashionistar.test",
+        password="Password123!",
+        role=UnifiedUser.ROLE_VENDOR,
+        is_active=True,
+        is_verified=True,
+    )
+
+    response = _auth_client(user).get("/api/v1/ninja/vendor/setup/")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["current_step"] == 1
+    assert payload["profile_complete"] is False
+    assert payload["completion_percentage"] == 0

@@ -38,7 +38,7 @@ def _require_vendor_user(request):
     user = request.auth.user if hasattr(request.auth, "user") else request.auth
     if user is None or not is_vendor_role(getattr(user, "role", None)):
         raise HttpError(403, "Vendor access is required for this endpoint.")
-    return user.vendor_profile.user
+    return user
 
 
 # ── Dashboard ──────────────────────────────────────────────────────────────
@@ -141,7 +141,15 @@ async def get_vendor_setup_state_async(request):
     try:
         profile = await aget_vendor_profile_or_none(user)
         if profile is None:
-            raise HttpError(404, "Vendor setup is required before setup-state access.")
+            return SetupStateOut(
+                current_step=1,
+                profile_complete=False,
+                bank_details=False,
+                id_verified=False,
+                first_product=False,
+                onboarding_done=False,
+                completion_percentage=0,
+            )
         setup_state = await aget_vendor_setup_state_data(profile)
         return SetupStateOut(**setup_state)
     except HttpError:

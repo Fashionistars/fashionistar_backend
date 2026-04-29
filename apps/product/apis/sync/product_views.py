@@ -18,7 +18,7 @@ from rest_framework.views import APIView
 
 from apps.common.renderers import CustomJSONRenderer, error_response, success_response
 from apps.common.permissions import (
-    IsVendor, IsClient, IsVerifiedUser, IsAuthenticatedAndActive,
+    IsVendorWithProfile, IsClient, IsVerifiedUser, IsAuthenticatedAndActive,
 )
 from apps.product.models import Product, ProductGalleryMedia
 from apps.product.serializers import (
@@ -133,7 +133,7 @@ class VendorProductListCreateView(APIView):
     """
     renderer_classes = _RENDERERS
     parser_classes = _PARSERS
-    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsVendor]
+    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsVendorWithProfile]
 
     def get(self, request):
         vendor = request.user.vendor_profile
@@ -174,7 +174,7 @@ class VendorProductDetailView(APIView):
     """
     renderer_classes = _RENDERERS
     parser_classes = _PARSERS
-    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsVendor]
+    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsVendorWithProfile]
 
     def _get_product(self, request, slug):
         vendor = request.user.vendor_profile
@@ -233,7 +233,7 @@ class VendorProductPublishView(APIView):
     """POST /api/v1/products/vendor/<slug>/publish/ — Submit for review."""
     renderer_classes = _RENDERERS
     parser_classes = _PARSERS
-    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsVendor]
+    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsVendorWithProfile]
 
     def post(self, request, slug):
         vendor = request.user.vendor_profile
@@ -259,7 +259,7 @@ class VendorProductGalleryView(APIView):
     """
     renderer_classes = _RENDERERS
     parser_classes = _PARSERS
-    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsVendor]
+    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsVendorWithProfile]
 
     def _get_product(self, request, slug):
         vendor = request.user.vendor_profile
@@ -302,7 +302,7 @@ class VendorProductGalleryDeleteView(APIView):
     """DELETE /api/v1/products/vendor/<slug>/media/<gid>/"""
     renderer_classes = _RENDERERS
     parser_classes = _PARSERS
-    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsVendor]
+    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsVendorWithProfile]
 
     def delete(self, request, slug, gid):
         vendor = request.user.vendor_profile
@@ -411,7 +411,7 @@ class VendorCouponListCreateView(APIView):
     """
     renderer_classes = _RENDERERS
     parser_classes = _PARSERS
-    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsVendor]
+    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsVendorWithProfile]
 
     def get(self, request):
         vendor = request.user.vendor_profile

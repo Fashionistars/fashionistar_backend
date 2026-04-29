@@ -9,7 +9,7 @@ from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.renderers import BrowsableAPIRenderer
 
-from apps.common.permissions import IsVendor
+from apps.common.permissions import IsVendorWithProfile
 from apps.common.renderers import CustomJSONRenderer
 from apps.common.responses import error_response, success_response
 from apps.vendor.legacy_compat import LegacyCommerceUnavailable, get_legacy_store_model
@@ -40,7 +40,7 @@ def _commerce_unavailable_response(message: str):
 
 class VendorProductCreateView(generics.GenericAPIView):
     serializer_class = VendorProductSerializer
-    permission_classes = [IsAuthenticated, IsVendor]
+    permission_classes = [IsAuthenticated, IsVendorWithProfile]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     @transaction.atomic
@@ -74,7 +74,7 @@ class VendorProductCreateView(generics.GenericAPIView):
 
 class VendorProductUpdateView(generics.GenericAPIView):
     serializer_class = VendorProductSerializer
-    permission_classes = [IsAuthenticated, IsVendor]
+    permission_classes = [IsAuthenticated, IsVendorWithProfile]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     @transaction.atomic
@@ -119,7 +119,7 @@ class VendorProductUpdateView(generics.GenericAPIView):
 
 
 class VendorProductDeleteView(generics.GenericAPIView):
-    permission_classes = [IsAuthenticated, IsVendor]
+    permission_classes = [IsAuthenticated, IsVendorWithProfile]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     def delete(self, request, product_pid: str, *args, **kwargs):
@@ -156,7 +156,7 @@ class VendorProductDeleteView(generics.GenericAPIView):
 
 class VendorProductFilterView(generics.GenericAPIView):
     serializer_class = VendorProductListSerializer
-    permission_classes = [IsAuthenticated, IsVendor]
+    permission_classes = [IsAuthenticated, IsVendorWithProfile]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     def get(self, request, *args, **kwargs):
@@ -195,7 +195,7 @@ class VendorProductFilterView(generics.GenericAPIView):
 
 class VendorOrderStatusUpdateView(generics.GenericAPIView):
     serializer_class = VendorOrderStatusSerializer
-    permission_classes = [IsAuthenticated, IsVendor]
+    permission_classes = [IsAuthenticated, IsVendorWithProfile]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
 
     @transaction.atomic
