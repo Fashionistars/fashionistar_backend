@@ -205,17 +205,34 @@ async def _acheck_storage() -> dict[str, Any]:
 
 async def _acheck_email() -> dict[str, Any]:
     """Identify the configured email backend/provider (Non-blocking)."""
-    try:
-        email_backend = getattr(settings, "EMAIL_BACKEND", "")
-        if "anymail" in email_backend.lower():
-            provider = getattr(settings, "ANYMAIL", {}).get("ESP_NAME", "anymail")
-        elif "console" in email_backend.lower():
-            return {"status": "ok", "provider": "console (dev mode)"}
-        else:
-            provider = email_backend
-        return {"status": "ok", "provider": provider}
-    except Exception as exc:  # noqa: BLE001
-        return {"status": "warning", "error": str(exc)}
+    def _resolve_provider() -> dict[str, Any]:
+        try:
+            from apps.common.providers.SMTP import get_email_backend_label
+
+            email_backend = getattr(settings, "EMAIL_BACKEND", "")
+            if email_backend.endswith("DatabaseConfiguredEmailBackend"):
+                from apps.admin_backend.models import EmailBackendConfig
+
+                config = EmailBackendConfig.objects.only("email_backend").first()
+                if config:
+                    return {
+                        "status": "ok",
+                        "provider": get_email_backend_label(config.email_backend),
+                    }
+                return {"status": "warning", "provider": "database-configured (unset)"}
+
+            if "anymail" in email_backend.lower():
+                provider = getattr(settings, "ANYMAIL", {}).get("ESP_NAME")
+                return {"status": "ok", "provider": provider or get_email_backend_label(email_backend)}
+
+            if "console" in email_backend.lower():
+                return {"status": "ok", "provider": "console (dev mode)"}
+
+            return {"status": "ok", "provider": get_email_backend_label(email_backend)}
+        except Exception as exc:  # noqa: BLE001
+            return {"status": "warning", "error": str(exc)}
+
+    return await asyncio.to_thread(_resolve_provider)
 
 
 # ---------------------------------------------------------------------------

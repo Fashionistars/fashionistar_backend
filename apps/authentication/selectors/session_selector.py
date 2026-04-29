@@ -5,6 +5,10 @@ Session & Login Event Selectors — Read-only QuerySet logic.
 Architecture rule: No direct ORM calls in views. All read operations
 go through selectors. All write operations go through services.
 
+Important session behavior:
+  - ``UserSession.objects`` returns only active (non-revoked) sessions.
+  - ``UserSession.all_objects`` exposes revoked rows for audit/admin usage.
+
 Uses:
   - select_related() for FK relationships (user, session)
   - Proper ordering for security audit display
@@ -50,7 +54,7 @@ def get_active_sessions(
         limit: Maximum number of sessions to return. Default: 20.
 
     Returns:
-        QuerySet of UserSession instances, ordered by -last_used_at.
+        QuerySet of active UserSession instances, ordered by -last_used_at.
     """
     from apps.authentication.models import UserSession
 
@@ -81,9 +85,9 @@ def get_session_by_id(
 
     try:
         return (
-            UserSession.objects
-            .select_related('user')
-            .get(pk=session_id, user=user)
+        UserSession.objects
+        .select_related('user')
+        .get(pk=session_id, user=user)
         )
     except (UserSession.DoesNotExist, ValueError, TypeError):
         return None
@@ -95,7 +99,7 @@ def get_other_sessions(
     exclude_jti: str,
 ) -> QuerySet:
     """
-    Return all sessions for a user EXCEPT the one with ``exclude_jti``.
+    Return all active sessions for a user EXCEPT the one with ``exclude_jti``.
 
     Used by the "revoke all other devices" endpoint.
 

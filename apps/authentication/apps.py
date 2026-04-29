@@ -26,7 +26,7 @@ class AuthenticationConfig(AppConfig):
                 exclude_fields=['password', 'last_login'],
             )
             auditlog.register(LoginEvent)
-            auditlog.register(UserSession, exclude_fields=['token_jti'])
+            auditlog.register(UserSession, exclude_fields=['jti', 'fingerprint_hash'])
             auditlog.register(ClientProfile)
 
         except Exception:

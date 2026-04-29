@@ -1,702 +1,466 @@
 """
-Common permissions for the Fashionistar project.
+Shared permission classes for the Fashionistar platform.
 
-This module contains shared permission classes used across all Django apps
-to enforce access control in the modular monolith architecture. These permissions
-are designed to be async-compatible for future Django versions and include
-robust error handling and logging for maintainability.
+This module centralizes the most common RBAC checks used across the modular
+backend. The rules intentionally mirror ``UnifiedUser.ROLE_CHOICES`` so
+permission behavior stays aligned with the authentication domain.
 """
-# apps/common/permissions.py
-from rest_framework.permissions import BasePermission
-from django.contrib.auth.models import AnonymousUser
+
+from __future__ import annotations
+
 import logging
 
-# Get logger for permission-related logging
-permission_logger = logging.getLogger('permissions')
+from django.contrib.auth.models import AnonymousUser
+from rest_framework.permissions import BasePermission
+
+permission_logger = logging.getLogger("permissions")
 
 
-class IsVendor(BasePermission):
-    """
-    Permission class to check if the user is a vendor.
+def _get_user(request):
+    """Return the best-effort user object from the request."""
 
-    This permission ensures that only users with the 'vendor' role can access
-    vendor-specific endpoints. It includes async support and detailed logging
-    for security auditing.
+    return getattr(request, "user", None)
 
-    Message:
-        Default deny message for unauthorized access.
-    """
 
+def _is_authenticated_user(user) -> bool:
+    """Return True when the object is an authenticated Django user."""
+
+    return bool(
+        user
+        and not isinstance(user, AnonymousUser)
+        and getattr(user, "is_authenticated", False)
+    )
+
+
+def _get_role(user) -> str:
+    """Return the normalized role for a user-like object."""
+
+    return str(getattr(user, "role", "") or "").strip().lower()
+
+
+def _has_any_role(user, *roles: str) -> bool:
+    """Check whether a user has any role from the provided set."""
+
+    return _get_role(user) in {role.lower() for role in roles}
+
+
+def _log_permission_result(user, *, label: str, granted: bool, async_mode: bool) -> None:
+    """Emit a concise audit log for a role permission decision."""
+
+    identifier = getattr(user, "email", None) or getattr(user, "pk", "anonymous")
+    suffix = " (async)" if async_mode else ""
+    if granted:
+        permission_logger.info("%s access granted%s for %s", label, suffix, identifier)
+    else:
+        permission_logger.warning("%s access denied%s for %s", label, suffix, identifier)
+
+
+class _RolePermission(BasePermission):
+    """Base class for simple role-driven permission checks."""
+
+    allowed_roles: tuple[str, ...] = ()
+    role_label: str = "Role"
+
+    def _user_has_permission(self, user) -> bool:
+        return _has_any_role(user, *self.allowed_roles)
+
+    def has_permission(self, request, view) -> bool:
+        try:
+            user = _get_user(request)
+            if not _is_authenticated_user(user):
+                permission_logger.warning(
+                    "%s access denied for anonymous/unauthenticated request.",
+                    self.role_label,
+                )
+                return False
+
+            granted = self._user_has_permission(user)
+            _log_permission_result(
+                user,
+                label=self.role_label,
+                granted=granted,
+                async_mode=False,
+            )
+            return granted
+        except Exception as exc:  # noqa: BLE001
+            permission_logger.error(
+                "Error evaluating %s permission for %s: %s",
+                self.role_label,
+                getattr(request, "user", None),
+                exc,
+            )
+            return False
+
+    async def has_permission_async(self, request, view) -> bool:
+        try:
+            user = await request.auser() if hasattr(request, "auser") else _get_user(request)
+            if not _is_authenticated_user(user):
+                permission_logger.warning(
+                    "%s access denied (async) for anonymous/unauthenticated request.",
+                    self.role_label,
+                )
+                return False
+
+            granted = self._user_has_permission(user)
+            _log_permission_result(
+                user,
+                label=self.role_label,
+                granted=granted,
+                async_mode=True,
+            )
+            return granted
+        except Exception as exc:  # noqa: BLE001
+            permission_logger.error(
+                "Error evaluating %s permission (async) for %s: %s",
+                self.role_label,
+                getattr(request, "user", None),
+                exc,
+            )
+            return False
+
+
+class IsVendor(_RolePermission):
+    """Allow access to vendor and super-vendor accounts."""
+
+    allowed_roles = ("vendor", "super_vendor")
+    role_label = "Vendor"
     message = "You must be a vendor to access this resource."
 
-    def has_permission(self, request, view):
-        """
-        Check if the user has vendor permissions.
 
-        This method verifies the user's role and logs the access attempt
+class IsClient(_RolePermission):
+    """Allow access to client and super-client accounts."""
 
-        for security purposes.
-
-        Args:
-            request (Request): The HTTP request object.
-            view (View): The view being accessed.
-
-        Returns:
-            bool: True if the user is a vendor, False otherwise.
-        """
-        try:
-            user = request.user
-            if isinstance(user, AnonymousUser):
-                permission_logger.warning("Anonymous user attempted vendor access")
-                return False
-
-            is_vendor = getattr(user, 'role', None) == 'vendor'
-            if is_vendor:
-                permission_logger.info(f"Vendor access granted to user: {user}")
-            else:
-                permission_logger.warning(f"Non-vendor user {user} attempted vendor access")
-            return is_vendor
-        except Exception as e:
-            permission_logger.error(f"Error checking vendor permission for user {request.user}: {e}")
-            return False
-
-    async def has_permission_async(self, request, view):
-        """
-        Async version of has_permission for future Django async views.
-
-        This method provides the same functionality as has_permission but
-        is designed for async contexts to support high-performance APIs.
-
-        Args:
-            request (Request): The HTTP request object.
-            view (View): The view being accessed.
-
-        Returns:
-            bool: True if the user is a vendor, False otherwise.
-        """
-        try:
-            user = await request.auser() if hasattr(request, 'auser') else request.user
-            if isinstance(user, AnonymousUser):
-                permission_logger.warning("Anonymous user attempted vendor access (async)")
-                return False
-
-            is_vendor = getattr(user, 'role', None) == 'vendor'
-            if is_vendor:
-                permission_logger.info(f"Vendor access granted to user (async): {user}")
-            else:
-                permission_logger.warning(f"Non-vendor user {user} attempted vendor access (async)")
-            return is_vendor
-        except Exception as e:
-            permission_logger.error(f"Error checking vendor permission (async) for user {request.user}: {e}")
-            return False
-
-
-class IsClient(BasePermission):
-    """
-    Permission class to check if the user is a client/customer.
-
-    This permission restricts access to client-specific endpoints, ensuring
-    that only authenticated clients can perform customer-related actions.
-
-    Message:
-        Default deny message for unauthorized access.
-    """
-
+    allowed_roles = ("client", "super_client")
+    role_label = "Client"
     message = "You must be a client to access this resource."
 
-    def has_permission(self, request, view):
-        """
-        Check if the user has client permissions.
 
-        Args:
-            request (Request): The HTTP request object.
-            view (View): The view being accessed.
+class IsSupport(_RolePermission):
+    """Allow access to support and super-support accounts."""
 
-        Returns:
-            bool: True if the user is a client, False otherwise.
-        """
-        try:
-            user = request.user
-            if isinstance(user, AnonymousUser):
-                permission_logger.warning("Anonymous user attempted client access")
-                return False
+    allowed_roles = ("support", "super_support")
+    role_label = "Support"
+    message = "You must be support staff to access this resource."
 
-            is_client = getattr(user, 'role', None) == 'client'
-            if is_client:
-                permission_logger.info(f"Client access granted to user: {user}")
-            else:
-                permission_logger.warning(f"Non-client user {user} attempted client access")
-            return is_client
-        except Exception as e:
-            permission_logger.error(f"Error checking client permission for user {request.user}: {e}")
-            return False
 
-    async def has_permission_async(self, request, view):
-        """
-        Async version of has_permission.
+class IsEditor(_RolePermission):
+    """Allow access to editor-role users and compatibility reviewer aliases."""
 
-        Args:
-            request (Request): The HTTP request object.
-            view (View): The view being accessed.
+    allowed_roles = ("editor", "reviewer", "super_editor")
+    role_label = "Editor"
+    message = "You must be an editor to access this resource."
 
-        Returns:
-            bool: True if the user is a client, False otherwise.
-        """
-        try:
-            user = await request.auser() if hasattr(request, 'auser') else request.user
-            if isinstance(user, AnonymousUser):
-                permission_logger.warning("Anonymous user attempted client access (async)")
-                return False
 
-            is_client = getattr(user, 'role', None) == 'client'
-            if is_client:
-                permission_logger.info(f"Client access granted to user (async): {user}")
-            else:
-                permission_logger.warning(f"Non-client user {user} attempted client access (async)")
-            return is_client
-        except Exception as e:
-            permission_logger.error(f"Error checking client permission (async) for user {request.user}: {e}")
-            return False
+class IsSales(_RolePermission):
+    """Allow access to assistant/sales-role users."""
+
+    allowed_roles = ("assistant", "super_assistant")
+    role_label = "Sales"
+    message = "You must be sales staff to access this resource."
+
+
+class IsModerator(_RolePermission):
+    """Allow access to moderation users."""
+
+    allowed_roles = ("moderator", "super_moderator")
+    role_label = "Moderator"
+    message = "You must be a moderator to access this resource."
 
 
 class IsStaff(BasePermission):
-    """
-    Permission class to check if the user is staff (support, reviewer, etc.).
-
-    This permission allows access for internal staff roles, enabling
-    administrative functions while maintaining security.
-
-    Message:
-        Default deny message for unauthorized access.
-    """
+    """Allow access to all internal staff and privileged admin roles."""
 
     message = "You must be staff to access this resource."
 
-    def has_permission(self, request, view):
-        """
-        Check if the user has staff permissions.
+    staff_roles: tuple[str, ...] = (
+        "staff",
+        "super_staff",
+        "admin",
+        "super_admin",
+        "support",
+        "super_support",
+        "editor",
+        "reviewer",
+        "super_editor",
+        "assistant",
+        "super_assistant",
+        "moderator",
+        "super_moderator",
+    )
 
-        Args:
-            request (Request): The HTTP request object.
-            view (View): The view being accessed.
+    def _user_has_permission(self, user) -> bool:
+        return bool(getattr(user, "is_staff", False) or getattr(user, "is_superuser", False) or _has_any_role(user, *self.staff_roles))
 
-        Returns:
-            bool: True if the user is staff, False otherwise.
-        """
+    def has_permission(self, request, view) -> bool:
         try:
-            user = request.user
-            if isinstance(user, AnonymousUser):
-                permission_logger.warning("Anonymous user attempted staff access")
+            user = _get_user(request)
+            if not _is_authenticated_user(user):
+                permission_logger.warning(
+                    "Staff access denied for anonymous/unauthenticated request."
+                )
                 return False
 
-            staff_roles = ['support', 'reviewer', 'assistant', 'admin']
-            is_staff = getattr(user, 'role', None) in staff_roles
-            if is_staff:
-                permission_logger.info(f"Staff access granted to user: {user}")
-            else:
-                permission_logger.warning(f"Non-staff user {user} attempted staff access")
-            return is_staff
-        except Exception as e:
-            permission_logger.error(f"Error checking staff permission for user {request.user}: {e}")
+            granted = self._user_has_permission(user)
+            _log_permission_result(user, label="Staff", granted=granted, async_mode=False)
+            return granted
+        except Exception as exc:  # noqa: BLE001
+            permission_logger.error(
+                "Error checking staff permission for %s: %s",
+                getattr(request, "user", None),
+                exc,
+            )
             return False
 
-    async def has_permission_async(self, request, view):
-        """
-        Async version of has_permission.
-
-        Args:
-            request (Request): The HTTP request object.
-            view (View): The view being accessed.
-
-        Returns:
-            bool: True if the user is staff, False otherwise.
-        """
+    async def has_permission_async(self, request, view) -> bool:
         try:
-            user = await request.auser() if hasattr(request, 'auser') else request.user
-            if isinstance(user, AnonymousUser):
-                permission_logger.warning("Anonymous user attempted staff access (async)")
+            user = await request.auser() if hasattr(request, "auser") else _get_user(request)
+            if not _is_authenticated_user(user):
+                permission_logger.warning(
+                    "Staff access denied (async) for anonymous/unauthenticated request."
+                )
                 return False
 
-            staff_roles = ['support', 'reviewer', 'assistant', 'admin']
-            is_staff = getattr(user, 'role', None) in staff_roles
-            if is_staff:
-                permission_logger.info(f"Staff access granted to user (async): {user}")
-            else:
-                permission_logger.warning(f"Non-staff user {user} attempted staff access (async)")
-            return is_staff
-        except Exception as e:
-            permission_logger.error(f"Error checking staff permission (async) for user {request.user}: {e}")
+            granted = self._user_has_permission(user)
+            _log_permission_result(user, label="Staff", granted=granted, async_mode=True)
+            return granted
+        except Exception as exc:  # noqa: BLE001
+            permission_logger.error(
+                "Error checking staff permission (async) for %s: %s",
+                getattr(request, "user", None),
+                exc,
+            )
+            return False
+
+
+class IsAdminOrSuperuser(BasePermission):
+    """Allow access to admin-grade accounts and Django superusers."""
+
+    message = "You must be an admin to access this resource."
+
+    def _user_has_permission(self, user) -> bool:
+        return bool(
+            getattr(user, "is_superuser", False)
+            or _has_any_role(user, "admin", "super_admin")
+        )
+
+    def has_permission(self, request, view) -> bool:
+        try:
+            user = _get_user(request)
+            if not _is_authenticated_user(user):
+                permission_logger.warning(
+                    "Admin access denied for anonymous/unauthenticated request."
+                )
+                return False
+
+            granted = self._user_has_permission(user)
+            _log_permission_result(user, label="Admin", granted=granted, async_mode=False)
+            return granted
+        except Exception as exc:  # noqa: BLE001
+            permission_logger.error(
+                "Error checking admin permission for %s: %s",
+                getattr(request, "user", None),
+                exc,
+            )
+            return False
+
+    async def has_permission_async(self, request, view) -> bool:
+        try:
+            user = await request.auser() if hasattr(request, "auser") else _get_user(request)
+            if not _is_authenticated_user(user):
+                permission_logger.warning(
+                    "Admin access denied (async) for anonymous/unauthenticated request."
+                )
+                return False
+
+            granted = self._user_has_permission(user)
+            _log_permission_result(user, label="Admin", granted=granted, async_mode=True)
+            return granted
+        except Exception as exc:  # noqa: BLE001
+            permission_logger.error(
+                "Error checking admin permission (async) for %s: %s",
+                getattr(request, "user", None),
+                exc,
+            )
             return False
 
 
 class IsOwner(BasePermission):
-    """
-    Permission class to check if the user is the owner of the resource.
-
-    This permission is object-level and checks if the requesting user
-    owns the specific object being accessed.
-
-    Message:
-        Default deny message for unauthorized access.
-    """
+    """Object-level permission that restricts access to the owning user."""
 
     message = "You must be the owner of this resource to access it."
 
-    def has_object_permission(self, request, view, obj):
-        """
-        Check if the user owns the object.
-
-        This method assumes the object has a 'user' field or similar
-        owner relationship.
-
-        Args:
-            request (Request): The HTTP request object.
-            view (View): The view being accessed.
-            obj: The object being accessed.
-
-        Returns:
-            bool: True if the user owns the object, False otherwise.
-        """
+    def has_object_permission(self, request, view, obj) -> bool:
         try:
-            user = request.user
-            if isinstance(user, AnonymousUser):
-                permission_logger.warning("Anonymous user attempted owner access")
+            user = _get_user(request)
+            if not _is_authenticated_user(user):
+                permission_logger.warning("Owner access denied for anonymous request.")
                 return False
 
-            # Assuming obj has a 'user' field; adjust as needed
-            is_owner = getattr(obj, 'user', None) == user
-            if is_owner:
-                permission_logger.info(f"Owner access granted to user {user} for object {obj}")
-            else:
-                permission_logger.warning(f"Non-owner user {user} attempted access to object {obj}")
-            return is_owner
-        except Exception as e:
-            permission_logger.error(f"Error checking owner permission for user {request.user} on object {obj}: {e}")
+            granted = getattr(obj, "user", None) == user
+            _log_permission_result(user, label="Owner", granted=granted, async_mode=False)
+            return granted
+        except Exception as exc:  # noqa: BLE001
+            permission_logger.error(
+                "Error checking owner permission for %s on %s: %s",
+                getattr(request, "user", None),
+                obj,
+                exc,
+            )
             return False
 
-    async def has_object_permission_async(self, request, view, obj):
-        """
-        Async version of has_object_permission.
-
-        Args:
-            request (Request): The HTTP request object.
-            view (View): The view being accessed.
-            obj: The object being accessed.
-
-        Returns:
-            bool: True if the user owns the object, False otherwise.
-        """
+    async def has_object_permission_async(self, request, view, obj) -> bool:
         try:
-            user = await request.auser() if hasattr(request, 'auser') else request.user
-            if isinstance(user, AnonymousUser):
-                permission_logger.warning("Anonymous user attempted owner access (async)")
+            user = await request.auser() if hasattr(request, "auser") else _get_user(request)
+            if not _is_authenticated_user(user):
+                permission_logger.warning(
+                    "Owner access denied (async) for anonymous request."
+                )
                 return False
 
-            is_owner = getattr(obj, 'user', None) == user
-            if is_owner:
-                permission_logger.info(f"Owner access granted to user (async) {user} for object {obj}")
-            else:
-                permission_logger.warning(f"Non-owner user {user} attempted access (async) to object {obj}")
-            return is_owner
-        except Exception as e:
-            permission_logger.error(f"Error checking owner permission (async) for user {request.user} on object {obj}: {e}")
+            granted = getattr(obj, "user", None) == user
+            _log_permission_result(user, label="Owner", granted=granted, async_mode=True)
+            return granted
+        except Exception as exc:  # noqa: BLE001
+            permission_logger.error(
+                "Error checking owner permission (async) for %s on %s: %s",
+                getattr(request, "user", None),
+                obj,
+                exc,
+            )
             return False
 
-
-class IsSupport(BasePermission):
-    """
-    Permission class to check if the user is support staff.
-
-    This permission is specifically for support roles, allowing
-    customer service functions.
-
-    Message:
-        Default deny message for unauthorized access.
-    """
-
-    message = "You must be support staff to access this resource."
-
-    def has_permission(self, request, view):
-        """
-        Check if the user has support permissions.
-
-        Args:
-            request (Request): The HTTP request object.
-            view (View): The view being accessed.
-
-        Returns:
-            bool: True if the user is support, False otherwise.
-        """
-        try:
-            user = request.user
-            if isinstance(user, AnonymousUser):
-                permission_logger.warning("Anonymous user attempted support access")
-                return False
-
-            is_support = getattr(user, 'role', None) == 'support'
-            if is_support:
-                permission_logger.info(f"Support access granted to user: {user}")
-            else:
-                permission_logger.warning(f"Non-support user {user} attempted support access")
-            return is_support
-        except Exception as e:
-            permission_logger.error(f"Error checking support permission for user {request.user}: {e}")
-            return False
-
-    async def has_permission_async(self, request, view):
-        """
-        Async version of has_permission.
-
-        Args:
-            request (Request): The HTTP request object.
-            view (View): The view being accessed.
-
-        Returns:
-            bool: True if the user is support, False otherwise.
-        """
-        try:
-            user = await request.auser() if hasattr(request, 'auser') else request.user
-            if isinstance(user, AnonymousUser):
-                permission_logger.warning("Anonymous user attempted support access (async)")
-                return False
-
-            is_support = getattr(user, 'role', None) == 'support'
-            if is_support:
-                permission_logger.info(f"Support access granted to user (async): {user}")
-            else:
-                permission_logger.warning(f"Non-support user {user} attempted support access (async)")
-            return is_support
-        except Exception as e:
-            permission_logger.error(f"Error checking support permission (async) for user {request.user}: {e}")
-            return False
-
-
-class IsEditor(BasePermission):
-    """
-    Permission class to check if the user is an editor/reviewer.
-
-    This permission allows content editing and review functions.
-
-    Message:
-        Default deny message for unauthorized access.
-    """
-
-    message = "You must be an editor to access this resource."
-
-    def has_permission(self, request, view):
-        """
-        Check if the user has editor permissions.
-
-        Args:
-            request (Request): The HTTP request object.
-            view (View): The view being accessed.
-
-        Returns:
-            bool: True if the user is an editor, False otherwise.
-        """
-        try:
-            user = request.user
-            if isinstance(user, AnonymousUser):
-                permission_logger.warning("Anonymous user attempted editor access")
-                return False
-
-            is_editor = getattr(user, 'role', None) == 'reviewer'
-            if is_editor:
-                permission_logger.info(f"Editor access granted to user: {user}")
-            else:
-                permission_logger.warning(f"Non-editor user {user} attempted editor access")
-            return is_editor
-        except Exception as e:
-            permission_logger.error(f"Error checking editor permission for user {request.user}: {e}")
-            return False
-
-    async def has_permission_async(self, request, view):
-        """
-        Async version of has_permission.
-
-        Args:
-            request (Request): The HTTP request object.
-            view (View): The view being accessed.
-
-        Returns:
-            bool: True if the user is an editor, False otherwise.
-        """
-        try:
-            user = await request.auser() if hasattr(request, 'auser') else request.user
-            if isinstance(user, AnonymousUser):
-                permission_logger.warning("Anonymous user attempted editor access (async)")
-                return False
-
-            is_editor = getattr(user, 'role', None) == 'reviewer'
-            if is_editor:
-                permission_logger.info(f"Editor access granted to user (async): {user}")
-            else:
-                permission_logger.warning(f"Non-editor user {user} attempted editor access (async)")
-            return is_editor
-        except Exception as e:
-            permission_logger.error(f"Error checking editor permission (async) for user {request.user}: {e}")
-            return False
-
-
-class IsSales(BasePermission):
-    """
-    Permission class to check if the user is sales staff.
-
-    This permission allows sales-related functions and analytics.
-
-    Message:
-        Default deny message for unauthorized access.
-    """
-
-    message = "You must be sales staff to access this resource."
-
-    def has_permission(self, request, view):
-        """
-        Check if the user has sales permissions.
-
-        Args:
-            request (Request): The HTTP request object.
-            view (View): The view being accessed.
-
-        Returns:
-            bool: True if the user is sales, False otherwise.
-        """
-        try:
-            user = request.user
-            if isinstance(user, AnonymousUser):
-                permission_logger.warning("Anonymous user attempted sales access")
-                return False
-
-            is_sales = getattr(user, 'role', None) == 'assistant'
-            if is_sales:
-                permission_logger.info(f"Sales access granted to user: {user}")
-            else:
-                permission_logger.warning(f"Non-sales user {user} attempted sales access")
-            return is_sales
-        except Exception as e:
-            permission_logger.error(f"Error checking sales permission for user {request.user}: {e}")
-            return False
-
-    async def has_permission_async(self, request, view):
-        """
-        Async version of has_permission.
-
-        Args:
-            request (Request): The HTTP request object.
-            view (View): The view being accessed.
-
-        Returns:
-            bool: True if the user is sales, False otherwise.
-        """
-        try:
-            user = await request.auser() if hasattr(request, 'auser') else request.user
-            if isinstance(user, AnonymousUser):
-                permission_logger.warning("Anonymous user attempted sales access (async)")
-                return False
-
-            is_sales = getattr(user, 'role', None) == 'assistant'
-            if is_sales:
-                permission_logger.info(f"Sales access granted to user (async): {user}")
-            else:
-                permission_logger.warning(f"Non-sales user {user} attempted sales access (async)")
-            return is_sales
-        except Exception as e:
-            permission_logger.error(f"Error checking sales permission (async) for user {request.user}: {e}")
-            return False
-
-
-# =============================================================================
-# IsAuthenticatedAndActive
-# =============================================================================
 
 class IsAuthenticatedAndActive(BasePermission):
     """
-    Ensures the user is authenticated AND has an active account (is_active=True).
+    Ensure the request is authenticated and the account is active.
 
-    This is stricter than DRF's built-in `IsAuthenticated` which only checks
-    that a valid JWT was presented — it does NOT verify that the account has
-    been activated or hasn't been suspended by an admin.
-
-    Use this on any endpoint where a suspended user must be blocked
-    even if they hold a valid, non-expired JWT token.
-
-    Example:
-        class MyView(APIView):
-            permission_classes = [IsAuthenticatedAndActive]
+    This is stricter than DRF's built-in authentication check because it also
+    blocks suspended accounts carrying otherwise valid JWTs.
     """
 
     message = "Your account is inactive. Please contact support."
 
-    def has_permission(self, request, view):
+    def has_permission(self, request, view) -> bool:
         try:
-            user = request.user
-            if isinstance(user, AnonymousUser) or not user.is_authenticated:
+            user = _get_user(request)
+            if not _is_authenticated_user(user):
                 permission_logger.warning(
-                    "IsAuthenticatedAndActive: anonymous/unauthenticated request blocked."
+                    "IsAuthenticatedAndActive blocked anonymous/unauthenticated request."
                 )
                 return False
 
-            if not user.is_active:
+            if not getattr(user, "is_active", False):
                 permission_logger.warning(
-                    "IsAuthenticatedAndActive: inactive account '%s' blocked.",
-                    getattr(user, 'email', user.pk),
+                    "IsAuthenticatedAndActive blocked inactive account '%s'.",
+                    getattr(user, "email", getattr(user, "pk", "?")),
                 )
                 return False
 
             return True
-        except Exception as e:
+        except Exception as exc:  # noqa: BLE001
             permission_logger.error(
                 "IsAuthenticatedAndActive error for '%s': %s",
-                getattr(request.user, 'email', '?'), e,
+                getattr(request, "user", None),
+                exc,
             )
             return False
 
-    async def has_permission_async(self, request, view):
+    async def has_permission_async(self, request, view) -> bool:
         try:
-            user = await request.auser() if hasattr(request, 'auser') else request.user
-            if isinstance(user, AnonymousUser) or not user.is_authenticated:
+            user = await request.auser() if hasattr(request, "auser") else _get_user(request)
+            if not _is_authenticated_user(user):
                 return False
-            if not user.is_active:
+            if not getattr(user, "is_active", False):
                 permission_logger.warning(
-                    "IsAuthenticatedAndActive (async): inactive account '%s' blocked.",
-                    getattr(user, 'email', user.pk),
+                    "IsAuthenticatedAndActive blocked inactive account (async) '%s'.",
+                    getattr(user, "email", getattr(user, "pk", "?")),
                 )
                 return False
             return True
-        except Exception as e:
-            permission_logger.error("IsAuthenticatedAndActive async error: %s", e)
+        except Exception as exc:  # noqa: BLE001
+            permission_logger.error("IsAuthenticatedAndActive async error: %s", exc)
             return False
 
 
-# =============================================================================
-# IsVerifiedUser
-# =============================================================================
-
 class IsVerifiedUser(BasePermission):
-    """
-    The highest-trust permission gate for authenticated users.
-
-    Checks three conditions in strict order:
-      1. User is authenticated (valid JWT / session).
-      2. Account is active (is_active=True — not suspended).
-      3. Identity is verified (is_verified=True — OTP/email confirmed).
-
-    Use this on any endpoint that should be inaccessible to:
-      - Unauthenticated visitors
-      - Suspended users (is_active=False)
-      - Registered but unverified users (is_verified=False)
-
-    This mirrors the flow used by platforms like Binance and Coinbase where
-    OTP verification is a hard prerequisite for accessing account features.
-
-    Example:
-        class ChangePasswordView(APIView):
-            permission_classes = [IsVerifiedUser]
-    """
+    """Require authentication, an active account, and successful verification."""
 
     message = (
         "Your account is not yet verified. "
         "Please complete OTP verification to access this resource."
     )
 
-    def has_permission(self, request, view):
+    def has_permission(self, request, view) -> bool:
         try:
-            user = request.user
-            if isinstance(user, AnonymousUser) or not user.is_authenticated:
+            user = _get_user(request)
+            if not _is_authenticated_user(user):
+                permission_logger.warning("IsVerifiedUser blocked unauthenticated request.")
+                return False
+            if not getattr(user, "is_active", False):
                 permission_logger.warning(
-                    "IsVerifiedUser: unauthenticated request blocked."
+                    "IsVerifiedUser blocked inactive account '%s'.",
+                    getattr(user, "email", getattr(user, "pk", "?")),
                 )
                 return False
-
-            if not user.is_active:
+            if not getattr(user, "is_verified", False):
                 permission_logger.warning(
-                    "IsVerifiedUser: inactive account '%s' blocked.",
-                    getattr(user, 'email', user.pk),
+                    "IsVerifiedUser blocked unverified account '%s'.",
+                    getattr(user, "email", getattr(user, "pk", "?")),
                 )
                 return False
-
-            if not getattr(user, 'is_verified', False):
-                permission_logger.warning(
-                    "IsVerifiedUser: unverified account '%s' blocked.",
-                    getattr(user, 'email', user.pk),
-                )
-                return False
-
             return True
-        except Exception as e:
+        except Exception as exc:  # noqa: BLE001
             permission_logger.error(
                 "IsVerifiedUser error for '%s': %s",
-                getattr(request.user, 'email', '?'), e,
+                getattr(request, "user", None),
+                exc,
             )
             return False
 
-    async def has_permission_async(self, request, view):
+    async def has_permission_async(self, request, view) -> bool:
         try:
-            user = await request.auser() if hasattr(request, 'auser') else request.user
-            if isinstance(user, AnonymousUser) or not user.is_authenticated:
+            user = await request.auser() if hasattr(request, "auser") else _get_user(request)
+            if not _is_authenticated_user(user):
                 return False
-            if not user.is_active:
+            if not getattr(user, "is_active", False):
                 return False
-            if not getattr(user, 'is_verified', False):
+            if not getattr(user, "is_verified", False):
                 permission_logger.warning(
-                    "IsVerifiedUser (async): unverified account '%s' blocked.",
-                    getattr(user, 'email', user.pk),
+                    "IsVerifiedUser blocked unverified account (async) '%s'.",
+                    getattr(user, "email", getattr(user, "pk", "?")),
                 )
                 return False
             return True
-        except Exception as e:
-            permission_logger.error("IsVerifiedUser async error: %s", e)
+        except Exception as exc:  # noqa: BLE001
+            permission_logger.error("IsVerifiedUser async error: %s", exc)
             return False
 
 
-# =============================================================================
-# RateLimitPermission  (Redis-backed sliding window, per IP + per user)
-# =============================================================================
-
 class RateLimitPermission(BasePermission):
     """
-    Redis-backed, per-IP + per-authenticated-user sliding-window rate limiter.
+    Simple cache-backed sliding-window rate limiter.
 
-    Default: 100 requests / 3600 seconds (1 hour) per identity.
-
-    How it works:
-      - For anonymous requests  → keyed on IP address.
-      - For authenticated users → keyed on user PK (bypasses IP spoofing).
-      - Uses Redis INCR + EXPIRE in a pipeline for O(1) atomicity.
-      - No blocking I/O: falls back to ALLOW if Redis is unavailable
-        (fail-open strategy — never blocks legitimate users during cache outages).
-
-    Customise limits per view by subclassing::
-
-        class StrictRateLimit(RateLimitPermission):
-            max_requests = 10
-            window_seconds = 60
-
-    Example:
-        class LoginView(APIView):
-            permission_classes = [RateLimitPermission]
-
-    Attributes:
-        max_requests (int):    Maximum requests allowed in the window.
-        window_seconds (int):  Sliding window duration in seconds.
+    The implementation deliberately fails open when the cache backend is
+    unavailable so temporary infrastructure issues do not block legitimate
+    platform traffic.
     """
 
     max_requests: int = 100
     window_seconds: int = 3600
-
     message = "Too many requests. Please slow down and try again later."
 
     @staticmethod
     def _get_client_ip(request) -> str:
         """Extract the real client IP, respecting proxy headers."""
-        x_forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
+
+        x_forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
         if x_forwarded:
-            return x_forwarded.split(',')[0].strip()
-        return request.META.get('REMOTE_ADDR', '0.0.0.0')
+            return x_forwarded.split(",")[0].strip()
+        return request.META.get("REMOTE_ADDR", "0.0.0.0")
 
     def _get_cache_key(self, request) -> str:
-        user = getattr(request, 'user', None)
-        if user and user.is_authenticated:
+        user = getattr(request, "user", None)
+        if user and getattr(user, "is_authenticated", False):
             identity = f"user:{user.pk}"
         else:
             identity = f"ip:{self._get_client_ip(request)}"
@@ -707,65 +471,43 @@ class RateLimitPermission(BasePermission):
             from django.core.cache import cache
 
             cache_key = self._get_cache_key(request)
-
-            # Atomic increment using Django cache (backed by Redis)
-            current = cache.get(cache_key, 0)
-            current += 1
+            current = cache.get(cache_key, 0) + 1
             cache.set(cache_key, current, timeout=self.window_seconds)
 
             if current > self.max_requests:
                 permission_logger.warning(
-                    "RateLimitPermission: key='%s' hit limit (%d/%d).",
-                    cache_key, current, self.max_requests,
+                    "RateLimitPermission hit limit for key='%s' (%d/%d).",
+                    cache_key,
+                    current,
+                    self.max_requests,
                 )
                 return False
             return True
-        except Exception as e:
-            # Fail-open: never block on cache outage
-            permission_logger.error(
-                "RateLimitPermission error (fail-open): %s", e
-            )
+        except Exception as exc:  # noqa: BLE001
+            permission_logger.error("RateLimitPermission error (fail-open): %s", exc)
             return True
 
     async def has_permission_async(self, request, view) -> bool:
-        # Delegate to sync version via thread for Django cache safety
         import asyncio
+
         try:
             return await asyncio.to_thread(self.has_permission, request, view)
-        except Exception as e:
+        except Exception as exc:  # noqa: BLE001
             permission_logger.error(
-                "RateLimitPermission async error (fail-open): %s", e
+                "RateLimitPermission async error (fail-open): %s",
+                exc,
             )
             return True
 
 
-# =============================================================================
-# require_verification  —  Function/Method decorator
-# =============================================================================
-
 def require_verification(func):
-    """
-    Decorator for DRF view methods that enforces ``IsVerifiedUser`` inline.
+    """Apply ``IsVerifiedUser`` to an individual DRF view method."""
 
-    Use this on individual methods when you want different permissions
-    at the class level vs. the method level.
-
-    Usage (on a method inside a ViewSet or APIView)::
-
-        class UserProfileView(APIView):
-            permission_classes = [IsAuthenticated]  # general gate
-
-            @require_verification
-            def patch(self, request, *args, **kwargs):
-                # Only fully-verified users reach here
-                ...
-
-    The decorator adds ``IsVerifiedUser`` on top of whatever class-level
-    permissions are already enforced by DRF.
-    """
     from functools import wraps
-    from apps.common.renderers import error_response
+
     from rest_framework import status
+
+    from apps.common.renderers import error_response
 
     @wraps(func)
     def wrapper(self, request, *args, **kwargs):
@@ -774,9 +516,8 @@ def require_verification(func):
             return error_response(
                 message=permission.message,
                 status=status.HTTP_403_FORBIDDEN,
-                code="account_not_verified"
+                code="account_not_verified",
             )
         return func(self, request, *args, **kwargs)
 
     return wrapper
-
