@@ -2,9 +2,11 @@
 """
 ClientDashboardService — Aggregated analytics for the client dashboard.
 
-All reads go through optimized ORM queries (select_related + values()).
-No raw SQL. Designed for the async Ninja dashboard endpoint.
+All reads go through the selectors layer. Independent lookups are gathered
+concurrently so Ninja dashboard reads stay aligned with the read-async,
+write-sync architecture.
 """
+import asyncio
 import logging
 from typing import Any
 
@@ -28,13 +30,21 @@ class ClientDashboardService:
           - ai_recommendations stub (future)
         """
         try:
-            from apps.client.models import ClientProfile, ClientAddress
+            from apps.client.selectors.client_selectors import (
+                acount_client_addresses,
+                aget_client_profile_or_none,
+            )
+            from apps.client.services.client_provisioning_service import (
+                ClientProvisioningService,
+            )
 
-            # Async ORM fetch
-            profile = await ClientProfile.objects.select_related("user").aget(user=user)
-            address_count = await ClientAddress.objects.filter(
-                client=profile, is_deleted=False
-            ).acount()
+            profile = await aget_client_profile_or_none(user)
+            if profile is None:
+                profile = await ClientProvisioningService.aprovision(user)
+
+            address_count, = await asyncio.gather(
+                acount_client_addresses(profile),
+            )
 
             return {
                 "profile": {

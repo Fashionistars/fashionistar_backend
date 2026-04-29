@@ -4,27 +4,23 @@ Client Dashboard — Django-Ninja Async Router.
 
 Mounted at: /api/v1/ninja/client/
 
-Read handlers use native async ORM.
-Transaction-heavy writes stay in sync services and are called explicitly
-through a thread-pool bridge during transition. This avoids `sync_to_async`
-and keeps atomic write logic inside the existing sync service layer.
+This router is intentionally read-only. Transaction-heavy writes remain on
+the DRF sync surface under /api/v1/client/*.
 
 Authentication: JWT Bearer (via NinjaJWT or shared auth middleware).
 """
-import asyncio
-import functools
 import logging
 
 from ninja import Router
+from ninja.errors import HttpError
 
 from apps.client.services.client_dashboard_service import ClientDashboardService
-from apps.client.services.client_profile_service import ClientProfileService
 from apps.client.types.client_schemas import (
-    AddressIn,
+    AddressOut,
     DashboardOut,
     ProfileOut,
-    ProfileUpdateIn,
 )
+from apps.common.roles import is_client_role
 
 logger = logging.getLogger(__name__)
 
@@ -32,16 +28,13 @@ logger = logging.getLogger(__name__)
 # under the /api/v1/ninja/client/ prefix.
 router = Router(tags=["Client — Async Dashboard"])
 
+def _require_client_user(request):
+    """Return the authenticated client user or raise a 403 error."""
 
-def _run_sync(func, *args, **kwargs):
-    """
-    Execute a synchronous service method without `sync_to_async`.
-
-    This is only used for transitional sync write paths that still depend on
-    `transaction.atomic()` in the service layer.
-    """
-    loop = asyncio.get_running_loop()
-    return loop.run_in_executor(None, functools.partial(func, *args, **kwargs))
+    user = request.auth
+    if user is None or not is_client_role(getattr(user, "role", None)):
+        raise HttpError(403, "Client access is required for this endpoint.")
+    return user
 
 
 # ── Dashboard Summary ──────────────────────────────────────────────────
@@ -54,7 +47,7 @@ async def get_client_dashboard(request):
     Returns the complete dashboard payload for the authenticated client.
     Aggregates profile data, analytics, and AI recommendations.
     """
-    user = request.auth  # NinjaJWT sets request.auth to the user instance
+    user = _require_client_user(request)
     summary = await ClientDashboardService.get_dashboard_summary(user)
     return summary
 
@@ -69,26 +62,25 @@ async def get_client_profile_async(request):
     Async read of the client's own profile. Mirrors the sync endpoint
     but is served from the ASGI (Uvicorn) worker — higher throughput.
     """
-    from apps.client.selectors.client_selectors import aget_client_profile_or_none
+    from apps.client.selectors.client_selectors import (
+        aget_client_profile_or_none,
+        alist_client_addresses,
+    )
     from apps.client.services.client_provisioning_service import ClientProvisioningService
 
-    user = request.auth
+    user = _require_client_user(request)
     profile = await aget_client_profile_or_none(user)
     if profile is None:
         profile = await ClientProvisioningService.aprovision(user)
 
-    # Build addresses list
-    from apps.client.models import ClientAddress
-    addresses = [
-        addr async for addr in
-        ClientAddress.objects.filter(client=profile, is_deleted=False)
-        .order_by("-is_default", "-created_at")
-    ]
+    addresses = await alist_client_addresses(profile)
 
     return ProfileOut(
         id=profile.pk,
         user_id=str(user.pk),
+        user_email=getattr(user, "email", "") or "",
         bio=profile.bio,
+        default_shipping_address=profile.default_shipping_address,
         preferred_size=profile.preferred_size,
         style_preferences=profile.style_preferences,
         favourite_colours=profile.favourite_colours,
@@ -117,17 +109,18 @@ async def get_client_profile_async(request):
     )
 
 
-@router.patch("/profile/", response=ProfileOut)
-async def update_client_profile_async(request, payload: ProfileUpdateIn):
-    """
-    PATCH /api/v1/ninja/client/profile/
+@router.get("/addresses/", response=list[AddressOut])
+async def list_client_addresses_async(request):
+    """Return the authenticated client's saved addresses."""
 
-    Async partial update of the client profile.
-    Only sends fields that are not None.
-    """
-    user = request.auth
-    data = payload.dict(exclude_none=True)
+    from apps.client.selectors.client_selectors import (
+        aget_client_profile_or_none,
+        alist_client_addresses,
+    )
+    from apps.client.services.client_provisioning_service import ClientProvisioningService
 
-    profile = await _run_sync(ClientProfileService.update_profile, user=user, data=data)
-
-    return await get_client_profile_async(request)
+    user = _require_client_user(request)
+    profile = await aget_client_profile_or_none(user)
+    if profile is None:
+        profile = await ClientProvisioningService.aprovision(user)
+    return await alist_client_addresses(profile)

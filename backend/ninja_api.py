@@ -60,6 +60,10 @@ ninja_api = NinjaAPI(
 
 # ── Register Domain Routers ────────────────────────────────────────────────────
 
+# Common reference-data domain: /api/v1/ninja/common/
+from apps.common.apis.async_.reference_views import router as common_router
+ninja_api.add_router("/common/", common_router)
+
 # Client domain: /api/v1/ninja/client/
 from apps.client.apis.async_.dashboard_views import router as client_router
 ninja_api.add_router("/client/", client_router)

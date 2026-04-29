@@ -22,6 +22,8 @@ from typing import Optional
 from django.conf import settings
 from django.utils import timezone
 
+from apps.common.roles import is_client_role, is_staff_role, is_vendor_role
+
 logger = logging.getLogger(__name__)
 
 
@@ -185,11 +187,11 @@ def user_directory_path(instance, filename: str) -> str:
         role_folder = "general"
         if user and hasattr(user, "role") and user.role:
             role = str(user.role).lower()
-            if role in ("admin", "staff", "support", "reviewer", "assistant"):
+            if is_staff_role(role):
                 role_folder = "internal_staff"
-            elif role == "vendor":
+            elif is_vendor_role(role):
                 role_folder = "vendors"
-            elif role == "client":
+            elif is_client_role(role):
                 role_folder = "clients"
 
         # ── Safe filename ─────────────────────────────────────────────────

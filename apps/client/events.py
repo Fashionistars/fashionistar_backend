@@ -16,6 +16,8 @@ Events emitted (by services, not here):
 """
 import logging
 
+from apps.common.roles import is_client_role
+
 logger = logging.getLogger(__name__)
 
 
@@ -32,7 +34,7 @@ def _on_user_registered(
     access is never blocked by client-domain default provisioning.
     """
     try:
-        if role != "client":
+        if not is_client_role(role):
             return
 
         if not user_uuid:
@@ -64,7 +66,7 @@ def _on_user_verified(
     and mark the profile as active (is_profile_complete may be recalculated).
     """
     try:
-        if role != "client":
+        if not is_client_role(role):
             return
 
         if not user_uuid:

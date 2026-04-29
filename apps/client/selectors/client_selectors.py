@@ -1,13 +1,13 @@
 # apps/client/selectors/client_selectors.py
 """
-Client Domain Selectors — Read-only data fetching layer.
+Client domain selectors — read-only data fetching layer.
 
-Selectors encapsulate all database read queries for the client domain.
-They are imported by API views, never by services (services own writes).
-
-All public functions are synchronous; async variants (prefixed `a`) are
-provided for Ninja endpoints.
+Selectors encapsulate all database reads for the client domain. Sync
+selectors are used by DRF views; async selectors are used by Django-Ninja
+read endpoints. No selector mutates state.
 """
+from __future__ import annotations
+
 import logging
 from typing import Any
 
@@ -50,6 +50,24 @@ def list_client_addresses(user) -> "QuerySet":
     except Exception:
         from apps.client.models import ClientAddress
         return ClientAddress.objects.none()
+
+
+async def alist_client_addresses(profile) -> list["ClientAddress"]:  # noqa: F821
+    """Return active addresses for a profile ordered with default first."""
+
+    return [
+        address
+        async for address in profile.addresses.filter(is_deleted=False).order_by(
+            "-is_default",
+            "-created_at",
+        )
+    ]
+
+
+async def acount_client_addresses(profile) -> int:
+    """Return the number of active saved addresses for a profile."""
+
+    return await profile.addresses.filter(is_deleted=False).acount()
 
 
 def get_client_stats(user) -> dict[str, Any]:

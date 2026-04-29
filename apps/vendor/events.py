@@ -12,6 +12,8 @@ Events emitted (by services):
 """
 import logging
 
+from apps.common.roles import is_vendor_role
+
 logger = logging.getLogger(__name__)
 
 
@@ -24,7 +26,7 @@ def _on_user_verified(
     When a vendor completes verification, send setup/onboarding guidance.
     """
     try:
-        if role != "vendor":
+        if not is_vendor_role(role):
             return
 
         if not user_uuid:

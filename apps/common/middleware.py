@@ -46,6 +46,8 @@ import uuid
 
 from asgiref.sync import iscoroutinefunction, markcoroutinefunction
 
+from apps.common.roles import normalize_role
+
 logger = logging.getLogger(__name__)
 security_logger = logging.getLogger('security')
 
@@ -212,11 +214,14 @@ def _get_user_context(request) -> tuple:
     """
     try:
         user = getattr(request, 'user', None)
-        if user is None or not user.is_authenticated:
+        if user is None or not getattr(user, 'is_authenticated', False):
+            user = getattr(request, 'auth', None)
+        if user is None or not getattr(user, 'is_authenticated', False):
             return 'anonymous', 'anonymous'
         uid = str(getattr(user, 'pk', '?'))
-        role = getattr(user, 'role', None) or (
-            'superadmin' if getattr(user, 'is_superuser', False)
+        raw_role = getattr(user, 'role', None)
+        role = normalize_role(raw_role) or (
+            'super_admin' if getattr(user, 'is_superuser', False)
             else 'staff' if getattr(user, 'is_staff', False)
             else 'authenticated'
         )

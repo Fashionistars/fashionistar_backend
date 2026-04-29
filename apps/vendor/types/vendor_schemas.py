@@ -68,6 +68,7 @@ class CouponStatsOut(Schema):
 class VendorProfileOut(Schema):
     id:            UUID
     user_id:       str
+    user_email:    str
     store_name:    str
     store_slug:    str
     tagline:       str
@@ -82,9 +83,16 @@ class VendorProfileOut(Schema):
     tiktok_url:    str = ""
     twitter_url:   str = ""
     website_url:   str = ""
+    total_products: int = 0
+    total_sales:    int = 0
+    total_revenue:  float = 0.0
+    average_rating: float = 0.0
+    review_count:   int = 0
+    wallet_balance: float = 0.0
     is_verified:   bool
     is_active:     bool
     is_featured:   bool
+    setup_state:   SetupStateOut | None = None
 
 
 class VendorDashboardOut(Schema):

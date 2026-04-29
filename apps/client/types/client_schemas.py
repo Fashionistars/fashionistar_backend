@@ -33,7 +33,9 @@ class AddressOut(Schema):
 class ProfileOut(Schema):
     id:                         UUID
     user_id:                    str
+    user_email:                 str
     bio:                        str
+    default_shipping_address:   str
     preferred_size:             str
     style_preferences:          list[str]
     favourite_colours:          list[str]

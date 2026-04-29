@@ -13,6 +13,20 @@ import logging
 from django.contrib.auth.models import AnonymousUser
 from rest_framework.permissions import BasePermission
 
+from apps.common.roles import (
+    CLIENT_ROLES,
+    EDITOR_ROLES,
+    MODERATOR_ROLES,
+    SALES_ROLES,
+    STAFF_ROLES,
+    SUPPORT_ROLES,
+    VENDOR_ROLES,
+    has_any_role,
+    is_admin_role,
+    is_staff_role,
+    normalize_role,
+)
+
 permission_logger = logging.getLogger("permissions")
 
 
@@ -35,13 +49,13 @@ def _is_authenticated_user(user) -> bool:
 def _get_role(user) -> str:
     """Return the normalized role for a user-like object."""
 
-    return str(getattr(user, "role", "") or "").strip().lower()
+    return normalize_role(getattr(user, "role", ""))
 
 
 def _has_any_role(user, *roles: str) -> bool:
     """Check whether a user has any role from the provided set."""
 
-    return _get_role(user) in {role.lower() for role in roles}
+    return has_any_role(_get_role(user), roles)
 
 
 def _log_permission_result(user, *, label: str, granted: bool, async_mode: bool) -> None:
@@ -122,7 +136,7 @@ class _RolePermission(BasePermission):
 class IsVendor(_RolePermission):
     """Allow access to vendor and super-vendor accounts."""
 
-    allowed_roles = ("vendor", "super_vendor")
+    allowed_roles = tuple(VENDOR_ROLES)
     role_label = "Vendor"
     message = "You must be a vendor to access this resource."
 
@@ -130,7 +144,7 @@ class IsVendor(_RolePermission):
 class IsClient(_RolePermission):
     """Allow access to client and super-client accounts."""
 
-    allowed_roles = ("client", "super_client")
+    allowed_roles = tuple(CLIENT_ROLES)
     role_label = "Client"
     message = "You must be a client to access this resource."
 
@@ -138,7 +152,7 @@ class IsClient(_RolePermission):
 class IsSupport(_RolePermission):
     """Allow access to support and super-support accounts."""
 
-    allowed_roles = ("support", "super_support")
+    allowed_roles = tuple(SUPPORT_ROLES)
     role_label = "Support"
     message = "You must be support staff to access this resource."
 
@@ -146,7 +160,7 @@ class IsSupport(_RolePermission):
 class IsEditor(_RolePermission):
     """Allow access to editor-role users and compatibility reviewer aliases."""
 
-    allowed_roles = ("editor", "reviewer", "super_editor")
+    allowed_roles = tuple(EDITOR_ROLES)
     role_label = "Editor"
     message = "You must be an editor to access this resource."
 
@@ -154,7 +168,7 @@ class IsEditor(_RolePermission):
 class IsSales(_RolePermission):
     """Allow access to assistant/sales-role users."""
 
-    allowed_roles = ("assistant", "super_assistant")
+    allowed_roles = tuple(SALES_ROLES)
     role_label = "Sales"
     message = "You must be sales staff to access this resource."
 
@@ -162,7 +176,7 @@ class IsSales(_RolePermission):
 class IsModerator(_RolePermission):
     """Allow access to moderation users."""
 
-    allowed_roles = ("moderator", "super_moderator")
+    allowed_roles = tuple(MODERATOR_ROLES)
     role_label = "Moderator"
     message = "You must be a moderator to access this resource."
 
@@ -172,24 +186,14 @@ class IsStaff(BasePermission):
 
     message = "You must be staff to access this resource."
 
-    staff_roles: tuple[str, ...] = (
-        "staff",
-        "super_staff",
-        "admin",
-        "super_admin",
-        "support",
-        "super_support",
-        "editor",
-        "reviewer",
-        "super_editor",
-        "assistant",
-        "super_assistant",
-        "moderator",
-        "super_moderator",
-    )
+    staff_roles: tuple[str, ...] = tuple(STAFF_ROLES)
 
     def _user_has_permission(self, user) -> bool:
-        return bool(getattr(user, "is_staff", False) or getattr(user, "is_superuser", False) or _has_any_role(user, *self.staff_roles))
+        return bool(
+            getattr(user, "is_staff", False)
+            or getattr(user, "is_superuser", False)
+            or is_staff_role(_get_role(user))
+        )
 
     def has_permission(self, request, view) -> bool:
         try:
@@ -240,7 +244,7 @@ class IsAdminOrSuperuser(BasePermission):
     def _user_has_permission(self, user) -> bool:
         return bool(
             getattr(user, "is_superuser", False)
-            or _has_any_role(user, "admin", "super_admin")
+            or is_admin_role(_get_role(user))
         )
 
     def has_permission(self, request, view) -> bool:
