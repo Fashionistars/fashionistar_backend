@@ -1,0 +1,227 @@
+// {
+//     "version": "2.0.0",
+//     "tasks": [
+//         {
+//             "label": "Run Celery Worker",
+//             "type": "shell",
+//             "command": "celery -A backend worker -l info",
+//             "group": {
+//                 "kind": "build",
+//                 "isDefault": true
+//             },
+//             "problemMatcher": []
+//         },
+//         {
+//             "label": "Run Celery Beat",
+//             "type": "shell",
+//             "command": "celery -A backend beat -l info",
+//             "group": {
+//                 "kind": "build",
+//                 "isDefault": false
+//             },
+//             "problemMatcher": []
+//         }
+//     ]
+// }
+
+
+
+
+// celery -A backend worker --loglevel=info
+
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Run Celery Worker",
+            "type": "shell",
+            "command": "env\\Scripts\\activate && celery -A backend worker -l info",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [],
+            "options": {
+                "shell": {
+                    "executable": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+                }
+            }
+        },
+        {
+            "label": "Run Celery Beat",
+            "type": "shell",
+            "command": "env\\Scripts\\activate && celery -A backend beat -l info",
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "problemMatcher": [],
+            "options": {
+                "shell": {
+                    "executable": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+                }
+            }
+        }
+    ]
+}
+// celery -A backend worker --loglevel=info
+
+
+
+
+// celery -A backend worker --loglevel=info --pool=solo --time-limit=300
+
+
+// ANOTHER FUNCTIOHN TO TEST ALL MY SERIALIZERS AND API ENDPOINTS BEFORE I DEPLOY THEM ONLINE FOR PRODUCTION PLEASE MAKE SURE YOU DO SO BEFORE YOU DEPLY FOR PRODUCTION PLEASE
+// python manage.py check --deploy
+
+
+
+// I WILL MAKE USE OF YOU LATER TO WRITE EMAIL THREADING SENDING FOR ( REGISTRATIONS )
+// Database-backed queue: Implement a simple queue using your Django database. Tasks are put into a DB table and processed by the web server (if it has time) or a separate "management command" that you manually run. This is a very poor substitute for Celery.
+
+
+
+
+
+
+//  FOR DELETING ALL FILES INSIDE THE MIGRATION FOLDERS EXCEPT THE _INIT_.PY FILES AND ALSO CLEARING ALL THE PYCACHE IN ALL THE DJANGO REGISTERED APPS\
+
+
+
+
+
+// # Delete database (if using SQLite)
+// rm db.sqlite3
+
+
+
+
+
+
+
+
+// # Delete all migration files except __init__.py
+// find . -path "*/migrations/*.py" -not -name "__init__.py" -delete
+// find . -path "*/migrations/*.pyc" -delete
+
+
+// # Clear all pycache directories
+// find . -type d -name "__pycache__" -exec rm -r {} +
+
+
+// pip uninstall Django
+// pip install Django==5.1.7
+
+
+// # Create fresh initial migrations
+// python manage.py makemigrations
+
+
+// # Apply all migrations
+// python manage.py migrate
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Let's resolve this migration dependency hell once and for all with a complete reset. Follow these steps carefully:
+
+// 1. Nuclear Reset (Clean Slate)
+// bash
+// Copy
+// # Delete database (if using SQLite)
+// rm db.sqlite3
+
+// # Delete all migration files except __init__.py
+// find . -path "*/migrations/*.py" -not -name "__init__.py" -delete
+// find . -path "*/migrations/*.pyc" -delete
+
+// # Clear all pycache directories
+// find . -type d -name "__pycache__" -exec rm -r {} +
+// 2. Regenerate Fresh Migrations
+// bash
+// Copy
+// # Create fresh initial migrations
+// python manage.py makemigrations
+
+// # Apply all migrations
+// python manage.py migrate
+// 3. Verify the Fix
+// bash
+// Copy
+// # Check migration status
+// python manage.py showmigrations
+
+// # Test creating new migrations
+// python manage.py makemigrations --check
+// Why This Works:
+// Complete Dependency Reset - Removes all historical migration references
+
+// Clean Database State - Ensures schema matches new migration structure
+
+// Atomic Recreation - Generates fresh dependency chain across all apps
+
+// If You Need to Preserve Data:
+// Create database backup first:
+
+// bash
+// Copy
+// python manage.py dumpdata > datadump.json
+// After reset, reload data:
+
+// bash
+// Copy
+// python manage.py loaddata datadump.json
+// This approach guarantees resolution of circular migration dependencies by starting with a clean slate while maintaining your data integrity.
+
+
+
+
+
+
+

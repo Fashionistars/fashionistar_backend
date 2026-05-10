@@ -1,0 +1,21 @@
+FASHIONISTAR — {{ subject|default:"Notification" }}
+================================================================
+Nigeria's Premier AI-Powered Fashion Marketplace
+fashionistar.net
+================================================================
+
+{% block content %}
+{% endblock %}
+
+----------------------------------------------------------------
+This email was sent by Fashionistar. If you did not request this,
+please ignore this email or contact support at:
+https://fashionistar.net/support/
+
+© 2026 Fashionistar Ltd. All rights reserved.
+Lagos, Nigeria | fashionistar.net
+
+Privacy Policy: https://fashionistar.net/privacy/
+Terms of Service: https://fashionistar.net/terms/
+Unsubscribe: https://fashionistar.net/unsubscribe/
+----------------------------------------------------------------

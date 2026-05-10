@@ -1,0 +1,1101 @@
+============================= test session starts =============================
+collected 155 items
+
+apps/authentication/tests/integration/test_login_endpoint.py::TestLoginHappyPath::test_email_login_returns_200 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d6-f701-7b78-b760-5b1100832cd9 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth \u2014 \u2705 LoginSerializer: valid credentials for 'verified@fashionistar.io'\n[INFO    ] apps.authentication.models — Details updated for user: verified@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d6-f701-7b78-b760-5b1100832cd9 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 LoginView: login successful for verified@fashionistar.io (id=019d20d6-f701-7b78-b760-5b1100832cd9 role=client)\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/login/ \u2192 200 in 3206.1ms [req=728948d4-09e9-438e-8c18-0b2010ef6872]\nPASSED                                                                   [  0%]
+apps/authentication/tests/integration/test_login_endpoint.py::TestLoginHappyPath::test_response_has_flat_access_token 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-08da-7508-b22f-fcab95b88ba3 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth \u2014 \u2705 LoginSerializer: valid credentials for 'verified@fashionistar.io'\n[INFO    ] apps.authentication.models — Details updated for user: verified@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-08da-7508-b22f-fcab95b88ba3 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 LoginView: login successful for verified@fashionistar.io (id=019d20d7-08da-7508-b22f-fcab95b88ba3 role=client)\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/login/ \u2192 200 in 2469.1ms [req=0fa2601f-8421-4298-ae26-c651b45a0b60]\nPASSED                                                                   [  1%]
+apps/authentication/tests/integration/test_login_endpoint.py::TestLoginHappyPath::test_response_has_flat_refresh_token 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-1852-7ce5-bcc0-336884362f4b [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth \u2014 \u2705 LoginSerializer: valid credentials for 'verified@fashionistar.io'\n[INFO    ] apps.authentication.models — Details updated for user: verified@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-1852-7ce5-bcc0-336884362f4b [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 LoginView: login successful for verified@fashionistar.io (id=019d20d7-1852-7ce5-bcc0-336884362f4b role=client)\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/login/ \u2192 200 in 1916.0ms [req=aff46c9b-cfe0-4e18-a406-fe53ff655913]\nPASSED                                                                   [  1%]
+apps/authentication/tests/integration/test_login_endpoint.py::TestLoginHappyPath::test_response_has_user_id 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-24d8-7e04-8ae8-6f78acc3ae1d [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth \u2014 \u2705 LoginSerializer: valid credentials for 'verified@fashionistar.io'\n[INFO    ] apps.authentication.models — Details updated for user: verified@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-24d8-7e04-8ae8-6f78acc3ae1d [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 LoginView: login successful for verified@fashionistar.io (id=019d20d7-24d8-7e04-8ae8-6f78acc3ae1d role=client)\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/login/ \u2192 200 in 2297.0ms [req=d92a9508-49a8-4ce5-b0c2-747b0da0ad86]\nPASSED                                                                   [  2%]
+apps/authentication/tests/integration/test_login_endpoint.py::TestLoginHappyPath::test_response_has_role 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-3198-7482-a3f6-fdd36b7756fd [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth \u2014 \u2705 LoginSerializer: valid credentials for 'verified@fashionistar.io'\n[INFO    ] apps.authentication.models — Details updated for user: verified@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-3198-7482-a3f6-fdd36b7756fd [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 LoginView: login successful for verified@fashionistar.io (id=019d20d7-3198-7482-a3f6-fdd36b7756fd role=client)\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/login/ \u2192 200 in 2037.1ms [req=850c9ae0-c945-4fc8-a91b-9f39c8cae870]\nPASSED                                                                   [  3%]
+apps/authentication/tests/integration/test_login_endpoint.py::TestLoginHappyPath::test_response_has_identifying_info 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-3db8-7baf-bc74-367371c06b77 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth \u2014 \u2705 LoginSerializer: valid credentials for 'verified@fashionistar.io'\n[INFO    ] apps.authentication.models — Details updated for user: verified@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-3db8-7baf-bc74-367371c06b77 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 LoginView: login successful for verified@fashionistar.io (id=019d20d7-3db8-7baf-bc74-367371c06b77 role=client)\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/login/ \u2192 200 in 2124.5ms [req=56a5b60c-1088-4a9e-91aa-5f2cf200203a]\nPASSED                                                                   [  3%]
+apps/authentication/tests/integration/test_login_endpoint.py::TestLoginHappyPath::test_response_has_message 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-4a53-7576-a439-6ca494b753f9 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth \u2014 \u2705 LoginSerializer: valid credentials for 'verified@fashionistar.io'\n[INFO    ] apps.authentication.models — Details updated for user: verified@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-4a53-7576-a439-6ca494b753f9 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 LoginView: login successful for verified@fashionistar.io (id=019d20d7-4a53-7576-a439-6ca494b753f9 role=client)\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/login/ \u2192 200 in 2501.9ms [req=220d1c8a-7413-4974-867a-6657b6c12bed]\nPASSED                                                                   [  4%]
+apps/authentication/tests/integration/test_login_endpoint.py::TestLoginHappyPath::test_access_token_is_valid_jwt_format 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-58ec-7d27-b52f-8b763044dcdc [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth \u2014 \u2705 LoginSerializer: valid credentials for 'verified@fashionistar.io'\n[INFO    ] apps.authentication.models — Details updated for user: verified@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-58ec-7d27-b52f-8b763044dcdc [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 LoginView: login successful for verified@fashionistar.io (id=019d20d7-58ec-7d27-b52f-8b763044dcdc role=client)\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/login/ \u2192 200 in 2322.2ms [req=bc1f4463-8e90-4f4c-be2d-1a92e4cd232a]\nPASSED                                                                   [  5%]
+apps/authentication/tests/integration/test_login_endpoint.py::TestLoginHappyPath::test_no_tokens_nested_key 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-6761-705a-b856-4b5837a9269a [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth \u2014 \u2705 LoginSerializer: valid credentials for 'verified@fashionistar.io'\n[INFO    ] apps.authentication.models — Details updated for user: verified@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-6761-705a-b856-4b5837a9269a [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 LoginView: login successful for verified@fashionistar.io (id=019d20d7-6761-705a-b856-4b5837a9269a role=client)\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/login/ \u2192 200 in 2358.4ms [req=97fdbb6f-27f4-404c-b85f-6bce85f7182c]\nPASSED                                                                   [  5%]
+apps/authentication/tests/integration/test_login_endpoint.py::TestLoginFailures::test_wrong_password_returns_400 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-762e-79b5-956b-de63b9375f77 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.serializers.auth \u2014 \u26d4 Login failed: wrong password for 'verified@fashionistar.io'\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/login/ \u2192 401 in 1237.4ms [req=ec0ad540-12be-46fe-83b0-c38fb7da4ee8]\nFAILED                                                                   [  6%]
+apps/authentication/tests/integration/test_login_endpoint.py::TestLoginFailures::test_wrong_password_has_no_tokens 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-83ad-7bec-9b9f-3906eb5a74dd [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.serializers.auth \u2014 \u26d4 Login failed: wrong password for 'verified@fashionistar.io'\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/login/ \u2192 401 in 1237.4ms [req=b7b941ad-a96c-4ec1-91d8-1b7f81cef23a]\nPASSED                                                                   [  7%]
+apps/authentication/tests/integration/test_login_endpoint.py::TestLoginFailures::test_nonexistent_user_returns_400 
+-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.serializers.auth \u2014 \u26d4 Login failed: user not found 'nobody@nowhere.com'\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/login/ \u2192 401 in 11.3ms [req=0d679b3e-5557-4b16-8d5e-2a7ab390523d]\nFAILED                                                                   [  7%]
+apps/authentication/tests/integration/test_login_endpoint.py::TestLoginFailures::test_unverified_user_returns_error 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-8de6-7359-95bb-0758043002c4 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=registered@fashionistar.io\n-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.serializers.auth \u2014 \u26d4 Login rejected: account not verified 'registered@fashionistar.io'\n[WARNING ] apps.authentication.apis.auth_views.sync_views \u2014 \u26d4 LoginView: unverified account attempt \u2014 registered@fashionistar.io\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/login/ \u2192 403 in 1167.4ms [req=8f6c8cb6-11a3-4bc3-a9aa-e266946fe7be]\nPASSED                                                                   [  8%]
+apps/authentication/tests/integration/test_login_endpoint.py::TestLoginFailures::test_empty_payload_returns_400 
+-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.apis.auth_views.sync_views \u2014 \u26a0\ufe0f LoginView validation error: {'email_or_phone': [ErrorDetail(string='This field is required.', code='required')], 'password': [ErrorDetail(string='This field is required.', code='required')]}\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/login/ \u2192 400 in 5.2ms [req=9d3c8294-7b65-4e7f-a5f7-83ea614fcc7a]\nPASSED                                                                   [  9%]
+apps/authentication/tests/integration/test_login_endpoint.py::TestLoginFailures::test_missing_password_returns_400 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-98ae-7a8f-8c56-fcb803309c95 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.apis.auth_views.sync_views \u2014 \u26a0\ufe0f LoginView validation error: {'password': [ErrorDetail(string='This field is required.', code='required')]}\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/login/ \u2192 400 in 2.8ms [req=8ccca259-7df4-47cd-b3fb-edc5b74cedcf]\nPASSED                                                                   [  9%]
+apps/authentication/tests/integration/test_login_endpoint.py::TestLoginFailures::test_missing_email_or_phone_returns_400 
+-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.apis.auth_views.sync_views \u2014 \u26a0\ufe0f LoginView validation error: {'email_or_phone': [ErrorDetail(string='This field is required.', code='required')]}\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/login/ \u2192 400 in 2.1ms [req=591855b6-ea0c-43ed-97bd-08daabbdf0cc]\nPASSED                                                                   [ 10%]
+apps/authentication/tests/integration/test_login_endpoint.py::TestLogout::test_logout_blacklists_token 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-9e21-7dea-bd53-4dc70679d23b [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.apis.auth_views.sync_views — Logout: refresh token blacklisted — user_id=019d20d7-9e21-7dea-bd53-4dc70679d23b
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/logout/ \u2192 200 in 17.2ms [req=0cb4527b-946c-493a-8e79-b31f6c283b61]\nPASSED                                                                   [ 10%]
+apps/authentication/tests/integration/test_login_endpoint.py::TestLogout::test_logout_without_refresh_token_returns_400 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-a30e-74e3-9f37-cc1b0e5418e9 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/logout/ \u2192 400 in 3.9ms [req=67386a61-9636-4bfa-adf3-f413822aa1d5]\nPASSED                                                                   [ 11%]
+apps/authentication/tests/integration/test_login_endpoint.py::TestLogout::test_double_logout_returns_400 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-a7ce-784b-9247-d46ffbe38f05 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.apis.auth_views.sync_views — Logout: refresh token blacklisted — user_id=019d20d7-a7ce-784b-9247-d46ffbe38f05
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/logout/ \u2192 200 in 10.2ms [req=c29dc3e8-e161-42f1-92a5-768d47ba1122]\n[WARNING ] apps.authentication.apis.auth_views.sync_views — LogoutView TokenError user_id=019d20d7-a7ce-784b-9247-d46ffbe38f05: Token is blacklisted
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/logout/ \u2192 400 in 7.0ms [req=bfda381c-146d-466c-ba6f-72d2b33c9ae0]\nPASSED                                                                   [ 12%]
+apps/authentication/tests/integration/test_login_endpoint.py::TestLogout::test_logout_requires_authentication 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/logout/ \u2192 401 in 2.4ms [req=237e791f-b067-4cff-a577-2e391513c65a]\nPASSED                                                                   [ 12%]
+apps/authentication/tests/integration/test_resend_otp_endpoint.py::TestResendOTPHappyPath::test_valid_email_resend_returns_200 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-ac7a-72a6-9cd3-2a16ff5fa699 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=registered@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.otp — ResendOTP validation successful for registered@fashionistar.io
+[INFO    ] apps.authentication.services.otp.sync_service \u2014 \U0001f4e7 OTP resend email scheduled on_commit \u2192 Celery [user_id=019d20d7-ac7a-72a6-9cd3-2a16ff5fa699 email=registered@fashionistar.io]\n[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 OTP resent for: registered@fashionistar.io\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/resend-otp/ \u2192 200 in 7.0ms [req=cee65ed5-1e45-49c6-a299-c8e473519e9b]\nPASSED                                                                   [ 13%]
+apps/authentication/tests/integration/test_resend_otp_endpoint.py::TestResendOTPHappyPath::test_response_has_message_field 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-b0cb-7eeb-82cf-e0696d100ff0 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=registered@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.otp — ResendOTP validation successful for registered@fashionistar.io
+[INFO    ] apps.authentication.services.otp.sync_service \u2014 \U0001f4e7 OTP resend email scheduled on_commit \u2192 Celery [user_id=019d20d7-b0cb-7eeb-82cf-e0696d100ff0 email=registered@fashionistar.io]\n[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 OTP resent for: registered@fashionistar.io\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/resend-otp/ \u2192 200 in 9.3ms [req=63572ec6-ebc9-44af-a822-1561c28f7b50]\nPASSED                                                                   [ 14%]
+apps/authentication/tests/integration/test_resend_otp_endpoint.py::TestResendOTPHappyPath::test_response_is_generic_non_enumerable 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-b537-739c-8356-3403d085a671 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=registered@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.otp — ResendOTP validation successful for registered@fashionistar.io
+[INFO    ] apps.authentication.services.otp.sync_service \u2014 \U0001f4e7 OTP resend email scheduled on_commit \u2192 Celery [user_id=019d20d7-b537-739c-8356-3403d085a671 email=registered@fashionistar.io]\n[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 OTP resent for: registered@fashionistar.io\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/resend-otp/ \u2192 200 in 5.3ms [req=88ab0f20-5f89-45c6-9819-57bb3ef5ee82]\nPASSED                                                                   [ 14%]
+apps/authentication/tests/integration/test_resend_otp_endpoint.py::TestResendOTPHappyPath::test_otp_service_resend_called 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-ba66-7771-ae87-2281f37833ba [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=registered@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.otp — ResendOTP validation successful for registered@fashionistar.io
+[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 OTP resent for: registered@fashionistar.io\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/resend-otp/ \u2192 200 in 2.7ms [req=6fba9d63-04c0-419d-b3f8-ee8294e1fc6c]\nPASSED                                                                   [ 15%]
+apps/authentication/tests/integration/test_resend_otp_endpoint.py::TestResendOTPErrors::test_nonexistent_email_returns_400 
+-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.serializers.otp — ResendOTP validation failed: no user for 'ghost@nobody.io'
+[WARNING ] apps.authentication.apis.auth_views.sync_views \u2014 \u26a0\ufe0f ResendOTPView validation error: {'email_or_phone': [ErrorDetail(string='No account found with this email or phone. Please check your input or register a new account.', code='invalid')]}\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/resend-otp/ \u2192 400 in 6.5ms [req=9bc3200a-ebb2-4384-b335-18ed6022dfb2]\nPASSED                                                                   [ 16%]
+apps/authentication/tests/integration/test_resend_otp_endpoint.py::TestResendOTPErrors::test_missing_email_or_phone_field_returns_400 
+-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.apis.auth_views.sync_views \u2014 \u26a0\ufe0f ResendOTPView validation error: {'email_or_phone': [ErrorDetail(string='This field is required.', code='required')]}\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/resend-otp/ \u2192 400 in 4.7ms [req=811898da-54e0-4a9f-a7fa-75bb4db8dd2c]\nPASSED                                                                   [ 16%]
+apps/authentication/tests/integration/test_resend_otp_endpoint.py::TestResendOTPErrors::test_invalid_email_format_returns_400 
+-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.serializers.otp — ResendOTP validation failed: no user for 'not-an-email-or-phone'
+[WARNING ] apps.authentication.apis.auth_views.sync_views \u2014 \u26a0\ufe0f ResendOTPView validation error: {'email_or_phone': [ErrorDetail(string='No account found with this email or phone. Please check your input or register a new account.', code='invalid')]}\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/resend-otp/ \u2192 400 in 4.9ms [req=ffbda9e7-bbb2-4b47-a13e-ecbd8de60e77]\nPASSED                                                                   [ 17%]
+apps/authentication/tests/integration/test_verify_otp_endpoint.py::TestVerifyOTPHappyPath::test_valid_otp_returns_200 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-c02a-7177-bf01-0cabe5c9e0f9 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=registered@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth — OTP validation successful.
+[INFO    ] apps.authentication.models — Details updated for user: registered@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-c02a-7177-bf01-0cabe5c9e0f9 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 Account verified: id=019d20d7-c02a-7177-bf01-0cabe5c9e0f9 identifier=registered@fashionistar.io\n[INFO    ] apps.authentication.models — Details updated for user: registered@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-c02a-7177-bf01-0cabe5c9e0f9 [email] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/verify-otp/ \u2192 200 in 36.1ms [req=57eef904-0ab7-4840-89d3-c91abf9a5d87]\nPASSED                                                                   [ 18%]
+apps/authentication/tests/integration/test_verify_otp_endpoint.py::TestVerifyOTPHappyPath::test_response_contains_access_token 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-c5f3-71fe-8d97-bc4e834e8831 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=registered@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth — OTP validation successful.
+[INFO    ] apps.authentication.models — Details updated for user: registered@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-c5f3-71fe-8d97-bc4e834e8831 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 Account verified: id=019d20d7-c5f3-71fe-8d97-bc4e834e8831 identifier=registered@fashionistar.io\n[INFO    ] apps.authentication.models — Details updated for user: registered@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-c5f3-71fe-8d97-bc4e834e8831 [email] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/verify-otp/ \u2192 200 in 42.9ms [req=6217fd83-7779-44be-be26-463662a7775a]\nPASSED                                                                   [ 18%]
+apps/authentication/tests/integration/test_verify_otp_endpoint.py::TestVerifyOTPHappyPath::test_response_contains_refresh_token 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-cdae-7bfb-8054-4331bda1d84f [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=registered@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth — OTP validation successful.
+[INFO    ] apps.authentication.models — Details updated for user: registered@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-cdae-7bfb-8054-4331bda1d84f [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 Account verified: id=019d20d7-cdae-7bfb-8054-4331bda1d84f identifier=registered@fashionistar.io\n[INFO    ] apps.authentication.models — Details updated for user: registered@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-cdae-7bfb-8054-4331bda1d84f [email] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/verify-otp/ \u2192 200 in 61.2ms [req=1ef23fec-a17d-4db3-a446-f6463184bde7]\nPASSED                                                                   [ 19%]
+apps/authentication/tests/integration/test_verify_otp_endpoint.py::TestVerifyOTPHappyPath::test_response_contains_user_id 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-d409-7ba2-a1a4-3d4edd9a5928 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=registered@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth — OTP validation successful.
+[INFO    ] apps.authentication.models — Details updated for user: registered@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-d409-7ba2-a1a4-3d4edd9a5928 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 Account verified: id=019d20d7-d409-7ba2-a1a4-3d4edd9a5928 identifier=registered@fashionistar.io\n[INFO    ] apps.authentication.models — Details updated for user: registered@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-d409-7ba2-a1a4-3d4edd9a5928 [email] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/verify-otp/ \u2192 200 in 36.0ms [req=399c7992-26f7-40ee-ac36-00e3da770baf]\nPASSED                                                                   [ 20%]
+apps/authentication/tests/integration/test_verify_otp_endpoint.py::TestVerifyOTPHappyPath::test_response_contains_role 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-da22-718b-bfa2-f574dca6f3e0 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=registered@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth — OTP validation successful.
+[INFO    ] apps.authentication.models — Details updated for user: registered@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-da22-718b-bfa2-f574dca6f3e0 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 Account verified: id=019d20d7-da22-718b-bfa2-f574dca6f3e0 identifier=registered@fashionistar.io\n[INFO    ] apps.authentication.models — Details updated for user: registered@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-da22-718b-bfa2-f574dca6f3e0 [email] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/verify-otp/ \u2192 200 in 32.4ms [req=d86d8f5c-c2df-4518-9f4b-b5e7ae7d5f58]\nPASSED                                                                   [ 20%]
+apps/authentication/tests/integration/test_verify_otp_endpoint.py::TestVerifyOTPHappyPath::test_response_contains_identifying_info 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-df84-782b-bea6-dcba3b4051dd [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=registered@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth — OTP validation successful.
+[INFO    ] apps.authentication.models — Details updated for user: registered@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-df84-782b-bea6-dcba3b4051dd [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 Account verified: id=019d20d7-df84-782b-bea6-dcba3b4051dd identifier=registered@fashionistar.io\n[INFO    ] apps.authentication.models — Details updated for user: registered@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-df84-782b-bea6-dcba3b4051dd [email] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/verify-otp/ \u2192 200 in 27.4ms [req=bcad5a35-7e65-40b9-988e-979dfcaa5230]\nPASSED                                                                   [ 21%]
+apps/authentication/tests/integration/test_verify_otp_endpoint.py::TestVerifyOTPHappyPath::test_response_message_confirms_verification 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-e41c-7748-97de-07b5d5bcaa2d [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=registered@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth — OTP validation successful.
+[INFO    ] apps.authentication.models — Details updated for user: registered@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-e41c-7748-97de-07b5d5bcaa2d [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 Account verified: id=019d20d7-e41c-7748-97de-07b5d5bcaa2d identifier=registered@fashionistar.io\n[INFO    ] apps.authentication.models — Details updated for user: registered@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-e41c-7748-97de-07b5d5bcaa2d [email] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/verify-otp/ \u2192 200 in 45.3ms [req=6da4e95a-9f25-4a0a-b04b-fa15830026b3]\nPASSED                                                                   [ 21%]
+apps/authentication/tests/integration/test_verify_otp_endpoint.py::TestVerifyOTPHappyPath::test_user_activated_after_verify 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-ea23-7580-b229-b1a7919c7932 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=registered@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth — OTP validation successful.
+[INFO    ] apps.authentication.models — Details updated for user: registered@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-ea23-7580-b229-b1a7919c7932 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 Account verified: id=019d20d7-ea23-7580-b229-b1a7919c7932 identifier=registered@fashionistar.io\n[INFO    ] apps.authentication.models — Details updated for user: registered@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-ea23-7580-b229-b1a7919c7932 [email] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/verify-otp/ \u2192 200 in 49.3ms [req=1ee39de6-a8c8-4043-b7eb-d49a81aa40ca]\nPASSED                                                                   [ 22%]
+apps/authentication/tests/integration/test_verify_otp_endpoint.py::TestVerifyOTPHappyPath::test_no_user_id_in_request_body 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-f14a-71cf-b41d-f873ffdb4f13 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=registered@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth — OTP validation successful.
+[INFO    ] apps.authentication.models — Details updated for user: registered@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-f14a-71cf-b41d-f873ffdb4f13 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 Account verified: id=019d20d7-f14a-71cf-b41d-f873ffdb4f13 identifier=registered@fashionistar.io\n[INFO    ] apps.authentication.models — Details updated for user: registered@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-f14a-71cf-b41d-f873ffdb4f13 [email] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/verify-otp/ \u2192 200 in 44.3ms [req=95519b87-5ce8-4837-a2d6-1a0fba959044]\nPASSED                                                                   [ 23%]
+apps/authentication/tests/integration/test_verify_otp_endpoint.py::TestVerifyOTPHappyPath::test_access_token_is_valid_jwt_format 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-f7ad-7ca6-8ea4-0fe2feb3bea6 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=registered@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth — OTP validation successful.
+[INFO    ] apps.authentication.models — Details updated for user: registered@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-f7ad-7ca6-8ea4-0fe2feb3bea6 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 Account verified: id=019d20d7-f7ad-7ca6-8ea4-0fe2feb3bea6 identifier=registered@fashionistar.io\n[INFO    ] apps.authentication.models — Details updated for user: registered@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d7-f7ad-7ca6-8ea4-0fe2feb3bea6 [email] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/verify-otp/ \u2192 200 in 32.9ms [req=9d924e95-5b7d-40a2-9691-00a525909bff]\nPASSED                                                                   [ 23%]
+apps/authentication/tests/integration/test_verify_otp_endpoint.py::TestVerifyOTPErrors::test_invalid_otp_returns_400 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth — OTP validation successful.
+[WARNING ] apps.authentication.apis.auth_views.sync_views \u2014 \u26a0\ufe0f VerifyOTPView: invalid/expired OTP submitted\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/verify-otp/ \u2192 400 in 2.2ms [req=a4e2efa5-1467-4d94-982a-3fd8105139e7]\nPASSED                                                                   [ 24%]
+apps/authentication/tests/integration/test_verify_otp_endpoint.py::TestVerifyOTPErrors::test_expired_otp_returns_400 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth — OTP validation successful.
+[WARNING ] apps.authentication.apis.auth_views.sync_views \u2014 \u26a0\ufe0f VerifyOTPView: invalid/expired OTP submitted\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/verify-otp/ \u2192 400 in 2.4ms [req=337521db-0c7f-4457-bc0f-8472c7f41f37]\nPASSED                                                                   [ 25%]
+apps/authentication/tests/integration/test_verify_otp_endpoint.py::TestVerifyOTPErrors::test_missing_otp_field_returns_400 
+-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.apis.auth_views.sync_views \u2014 \u26a0\ufe0f VerifyOTPView validation error: {'otp': [ErrorDetail(string='This field is required.', code='required')]}\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/verify-otp/ \u2192 400 in 2.1ms [req=4f71e6bd-711f-44b0-b2d0-262e71d9bd27]\nPASSED                                                                   [ 25%]
+apps/authentication/tests/integration/test_verify_otp_endpoint.py::TestVerifyOTPErrors::test_non_numeric_otp_returns_400 
+-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.serializers.auth — OTP validation failed: Non-digit characters detected.
+[WARNING ] apps.authentication.apis.auth_views.sync_views \u2014 \u26a0\ufe0f VerifyOTPView validation error: {'otp': [ErrorDetail(string='OTP must contain only digits.', code='invalid')]}\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/verify-otp/ \u2192 400 in 4.1ms [req=afa9fec6-a145-4a47-b26f-527df965c58b]\nPASSED                                                                   [ 26%]
+apps/authentication/tests/integration/test_verify_otp_endpoint.py::TestVerifyOTPErrors::test_5_digit_otp_returns_400 
+-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.serializers.auth — OTP validation failed: Invalid length 5.
+[WARNING ] apps.authentication.apis.auth_views.sync_views \u2014 \u26a0\ufe0f VerifyOTPView validation error: {'otp': [ErrorDetail(string='OTP length should be of six digits.', code='invalid')]}\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/verify-otp/ \u2192 400 in 2.5ms [req=145c249b-9a71-406f-8c4e-ce1ecf43fa14]\nPASSED                                                                   [ 27%]
+apps/authentication/tests/integration/test_verify_otp_endpoint.py::TestVerifyOTPErrors::test_error_response_has_no_tokens 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth — OTP validation successful.
+[WARNING ] apps.authentication.apis.auth_views.sync_views \u2014 \u26a0\ufe0f VerifyOTPView: invalid/expired OTP submitted\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/verify-otp/ \u2192 400 in 3.8ms [req=450cc6cf-0f7f-473a-abcc-ed134eece1c1]\nPASSED                                                                   [ 27%]
+apps/authentication/tests/integration/test_verify_otp_endpoint.py::TestVerifyOTPAlreadyVerified::test_already_verified_user_returns_200 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-00be-75b9-9253-bae157b70094 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth — OTP validation successful.
+[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 Account verified: id=019d20d8-00be-75b9-9253-bae157b70094 identifier=verified@fashionistar.io\n[INFO    ] apps.authentication.models — Details updated for user: verified@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-00be-75b9-9253-bae157b70094 [email] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/verify-otp/ \u2192 200 in 40.5ms [req=b2f7dd4d-764c-4df0-8b02-ba3b88a509da]\nPASSED                                                                   [ 28%]
+apps/authentication/tests/test_login.py::TestLoginHappyPath::test_email_login_returns_200_with_tokens 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-06b2-7611-aea3-4d8f4ad2a1be [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth \u2014 \u2705 LoginSerializer: valid credentials for 'verified@fashionistar.io'\n[INFO    ] apps.authentication.models — Details updated for user: verified@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-06b2-7611-aea3-4d8f4ad2a1be [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 LoginView: login successful for verified@fashionistar.io (id=019d20d8-06b2-7611-aea3-4d8f4ad2a1be role=client)\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/login/ \u2192 200 in 2608.3ms [req=7c6d7ddf-c8ed-4f13-9a8f-52a10d4c3c62]\nPASSED                                                                   [ 29%]
+apps/authentication/tests/test_login.py::TestLoginHappyPath::test_login_access_token_is_non_empty 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-16f4-71aa-ae8d-3fddd3de2c68 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth \u2014 \u2705 LoginSerializer: valid credentials for 'verified@fashionistar.io'\n[INFO    ] apps.authentication.models — Details updated for user: verified@fashionistar.io
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-16f4-71aa-ae8d-3fddd3de2c68 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 LoginView: login successful for verified@fashionistar.io (id=019d20d8-16f4-71aa-ae8d-3fddd3de2c68 role=client)\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/login/ \u2192 200 in 3189.1ms [req=7183ae44-0207-477f-8d33-bb995da644b7]\nPASSED                                                                   [ 29%]
+apps/authentication/tests/test_login.py::TestLoginFailures::test_wrong_password_returns_error 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-2897-7935-b26c-cae53e0947a4 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.serializers.auth \u2014 \u26d4 Login failed: wrong password for 'verified@fashionistar.io'\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/login/ \u2192 401 in 1252.0ms [req=c999b50b-5c04-4177-ac00-a1268a64e9d5]\nPASSED                                                                   [ 30%]
+apps/authentication/tests/test_login.py::TestLoginFailures::test_non_existent_user_returns_error 
+-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.serializers.auth \u2014 \u26d4 Login failed: user not found 'nobody@nowhere.com'\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/login/ \u2192 401 in 5.6ms [req=53967c34-78a1-46cc-8b9b-dfb575263c9a]\nPASSED                                                                   [ 30%]
+apps/authentication/tests/test_login.py::TestLoginFailures::test_empty_payload_returns_400 
+-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.apis.auth_views.sync_views \u2014 \u26a0\ufe0f LoginView validation error: {'email_or_phone': [ErrorDetail(string='This field is required.', code='required')], 'password': [ErrorDetail(string='This field is required.', code='required')]}\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/login/ \u2192 400 in 5.4ms [req=f288e44c-57c4-41cd-ba49-881cdc2494c9]\nPASSED                                                                   [ 31%]
+apps/authentication/tests/test_login.py::TestLoginFailures::test_unverified_user_cannot_login 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-340a-73d4-9fa9-0463ec1a459d [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=registered@fashionistar.io\n-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.serializers.auth \u2014 \u26d4 Login rejected: account not verified 'registered@fashionistar.io'\n[WARNING ] apps.authentication.apis.auth_views.sync_views \u2014 \u26d4 LoginView: unverified account attempt \u2014 registered@fashionistar.io\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/login/ \u2192 403 in 1200.6ms [req=deb3a232-4904-4125-a8d3-5b0e5b127c10]\nPASSED                                                                   [ 32%]
+apps/authentication/tests/test_login.py::TestLogout::test_logout_blacklists_refresh_token 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-3db1-7ac3-bffa-5798c1d7d848 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.apis.auth_views.sync_views — Logout: refresh token blacklisted — user_id=019d20d8-3db1-7ac3-bffa-5798c1d7d848
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/logout/ \u2192 200 in 10.1ms [req=8990521d-e873-4805-b039-9c9384f2670d]\nPASSED                                                                   [ 32%]
+apps/authentication/tests/test_login.py::TestLogout::test_logout_without_refresh_token_returns_400 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-42b8-7178-a096-02c2c1cf4791 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/logout/ \u2192 400 in 7.6ms [req=afc78819-2500-44c3-bb13-13f504a90147]\nPASSED                                                                   [ 33%]
+apps/authentication/tests/test_login.py::TestLogout::test_logout_requires_authentication 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/logout/ \u2192 401 in 4.0ms [req=d41fffe0-faab-4f9e-8935-098f8109c8c3]\nPASSED                                                                   [ 34%]
+apps/authentication/tests/test_login.py::TestLogout::test_double_logout_returns_400 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-4884-7135-bfc7-c23527784915 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.apis.auth_views.sync_views — Logout: refresh token blacklisted — user_id=019d20d8-4884-7135-bfc7-c23527784915
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/logout/ \u2192 200 in 9.3ms [req=deb1f03e-8e4d-4442-8023-1ec832bca3d4]\n[WARNING ] apps.authentication.apis.auth_views.sync_views — LogoutView TokenError user_id=019d20d8-4884-7135-bfc7-c23527784915: Token is blacklisted
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/logout/ \u2192 400 in 7.2ms [req=43028c54-5a1e-4132-8252-b49efdfbf5c9]\nPASSED                                                                   [ 34%]
+apps/authentication/tests/test_password_reset.py::TestIsExpiredBadge::test_active_badge PASSED [ 35%]
+apps/authentication/tests/test_password_reset.py::TestIsExpiredBadge::test_expired_badge PASSED [ 36%]
+apps/authentication/tests/test_registration.py::TestHappyPath::test_email_registration_201 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth — Registration validation successful.
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-506f-78d5-a67f-965be9182bbc [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=happy_email@test.io\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \u2705 User created (sync): id=019d20d8-506f-78d5-a67f-965be9182bbc identifier=happy_email@test.io role=client\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f510 OTP generated for user_id=019d20d8-506f-78d5-a67f-965be9182bbc\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f4e1 EventBus: 'user.registered' scheduled on_commit [user_id=019d20d8-506f-78d5-a67f-965be9182bbc]\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f4e7 OTP email task scheduled on_commit \u2192 Celery [user_id=019d20d8-506f-78d5-a67f-965be9182bbc email=happy_email@test.io]\n[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 RegisterView: user_id=019d20d8-506f-78d5-a67f-965be9182bbc identifier=happy_email@test.io\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/register/ \u2192 201 in 1195.7ms [req=7f3e40d3-e444-4f36-84d1-4fa4b294e0ca]\nPASSED                                                                   [ 36%]
+apps/authentication/tests/test_registration.py::TestHappyPath::test_phone_registration_201 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth — Registration validation successful.
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-558d-7b51-b37c-90669797e265 [phone] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=+234 803 111 1111\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \u2705 User created (sync): id=019d20d8-558d-7b51-b37c-90669797e265 identifier=+234 803 111 1111 role=vendor\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f510 OTP generated for user_id=019d20d8-558d-7b51-b37c-90669797e265\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f4e1 EventBus: 'user.registered' scheduled on_commit [user_id=019d20d8-558d-7b51-b37c-90669797e265]\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f4f1 OTP SMS task scheduled on_commit \u2192 Celery [user_id=019d20d8-558d-7b51-b37c-90669797e265 phone=+234 803 111 1111]\n[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 RegisterView: user_id=019d20d8-558d-7b51-b37c-90669797e265 identifier=+234 803 111 1111\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/register/ \u2192 201 in 1206.3ms [req=b63339b7-ddeb-4cc2-8b07-ccb81fc92318]\nPASSED                                                                   [ 37%]
+apps/authentication/tests/test_registration.py::TestHappyPath::test_second_phone_user_201_regression 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth — Registration validation successful.
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-5ab8-722d-8179-37d6746c452d [phone] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=+234 803 111 2222\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \u2705 User created (sync): id=019d20d8-5ab8-722d-8179-37d6746c452d identifier=+234 803 111 2222 role=vendor\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f510 OTP generated for user_id=019d20d8-5ab8-722d-8179-37d6746c452d\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f4e1 EventBus: 'user.registered' scheduled on_commit [user_id=019d20d8-5ab8-722d-8179-37d6746c452d]\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f4f1 OTP SMS task scheduled on_commit \u2192 Celery [user_id=019d20d8-5ab8-722d-8179-37d6746c452d phone=+234 803 111 2222]\n[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 RegisterView: user_id=019d20d8-5ab8-722d-8179-37d6746c452d identifier=+234 803 111 2222\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/register/ \u2192 201 in 1437.1ms [req=0b43a328-1bc2-4b05-87c9-777f1d6039a7]\n[INFO    ] apps.authentication.serializers.auth — Registration validation successful.
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-6059-7ca4-bf38-54f60a8b442f [phone] member_id=FASTAR000002
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=+234 803 111 3333\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \u2705 User created (sync): id=019d20d8-6059-7ca4-bf38-54f60a8b442f identifier=+234 803 111 3333 role=client\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f510 OTP generated for user_id=019d20d8-6059-7ca4-bf38-54f60a8b442f\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f4e1 EventBus: 'user.registered' scheduled on_commit [user_id=019d20d8-6059-7ca4-bf38-54f60a8b442f]\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f4f1 OTP SMS task scheduled on_commit \u2192 Celery [user_id=019d20d8-6059-7ca4-bf38-54f60a8b442f phone=+234 803 111 3333]\n[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 RegisterView: user_id=019d20d8-6059-7ca4-bf38-54f60a8b442f identifier=+234 803 111 3333\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/register/ \u2192 201 in 1212.8ms [req=dbf41688-0d1f-4050-a7b9-439fa8b8602b]\nPASSED                                                                   [ 38%]
+apps/authentication/tests/test_registration.py::TestHappyPath::test_new_user_is_inactive_and_unverified 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth — Registration validation successful.
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-6588-7395-b01a-e3cde6074da6 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=inactive_check@test.io\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \u2705 User created (sync): id=019d20d8-6588-7395-b01a-e3cde6074da6 identifier=inactive_check@test.io role=client\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f510 OTP generated for user_id=019d20d8-6588-7395-b01a-e3cde6074da6\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f4e1 EventBus: 'user.registered' scheduled on_commit [user_id=019d20d8-6588-7395-b01a-e3cde6074da6]\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f4e7 OTP email task scheduled on_commit \u2192 Celery [user_id=019d20d8-6588-7395-b01a-e3cde6074da6 email=inactive_check@test.io]\n[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 RegisterView: user_id=019d20d8-6588-7395-b01a-e3cde6074da6 identifier=inactive_check@test.io\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/register/ \u2192 201 in 1179.1ms [req=bb412ae9-a147-4097-9290-400c9bdb4e5a]\nPASSED                                                                   [ 38%]
+apps/authentication/tests/test_registration.py::TestHappyPath::test_vendor_role_saved 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth — Registration validation successful.
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-6a75-7037-a07c-f3cad8fd9f3d [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=vendor_role@test.io\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \u2705 User created (sync): id=019d20d8-6a75-7037-a07c-f3cad8fd9f3d identifier=vendor_role@test.io role=vendor\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f510 OTP generated for user_id=019d20d8-6a75-7037-a07c-f3cad8fd9f3d\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f4e1 EventBus: 'user.registered' scheduled on_commit [user_id=019d20d8-6a75-7037-a07c-f3cad8fd9f3d]\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f4e7 OTP email task scheduled on_commit \u2192 Celery [user_id=019d20d8-6a75-7037-a07c-f3cad8fd9f3d email=vendor_role@test.io]\n[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 RegisterView: user_id=019d20d8-6a75-7037-a07c-f3cad8fd9f3d identifier=vendor_role@test.io\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/register/ \u2192 201 in 1044.8ms [req=023ea004-387b-4b45-ac77-2f57efcd418e]\nPASSED                                                                   [ 39%]
+apps/authentication/tests/test_registration.py::TestHappyPath::test_multipart_form_201 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth — Registration validation successful.
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-6efa-71f1-96c9-b9096a280af3 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=multipart@test.io\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \u2705 User created (sync): id=019d20d8-6efa-71f1-96c9-b9096a280af3 identifier=multipart@test.io role=client\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f510 OTP generated for user_id=019d20d8-6efa-71f1-96c9-b9096a280af3\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f4e1 EventBus: 'user.registered' scheduled on_commit [user_id=019d20d8-6efa-71f1-96c9-b9096a280af3]\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f4e7 OTP email task scheduled on_commit \u2192 Celery [user_id=019d20d8-6efa-71f1-96c9-b9096a280af3 email=multipart@test.io]\n[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 RegisterView: user_id=019d20d8-6efa-71f1-96c9-b9096a280af3 identifier=multipart@test.io\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/register/ \u2192 201 in 1322.0ms [req=d085b59b-501e-4448-a889-7ac190c1f633]\nPASSED                                                                   [ 40%]
+apps/authentication/tests/test_registration.py::TestValidationErrors::test_password_mismatch_400 
+-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.serializers.auth — Registration failed: Passwords do not match.
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/register/ \u2192 400 in 8.8ms [req=4f7c9a16-5602-4c96-8633-7532771fbe44]\nPASSED                                                                   [ 40%]
+apps/authentication/tests/test_registration.py::TestValidationErrors::test_weak_password_400 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/register/ \u2192 400 in 7.9ms [req=701424f7-2775-4713-9102-cabb342c8820]\nPASSED                                                                   [ 41%]
+apps/authentication/tests/test_registration.py::TestValidationErrors::test_missing_email_and_phone_400 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/register/ \u2192 400 in 4.2ms [req=0d625f1e-da49-415e-a9ed-ec9074e40c0a]\nPASSED                                                                   [ 41%]
+apps/authentication/tests/test_registration.py::TestValidationErrors::test_both_email_and_phone_400 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/register/ \u2192 400 in 2.1ms [req=372fda6b-faa4-4dce-a930-2664b164f427]\nPASSED                                                                   [ 42%]
+apps/authentication/tests/test_registration.py::TestValidationErrors::test_invalid_email_format_400 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/register/ \u2192 400 in 2.9ms [req=12c7ee3e-96c5-4446-899e-82629e197a5c]\nPASSED                                                                   [ 43%]
+apps/authentication/tests/test_registration.py::TestValidationErrors::test_empty_payload_400 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/register/ \u2192 400 in 2.8ms [req=adf51f81-f072-4643-9c28-349c00ad73db]\nPASSED                                                                   [ 43%]
+apps/authentication/tests/test_registration.py::TestValidationErrors::test_admin_role_rejected_400 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/register/ \u2192 400 in 1.8ms [req=ab88ad4c-101b-4cdc-81eb-8d1fa1449c7a]\nPASSED                                                                   [ 44%]
+apps/authentication/tests/test_registration.py::TestValidationErrors::test_missing_role_400 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/register/ \u2192 400 in 2.4ms [req=5883972d-3665-40b4-b92e-3eec2365d612]\nPASSED                                                                   [ 45%]
+apps/authentication/tests/test_registration.py::TestValidationErrors::test_missing_password_400 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/register/ \u2192 400 in 1.8ms [req=96c0b383-870a-44e0-9be9-b667506d5042]\nPASSED                                                                   [ 45%]
+apps/authentication/tests/test_registration.py::TestDuplicates::test_duplicate_email_returns_400_not_500 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-7829-70dd-b65c-dd98dc53e2bf [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=registered@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/register/ \u2192 400 in 4.0ms [req=ef58cf70-5e7b-4519-9788-62bd47088a07]\nPASSED                                                                   [ 46%]
+apps/authentication/tests/test_registration.py::TestDuplicates::test_duplicate_email_error_is_field_specific 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-7c62-7bc8-8cbf-5e05b7d12f5a [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=registered@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/register/ \u2192 400 in 4.8ms [req=1af168b6-139f-42ff-9988-192044af9ec9]\nPASSED                                                                   [ 47%]
+apps/authentication/tests/test_registration.py::TestDuplicates::test_duplicate_phone_returns_400_with_phone_error 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-8173-7673-b6aa-be61d35c069a [phone] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=+2348099990000\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/register/ \u2192 400 in 8.1ms [req=58863d13-4982-40cb-9af9-54819ce1fe59]\nPASSED                                                                   [ 47%]
+apps/authentication/tests/test_registration.py::TestDuplicates::test_duplicate_phone_no_second_user_created 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-8724-787d-87e5-a557bd813e23 [phone] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=+2348099991111\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/register/ \u2192 400 in 4.8ms [req=6db57146-9fae-454f-8bd6-2e9d892baa41]\nPASSED                                                                   [ 48%]
+apps/authentication/tests/test_registration.py::TestDuplicates::test_race_condition_returns_400 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth — Registration validation successful.
+[ERROR   ] apps.authentication.services.registration.sync_service \u2014 \u274c RegistrationService.register_sync failed: {'email': [ErrorDetail(string='Already exists.', code='invalid')]}\nTraceback (most recent call last):\n  File "C:\\Users\\fashi\\OneDrive\\Documenti\\FASHIONISTAR_ANTAGRAVITY\\fashionistar_backend\\apps\\authentication\\services\\registration\\sync_service.py", line 110, in register_sync\n    user = UnifiedUser.objects.create_user(\n        email=email,\n    ...<5 lines>...\n        **extra_fields\n    )\n  File "C:\\Python314\\Lib\\unittest\\mock.py", line 1175, in __call__\n    return self._mock_call(*args, **kwargs)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File "C:\\Python314\\Lib\\unittest\\mock.py", line 1179, in _mock_call\n    return self._execute_mock_call(*args, **kwargs)\n           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File "C:\\Python314\\Lib\\unittest\\mock.py", line 1234, in _execute_mock_call\n    raise effect\ndjango.core.exceptions.ValidationError: {'email': ['Already exists.']}\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File "C:\\Users\\fashi\\OneDrive\\Documenti\\FASHIONISTAR_ANTAGRAVITY\\fashionistar_backend\\apps\\authentication\\services\\registration\\sync_service.py", line 121, in register_sync\n    raise drf_serializers.ValidationError(exc.message_dict)\nrest_framework.exceptions.ValidationError: {'email': [ErrorDetail(string='Already exists.', code='invalid')]}\n[WARNING ] apps.authentication.apis.auth_views.sync_views \u2014 \u26a0\ufe0f RegisterView DRF validation error: {'email': [ErrorDetail(string='Already exists.', code='invalid')]}\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/register/ \u2192 400 in 6.9ms [req=01a551a3-f9cb-47b5-a312-a50ded6c76db]\nPASSED                                                                   [ 49%]
+apps/authentication/tests/unit/test_otp_service.py::TestResendOTPSync::test_uses_resend_otp_html_template 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-8d06-7998-bd43-0022445e82e2 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=resend_template@test.io\n[INFO    ] apps.authentication.services.otp.sync_service \u2014 \U0001f4e7 OTP resend email scheduled on_commit \u2192 Celery [user_id=019d20d8-8d06-7998-bd43-0022445e82e2 email=resend_template@test.io]\n[INFO    ] apps.authentication.services.otp.sync_service \u2014 \U0001f4e7 OTP resend email scheduled on_commit \u2192 Celery [user_id=019d20d8-8d06-7998-bd43-0022445e82e2 email=resend_template@test.io]\nPASSED                                                                   [ 49%]
+apps/authentication/tests/unit/test_otp_service.py::TestResendOTPSync::test_generic_message_for_nonexistent_user 
+-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.services.otp.sync_service — Resend OTP requested for non-existent user: ghost@nowhere.io
+PASSED                                                                   [ 50%]
+apps/authentication/tests/unit/test_serializers.py::TestLoginSerializer::test_valid_email_login_passes 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-91a0-754e-b3a6-420cc24cf3d0 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth \u2014 \u2705 LoginSerializer: valid credentials for 'verified@fashionistar.io'\nPASSED                                                                   [ 50%]
+apps/authentication/tests/unit/test_serializers.py::TestLoginSerializer::test_wrong_password_fails 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-9d6b-7c85-a93d-33be2545267d [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.serializers.auth \u2014 \u26d4 Login failed: wrong password for 'verified@fashionistar.io'\nFAILED                                                                   [ 51%]
+apps/authentication/tests/unit/test_serializers.py::TestLoginSerializer::test_non_existent_user_fails 
+-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.serializers.auth \u2014 \u26d4 Login failed: user not found 'nobody@nowhere.com'\nFAILED                                                                   [ 52%]
+apps/authentication/tests/unit/test_serializers.py::TestLoginSerializer::test_inactive_user_cannot_login 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-a85a-75df-8db2-9cffcea43819 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=registered@fashionistar.io\n-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.serializers.auth \u2014 \u26d4 Login rejected: account not verified 'registered@fashionistar.io'\nFAILED                                                                   [ 52%]
+apps/authentication/tests/unit/test_serializers.py::TestLoginSerializer::test_validated_data_contains_user_object 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-b175-798b-b19b-6bc1e480b624 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth \u2014 \u2705 LoginSerializer: valid credentials for 'verified@fashionistar.io'\nPASSED                                                                   [ 53%]
+apps/authentication/tests/unit/test_serializers.py::TestResendOTPRequestSerializer::test_valid_existing_email_passes 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-b9a5-7877-839d-1750f3b38b00 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.otp — ResendOTP validation successful for verified@fashionistar.io
+PASSED                                                                   [ 54%]
+apps/authentication/tests/unit/test_serializers.py::TestResendOTPRequestSerializer::test_nonexistent_email_fails 
+-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.serializers.otp — ResendOTP validation failed: no user for 'ghost@nobody.com'
+PASSED                                                                   [ 54%]
+apps/authentication/tests/unit/test_serializers.py::TestResendOTPRequestSerializer::test_missing_field_fails PASSED [ 55%]
+apps/authentication/tests/integration/test_resend_otp_endpoint.py::TestResendOTPCelery::test_email_task_dispatched_after_commit 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-bd98-76cd-a2a5-7d16d381bb9c [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=registered@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.otp — ResendOTP validation successful for registered@fashionistar.io
+[INFO    ] apps.authentication.services.otp.sync_service \u2014 \U0001f4e7 OTP resend email scheduled on_commit \u2192 Celery [user_id=019d20d8-bd98-76cd-a2a5-7d16d381bb9c email=registered@fashionistar.io]\n[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 OTP resent for: registered@fashionistar.io\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/resend-otp/ \u2192 200 in 9.1ms [req=ad4e627e-8e31-41f2-8ba5-6b74ece451de]\nPASSED                                                                   [ 56%]
+apps/authentication/tests/integration/test_resend_otp_endpoint.py::TestResendOTPCelery::test_email_task_uses_correct_template 
+------------------------------- live log setup --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-c230-7b8f-a447-aa9d26925f50 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=registered@fashionistar.io\n-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.otp — ResendOTP validation successful for registered@fashionistar.io
+[INFO    ] apps.authentication.services.otp.sync_service \u2014 \U0001f4e7 OTP resend email scheduled on_commit \u2192 Celery [user_id=019d20d8-c230-7b8f-a447-aa9d26925f50 email=registered@fashionistar.io]\n[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 OTP resent for: registered@fashionistar.io\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/resend-otp/ \u2192 200 in 6.8ms [req=069e3627-4c20-43e6-886d-7c9b3925fb3f]\nPASSED                                                                   [ 56%]
+apps/authentication/tests/integration/test_resend_otp_endpoint.py::TestResendOTPCelery::test_sms_task_dispatched_for_phone_user 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-c8f5-71fc-8c22-3209e84f1846 [phone] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=+2349012345678\n[INFO    ] apps.authentication.serializers.otp — ResendOTP validation successful for +2349012345678
+[INFO    ] apps.authentication.services.otp.sync_service \u2014 \U0001f4f1 OTP resend SMS scheduled on_commit \u2192 Celery [user_id=019d20d8-c8f5-71fc-8c22-3209e84f1846 phone=+234 901 234 5678]\n[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 OTP resent for: +2349012345678\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/resend-otp/ \u2192 200 in 7.9ms [req=07b1c2bc-6237-4ba5-a554-f00d19ed3a8b]\nPASSED                                                                   [ 57%]
+apps/authentication/tests/test_password_reset.py::TestPasswordResetRequest::test_email_reset_sends_reset_url_not_reset_link 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-cefd-79a0-8c26-776adfe46e7e [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=pwreset@example.com\n[INFO    ] apps.authentication.models — Details updated for user: pwreset@example.com
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-cefd-79a0-8c26-776adfe46e7e [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.serializers.password — Password reset request validation for pwreset@example.com
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-request/ \u2192 200 in 18.9ms [req=ff91f97d-8f9e-4611-aaea-1ecbd5d55950]\nPASSED                                                                   [ 58%]
+apps/authentication/tests/test_password_reset.py::TestPasswordResetRequest::test_phone_reset_dispatches_sms 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-d497-7f0a-9730-712780de28bf [phone] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=+2348012345678\n[INFO    ] apps.authentication.models — Details updated for user: +234 801 234 5678
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-d497-7f0a-9730-712780de28bf [phone] member_id=FASTAR000001
+[INFO    ] apps.authentication.serializers.password — Password reset request validation for +234 801 234 5678
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-request/ \u2192 200 in 30.8ms [req=a92604a9-1e01-4e87-bf6b-586216f24eeb]\nPASSED                                                                   [ 58%]
+apps/authentication/tests/test_password_reset.py::TestPasswordResetRequest::test_unknown_email_returns_200_anti_enumeration 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.password — Password reset request validation for ghost@nowhere.invalid
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-request/ \u2192 200 in 17.6ms [req=e459fba6-3d00-438c-a832-52a6cbf628e8]\nPASSED                                                                   [ 59%]
+apps/authentication/tests/test_password_reset.py::TestPasswordResetRequest::test_missing_field_returns_400 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-request/ \u2192 400 in 6.3ms [req=055ae7bc-8f4d-4f02-87d2-510dad630189]\nPASSED                                                                   [ 60%]
+apps/authentication/tests/test_password_reset.py::TestPasswordResetRequest::test_idempotency_double_request_both_200 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-def3-7ec4-bcf6-3d8c659b15c3 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=pwreset@example.com\n[INFO    ] apps.authentication.models — Details updated for user: pwreset@example.com
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-def3-7ec4-bcf6-3d8c659b15c3 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.serializers.password — Password reset request validation for pwreset@example.com
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-request/ \u2192 200 in 16.5ms [req=cd365c7f-5b85-4078-8bfc-eaaff082b1e1]\n[INFO    ] apps.authentication.serializers.password — Password reset request validation for pwreset@example.com
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-request/ \u2192 200 in 20.7ms [req=52a528e9-da00-4e4e-8831-127d2b4b6f47]\nPASSED                                                                   [ 60%]
+apps/authentication/tests/test_password_reset.py::TestPasswordResetConfirmEmail::test_valid_token_resets_password 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-e4d1-7fd0-8d2f-db09e6b7cde9 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=pwreset@example.com\n[INFO    ] apps.authentication.models — Details updated for user: pwreset@example.com
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-e4d1-7fd0-8d2f-db09e6b7cde9 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.models — Details updated for user: pwreset@example.com
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-e4d1-7fd0-8d2f-db09e6b7cde9 [email] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-confirm/MDE5ZDIwZDgtZTRkMS03ZmQwLThkMmYtZGIwOWU2YjdjZGU5/d5yir7-69c56935be008bdaed98780158805660/ \u2192 200 in 1409.9ms [req=2430f590-6863-4bf0-adc4-b0710e944147]\nPASSED                                                                   [ 61%]
+apps/authentication/tests/test_password_reset.py::TestPasswordResetConfirmEmail::test_bad_token_returns_400_with_code 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-f7d1-7f76-9047-a6f60dabe4d0 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=pwreset@example.com\n[INFO    ] apps.authentication.models — Details updated for user: pwreset@example.com
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-f7d1-7f76-9047-a6f60dabe4d0 [email] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-confirm/MDE5ZDIwZDgtZjdkMS03Zjc2LTkwNDctYTZmNjBkYWJlNGQw/bad-token-xyz/ \u2192 429 in 5.4ms [req=83e73e08-a376-4717-bc1c-e44264b9553e]\nFAILED                                                                   [ 61%]
+apps/authentication/tests/test_password_reset.py::TestPasswordResetConfirmEmail::test_mismatched_passwords_returns_400 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-fedf-7ee9-a301-876a10179f28 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=pwreset@example.com\n[INFO    ] apps.authentication.models — Details updated for user: pwreset@example.com
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d8-fedf-7ee9-a301-876a10179f28 [email] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-confirm/MDE5ZDIwZDgtZmVkZi03ZWU5LWEzMDEtODc2YTEwMTc5ZjI4/d5yire-6f25798bd358c707dd4949224901ab4b/ \u2192 429 in 3.7ms [req=000170cb-8a94-44bd-8dc9-170e433a150a]\nFAILED                                                                   [ 62%]
+apps/authentication/tests/test_password_reset.py::TestPasswordResetConfirmEmail::test_idempotency_same_token_twice 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-0470-7d7b-82dd-d451a38b10b5 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=pwreset@example.com\n[INFO    ] apps.authentication.models — Details updated for user: pwreset@example.com
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-0470-7d7b-82dd-d451a38b10b5 [email] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-confirm/MDE5ZDIwZDktMDQ3MC03ZDdiLTgyZGQtZDQ1MWEzOGIxMGI1/d5yirg-60e1c1fe2a0105fe72154fa3bd05bc91/ \u2192 429 in 4.2ms [req=ca4f4735-2aaa-467d-99c9-8eefc8c86008]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-confirm/MDE5ZDIwZDktMDQ3MC03ZDdiLTgyZGQtZDQ1MWEzOGIxMGI1/d5yirg-60e1c1fe2a0105fe72154fa3bd05bc91/ \u2192 429 in 4.2ms [req=1b57d866-be7d-4d5b-9e07-04f5c5328e6e]\nFAILED                                                                   [ 63%]
+apps/authentication/tests/test_password_reset.py::TestPasswordResetConfirmEmail::test_atomic_rollback_on_weak_password 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-0c3c-75d0-81dc-a043629adff0 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=pwreset@example.com\n[INFO    ] apps.authentication.models — Details updated for user: pwreset@example.com
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-0c3c-75d0-81dc-a043629adff0 [email] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-confirm/MDE5ZDIwZDktMGMzYy03NWQwLTgxZGMtYTA0MzYyOWFkZmYw/d5yiri-d3acea1ab1ebda15201b48a32ccc25e3/ \u2192 429 in 19.4ms [req=4f6d98c7-1490-4834-b155-8d3bc9dcacc4]\nPASSED                                                                   [ 63%]
+apps/authentication/tests/test_password_reset.py::TestPasswordResetConfirmEmail::test_race_condition_same_token_two_threads 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-1332-79b3-8ee9-ad7b845647f2 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=pwreset@example.com\n[INFO    ] apps.authentication.models — Details updated for user: pwreset@example.com
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-1332-79b3-8ee9-ad7b845647f2 [email] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-confirm/MDE5ZDIwZDktMTMzMi03OWIzLThlZTktYWQ3Yjg0NTY0N2Yy/d5yirj-d771c7334eca73c792879a5493c3cc3a/ \u2192 429 in 101.8ms [req=d2fb4849-e480-467b-bc81-fb5b621013bb]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-confirm/MDE5ZDIwZDktMTMzMi03OWIzLThlZTktYWQ3Yjg0NTY0N2Yy/d5yirj-d771c7334eca73c792879a5493c3cc3a/ \u2192 429 in 14.5ms [req=0dcf7f29-ce3b-4935-8a24-761e4c8ff8b6]\nFAILED                                                                   [ 64%]
+apps/authentication/tests/test_password_reset.py::TestPasswordResetConfirmPhone::test_valid_otp_resets_password 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-195d-70f0-a677-ed50663da4d4 [phone] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=+2348012345678\n[INFO    ] apps.authentication.models — Details updated for user: +234 801 234 5678
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-195d-70f0-a677-ed50663da4d4 [phone] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 429 in 5.9ms [req=fa2e3f92-e0d5-435b-9e06-a82b5895cb22]\nFAILED                                                                   [ 65%]
+apps/authentication/tests/test_password_reset.py::TestPasswordResetConfirmPhone::test_phone_field_NOT_required 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 429 in 4.5ms [req=4c272fd3-46ae-4594-bfbe-a8ed96cb7ef1]\nFAILED                                                                   [ 65%]
+apps/authentication/tests/test_password_reset.py::TestPasswordResetConfirmPhone::test_invalid_otp_returns_400_invalid_otp_code 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 429 in 5.9ms [req=8f66cd07-5bb5-400c-9db7-233ed76ffcdc]\nFAILED                                                                   [ 66%]
+apps/authentication/tests/test_password_reset.py::TestPasswordResetConfirmPhone::test_non_digit_otp_rejected_by_serializer 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 429 in 4.9ms [req=cd221efe-44f1-40f7-bfbb-f932cf718859]\nFAILED                                                                   [ 67%]
+apps/authentication/tests/test_password_reset.py::TestPasswordResetConfirmPhone::test_idempotency_otp_consumed_on_first_use 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-245f-7746-babe-e69cfe402fa5 [phone] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=+2348012345678\n[INFO    ] apps.authentication.models — Details updated for user: +234 801 234 5678
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-245f-7746-babe-e69cfe402fa5 [phone] member_id=FASTAR000001
+[INFO    ] apps.authentication.models — Details updated for user: +234 801 234 5678
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-245f-7746-babe-e69cfe402fa5 [phone] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 200 in 1561.7ms [req=7568e254-bd9d-4094-bdc0-43e4f5da04cd]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 400 in 18.9ms [req=8cd9384a-7e5c-4baf-b7d2-730936935b3b]\nPASSED                                                                   [ 67%]
+apps/authentication/tests/test_password_reset.py::TestPasswordResetConfirmPhone::test_atomic_rollback_on_invalid_otp 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-30cd-795a-92cd-bb641a6ddb22 [phone] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=+2348012345678\n[INFO    ] apps.authentication.models — Details updated for user: +234 801 234 5678
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-30cd-795a-92cd-bb641a6ddb22 [phone] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 400 in 10.8ms [req=d94630d0-cc8c-4738-b740-be34d29898b0]\nPASSED                                                                   [ 68%]
+apps/authentication/tests/test_password_reset.py::TestPasswordResetConfirmPhone::test_race_otp_consumed_only_once 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-377c-7591-9e6a-a6b1d263497d [phone] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=+2348012345678\n[INFO    ] apps.authentication.models — Details updated for user: +234 801 234 5678
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-377c-7591-9e6a-a6b1d263497d [phone] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 400 in 51.1ms [req=86141931-4d16-4ee3-b587-25f4c516dceb]\n[INFO    ] apps.authentication.models — Details updated for user: +234 801 234 5678
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-377c-7591-9e6a-a6b1d263497d [phone] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 200 in 1381.7ms [req=138e42af-1dc6-4cb8-8193-4c1a2000fe3b]\nPASSED                                                                   [ 69%]
+apps/authentication/tests/test_password_reset.py::TestChangePassword::test_success 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-427f-754d-b70d-7be361f05e62 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=pwreset@example.com\n[INFO    ] apps.authentication.models — Details updated for user: pwreset@example.com
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-427f-754d-b70d-7be361f05e62 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.models — Details updated for user: pwreset@example.com
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-427f-754d-b70d-7be361f05e62 [email] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/change/ \u2192 200 in 3079.6ms [req=ae27ae25-dc4f-4717-8f95-3e3209400ae1]\nPASSED                                                                   [ 69%]
+apps/authentication/tests/test_password_reset.py::TestChangePassword::test_wrong_old_password_returns_400 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-5be1-7aff-9413-120f1cb77348 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=pwreset@example.com\n[INFO    ] apps.authentication.models — Details updated for user: pwreset@example.com
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-5be1-7aff-9413-120f1cb77348 [email] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/change/ \u2192 400 in 1379.3ms [req=de0772c3-cfc5-4a70-a6e5-777b368acc87]\nPASSED                                                                   [ 70%]
+apps/authentication/tests/test_password_reset.py::TestChangePassword::test_unauthenticated_returns_401 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/change/ \u2192 401 in 5.3ms [req=a09e6c1e-6940-4c8c-87d8-bf0f6d5e519e]\nPASSED                                                                   [ 70%]
+apps/authentication/tests/test_password_reset.py::TestChangePassword::test_atomic_block_integrity 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-68bf-7ed8-aca7-90d2430167c3 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=pwreset@example.com\n[INFO    ] apps.authentication.models — Details updated for user: pwreset@example.com
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-68bf-7ed8-aca7-90d2430167c3 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.models — Details updated for user: pwreset@example.com
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-68bf-7ed8-aca7-90d2430167c3 [email] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/change/ \u2192 200 in 3111.1ms [req=e14effd1-18c5-4a4b-a3ca-9f1690292848]\nPASSED                                                                   [ 71%]
+apps/authentication/tests/test_password_reset.py::TestSessionViews::test_session_list_200 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-7fda-7e63-9c44-f94b3c5ccd2c [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=pwreset@example.com\n[INFO    ] apps.authentication.models — Details updated for user: pwreset@example.com
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-7fda-7e63-9c44-f94b3c5ccd2c [email] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [GET] /api/v1/auth/sessions/ \u2192 200 in 9.4ms [req=d6842e1f-6c98-4ee8-84ac-314864b74b3f]\nPASSED                                                                   [ 72%]
+apps/authentication/tests/test_password_reset.py::TestSessionViews::test_session_list_unauthenticated_401 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.common.middleware \u2014 [GET] /api/v1/auth/sessions/ \u2192 401 in 2.4ms [req=482e6f9d-ce56-4a09-b48b-54f1be371c6c]\nPASSED                                                                   [ 72%]
+apps/authentication/tests/test_password_reset.py::TestSessionViews::test_revoke_others_200 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-8778-73f9-b167-9040b771e826 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=pwreset@example.com\n[INFO    ] apps.authentication.models — Details updated for user: pwreset@example.com
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-8778-73f9-b167-9040b771e826 [email] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/sessions/revoke-others/ \u2192 200 in 15.5ms [req=be6cea1f-b0e3-4f04-9bbd-a1f767695be6]\nPASSED                                                                   [ 73%]
+apps/authentication/tests/test_password_reset.py::TestSessionViews::test_login_events_200 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-8e39-7037-aae9-65faf32bfafc [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=pwreset@example.com\n[INFO    ] apps.authentication.models — Details updated for user: pwreset@example.com
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-8e39-7037-aae9-65faf32bfafc [email] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [GET] /api/v1/auth/login-events/ \u2192 200 in 6.8ms [req=f4fa0882-3a04-422d-bc78-de3d7e813d43]\nPASSED                                                                   [ 74%]
+apps/authentication/tests/test_password_reset.py::TestSessionViews::test_login_events_unauthenticated_401 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.common.middleware \u2014 [GET] /api/v1/auth/login-events/ \u2192 401 in 1.8ms [req=1db6e290-17ef-4862-bee6-5a5638651f09]\nPASSED                                                                   [ 74%]
+apps/authentication/tests/test_password_reset.py::TestSessionViews::test_revoke_nonexistent_session_404 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-958e-719c-b0b9-d9fa7b9ee90f [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=pwreset@example.com\n[INFO    ] apps.authentication.models — Details updated for user: pwreset@example.com
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-958e-719c-b0b9-d9fa7b9ee90f [email] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [DELETE] /api/v1/auth/sessions/999999/ \u2192 404 in 5.9ms [req=0cdf9b40-6abd-416f-9b40-d1217677ff9a]\nPASSED                                                                   [ 75%]
+apps/authentication/tests/test_password_reset.py::TestConcurrencyStress::test_20_concurrent_reset_requests_all_200 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-9b59-7c8f-8132-c70885ab706b [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=pwreset@example.com\n[INFO    ] apps.authentication.models — Details updated for user: pwreset@example.com
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-9b59-7c8f-8132-c70885ab706b [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.serializers.password — Password reset request validation for pwreset@example.com
+[INFO    ] apps.authentication.serializers.password — Password reset request validation for pwreset@example.com
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-request/ \u2192 200 in 1470.6ms [req=d0e9a64f-844e-403e-9655-5ec5ebd4cdfa]\n[INFO    ] apps.authentication.serializers.password — Password reset request validation for pwreset@example.com
+[INFO    ] apps.authentication.serializers.password — Password reset request validation for pwreset@example.com
+[INFO    ] apps.authentication.serializers.password — Password reset request validation for pwreset@example.com
+[INFO    ] apps.authentication.serializers.password — Password reset request validation for pwreset@example.com
+[INFO    ] apps.authentication.serializers.password — Password reset request validation for pwreset@example.com
+[INFO    ] apps.authentication.serializers.password — Password reset request validation for pwreset@example.com
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-request/ \u2192 200 in 1549.4ms [req=8962b4c9-1bbc-4a59-9944-2fa4e6399d1a]\n[INFO    ] apps.authentication.serializers.password — Password reset request validation for pwreset@example.com
+[INFO    ] apps.authentication.serializers.password — Password reset request validation for pwreset@example.com
+[INFO    ] apps.authentication.serializers.password — Password reset request validation for pwreset@example.com
+[INFO    ] apps.authentication.serializers.password — Password reset request validation for pwreset@example.com
+[INFO    ] apps.authentication.serializers.password — Password reset request validation for pwreset@example.com
+[INFO    ] apps.authentication.serializers.password — Password reset request validation for pwreset@example.com
+[INFO    ] apps.authentication.serializers.password — Password reset request validation for pwreset@example.com
+[INFO    ] apps.authentication.serializers.password — Password reset request validation for pwreset@example.com
+[INFO    ] apps.authentication.serializers.password — Password reset request validation for pwreset@example.com
+[INFO    ] apps.authentication.serializers.password — Password reset request validation for pwreset@example.com
+[INFO    ] apps.authentication.serializers.password — Password reset request validation for pwreset@example.com
+[INFO    ] apps.authentication.serializers.password — Password reset request validation for pwreset@example.com
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-request/ \u2192 200 in 1743.7ms [req=c09bdfbc-a9e1-4b41-8a92-c7167634c7f0]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-request/ \u2192 200 in 1702.8ms [req=68d69ab9-8e0c-448f-a636-14eabcf5470d]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-request/ \u2192 200 in 1861.5ms [req=8c8e33e6-b46b-4652-b104-decc723c8c0b]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-request/ \u2192 200 in 1776.5ms [req=5323dafa-318c-4d0f-a0ff-ee704b89bdbc]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-request/ \u2192 200 in 1738.8ms [req=b32f81d3-6cf3-4a30-a936-1b21229d8414]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-request/ \u2192 200 in 1562.7ms [req=a20699f7-88da-4d7b-914a-25ba28c058b8]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-request/ \u2192 200 in 1766.5ms [req=3725c7cf-a2fc-4900-9315-f91d59e519e4]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-request/ \u2192 200 in 1310.4ms [req=22829f9a-3a30-47a4-ac5d-670cbb32111e]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-request/ \u2192 200 in 963.7ms [req=367457af-8c28-4be4-a939-4a4e83a4a453]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-request/ \u2192 200 in 888.0ms [req=e13315f6-a038-493a-b606-58cbce00fddf]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-request/ \u2192 200 in 1745.5ms [req=955c2bb8-c9c9-4e1c-a8e5-d4747b7e5e1b]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-request/ \u2192 200 in 1472.0ms [req=63066567-e673-43c5-a25c-2c8b84165c14]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-request/ \u2192 200 in 1287.2ms [req=d331ea6f-e7e6-45cf-800c-1082109540eb]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-request/ \u2192 200 in 1552.0ms [req=5f8a97ec-450f-4cc2-b317-5cf510d8ebc1]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-request/ \u2192 200 in 1139.2ms [req=a6aec445-d922-499a-b441-458b4b49eba6]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-request/ \u2192 200 in 1652.4ms [req=6527df61-f2f4-421f-9aac-0a928b43fc2e]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-request/ \u2192 200 in 1192.7ms [req=b173f347-94ac-4efd-ac5a-ade8b2e04bba]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-request/ \u2192 200 in 1381.8ms [req=3884b0ee-f685-48cb-bd9a-ac1309387c53]\nPASSED                                                                   [ 76%]
+apps/authentication/tests/test_password_reset.py::TestConcurrencyStress::test_20_concurrent_phone_confirm_only_1_wins 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-ab73-7c52-b55e-891f0014c0a3 [phone] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=+2348012345678\n[INFO    ] apps.authentication.models — Details updated for user: +234 801 234 5678
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-ab73-7c52-b55e-891f0014c0a3 [phone] member_id=FASTAR000001
+[INFO    ] apps.authentication.models — Details updated for user: +234 801 234 5678
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 400 in 1430.2ms [req=84192995-f44a-4100-bf75-b6ebe244f5fe]\n[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-ab73-7c52-b55e-891f0014c0a3 [phone] member_id=FASTAR000001
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 429 in 142.3ms [req=bd5b3638-612b-49b8-bf61-06aab14b4ba7]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 400 in 1638.6ms [req=9e5a2253-3f7e-4c88-a7a4-39a5cec7297a]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 429 in 192.1ms [req=2aa56908-2a78-4f61-b131-6aac811ffe35]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 400 in 1569.4ms [req=d7d0d5a6-9840-4617-a9b1-7191c063cf6e]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 429 in 65.8ms [req=c011a81f-9ece-48c8-a48a-89b5e4ab1480]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 429 in 57.6ms [req=009e20e8-56ce-4239-9e59-99e12901a352]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 400 in 1520.2ms [req=80a410de-243b-438a-8b20-4eb43cc96ff9]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 429 in 34.5ms [req=ce685b1c-ebc6-4d9e-aa25-c1a1dc513063]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 400 in 1459.1ms [req=fe5912c8-cb8d-4e75-8da8-9ef6f81f81bc]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 400 in 1535.8ms [req=d821b8f6-0c93-4152-b790-46e309e27bbf]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 400 in 1389.1ms [req=4bd13a8d-3095-4fc2-9855-5d194154e1f9]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 400 in 1255.8ms [req=26e3ddd9-ad83-46f0-bcd7-203086cc891f]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 400 in 1214.9ms [req=dcc2fe0d-2758-4144-b1cb-19239480dd08]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 400 in 1016.6ms [req=fae83bef-0267-40b6-a300-3d1c57447f6c]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 400 in 996.6ms [req=67d641d8-3694-422e-955d-043266f2a7b6]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 400 in 913.3ms [req=07a214d5-b39b-49ec-82a7-be90b0da66f3]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 400 in 1083.0ms [req=3b71287e-a1e2-40e3-b994-5fba41eb4ca7]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 400 in 836.4ms [req=dd5f06a5-6e1b-4283-989d-2532fc0140a3]\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 200 in 2240.4ms [req=dffaa629-932a-4d53-8f4e-30ec0b11fbc2]\nPASSED                                                                   [ 76%]
+apps/authentication/tests/test_registration.py::TestCeleryDispatch::test_email_task_dispatched_for_email_registration 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth — Registration validation successful.
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-bb3d-7984-bad6-328224661684 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=celery_email@test.io\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \u2705 User created (sync): id=019d20d9-bb3d-7984-bad6-328224661684 identifier=celery_email@test.io role=client\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f510 OTP generated for user_id=019d20d9-bb3d-7984-bad6-328224661684\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f4e1 EventBus: 'user.registered' scheduled on_commit [user_id=019d20d9-bb3d-7984-bad6-328224661684]\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f4e7 OTP email task scheduled on_commit \u2192 Celery [user_id=019d20d9-bb3d-7984-bad6-328224661684 email=celery_email@test.io]\n[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 RegisterView: user_id=019d20d9-bb3d-7984-bad6-328224661684 identifier=celery_email@test.io\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/register/ \u2192 201 in 1289.4ms [req=c901757f-b110-4363-bcd9-7c5c0c8d3148]\nPASSED                                                                   [ 77%]
+------------------------------ live log teardown ------------------------------
+[INFO    ] apps.common.event_handlers — EventBus: upsert_user_lifecycle_registry queued for user_uuid=019d20d9-bb3d-7984-bad6-328224661684
+
+apps/authentication/tests/test_registration.py::TestCeleryDispatch::test_sms_task_dispatched_for_phone_registration 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth — Registration validation successful.
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-c1ab-728f-8429-1bf42f1ba066 [phone] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=+234 803 111 5555\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \u2705 User created (sync): id=019d20d9-c1ab-728f-8429-1bf42f1ba066 identifier=+234 803 111 5555 role=client\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f510 OTP generated for user_id=019d20d9-c1ab-728f-8429-1bf42f1ba066\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f4e1 EventBus: 'user.registered' scheduled on_commit [user_id=019d20d9-c1ab-728f-8429-1bf42f1ba066]\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f4f1 OTP SMS task scheduled on_commit \u2192 Celery [user_id=019d20d9-c1ab-728f-8429-1bf42f1ba066 phone=+234 803 111 5555]\n[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 RegisterView: user_id=019d20d9-c1ab-728f-8429-1bf42f1ba066 identifier=+234 803 111 5555\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/register/ \u2192 201 in 1039.1ms [req=a3a4f36f-9a7a-47f7-a390-d905c5272a61]\nPASSED                                                                   [ 78%]
+------------------------------ live log teardown ------------------------------
+[INFO    ] apps.common.event_handlers — EventBus: upsert_user_lifecycle_registry queued for user_uuid=019d20d9-c1ab-728f-8429-1bf42f1ba066
+
+apps/authentication/tests/test_registration.py::TestCeleryDispatch::test_email_task_context_has_site_url 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth — Registration validation successful.
+[INFO    ] apps.authentication.models — Saved UnifiedUser 019d20d9-c6d1-75ad-ba92-5afae9bb9853 [email] member_id=FASTAR000001
+[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=siteurl@test.io\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \u2705 User created (sync): id=019d20d9-c6d1-75ad-ba92-5afae9bb9853 identifier=siteurl@test.io role=client\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f510 OTP generated for user_id=019d20d9-c6d1-75ad-ba92-5afae9bb9853\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f4e1 EventBus: 'user.registered' scheduled on_commit [user_id=019d20d9-c6d1-75ad-ba92-5afae9bb9853]\n[INFO    ] apps.authentication.services.registration.sync_service \u2014 \U0001f4e7 OTP email task scheduled on_commit \u2192 Celery [user_id=019d20d9-c6d1-75ad-ba92-5afae9bb9853 email=siteurl@test.io]\n[INFO    ] apps.authentication.apis.auth_views.sync_views \u2014 \u2705 RegisterView: user_id=019d20d9-c6d1-75ad-ba92-5afae9bb9853 identifier=siteurl@test.io\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/register/ \u2192 201 in 1248.7ms [req=0d1882c8-12b4-45d4-8d64-240b08b357ef]\nPASSED                                                                   [ 78%]
+------------------------------ live log teardown ------------------------------
+[INFO    ] apps.common.event_handlers — EventBus: upsert_user_lifecycle_registry queued for user_uuid=019d20d9-c6d1-75ad-ba92-5afae9bb9853
+
+apps/authentication/tests/test_registration.py::TestCeleryDispatch::test_no_task_dispatched_on_failed_registration 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/register/ \u2192 400 in 2.2ms [req=eef34c13-f898-4fc5-85fa-437da4da33fc]\nPASSED                                                                   [ 79%]
+apps/authentication/tests/unit/test_otp_service.py::TestGenerateOTPSync::test_returns_plain_text_otp 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.services.otp.sync_service — OTP generated for User USER-001 (Purpose: verify)
+PASSED                                                                   [ 80%]
+apps/authentication/tests/unit/test_otp_service.py::TestGenerateOTPSync::test_stores_primary_and_hash_index_atomically 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.services.otp.sync_service — OTP generated for User USER-001 (Purpose: verify)
+PASSED                                                                   [ 80%]
+apps/authentication/tests/unit/test_otp_service.py::TestGenerateOTPSync::test_raises_when_redis_unavailable 
+-------------------------------- live log call --------------------------------
+[ERROR   ] apps.authentication.services.otp.sync_service — Redis unavailable for OTP generation (User: USER-001)
+[ERROR   ] apps.authentication.services.otp.sync_service — OTP Generation Failed: Service unavailable
+Traceback (most recent call last):
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\apps\authentication\services\otp\sync_service.py", line 101, in generate_otp_sync
+    raise Exception("Service unavailable")
+Exception: Service unavailable
+PASSED                                                                   [ 81%]
+apps/authentication/tests/unit/test_otp_service.py::TestGenerateOTPSync::test_primary_key_format 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.services.otp.sync_service — OTP generated for User MY-USER-ID (Purpose: verify)
+PASSED                                                                   [ 81%]
+apps/authentication/tests/unit/test_otp_service.py::TestGenerateOTPSync::test_hash_index_key_format 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.services.otp.sync_service — OTP generated for User MY-USER-ID (Purpose: verify)
+PASSED                                                                   [ 82%]
+apps/authentication/tests/unit/test_otp_service.py::TestGenerateOTPSync::test_ttl_is_300_seconds 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.services.otp.sync_service — OTP generated for User MY-USER-ID (Purpose: verify)
+PASSED                                                                   [ 83%]
+apps/authentication/tests/unit/test_otp_service.py::TestVerifyByOTPSync::test_returns_user_id_on_valid_otp FAILED [ 83%]
+apps/authentication/tests/unit/test_otp_service.py::TestVerifyByOTPSync::test_returns_none_on_wrong_otp PASSED [ 84%]
+apps/authentication/tests/unit/test_otp_service.py::TestVerifyByOTPSync::test_deletes_both_keys_on_success FAILED [ 85%]
+apps/authentication/tests/unit/test_otp_service.py::TestVerifyByOTPSync::test_purpose_mismatch_returns_none PASSED [ 85%]
+apps/authentication/tests/unit/test_otp_service.py::TestVerifyByOTPSync::test_orphaned_hash_index_cleaned_up FAILED [ 86%]
+apps/authentication/tests/unit/test_otp_service.py::TestVerifyByOTPSync::test_returns_none_when_redis_unavailable PASSED [ 87%]
+apps/authentication/tests/unit/test_otp_service.py::TestVerifyOTPSyncByUserID::test_returns_true_on_valid_otp 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.services.otp.sync_service — OTP Verified for User U1 (Purpose: verify)
+PASSED                                                                   [ 87%]
+apps/authentication/tests/unit/test_otp_service.py::TestVerifyOTPSyncByUserID::test_returns_false_on_wrong_otp 
+-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.services.otp.sync_service — OTP Verification Failed for User U1 (Purpose: verify)
+PASSED                                                                   [ 88%]
+apps/authentication/tests/unit/test_otp_service.py::TestVerifyOTPSyncByUserID::test_returns_false_on_no_keys 
+-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.services.otp.sync_service — OTP Verification Failed for User U1 (Purpose: verify)
+PASSED                                                                   [ 89%]
+apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_valid_email_payload_passes 
+-------------------------------- live log call --------------------------------
+[ERROR   ] apps.authentication.serializers.auth — Unexpected error in registration validation: Database access not allowed, use the "django_db" mark, or the "db" or "transactional_db" fixtures to enable it.
+FAILED                                                                   [ 89%]
+apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_password_mismatch_raises 
+-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.serializers.auth — Registration failed: Passwords do not match.
+PASSED                                                                   [ 90%]
+apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_both_email_and_phone_rejected PASSED [ 90%]
+apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_neither_email_nor_phone_rejected PASSED [ 91%]
+apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_admin_role_rejected PASSED [ 92%]
+apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_staff_role_rejected PASSED [ 92%]
+apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_vendor_role_accepted 
+-------------------------------- live log call --------------------------------
+[ERROR   ] apps.authentication.serializers.auth — Unexpected error in registration validation: Database access not allowed, use the "django_db" mark, or the "db" or "transactional_db" fixtures to enable it.
+FAILED                                                                   [ 93%]
+apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_duplicate_email_returns_email_field_error 
+-------------------------------- live log call --------------------------------
+[ERROR   ] apps.authentication.serializers.auth — Unexpected error in registration validation: Database access not allowed, use the "django_db" mark, or the "db" or "transactional_db" fixtures to enable it.
+FAILED                                                                   [ 94%]
+apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_email_normalized_before_uniqueness_check 
+-------------------------------- live log call --------------------------------
+[ERROR   ] apps.authentication.serializers.auth — Unexpected error in registration validation: Database access not allowed, use the "django_db" mark, or the "db" or "transactional_db" fixtures to enable it.
+FAILED                                                                   [ 94%]
+apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_empty_email_normalized_to_none 
+-------------------------------- live log call --------------------------------
+[ERROR   ] apps.authentication.serializers.auth — Unexpected error in registration validation: Database access not allowed, use the "django_db" mark, or the "db" or "transactional_db" fixtures to enable it.
+PASSED                                                                   [ 95%]
+apps/authentication/tests/unit/test_serializers.py::TestOTPSerializer::test_valid_6_digit_otp_passes 
+-------------------------------- live log call --------------------------------
+[INFO    ] apps.authentication.serializers.auth — OTP validation successful.
+PASSED                                                                   [ 96%]
+apps/authentication/tests/unit/test_serializers.py::TestOTPSerializer::test_5_digit_otp_fails 
+-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.serializers.auth — OTP validation failed: Invalid length 5.
+PASSED                                                                   [ 96%]
+apps/authentication/tests/unit/test_serializers.py::TestOTPSerializer::test_7_digit_otp_exceeds_maxlength_or_fails PASSED [ 97%]
+apps/authentication/tests/unit/test_serializers.py::TestOTPSerializer::test_non_numeric_otp_fails 
+-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.serializers.auth — OTP validation failed: Non-digit characters detected.
+PASSED                                                                   [ 98%]
+apps/authentication/tests/unit/test_serializers.py::TestOTPSerializer::test_alphanumeric_otp_fails 
+-------------------------------- live log call --------------------------------
+[WARNING ] apps.authentication.serializers.auth — OTP validation failed: Non-digit characters detected.
+PASSED                                                                   [ 98%]
+apps/authentication/tests/unit/test_serializers.py::TestOTPSerializer::test_empty_otp_fails PASSED [ 99%]
+apps/authentication/tests/unit/test_serializers.py::TestOTPSerializer::test_missing_otp_fails PASSED [100%]
+
+================================== FAILURES ===================================
+______________ TestLoginFailures.test_wrong_password_returns_400 ______________
+apps\authentication\tests\integration\test_login_endpoint.py:158: in test_wrong_password_returns_400
+    assert r.status_code == status.HTTP_400_BAD_REQUEST
+E   assert 401 == 400
+E    +  where 401 = <Response status_code=401, "application/json">.status_code
+E    +  and   400 = status.HTTP_400_BAD_REQUEST
+---------------------------- Captured stdout setup ----------------------------
+[INFO    ] apps.authentication.models \u2014 Saved UnifiedUser 019d20d7-762e-79b5-956b-de63b9375f77 [email] member_id=FASTAR000001\n[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io
+----------------------------- Captured log setup ------------------------------
+INFO     apps.authentication.models:models.py:582 Saved UnifiedUser 019d20d7-762e-79b5-956b-de63b9375f77 [email] member_id=FASTAR000001\nINFO     apps.authentication.managers:managers.py:146 \u2705 Created user: email=verified@fashionistar.io
+---------------------------- Captured stdout call -----------------------------
+[WARNING ] apps.authentication.serializers.auth \u2014 \u26d4 Login failed: wrong password for 'verified@fashionistar.io'\n[WARNING ] security \u2014 SECURITY_AUDIT action=PERMISSION_DENIED req=ec0ad540-12be-46fe-83b0-c38fb7da4ee8 device=fp:57efdd91ba75ee0012c0 session=- ip=127.0.0.1 method=POST path=/api/v1/auth/login/ status=401 duration_ms=1237.2 user_id=anonymous role=anonymous ua='-' referrer=-\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/login/ \u2192 401 in 1237.4ms [req=ec0ad540-12be-46fe-83b0-c38fb7da4ee8]\n[WARNING ] django.request \u2014 Unauthorized: /api/v1/auth/login/
+------------------------------ Captured log call ------------------------------
+WARNING  apps.authentication.serializers.auth:auth.py:140 \u26d4 Login failed: wrong password for 'verified@fashionistar.io'\nINFO     apps.common.middleware:middleware.py:147 [POST] /api/v1/auth/login/ \u2192 401 in 1237.4ms [req=ec0ad540-12be-46fe-83b0-c38fb7da4ee8]
+_____________ TestLoginFailures.test_nonexistent_user_returns_400 _____________
+apps\authentication\tests\integration\test_login_endpoint.py:175: in test_nonexistent_user_returns_400
+    assert r.status_code == status.HTTP_400_BAD_REQUEST
+E   assert 401 == 400
+E    +  where 401 = <Response status_code=401, "application/json">.status_code
+E    +  and   400 = status.HTTP_400_BAD_REQUEST
+---------------------------- Captured stdout call -----------------------------
+[WARNING ] apps.authentication.serializers.auth \u2014 \u26d4 Login failed: user not found 'nobody@nowhere.com'\n[WARNING ] security \u2014 SECURITY_AUDIT action=PERMISSION_DENIED req=0d679b3e-5557-4b16-8d5e-2a7ab390523d device=fp:57efdd91ba75ee0012c0 session=- ip=127.0.0.1 method=POST path=/api/v1/auth/login/ status=401 duration_ms=11.0 user_id=anonymous role=anonymous ua='-' referrer=-\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/auth/login/ \u2192 401 in 11.3ms [req=0d679b3e-5557-4b16-8d5e-2a7ab390523d]\n[WARNING ] django.request \u2014 Unauthorized: /api/v1/auth/login/
+------------------------------ Captured log call ------------------------------
+WARNING  apps.authentication.serializers.auth:auth.py:135 \u26d4 Login failed: user not found 'nobody@nowhere.com'\nINFO     apps.common.middleware:middleware.py:147 [POST] /api/v1/auth/login/ \u2192 401 in 11.3ms [req=0d679b3e-5557-4b16-8d5e-2a7ab390523d]
+________________ TestLoginSerializer.test_wrong_password_fails ________________
+apps\authentication\tests\unit\test_serializers.py:216: in test_wrong_password_fails
+    assert not s.is_valid()
+               ^^^^^^^^^^^^
+.venv\Lib\site-packages\rest_framework\serializers.py:225: in is_valid
+    self._validated_data = self.run_validation(self.initial_data)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\rest_framework\serializers.py:447: in run_validation
+    value = self.validate(value)
+            ^^^^^^^^^^^^^^^^^^^^
+apps\authentication\serializers\auth.py:143: in validate
+    raise InvalidCredentialsError()
+E   apps.authentication.exceptions.InvalidCredentialsError: Invalid credentials. Please check your email/phone and password and try again.
+---------------------------- Captured stdout setup ----------------------------
+[INFO    ] apps.authentication.models \u2014 Saved UnifiedUser 019d20d8-9d6b-7c85-a93d-33be2545267d [email] member_id=FASTAR000001\n[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=verified@fashionistar.io
+----------------------------- Captured log setup ------------------------------
+INFO     apps.authentication.models:models.py:582 Saved UnifiedUser 019d20d8-9d6b-7c85-a93d-33be2545267d [email] member_id=FASTAR000001\nINFO     apps.authentication.managers:managers.py:146 \u2705 Created user: email=verified@fashionistar.io
+---------------------------- Captured stdout call -----------------------------
+[WARNING ] apps.authentication.serializers.auth \u2014 \u26d4 Login failed: wrong password for 'verified@fashionistar.io'
+------------------------------ Captured log call ------------------------------
+WARNING  apps.authentication.serializers.auth:auth.py:140 \u26d4 Login failed: wrong password for 'verified@fashionistar.io'
+______________ TestLoginSerializer.test_non_existent_user_fails _______________
+apps\authentication\tests\unit\test_serializers.py:224: in test_non_existent_user_fails
+    assert not s.is_valid()
+               ^^^^^^^^^^^^
+.venv\Lib\site-packages\rest_framework\serializers.py:225: in is_valid
+    self._validated_data = self.run_validation(self.initial_data)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\rest_framework\serializers.py:447: in run_validation
+    value = self.validate(value)
+            ^^^^^^^^^^^^^^^^^^^^
+apps\authentication\serializers\auth.py:136: in validate
+    raise InvalidCredentialsError()
+E   apps.authentication.exceptions.InvalidCredentialsError: Invalid credentials. Please check your email/phone and password and try again.
+---------------------------- Captured stdout call -----------------------------
+[WARNING ] apps.authentication.serializers.auth \u2014 \u26d4 Login failed: user not found 'nobody@nowhere.com'
+------------------------------ Captured log call ------------------------------
+WARNING  apps.authentication.serializers.auth:auth.py:135 \u26d4 Login failed: user not found 'nobody@nowhere.com'
+_____________ TestLoginSerializer.test_inactive_user_cannot_login _____________
+apps\authentication\tests\unit\test_serializers.py:232: in test_inactive_user_cannot_login
+    assert not s.is_valid()
+               ^^^^^^^^^^^^
+.venv\Lib\site-packages\rest_framework\serializers.py:225: in is_valid
+    self._validated_data = self.run_validation(self.initial_data)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\rest_framework\serializers.py:447: in run_validation
+    value = self.validate(value)
+            ^^^^^^^^^^^^^^^^^^^^
+apps\authentication\serializers\auth.py:150: in validate
+    raise AccountNotVerifiedError()
+E   apps.authentication.exceptions.AccountNotVerifiedError: Your account has not been verified yet. Please check your email or phone for the OTP code we sent during registration. Verify your account here: http://fashionistar.net/verify-otp — or request a new code here: http://fashionistar.net/resend-otp
+---------------------------- Captured stdout setup ----------------------------
+[INFO    ] apps.authentication.models \u2014 Saved UnifiedUser 019d20d8-a85a-75df-8db2-9cffcea43819 [email] member_id=FASTAR000001\n[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=registered@fashionistar.io
+----------------------------- Captured log setup ------------------------------
+INFO     apps.authentication.models:models.py:582 Saved UnifiedUser 019d20d8-a85a-75df-8db2-9cffcea43819 [email] member_id=FASTAR000001\nINFO     apps.authentication.managers:managers.py:146 \u2705 Created user: email=registered@fashionistar.io
+---------------------------- Captured stdout call -----------------------------
+[WARNING ] apps.authentication.serializers.auth \u2014 \u26d4 Login rejected: account not verified 'registered@fashionistar.io'
+------------------------------ Captured log call ------------------------------
+WARNING  apps.authentication.serializers.auth:auth.py:147 \u26d4 Login rejected: account not verified 'registered@fashionistar.io'
+_____ TestPasswordResetConfirmEmail.test_bad_token_returns_400_with_code ______
+apps\authentication\tests\test_password_reset.py:177: in test_bad_token_returns_400_with_code
+    assert r.status_code == status.HTTP_400_BAD_REQUEST
+E   assert 429 == 400
+E    +  where 429 = <Response status_code=429, "application/json">.status_code
+E    +  and   400 = status.HTTP_400_BAD_REQUEST
+---------------------------- Captured stdout call -----------------------------
+[INFO    ] apps.authentication.models \u2014 Saved UnifiedUser 019d20d8-f7d1-7f76-9047-a6f60dabe4d0 [email] member_id=FASTAR000001\n[DEBUG   ] backend.celery \u2014 [Celery] Task dispatched: update_model_analytics_counter\n[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=pwreset@example.com\n[INFO    ] apps.authentication.models \u2014 Details updated for user: pwreset@example.com\n[DEBUG   ] backend.celery \u2014 [Celery] Task dispatched: update_model_analytics_counter\n[INFO    ] apps.authentication.models \u2014 Saved UnifiedUser 019d20d8-f7d1-7f76-9047-a6f60dabe4d0 [email] member_id=FASTAR000001\n[INFO    ] security \u2014 SECURITY_AUDIT action=CLIENT_ERROR req=83e73e08-a376-4717-bc1c-e44264b9553e device=fp:57efdd91ba75ee0012c0 session=- ip=127.0.0.1 method=POST path=/api/v1/password/reset-confirm/MDE5ZDIwZDgtZjdkMS03Zjc2LTkwNDctYTZmNjBkYWJlNGQw/bad-token-xyz/ status=429 duration_ms=5.0 user_id=anonymous role=anonymous ua='-' referrer=-\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-confirm/MDE5ZDIwZDgtZjdkMS03Zjc2LTkwNDctYTZmNjBkYWJlNGQw/bad-token-xyz/ \u2192 429 in 5.4ms [req=83e73e08-a376-4717-bc1c-e44264b9553e]\n[WARNING ] django.request \u2014 Too Many Requests: /api/v1/password/reset-confirm/MDE5ZDIwZDgtZjdkMS03Zjc2LTkwNDctYTZmNjBkYWJlNGQw/bad-token-xyz/
+------------------------------ Captured log call ------------------------------
+INFO     apps.authentication.models:models.py:582 Saved UnifiedUser 019d20d8-f7d1-7f76-9047-a6f60dabe4d0 [email] member_id=FASTAR000001\nDEBUG    backend.celery:celery.py:252 [Celery] Task dispatched: update_model_analytics_counter\nINFO     apps.authentication.managers:managers.py:146 \u2705 Created user: email=pwreset@example.com\nINFO     apps.authentication.models:models.py:534 Details updated for user: pwreset@example.com\nDEBUG    backend.celery:celery.py:252 [Celery] Task dispatched: update_model_analytics_counter\nINFO     apps.authentication.models:models.py:582 Saved UnifiedUser 019d20d8-f7d1-7f76-9047-a6f60dabe4d0 [email] member_id=FASTAR000001\nINFO     apps.common.middleware:middleware.py:147 [POST] /api/v1/password/reset-confirm/MDE5ZDIwZDgtZjdkMS03Zjc2LTkwNDctYTZmNjBkYWJlNGQw/bad-token-xyz/ \u2192 429 in 5.4ms [req=83e73e08-a376-4717-bc1c-e44264b9553e]
+-------------------------- Captured stdout teardown ---------------------------
+[DEBUG   ] backend.celery — [Celery] Task dispatched: update_model_analytics_counter
+[INFO    ] application — EmailBackendConfig instance created via post_migrate signal.
+[DEBUG   ] backend.celery — [Celery] Task dispatched: update_model_analytics_counter
+[INFO    ] application — Default SMSBackendConfig instance created via post_migrate signal.
+---------------------------- Captured log teardown ----------------------------
+DEBUG    backend.celery:celery.py:252 [Celery] Task dispatched: update_model_analytics_counter
+DEBUG    backend.celery:celery.py:252 [Celery] Task dispatched: update_model_analytics_counter
+_____ TestPasswordResetConfirmEmail.test_mismatched_passwords_returns_400 _____
+apps\authentication\tests\test_password_reset.py:186: in test_mismatched_passwords_returns_400
+    assert r.status_code == status.HTTP_400_BAD_REQUEST
+E   assert 429 == 400
+E    +  where 429 = <Response status_code=429, "application/json">.status_code
+E    +  and   400 = status.HTTP_400_BAD_REQUEST
+---------------------------- Captured stdout call -----------------------------
+[INFO    ] apps.authentication.models \u2014 Saved UnifiedUser 019d20d8-fedf-7ee9-a301-876a10179f28 [email] member_id=FASTAR000001\n[DEBUG   ] backend.celery \u2014 [Celery] Task dispatched: update_model_analytics_counter\n[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=pwreset@example.com\n[INFO    ] apps.authentication.models \u2014 Details updated for user: pwreset@example.com\n[DEBUG   ] backend.celery \u2014 [Celery] Task dispatched: update_model_analytics_counter\n[INFO    ] apps.authentication.models \u2014 Saved UnifiedUser 019d20d8-fedf-7ee9-a301-876a10179f28 [email] member_id=FASTAR000001\n[INFO    ] security \u2014 SECURITY_AUDIT action=CLIENT_ERROR req=000170cb-8a94-44bd-8dc9-170e433a150a device=fp:57efdd91ba75ee0012c0 session=- ip=127.0.0.1 method=POST path=/api/v1/password/reset-confirm/MDE5ZDIwZDgtZmVkZi03ZWU5LWEzMDEtODc2YTEwMTc5ZjI4/d5yire-6f25798bd358c707dd4949224901ab4b/ status=429 duration_ms=3.3 user_id=anonymous role=anonymous ua='-' referrer=-\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-confirm/MDE5ZDIwZDgtZmVkZi03ZWU5LWEzMDEtODc2YTEwMTc5ZjI4/d5yire-6f25798bd358c707dd4949224901ab4b/ \u2192 429 in 3.7ms [req=000170cb-8a94-44bd-8dc9-170e433a150a]\n[WARNING ] django.request \u2014 Too Many Requests: /api/v1/password/reset-confirm/MDE5ZDIwZDgtZmVkZi03ZWU5LWEzMDEtODc2YTEwMTc5ZjI4/d5yire-6f25798bd358c707dd4949224901ab4b/
+------------------------------ Captured log call ------------------------------
+INFO     apps.authentication.models:models.py:582 Saved UnifiedUser 019d20d8-fedf-7ee9-a301-876a10179f28 [email] member_id=FASTAR000001\nDEBUG    backend.celery:celery.py:252 [Celery] Task dispatched: update_model_analytics_counter\nINFO     apps.authentication.managers:managers.py:146 \u2705 Created user: email=pwreset@example.com\nINFO     apps.authentication.models:models.py:534 Details updated for user: pwreset@example.com\nDEBUG    backend.celery:celery.py:252 [Celery] Task dispatched: update_model_analytics_counter\nINFO     apps.authentication.models:models.py:582 Saved UnifiedUser 019d20d8-fedf-7ee9-a301-876a10179f28 [email] member_id=FASTAR000001\nINFO     apps.common.middleware:middleware.py:147 [POST] /api/v1/password/reset-confirm/MDE5ZDIwZDgtZmVkZi03ZWU5LWEzMDEtODc2YTEwMTc5ZjI4/d5yire-6f25798bd358c707dd4949224901ab4b/ \u2192 429 in 3.7ms [req=000170cb-8a94-44bd-8dc9-170e433a150a]
+-------------------------- Captured stdout teardown ---------------------------
+[DEBUG   ] backend.celery — [Celery] Task dispatched: update_model_analytics_counter
+[INFO    ] application — EmailBackendConfig instance created via post_migrate signal.
+[DEBUG   ] backend.celery — [Celery] Task dispatched: update_model_analytics_counter
+[INFO    ] application — Default SMSBackendConfig instance created via post_migrate signal.
+---------------------------- Captured log teardown ----------------------------
+DEBUG    backend.celery:celery.py:252 [Celery] Task dispatched: update_model_analytics_counter
+DEBUG    backend.celery:celery.py:252 [Celery] Task dispatched: update_model_analytics_counter
+_______ TestPasswordResetConfirmEmail.test_idempotency_same_token_twice _______
+apps\authentication\tests\test_password_reset.py:196: in test_idempotency_same_token_twice
+    assert r1.status_code == 200
+E   assert 429 == 200
+E    +  where 429 = <Response status_code=429, "application/json">.status_code
+---------------------------- Captured stdout call -----------------------------
+[INFO    ] apps.authentication.models \u2014 Saved UnifiedUser 019d20d9-0470-7d7b-82dd-d451a38b10b5 [email] member_id=FASTAR000001\n[DEBUG   ] backend.celery \u2014 [Celery] Task dispatched: update_model_analytics_counter\n[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=pwreset@example.com\n[INFO    ] apps.authentication.models \u2014 Details updated for user: pwreset@example.com\n[DEBUG   ] backend.celery \u2014 [Celery] Task dispatched: update_model_analytics_counter\n[INFO    ] apps.authentication.models \u2014 Saved UnifiedUser 019d20d9-0470-7d7b-82dd-d451a38b10b5 [email] member_id=FASTAR000001\n[INFO    ] security \u2014 SECURITY_AUDIT action=CLIENT_ERROR req=ca4f4735-2aaa-467d-99c9-8eefc8c86008 device=fp:57efdd91ba75ee0012c0 session=- ip=127.0.0.1 method=POST path=/api/v1/password/reset-confirm/MDE5ZDIwZDktMDQ3MC03ZDdiLTgyZGQtZDQ1MWEzOGIxMGI1/d5yirg-60e1c1fe2a0105fe72154fa3bd05bc91/ status=429 duration_ms=3.8 user_id=anonymous role=anonymous ua='-' referrer=-\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-confirm/MDE5ZDIwZDktMDQ3MC03ZDdiLTgyZGQtZDQ1MWEzOGIxMGI1/d5yirg-60e1c1fe2a0105fe72154fa3bd05bc91/ \u2192 429 in 4.2ms [req=ca4f4735-2aaa-467d-99c9-8eefc8c86008]\n[WARNING ] django.request \u2014 Too Many Requests: /api/v1/password/reset-confirm/MDE5ZDIwZDktMDQ3MC03ZDdiLTgyZGQtZDQ1MWEzOGIxMGI1/d5yirg-60e1c1fe2a0105fe72154fa3bd05bc91/\n[INFO    ] security \u2014 SECURITY_AUDIT action=CLIENT_ERROR req=1b57d866-be7d-4d5b-9e07-04f5c5328e6e device=fp:57efdd91ba75ee0012c0 session=- ip=127.0.0.1 method=POST path=/api/v1/password/reset-confirm/MDE5ZDIwZDktMDQ3MC03ZDdiLTgyZGQtZDQ1MWEzOGIxMGI1/d5yirg-60e1c1fe2a0105fe72154fa3bd05bc91/ status=429 duration_ms=3.8 user_id=anonymous role=anonymous ua='-' referrer=-\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-confirm/MDE5ZDIwZDktMDQ3MC03ZDdiLTgyZGQtZDQ1MWEzOGIxMGI1/d5yirg-60e1c1fe2a0105fe72154fa3bd05bc91/ \u2192 429 in 4.2ms [req=1b57d866-be7d-4d5b-9e07-04f5c5328e6e]\n[WARNING ] django.request \u2014 Too Many Requests: /api/v1/password/reset-confirm/MDE5ZDIwZDktMDQ3MC03ZDdiLTgyZGQtZDQ1MWEzOGIxMGI1/d5yirg-60e1c1fe2a0105fe72154fa3bd05bc91/
+------------------------------ Captured log call ------------------------------
+INFO     apps.authentication.models:models.py:582 Saved UnifiedUser 019d20d9-0470-7d7b-82dd-d451a38b10b5 [email] member_id=FASTAR000001\nDEBUG    backend.celery:celery.py:252 [Celery] Task dispatched: update_model_analytics_counter\nINFO     apps.authentication.managers:managers.py:146 \u2705 Created user: email=pwreset@example.com\nINFO     apps.authentication.models:models.py:534 Details updated for user: pwreset@example.com\nDEBUG    backend.celery:celery.py:252 [Celery] Task dispatched: update_model_analytics_counter\nINFO     apps.authentication.models:models.py:582 Saved UnifiedUser 019d20d9-0470-7d7b-82dd-d451a38b10b5 [email] member_id=FASTAR000001\nINFO     apps.common.middleware:middleware.py:147 [POST] /api/v1/password/reset-confirm/MDE5ZDIwZDktMDQ3MC03ZDdiLTgyZGQtZDQ1MWEzOGIxMGI1/d5yirg-60e1c1fe2a0105fe72154fa3bd05bc91/ \u2192 429 in 4.2ms [req=ca4f4735-2aaa-467d-99c9-8eefc8c86008]\nINFO     apps.common.middleware:middleware.py:147 [POST] /api/v1/password/reset-confirm/MDE5ZDIwZDktMDQ3MC03ZDdiLTgyZGQtZDQ1MWEzOGIxMGI1/d5yirg-60e1c1fe2a0105fe72154fa3bd05bc91/ \u2192 429 in 4.2ms [req=1b57d866-be7d-4d5b-9e07-04f5c5328e6e]
+-------------------------- Captured stdout teardown ---------------------------
+[DEBUG   ] backend.celery — [Celery] Task dispatched: update_model_analytics_counter
+[INFO    ] application — EmailBackendConfig instance created via post_migrate signal.
+[DEBUG   ] backend.celery — [Celery] Task dispatched: update_model_analytics_counter
+[INFO    ] application — Default SMSBackendConfig instance created via post_migrate signal.
+---------------------------- Captured log teardown ----------------------------
+DEBUG    backend.celery:celery.py:252 [Celery] Task dispatched: update_model_analytics_counter
+DEBUG    backend.celery:celery.py:252 [Celery] Task dispatched: update_model_analytics_counter
+__ TestPasswordResetConfirmEmail.test_race_condition_same_token_two_threads ___
+apps\authentication\tests\test_password_reset.py:228: in test_race_condition_same_token_two_threads
+    assert results.count(200) == 1, f"Expected 1 win, got: {results}"
+E   AssertionError: Expected 1 win, got: [429, 429]
+E   assert 0 == 1
+E    +  where 0 = <built-in method count of list object at 0x000001F8A0973600>(200)
+E    +    where <built-in method count of list object at 0x000001F8A0973600> = [429, 429].count
+---------------------------- Captured stdout call -----------------------------
+[INFO    ] apps.authentication.models \u2014 Saved UnifiedUser 019d20d9-1332-79b3-8ee9-ad7b845647f2 [email] member_id=FASTAR000001\n[DEBUG   ] backend.celery \u2014 [Celery] Task dispatched: update_model_analytics_counter\n[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=pwreset@example.com\n[INFO    ] apps.authentication.models \u2014 Details updated for user: pwreset@example.com\n[DEBUG   ] backend.celery \u2014 [Celery] Task dispatched: update_model_analytics_counter\n[INFO    ] apps.authentication.models \u2014 Saved UnifiedUser 019d20d9-1332-79b3-8ee9-ad7b845647f2 [email] member_id=FASTAR000001\n[INFO    ] security \u2014 SECURITY_AUDIT action=CLIENT_ERROR req=d2fb4849-e480-467b-bc81-fb5b621013bb device=fp:57efdd91ba75ee0012c0 session=- ip=127.0.0.1 method=POST path=/api/v1/password/reset-confirm/MDE5ZDIwZDktMTMzMi03OWIzLThlZTktYWQ3Yjg0NTY0N2Yy/d5yirj-d771c7334eca73c792879a5493c3cc3a/ status=429 duration_ms=101.4 user_id=anonymous role=anonymous ua='-' referrer=-\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-confirm/MDE5ZDIwZDktMTMzMi03OWIzLThlZTktYWQ3Yjg0NTY0N2Yy/d5yirj-d771c7334eca73c792879a5493c3cc3a/ \u2192 429 in 101.8ms [req=d2fb4849-e480-467b-bc81-fb5b621013bb]\n[WARNING ] django.request \u2014 Too Many Requests: /api/v1/password/reset-confirm/MDE5ZDIwZDktMTMzMi03OWIzLThlZTktYWQ3Yjg0NTY0N2Yy/d5yirj-d771c7334eca73c792879a5493c3cc3a/\n[INFO    ] security \u2014 SECURITY_AUDIT action=CLIENT_ERROR req=0dcf7f29-ce3b-4935-8a24-761e4c8ff8b6 device=fp:57efdd91ba75ee0012c0 session=- ip=127.0.0.1 method=POST path=/api/v1/password/reset-confirm/MDE5ZDIwZDktMTMzMi03OWIzLThlZTktYWQ3Yjg0NTY0N2Yy/d5yirj-d771c7334eca73c792879a5493c3cc3a/ status=429 duration_ms=13.3 user_id=anonymous role=anonymous ua='-' referrer=-\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-confirm/MDE5ZDIwZDktMTMzMi03OWIzLThlZTktYWQ3Yjg0NTY0N2Yy/d5yirj-d771c7334eca73c792879a5493c3cc3a/ \u2192 429 in 14.5ms [req=0dcf7f29-ce3b-4935-8a24-761e4c8ff8b6]\n[WARNING ] django.request \u2014 Too Many Requests: /api/v1/password/reset-confirm/MDE5ZDIwZDktMTMzMi03OWIzLThlZTktYWQ3Yjg0NTY0N2Yy/d5yirj-d771c7334eca73c792879a5493c3cc3a/
+------------------------------ Captured log call ------------------------------
+INFO     apps.authentication.models:models.py:582 Saved UnifiedUser 019d20d9-1332-79b3-8ee9-ad7b845647f2 [email] member_id=FASTAR000001\nDEBUG    backend.celery:celery.py:252 [Celery] Task dispatched: update_model_analytics_counter\nINFO     apps.authentication.managers:managers.py:146 \u2705 Created user: email=pwreset@example.com\nINFO     apps.authentication.models:models.py:534 Details updated for user: pwreset@example.com\nDEBUG    backend.celery:celery.py:252 [Celery] Task dispatched: update_model_analytics_counter\nINFO     apps.authentication.models:models.py:582 Saved UnifiedUser 019d20d9-1332-79b3-8ee9-ad7b845647f2 [email] member_id=FASTAR000001\nINFO     apps.common.middleware:middleware.py:147 [POST] /api/v1/password/reset-confirm/MDE5ZDIwZDktMTMzMi03OWIzLThlZTktYWQ3Yjg0NTY0N2Yy/d5yirj-d771c7334eca73c792879a5493c3cc3a/ \u2192 429 in 101.8ms [req=d2fb4849-e480-467b-bc81-fb5b621013bb]\nINFO     apps.common.middleware:middleware.py:147 [POST] /api/v1/password/reset-confirm/MDE5ZDIwZDktMTMzMi03OWIzLThlZTktYWQ3Yjg0NTY0N2Yy/d5yirj-d771c7334eca73c792879a5493c3cc3a/ \u2192 429 in 14.5ms [req=0dcf7f29-ce3b-4935-8a24-761e4c8ff8b6]
+-------------------------- Captured stdout teardown ---------------------------
+[DEBUG   ] backend.celery — [Celery] Task dispatched: update_model_analytics_counter
+[INFO    ] application — EmailBackendConfig instance created via post_migrate signal.
+[DEBUG   ] backend.celery — [Celery] Task dispatched: update_model_analytics_counter
+[INFO    ] application — Default SMSBackendConfig instance created via post_migrate signal.
+---------------------------- Captured log teardown ----------------------------
+DEBUG    backend.celery:celery.py:252 [Celery] Task dispatched: update_model_analytics_counter
+DEBUG    backend.celery:celery.py:252 [Celery] Task dispatched: update_model_analytics_counter
+________ TestPasswordResetConfirmPhone.test_valid_otp_resets_password _________
+apps\authentication\tests\test_password_reset.py:251: in test_valid_otp_resets_password
+    assert r.status_code == status.HTTP_200_OK
+E   assert 429 == 200
+E    +  where 429 = <Response status_code=429, "application/json">.status_code
+E    +  and   200 = status.HTTP_200_OK
+---------------------------- Captured stdout call -----------------------------
+[INFO    ] apps.authentication.models \u2014 Saved UnifiedUser 019d20d9-195d-70f0-a677-ed50663da4d4 [phone] member_id=FASTAR000001\n[DEBUG   ] backend.celery \u2014 [Celery] Task dispatched: update_model_analytics_counter\n[INFO    ] apps.authentication.managers \u2014 \u2705 Created user: email=+2348012345678\n[INFO    ] apps.authentication.models \u2014 Details updated for user: +234 801 234 5678\n[DEBUG   ] backend.celery \u2014 [Celery] Task dispatched: update_model_analytics_counter\n[INFO    ] apps.authentication.models \u2014 Saved UnifiedUser 019d20d9-195d-70f0-a677-ed50663da4d4 [phone] member_id=FASTAR000001\n[INFO    ] security \u2014 SECURITY_AUDIT action=CLIENT_ERROR req=fa2e3f92-e0d5-435b-9e06-a82b5895cb22 device=fp:57efdd91ba75ee0012c0 session=- ip=127.0.0.1 method=POST path=/api/v1/password/reset-phone-confirm/ status=429 duration_ms=5.4 user_id=anonymous role=anonymous ua='-' referrer=-\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 429 in 5.9ms [req=fa2e3f92-e0d5-435b-9e06-a82b5895cb22]\n[WARNING ] django.request \u2014 Too Many Requests: /api/v1/password/reset-phone-confirm/
+------------------------------ Captured log call ------------------------------
+INFO     apps.authentication.models:models.py:582 Saved UnifiedUser 019d20d9-195d-70f0-a677-ed50663da4d4 [phone] member_id=FASTAR000001\nDEBUG    backend.celery:celery.py:252 [Celery] Task dispatched: update_model_analytics_counter\nINFO     apps.authentication.managers:managers.py:146 \u2705 Created user: email=+2348012345678\nINFO     apps.authentication.models:models.py:534 Details updated for user: +234 801 234 5678\nDEBUG    backend.celery:celery.py:252 [Celery] Task dispatched: update_model_analytics_counter\nINFO     apps.authentication.models:models.py:582 Saved UnifiedUser 019d20d9-195d-70f0-a677-ed50663da4d4 [phone] member_id=FASTAR000001\nINFO     apps.common.middleware:middleware.py:147 [POST] /api/v1/password/reset-phone-confirm/ \u2192 429 in 5.9ms [req=fa2e3f92-e0d5-435b-9e06-a82b5895cb22]
+-------------------------- Captured stdout teardown ---------------------------
+[DEBUG   ] backend.celery — [Celery] Task dispatched: update_model_analytics_counter
+[INFO    ] application — EmailBackendConfig instance created via post_migrate signal.
+[DEBUG   ] backend.celery — [Celery] Task dispatched: update_model_analytics_counter
+[INFO    ] application — Default SMSBackendConfig instance created via post_migrate signal.
+---------------------------- Captured log teardown ----------------------------
+DEBUG    backend.celery:celery.py:252 [Celery] Task dispatched: update_model_analytics_counter
+DEBUG    backend.celery:celery.py:252 [Celery] Task dispatched: update_model_analytics_counter
+_________ TestPasswordResetConfirmPhone.test_phone_field_NOT_required _________
+apps\authentication\tests\test_password_reset.py:266: in test_phone_field_NOT_required
+    assert r.status_code == status.HTTP_400_BAD_REQUEST
+E   assert 429 == 400
+E    +  where 429 = <Response status_code=429, "application/json">.status_code
+E    +  and   400 = status.HTTP_400_BAD_REQUEST
+---------------------------- Captured stdout call -----------------------------
+[INFO    ] security \u2014 SECURITY_AUDIT action=CLIENT_ERROR req=4c272fd3-46ae-4594-bfbe-a8ed96cb7ef1 device=fp:57efdd91ba75ee0012c0 session=- ip=127.0.0.1 method=POST path=/api/v1/password/reset-phone-confirm/ status=429 duration_ms=4.0 user_id=anonymous role=anonymous ua='-' referrer=-\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 429 in 4.5ms [req=4c272fd3-46ae-4594-bfbe-a8ed96cb7ef1]\n[WARNING ] django.request \u2014 Too Many Requests: /api/v1/password/reset-phone-confirm/
+------------------------------ Captured log call ------------------------------
+INFO     apps.common.middleware:middleware.py:147 [POST] /api/v1/password/reset-phone-confirm/ \u2192 429 in 4.5ms [req=4c272fd3-46ae-4594-bfbe-a8ed96cb7ef1]
+-------------------------- Captured stdout teardown ---------------------------
+[DEBUG   ] backend.celery — [Celery] Task dispatched: update_model_analytics_counter
+[INFO    ] application — EmailBackendConfig instance created via post_migrate signal.
+[DEBUG   ] backend.celery — [Celery] Task dispatched: update_model_analytics_counter
+[INFO    ] application — Default SMSBackendConfig instance created via post_migrate signal.
+---------------------------- Captured log teardown ----------------------------
+DEBUG    backend.celery:celery.py:252 [Celery] Task dispatched: update_model_analytics_counter
+DEBUG    backend.celery:celery.py:252 [Celery] Task dispatched: update_model_analytics_counter
+_ TestPasswordResetConfirmPhone.test_invalid_otp_returns_400_invalid_otp_code _
+apps\authentication\tests\test_password_reset.py:282: in test_invalid_otp_returns_400_invalid_otp_code
+    assert r.status_code == status.HTTP_400_BAD_REQUEST
+E   assert 429 == 400
+E    +  where 429 = <Response status_code=429, "application/json">.status_code
+E    +  and   400 = status.HTTP_400_BAD_REQUEST
+---------------------------- Captured stdout call -----------------------------
+[INFO    ] security \u2014 SECURITY_AUDIT action=CLIENT_ERROR req=8f66cd07-5bb5-400c-9db7-233ed76ffcdc device=fp:57efdd91ba75ee0012c0 session=- ip=127.0.0.1 method=POST path=/api/v1/password/reset-phone-confirm/ status=429 duration_ms=5.4 user_id=anonymous role=anonymous ua='-' referrer=-\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 429 in 5.9ms [req=8f66cd07-5bb5-400c-9db7-233ed76ffcdc]\n[WARNING ] django.request \u2014 Too Many Requests: /api/v1/password/reset-phone-confirm/
+------------------------------ Captured log call ------------------------------
+INFO     apps.common.middleware:middleware.py:147 [POST] /api/v1/password/reset-phone-confirm/ \u2192 429 in 5.9ms [req=8f66cd07-5bb5-400c-9db7-233ed76ffcdc]
+-------------------------- Captured stdout teardown ---------------------------
+[DEBUG   ] backend.celery — [Celery] Task dispatched: update_model_analytics_counter
+[INFO    ] application — EmailBackendConfig instance created via post_migrate signal.
+[DEBUG   ] backend.celery — [Celery] Task dispatched: update_model_analytics_counter
+[INFO    ] application — Default SMSBackendConfig instance created via post_migrate signal.
+---------------------------- Captured log teardown ----------------------------
+DEBUG    backend.celery:celery.py:252 [Celery] Task dispatched: update_model_analytics_counter
+DEBUG    backend.celery:celery.py:252 [Celery] Task dispatched: update_model_analytics_counter
+___ TestPasswordResetConfirmPhone.test_non_digit_otp_rejected_by_serializer ___
+apps\authentication\tests\test_password_reset.py:289: in test_non_digit_otp_rejected_by_serializer
+    assert r.status_code == status.HTTP_400_BAD_REQUEST
+E   assert 429 == 400
+E    +  where 429 = <Response status_code=429, "application/json">.status_code
+E    +  and   400 = status.HTTP_400_BAD_REQUEST
+---------------------------- Captured stdout call -----------------------------
+[INFO    ] security \u2014 SECURITY_AUDIT action=CLIENT_ERROR req=cd221efe-44f1-40f7-bfbb-f932cf718859 device=fp:57efdd91ba75ee0012c0 session=- ip=127.0.0.1 method=POST path=/api/v1/password/reset-phone-confirm/ status=429 duration_ms=4.3 user_id=anonymous role=anonymous ua='-' referrer=-\n[INFO    ] apps.common.middleware \u2014 [POST] /api/v1/password/reset-phone-confirm/ \u2192 429 in 4.9ms [req=cd221efe-44f1-40f7-bfbb-f932cf718859]\n[WARNING ] django.request \u2014 Too Many Requests: /api/v1/password/reset-phone-confirm/
+------------------------------ Captured log call ------------------------------
+INFO     apps.common.middleware:middleware.py:147 [POST] /api/v1/password/reset-phone-confirm/ \u2192 429 in 4.9ms [req=cd221efe-44f1-40f7-bfbb-f932cf718859]
+-------------------------- Captured stdout teardown ---------------------------
+[DEBUG   ] backend.celery — [Celery] Task dispatched: update_model_analytics_counter
+[INFO    ] application — EmailBackendConfig instance created via post_migrate signal.
+[DEBUG   ] backend.celery — [Celery] Task dispatched: update_model_analytics_counter
+[INFO    ] application — Default SMSBackendConfig instance created via post_migrate signal.
+---------------------------- Captured log teardown ----------------------------
+DEBUG    backend.celery:celery.py:252 [Celery] Task dispatched: update_model_analytics_counter
+DEBUG    backend.celery:celery.py:252 [Celery] Task dispatched: update_model_analytics_counter
+____________ TestVerifyByOTPSync.test_returns_user_id_on_valid_otp ____________
+apps\authentication\tests\unit\test_otp_service.py:192: in test_returns_user_id_on_valid_otp
+    assert result is not None
+E   assert None is not None
+____________ TestVerifyByOTPSync.test_deletes_both_keys_on_success ____________
+apps\authentication\tests\unit\test_otp_service.py:217: in test_deletes_both_keys_on_success
+    assert pipe.delete.call_count == 2
+E   AssertionError: assert 0 == 2
+E    +  where 0 = <MagicMock name='get_redis_connection_safe().pipeline().delete' id='2167269282816'>.call_count
+E    +    where <MagicMock name='get_redis_connection_safe().pipeline().delete' id='2167269282816'> = <MagicMock name='get_redis_connection_safe().pipeline()' id='2167269291216'>.delete
+___________ TestVerifyByOTPSync.test_orphaned_hash_index_cleaned_up ___________
+C:\Python314\Lib\unittest\mock.py:954: in assert_called
+    raise AssertionError(msg)
+E   AssertionError: Expected 'delete' to have been called.
+
+During handling of the above exception, another exception occurred:
+apps\authentication\tests\unit\test_otp_service.py:254: in test_orphaned_hash_index_cleaned_up
+    redis.delete.assert_called()  # orphan cleaned up
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError: Expected 'delete' to have been called.
+_______ TestUserRegistrationSerializer.test_valid_email_payload_passes ________
+apps\authentication\tests\unit\test_serializers.py:63: in test_valid_email_payload_passes
+    assert s.is_valid(), s.errors
+E   AssertionError: {'non_field_errors': [ErrorDetail(string='An error occurred during validation.', code='invalid')]}
+E   assert False
+E    +  where False = is_valid()
+E    +    where is_valid = UserRegistrationSerializer(data={'email': 'valid@fashionistar-test.io', 'password': 'SecurePass123!', 'password2': 'SecurePass123!', 'role': 'client'}):\n    email = EmailField(allow_blank=True, help_text="User's email address", required=False)\n    phone = PhoneNumberField(allow_blank=True, help_text="User's phone number", required=False)\n    role = ChoiceField(choices=[('vendor', 'Vendor'), ('client', 'Client')], help_text="User's role: 'vendor' or 'client'")\n    password = CharField(help_text="User's password", required=True, style={'input_type': 'password'}, validators=[<function validate_password>], write_only=True)\n    password2 = CharField(help_text="Confirm user's password", required=True, style={'input_type': 'password'}, write_only=True).is_valid
+---------------------------- Captured stdout call -----------------------------
+[ERROR   ] apps.authentication.serializers.auth — Unexpected error in registration validation: Database access not allowed, use the "django_db" mark, or the "db" or "transactional_db" fixtures to enable it.
+------------------------------ Captured log call ------------------------------
+ERROR    apps.authentication.serializers.auth:auth.py:311 Unexpected error in registration validation: Database access not allowed, use the "django_db" mark, or the "db" or "transactional_db" fixtures to enable it.
+__________ TestUserRegistrationSerializer.test_vendor_role_accepted ___________
+apps\authentication\tests\unit\test_serializers.py:130: in test_vendor_role_accepted
+    assert s.is_valid(), s.errors
+E   AssertionError: {'non_field_errors': [ErrorDetail(string='An error occurred during validation.', code='invalid')]}
+E   assert False
+E    +  where False = is_valid()
+E    +    where is_valid = UserRegistrationSerializer(data={'email': 'vendor@test.io', 'password': 'SecurePass123!', 'password2': 'SecurePass123!', 'role': 'vendor'}):\n    email = EmailField(allow_blank=True, help_text="User's email address", required=False)\n    phone = PhoneNumberField(allow_blank=True, help_text="User's phone number", required=False)\n    role = ChoiceField(choices=[('vendor', 'Vendor'), ('client', 'Client')], help_text="User's role: 'vendor' or 'client'")\n    password = CharField(help_text="User's password", required=True, style={'input_type': 'password'}, validators=[<function validate_password>], write_only=True)\n    password2 = CharField(help_text="Confirm user's password", required=True, style={'input_type': 'password'}, write_only=True).is_valid
+---------------------------- Captured stdout call -----------------------------
+[ERROR   ] apps.authentication.serializers.auth — Unexpected error in registration validation: Database access not allowed, use the "django_db" mark, or the "db" or "transactional_db" fixtures to enable it.
+------------------------------ Captured log call ------------------------------
+ERROR    apps.authentication.serializers.auth:auth.py:311 Unexpected error in registration validation: Database access not allowed, use the "django_db" mark, or the "db" or "transactional_db" fixtures to enable it.
+_ TestUserRegistrationSerializer.test_duplicate_email_returns_email_field_error _
+apps\authentication\tests\unit\test_serializers.py:145: in test_duplicate_email_returns_email_field_error
+    assert 'email' in s.errors
+E   assert 'email' in {'non_field_errors': [ErrorDetail(string='An error occurred during validation.', code='invalid')]}
+E    +  where {'non_field_errors': [ErrorDetail(string='An error occurred during validation.', code='invalid')]} = UserRegistrationSerializer(data={'email': 'dup@test.io', 'password': 'SecurePass123!', 'password2': 'SecurePass123!', 'role': 'client'}):\n    email = EmailField(allow_blank=True, help_text="User's email address", required=False)\n    phone = PhoneNumberField(allow_blank=True, help_text="User's phone number", required=False)\n    role = ChoiceField(choices=[('vendor', 'Vendor'), ('client', 'Client')], help_text="User's role: 'vendor' or 'client'")\n    password = CharField(help_text="User's password", required=True, style={'input_type': 'password'}, validators=[<function validate_password>], write_only=True)\n    password2 = CharField(help_text="Confirm user's password", required=True, style={'input_type': 'password'}, write_only=True).errors
+---------------------------- Captured stdout call -----------------------------
+[ERROR   ] apps.authentication.serializers.auth — Unexpected error in registration validation: Database access not allowed, use the "django_db" mark, or the "db" or "transactional_db" fixtures to enable it.
+------------------------------ Captured log call ------------------------------
+ERROR    apps.authentication.serializers.auth:auth.py:311 Unexpected error in registration validation: Database access not allowed, use the "django_db" mark, or the "db" or "transactional_db" fixtures to enable it.
+_ TestUserRegistrationSerializer.test_email_normalized_before_uniqueness_check _
+apps\authentication\tests\unit\test_serializers.py:164: in test_email_normalized_before_uniqueness_check
+    assert 'email' in s.errors
+E   assert 'email' in {'non_field_errors': [ErrorDetail(string='An error occurred during validation.', code='invalid')]}
+E    +  where {'non_field_errors': [ErrorDetail(string='An error occurred during validation.', code='invalid')]} = UserRegistrationSerializer(data={'email': 'user@EXAMPLE.COM', 'password': 'SecurePass123!', 'password2': 'SecurePass123!', 'role': 'client'}):\n    email = EmailField(allow_blank=True, help_text="User's email address", required=False)\n    phone = PhoneNumberField(allow_blank=True, help_text="User's phone number", required=False)\n    role = ChoiceField(choices=[('vendor', 'Vendor'), ('client', 'Client')], help_text="User's role: 'vendor' or 'client'")\n    password = CharField(help_text="User's password", required=True, style={'input_type': 'password'}, validators=[<function validate_password>], write_only=True)\n    password2 = CharField(help_text="Confirm user's password", required=True, style={'input_type': 'password'}, write_only=True).errors
+---------------------------- Captured stdout call -----------------------------
+[ERROR   ] apps.authentication.serializers.auth — Unexpected error in registration validation: Database access not allowed, use the "django_db" mark, or the "db" or "transactional_db" fixtures to enable it.
+------------------------------ Captured log call ------------------------------
+ERROR    apps.authentication.serializers.auth:auth.py:311 Unexpected error in registration validation: Database access not allowed, use the "django_db" mark, or the "db" or "transactional_db" fixtures to enable it.
+=========================== short test summary info ===========================
+FAILED apps/authentication/tests/integration/test_login_endpoint.py::TestLoginFailures::test_wrong_password_returns_400
+FAILED apps/authentication/tests/integration/test_login_endpoint.py::TestLoginFailures::test_nonexistent_user_returns_400
+FAILED apps/authentication/tests/unit/test_serializers.py::TestLoginSerializer::test_wrong_password_fails
+FAILED apps/authentication/tests/unit/test_serializers.py::TestLoginSerializer::test_non_existent_user_fails
+FAILED apps/authentication/tests/unit/test_serializers.py::TestLoginSerializer::test_inactive_user_cannot_login
+FAILED apps/authentication/tests/test_password_reset.py::TestPasswordResetConfirmEmail::test_bad_token_returns_400_with_code
+FAILED apps/authentication/tests/test_password_reset.py::TestPasswordResetConfirmEmail::test_mismatched_passwords_returns_400
+FAILED apps/authentication/tests/test_password_reset.py::TestPasswordResetConfirmEmail::test_idempotency_same_token_twice
+FAILED apps/authentication/tests/test_password_reset.py::TestPasswordResetConfirmEmail::test_race_condition_same_token_two_threads
+FAILED apps/authentication/tests/test_password_reset.py::TestPasswordResetConfirmPhone::test_valid_otp_resets_password
+FAILED apps/authentication/tests/test_password_reset.py::TestPasswordResetConfirmPhone::test_phone_field_NOT_required
+FAILED apps/authentication/tests/test_password_reset.py::TestPasswordResetConfirmPhone::test_invalid_otp_returns_400_invalid_otp_code
+FAILED apps/authentication/tests/test_password_reset.py::TestPasswordResetConfirmPhone::test_non_digit_otp_rejected_by_serializer
+FAILED apps/authentication/tests/unit/test_otp_service.py::TestVerifyByOTPSync::test_returns_user_id_on_valid_otp
+FAILED apps/authentication/tests/unit/test_otp_service.py::TestVerifyByOTPSync::test_deletes_both_keys_on_success
+FAILED apps/authentication/tests/unit/test_otp_service.py::TestVerifyByOTPSync::test_orphaned_hash_index_cleaned_up
+FAILED apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_valid_email_payload_passes
+FAILED apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_vendor_role_accepted
+FAILED apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_duplicate_email_returns_email_field_error
+FAILED apps/authentication/tests/unit/test_serializers.py::TestUserRegistrationSerializer::test_email_normalized_before_uniqueness_check
+================= 20 failed, 135 passed in 197.35s (0:03:17) ==================

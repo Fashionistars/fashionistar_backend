@@ -1,0 +1,12 @@
+Subject: Test Email - Fashionistar
+
+Hi,
+
+This is a test email to confirm that our email system is working correctly.
+
+Message: {{ message }}
+
+If you received this email, everything is functioning properly.
+
+Best Regards,
+The Fashionistar Team

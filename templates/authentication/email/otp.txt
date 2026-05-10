@@ -1,0 +1,25 @@
+FASHIONISTAR — Verify Your Account
+================================================================
+
+Hello,
+
+Your One-Time Password (OTP) for Fashionistar account verification:
+
+    {{ otp }}
+
+This code expires in 5 minutes{% if time %} at {{ time }}{% endif %}.
+
+HOW TO USE:
+1. Return to fashionistar.net
+2. Enter the 6-digit code above in the OTP field
+3. Your account will be instantly verified
+
+SECURITY NOTICE:
+Fashionistar will NEVER ask for this code via phone, chat, or email.
+Do not share this OTP with anyone.
+
+If you did not register on Fashionistar, please ignore this email.
+
+================================================================
+© 2026 Fashionistar Ltd. | fashionistar.net | Lagos, Nigeria
+================================================================

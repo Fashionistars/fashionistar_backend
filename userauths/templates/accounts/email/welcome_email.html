@@ -1,0 +1,17 @@
+{% extends 'accounts/email/base_email.html' %}
+
+{% block title %}Welcome to Fashionistar!{% endblock %}
+
+{% block header_text %}Welcome to Fashionistar!{% endblock %}
+
+{% block content %}
+    <p>Hi {{ user.username }},</p>
+
+    <p>Thank you for registering with Fashionistar! We're excited to have you as part of our community.</p>
+
+    <p>{{ message }}</p>
+
+    <p>Start exploring our latest collections and find your perfect style today!</p>
+
+    <p>Best Regards,<br>The Fashionistar Team</p>
+{% endblock %}
