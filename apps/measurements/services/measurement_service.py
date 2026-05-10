@@ -7,7 +7,10 @@ Key rules:
   2. A user may have up to 5 measurement profiles (configurable).
   3. assert_buyer_has_measurement() is the checkout-gate — called by cart
      service before checkout of `requires_measurement=True` products.
-  4. Audit events emitted for profile creation and verification.
+  4. Audit events emitted for profile creation and verification via
+     ``apps.audit_logs.services.measurements.measurements_audit``.
+  5. All audit imports are deferred inside function bodies (never module-level)
+     to prevent circular imports during Django startup / makemigrations.
 """
 
 import logging
@@ -122,6 +125,22 @@ def create_measurement_profile(
         owner.id,
         name,
     )
+    # ── Audit event (on_commit: inside @transaction.atomic) ────────────────
+    _profile_id = str(profile.id)
+    _owner = owner
+    def _audit_profile_created():
+        try:
+            from apps.audit_logs.services.measurements import measurements_audit
+            measurements_audit.log_measurement_created(
+                actor=_owner,
+                measurement_id=_profile_id,
+                source="manual",
+            )
+        except Exception:
+            logger.warning(
+                "measurements_audit.log_measurement_created failed silently", exc_info=True
+            )
+    transaction.on_commit(_audit_profile_created)
     return profile
 
 
@@ -151,6 +170,23 @@ def update_measurement_profile(
         profile.id,
         owner.id,
     )
+    # ── Audit event ──────────────────────────────────────────────────────────
+    _profile_id = str(profile.id)
+    _owner = owner
+    _new_values = {k: str(v) for k, v in data.items()}
+    def _audit_profile_updated():
+        try:
+            from apps.audit_logs.services.measurements import measurements_audit
+            measurements_audit.log_measurement_updated(
+                actor=_owner,
+                measurement_id=_profile_id,
+                new_values=_new_values,
+            )
+        except Exception:
+            logger.warning(
+                "measurements_audit.log_measurement_updated failed silently", exc_info=True
+            )
+    transaction.on_commit(_audit_profile_updated)
     return profile
 
 
@@ -169,6 +205,25 @@ def delete_measurement_profile(*, profile_id, owner) -> None:
     was_default = profile.is_default
     profile.delete()
     logger.info("MeasurementProfile deleted: id=%s owner=%s", profile_id, owner.id)
+    # ── Audit (GDPR: right-to-erasure events must be logged) ────────────────
+    try:
+        from apps.audit_logs.services.audit import AuditService
+        from apps.audit_logs.models import EventType, EventCategory
+        AuditService.log(
+            event_type=EventType.ACCOUNT_SOFT_DELETED,
+            event_category=EventCategory.MEASUREMENT,
+            action=f"MeasurementProfile deleted (GDPR): id={profile_id} owner={owner.id}",
+            actor=owner,
+            resource_type="MeasurementProfile",
+            resource_id=str(profile_id),
+            severity="warning",
+            is_compliance=True,
+            retention_days=2555,  # 7 years for GDPR erasure audit trail
+        )
+    except Exception:
+        logger.warning(
+            "measurements_audit.delete failed silently", exc_info=True
+        )
 
     if was_default:
         # Promote the next most-recent profile

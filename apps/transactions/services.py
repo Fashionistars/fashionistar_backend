@@ -19,6 +19,15 @@ Architecture:
     consistency.  Service classes expose only class methods / static methods
     — they are never instantiated.
 
+Audit:
+    All financial mutations emit PCI-DSS / NDPR compliance audit events via
+    ``apps.audit_logs.services.transactions.transactions_audit``.
+    Audit calls use ``db_transaction.on_commit()`` inside atomic blocks so
+    that events are only logged for COMMITTED ledger entries (no phantom audits
+    on rolled-back transactions).
+    Audit imports are always deferred inside inner functions to prevent circular
+    imports during Django startup and ``makemigrations``.
+
 Usage::
 
     from apps.transactions.services import (
@@ -198,6 +207,27 @@ class TransactionLedgerService:
 
         txn = Transaction.objects.create(**kwargs)
         cls._log(txn, txn.status, reason="Transaction created")
+        # ── Compliance audit (on_commit: only for committed entries) ───────
+        _txn_id = str(txn.id)
+        _amount = str(txn.amount)
+        _from_user = getattr(txn, "from_user", None)
+        _tx_type = str(kwargs.get("transaction_type", ""))
+        def _audit_created():
+            try:
+                from apps.audit_logs.services.transactions import transactions_audit
+                transactions_audit.log_transaction_created(
+                    actor=_from_user,
+                    transaction_id=_txn_id,
+                    amount=_amount,
+                    tx_type=_tx_type,
+                )
+            except Exception:
+                import logging as _logging
+                _logging.getLogger(__name__).warning(
+                    "transactions_audit.log_transaction_created failed silently",
+                    exc_info=True,
+                )
+        db_transaction.on_commit(_audit_created)
         return txn
 
     @classmethod
@@ -215,6 +245,25 @@ class TransactionLedgerService:
         txn.complete()
         txn.save(update_fields=["status", "processed_at", "completed_at", "updated_at"])
         cls._log(txn, txn.status, previous_status=previous, reason=reason)
+        # ── Compliance audit ──────────────────────────────────────────────────────
+        _txn_id = str(txn.id)
+        _amount = str(txn.amount)
+        _previous = previous
+        def _audit_completed():
+            try:
+                from apps.audit_logs.services.transactions import transactions_audit
+                transactions_audit.log_transaction_created(
+                    actor=getattr(txn, "from_user", None),
+                    transaction_id=_txn_id,
+                    amount=_amount,
+                    tx_type=f"COMPLETED:{_previous}\u2192{txn.status}",
+                )
+            except Exception:
+                import logging as _logging
+                _logging.getLogger(__name__).warning(
+                    "transactions_audit.complete failed silently", exc_info=True
+                )
+        db_transaction.on_commit(_audit_completed)
         return txn
 
     @classmethod
@@ -562,4 +611,18 @@ class DisputeService:
             changed_by=user,
             reason="Dispute opened",
         )
+        # ── Compliance audit (PCI-DSS: dispute events retained indefinitely) ─
+        try:
+            from apps.audit_logs.services.transactions import transactions_audit
+            transactions_audit.log_transaction_created(
+                actor=user,
+                transaction_id=str(txn.id),
+                amount=str(amount),
+                tx_type="DISPUTE_OPENED",
+            )
+        except Exception:
+            import logging as _logging
+            _logging.getLogger(__name__).warning(
+                "transactions_audit.create_dispute failed silently", exc_info=True
+            )
         return dispute

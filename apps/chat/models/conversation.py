@@ -85,12 +85,16 @@ class Conversation(TimeStampedModel):
 
     buyer = models.ForeignKey(
         UnifiedUser,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name="buyer_conversations",
     )
     vendor = models.ForeignKey(
         UnifiedUser,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name="vendor_conversations",
     )
     # Optional product scoping — NULL = general inquiry

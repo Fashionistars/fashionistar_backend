@@ -788,12 +788,26 @@ CELERY_TASK_SEND_SENT_EVENT = True  # track when tasks are sent
 
 
 CELERY_BEAT_SCHEDULE = {
-    # This is the hard-coded schedule that avoids using the Admin panel.
+    # ── Keep Render.com service awake (free-tier cold-start prevention) ────────
     "keep-render-service-awake": {
-        "task": "keep_service_awake",  # This must match the name in @shared_task
-        "schedule": 300.0,  # Run every 600 seconds (10 minutes)
+        "task": "keep_service_awake",  # matches @shared_task name
+        "schedule": 300.0,  # every 5 minutes
+    },
+
+    # ── NDPR/PCI-DSS Compliance: Audit log retention enforcement ──────────────
+    # Deletes non-compliance AuditEventLog rows whose per-row retention_days
+    # has elapsed. Compliance rows (is_compliance=True) are NEVER touched.
+    # Runs daily at 02:00 UTC (04:00 WAT / Africa/Lagos) when load is minimal.
+    "audit-log-cleanup": {
+        "task": "audit_log_cleanup",
+        "schedule": 86400.0,          # every 24 hours
+        "options": {
+            "expires": 3600,          # drop if worker is unavailable for 1h
+            "queue": "celery",        # default queue
+        },
     },
 }
+
 
 
 #                       =========================

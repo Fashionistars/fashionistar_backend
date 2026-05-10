@@ -33,6 +33,7 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from django.contrib.auth import get_user_model
 
 from apps.chat.models import Conversation
+from apps.audit_logs.services.chat import chat_audit
 
 logger = logging.getLogger("application")
 
@@ -127,7 +128,20 @@ class ChatConversationConsumer(AsyncJsonWebsocketConsumer):
 
         await self.accept()
 
-        # ── Start heartbeat ───────────────────────────────────────────────────
+        # ── Audit: WebSocket connected ────────────────────────────────────────
+        # Run in background thread to avoid blocking the ASGI event loop.
+        # chat_audit dispatches to Celery internally — never raises.
+        try:
+            _jti = getattr(user, "_ws_jti", None)  # set by _resolve_jwt_user if available
+            chat_audit.log_websocket_connected(
+                actor=user,
+                conversation_id=conversation_id,
+                session_id=_jti,
+            )
+        except Exception:  # noqa: BLE001
+            pass  # audit failure MUST NOT affect the live WebSocket connection
+
+        # ── Start heartbeat ───────────────────────────────────────────────
         self._heartbeat_task = asyncio.ensure_future(self._heartbeat_loop())
 
         logger.info(
@@ -138,6 +152,19 @@ class ChatConversationConsumer(AsyncJsonWebsocketConsumer):
 
     async def disconnect(self, close_code: int) -> None:
         """Clean up group subscription and cancel heartbeat on disconnect."""
+        # ── Audit: WebSocket disconnected ─────────────────────────────────────
+        _user = getattr(self, "auth_user", None)
+        _conv_id = getattr(self, "conversation_id", None)
+        if _user and _conv_id:
+            try:
+                chat_audit.log_websocket_disconnected(
+                    actor=_user,
+                    conversation_id=_conv_id,
+                    reason=str(close_code),
+                )
+            except Exception:  # noqa: BLE001
+                pass
+
         # Cancel heartbeat task
         if getattr(self, "_heartbeat_task", None) and not self._heartbeat_task.done():
             self._heartbeat_task.cancel()

@@ -7,6 +7,8 @@ Design principles:
   - Uses Django ORM (NO raw SQL) with select_related/prefetch_related.
   - Emits EventBus events AFTER successful database commits.
   - Raises specific exceptions for the API layer to translate to HTTP errors.
+  - Emits audit events via client_audit domain helper (deferred imports,
+    never module-level, to prevent circular import during startup).
 """
 
 import logging
@@ -95,6 +97,20 @@ class ClientProfileService:
             profile.pk,
             user.pk,
         )
+        # ── Audit event (after commit — won't fire on rollback) ──────────
+        _profile_id = str(profile.pk)
+        _actor = user
+        def _audit_profile_updated():
+            try:
+                from apps.audit_logs.services.client import client_audit
+                client_audit.log_profile_updated(
+                    actor=_actor,
+                    resource_id=_profile_id,
+                    new_values={f: str(data.get(f, "")) for f in update_fields},
+                )
+            except Exception:
+                logger.warning("client_audit.log_profile_updated failed silently", exc_info=True)
+        transaction.on_commit(_audit_profile_updated)
         return profile
 
     # ── Address management ─────────────────────────────────────────
@@ -116,6 +132,16 @@ class ClientProfileService:
             address.pk,
             user.pk,
         )
+        # ── Audit event ──────────────────────────────────────────────────────────
+        try:
+            from apps.audit_logs.services.client import client_audit
+            client_audit.log_address_saved(
+                actor=user,
+                address_id=str(address.pk),
+                is_default=address_data.get("is_default", False),
+            )
+        except Exception:
+            logger.warning("client_audit.log_address_saved failed silently", exc_info=True)
         return address
 
     @classmethod
@@ -158,3 +184,13 @@ class ClientProfileService:
         logger.info(
             "ClientProfileService.delete_address: soft-deleted address %s", address.pk
         )
+        # ── Audit event ──────────────────────────────────────────────────────────
+        try:
+            from apps.audit_logs.services.client import client_audit
+            client_audit.log_address_saved(
+                actor=user,
+                address_id=str(address.pk),
+                is_default=False,
+            )
+        except Exception:
+            logger.warning("client_audit.delete_address failed silently", exc_info=True)

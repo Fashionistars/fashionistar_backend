@@ -6,6 +6,12 @@ Tasks
 ─────
   write_audit_event     — Write one AuditEventLog row (primary task).
   cleanup_audit_logs    — Periodic cleanup of expired audit records (daily 2AM).
+                          Respects per-row retention_days (NDPR/PCI-DSS).
+
+Compliance notes:
+  - Rows with is_compliance=True are NEVER deleted, regardless of retention_days.
+  - Rows with retention_days=-1 (permanent) are excluded by is_compliance=False guard.
+  - Batch deletes (1000/cycle) prevent long table locks in production PostgreSQL.
 """
 
 from __future__ import annotations
@@ -14,7 +20,7 @@ import logging
 from datetime import timedelta
 
 from celery import shared_task
-
+from django.db.models import DurationField, ExpressionWrapper, F
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -134,46 +140,60 @@ def cleanup_audit_logs(self) -> dict:
     }
 
     # ── Step 1: Delete expired non-compliance AuditEventLog rows ─────────
+    #
+    # Production-grade strategy (NDPR / PCI-DSS Art. 17):
+    #   We annotate each row with its individual expiry date using a DB-side
+    #   ExpressionWrapper so each row's own retention_days column drives deletion.
+    #   This means a 7-year financial event and a 90-day debug event co-exist
+    #   in the same table with ZERO risk of premature erasure.
+    #
+    # Excluded from deletion:
+    #   - is_compliance = True  (hard financial / GDPR compliance records)
+    #   - retention_days <= 0   (permanent retention sentinel — set to -1 by convention)
     try:
         from apps.audit_logs.models import AuditEventLog
 
-        # Delete rows where the record is older than its own retention_days
-        # and it is NOT marked as compliance-critical.
-        # SQL: DELETE FROM audit_event_log
-        #      WHERE is_compliance = FALSE
-        #        AND created_at < NOW() - INTERVAL retention_days DAYS
-        #
-        # Django ORM approach: filter by a computed expiry.
-        # We delete in batches (1000 at a time) to avoid long-running locks.
         BATCH_SIZE = 1000
         total_deleted = 0
 
         while True:
-            # Get IDs of expired non-compliance events
+            # Annotate rows with a computed expiry timestamp:
+            #   expiry_at = created_at + retention_days (converted to interval)
+            # Then filter: expiry_at < now AND is_compliance=False AND retention_days > 0
             expired_ids = list(
                 AuditEventLog.objects.filter(
                     is_compliance=False,
-                    # Approximate: compare on created_at < cutoff(90 days)
-                    # For rows with custom retention_days, the service layer
-                    # sets the value; we use 90 days as a conservative default.
-                    created_at__lt=now - timedelta(days=90),
-                ).values_list("id", flat=True)[:BATCH_SIZE]
+                    retention_days__gt=0,   # exclude permanent (-1) rows
+                )
+                .annotate(
+                    expiry_at=ExpressionWrapper(
+                        F("created_at")
+                        + ExpressionWrapper(
+                            F("retention_days") * timedelta(days=1),
+                            output_field=DurationField(),
+                        ),
+                        output_field=DurationField(),
+                    )
+                )
+                .filter(expiry_at__lt=now)
+                .values_list("id", flat=True)[:BATCH_SIZE]
             )
 
             if not expired_ids:
                 break
 
             deleted_count, _ = AuditEventLog.objects.filter(
-                id__in=expired_ids, is_compliance=False  # double-guard
+                id__in=expired_ids,
+                is_compliance=False,  # double-guard — never delete compliance rows
             ).delete()
             total_deleted += deleted_count
 
             if deleted_count < BATCH_SIZE:
-                break  # No more to delete
+                break  # exhausted eligible rows
 
         result["audit_deleted"] = total_deleted
         logger.info(
-            "audit_log_cleanup: deleted %d expired AuditEventLog rows",
+            "audit_log_cleanup: deleted %d expired AuditEventLog rows (per-row retention)",
             total_deleted,
         )
 

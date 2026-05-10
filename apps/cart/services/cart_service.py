@@ -8,12 +8,19 @@ All mutating operations:
   3. Idempotency key derived from (cart_id, product_id, variant_id) prevents
      duplicate CartItem rows from retry storms.
   4. CartActivityLog written for every mutation.
+  5. Audit events emitted for all mutations via cart_audit domain helper.
 
 Stock reservation:
   - On add: product.stock_qty reserved (decremented) — not yet fully deducted.
   - On remove: reservation released.
   - Definitive deduction happens in OrderService.place_order().
   - Celery beat releases reservations from carts abandoned > 24h.
+
+Audit:
+  All mutations fire audit events via
+  ``apps.audit_logs.services.cart.cart_audit``.
+  Imports are deferred inside function bodies to prevent circular imports
+  during Django startup / makemigrations.
 """
 
 import hashlib
@@ -174,6 +181,17 @@ def add_item(
         product.slug,
         quantity,
     )
+    # ── Audit event ──────────────────────────────────────────────────────────
+    try:
+        from apps.audit_logs.services.cart import cart_audit
+        cart_audit.log_cart_item_added(
+            actor=user,
+            cart_id=str(cart.id),
+            product_id=str(product.id),
+            quantity=quantity,
+        )
+    except Exception:
+        logger.warning("cart_audit.log_cart_item_added failed silently", exc_info=True)
     return item
 
 
@@ -192,6 +210,16 @@ def remove_item(*, user=None, session_key: str | None = None, item_id) -> None:
     product = item.product
     item.delete()
     _log_activity(cart, "item_removed", product=product)
+    # ── Audit event ──────────────────────────────────────────────────────────
+    try:
+        from apps.audit_logs.services.cart import cart_audit
+        cart_audit.log_cart_item_removed(
+            actor=user,
+            cart_id=str(cart.id),
+            product_id=str(product.id),
+        )
+    except Exception:
+        logger.warning("cart_audit.log_cart_item_removed failed silently", exc_info=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -266,6 +294,17 @@ def apply_coupon(*, user=None, session_key: str | None = None, code: str) -> Car
     cart.coupon_discount = result["discount_amount"]
     cart.save(update_fields=["coupon", "coupon_discount", "updated_at"])
     _log_activity(cart, "coupon_applied", metadata={"code": code})
+    # ── Audit event ──────────────────────────────────────────────────────────
+    try:
+        from apps.audit_logs.services.cart import cart_audit
+        cart_audit.log_coupon_applied(
+            actor=user,
+            cart_id=str(cart.id),
+            coupon_code=code,
+            discount=str(result["discount_amount"]),
+        )
+    except Exception:
+        logger.warning("cart_audit.log_coupon_applied failed silently", exc_info=True)
     return cart
 
 
@@ -292,6 +331,20 @@ def clear_cart(*, user=None, session_key: str | None = None) -> None:
     cart.coupon_discount = 0
     cart.save(update_fields=["coupon", "coupon_discount", "updated_at"])
     _log_activity(cart, "cart_cleared")
+    # ── Audit event (fire after commit — inside @transaction.atomic) ──────────
+    try:
+        from apps.audit_logs.services.cart import cart_audit
+        from apps.audit_logs.services.audit import AuditService
+        from apps.audit_logs.models import EventType, EventCategory
+        transaction.on_commit(lambda: AuditService.log(
+            event_type=EventType.CHECKOUT_COMPLETED,
+            event_category=EventCategory.CART,
+            action=f"Cart cleared: cart={cart.id}",
+            resource_type="Cart",
+            resource_id=str(cart.id),
+        ))
+    except Exception:
+        logger.warning("cart_audit.cart_cleared failed silently", exc_info=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

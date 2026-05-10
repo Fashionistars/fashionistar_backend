@@ -7,7 +7,10 @@ Rules:
   - All writes use transaction.atomic().
   - Financial/compliance notifications CANNOT be suppressed.
   - Dispatch is fire-and-forget via Celery task (never blocks the caller).
-  - Audit events are emitted for all notification actions.
+  - Audit events are emitted for all notification actions via
+    ``apps.audit_logs.services.notification.notification_audit``.
+  - Audit imports are deferred inside function bodies (never module-level)
+    to guarantee Django app registry safety during makemigrations.
 """
 
 import logging
@@ -151,6 +154,23 @@ def create_notification(
         transaction.on_commit(
             lambda: push_unread_badge_count(notification.recipient_id)
         )
+    # ── Audit event (fire after commit alongside Celery dispatch) ─────────
+    _notif_id = str(notification.id)
+    _recipient_id = str(getattr(recipient, 'id', ''))
+    _channel = channel
+    _notification_type = notification_type
+    def _audit_notification_sent():
+        try:
+            from apps.audit_logs.services.notification import notification_audit
+            notification_audit.log_notification_sent(
+                recipient_id=_recipient_id,
+                channel=_channel,
+                notification_id=_notif_id,
+                template=_notification_type,
+            )
+        except Exception:
+            logger.warning("notification_audit.log_notification_sent failed silently", exc_info=True)
+    transaction.on_commit(_audit_notification_sent)
     return notification
 
 

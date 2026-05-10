@@ -8,6 +8,9 @@ Patterns:
   • Module-level imports for all external dependencies (patchable in tests).
   • Idempotent conversation creation via get_or_create.
   • Business-rule enforcement before any DB mutation.
+  • Audit events emitted for all mutations via chat_audit domain helper.
+    All audit imports are deferred inside function bodies (never module-level)
+    to guarantee Django app registry safety during makemigrations.
 """
 import logging
 from typing import Optional
@@ -96,6 +99,16 @@ def get_or_create_conversation(
                 )
             except Exception as exc:  # pragma: no cover
                 logger.warning("Notification failed for new conversation: %s", exc)
+        # ── Audit event ──────────────────────────────────────────────────────────
+        try:
+            from apps.audit_logs.services.chat import chat_audit
+            chat_audit.log_conversation_started(
+                actor=buyer,
+                conversation_id=str(conversation.id),
+                participants=[str(buyer.id), str(vendor.id)],
+            )
+        except Exception:
+            logger.warning("chat_audit.log_conversation_started failed silently", exc_info=True)
 
     return conversation, created
 
@@ -142,6 +155,23 @@ def send_message(
         message_type,
     )
     transaction.on_commit(lambda: broadcast_message_created(message.id))
+    # ── Audit event (inside on_commit since we're in @transaction.atomic) ───
+    _msg_id = str(message.id)
+    _conv_id = str(conversation.id)
+    _msg_type = message_type
+    _author = author
+    def _audit_message_sent():
+        try:
+            from apps.audit_logs.services.chat import chat_audit
+            chat_audit.log_message_sent(
+                actor=_author,
+                conversation_id=_conv_id,
+                message_id=_msg_id,
+                message_type=_msg_type,
+            )
+        except Exception:
+            logger.warning("chat_audit.log_message_sent failed silently", exc_info=True)
+    transaction.on_commit(_audit_message_sent)
     return message
 
 
@@ -247,6 +277,23 @@ def create_chat_offer(
         offered_price,
     )
     transaction.on_commit(lambda: broadcast_offer_updated(offer.id))
+    # ── Audit event ──────────────────────────────────────────────────────────
+    try:
+        from apps.audit_logs.services.audit import AuditService
+        from apps.audit_logs.models import EventType, EventCategory
+        transaction.on_commit(lambda: AuditService.log(
+            event_type=EventType.MESSAGE_SENT,
+            event_category=EventCategory.CHAT,
+            action=f"ChatOffer created: offer={offer.id} conv={conversation.id} price={offered_price}",
+            actor=vendor,
+            resource_type="ChatOffer",
+            resource_id=str(offer.id),
+            new_values={"offered_price": str(offered_price), "quantity": quantity},
+            is_compliance=True,
+            retention_days=-1,
+        ))
+    except Exception:
+        logger.warning("chat_audit.log_offer_created failed silently", exc_info=True)
     return offer
 
 
@@ -315,6 +362,22 @@ def flag_conversation(
         reason,
         reported_by.id,
     )
+    # ── Audit event ──────────────────────────────────────────────────────────
+    try:
+        from apps.audit_logs.services.audit import AuditService
+        from apps.audit_logs.models import EventType, EventCategory
+        AuditService.log(
+            event_type=EventType.CONVERSATION_STARTED,  # closest generic event
+            event_category=EventCategory.MODERATION,
+            action=f"Conversation flagged: conv={conversation.id} reason={reason} by={reported_by.id}",
+            actor=reported_by,
+            resource_type="ModerationFlag",
+            resource_id=str(flag.id),
+            severity="warning",
+            new_values={"reason": reason, "details": details},
+        )
+    except Exception:
+        logger.warning("chat_audit.flag_conversation failed silently", exc_info=True)
     return flag
 
 
