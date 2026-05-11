@@ -57,22 +57,21 @@ class Category(TimeStampedModel, SoftDeleteModel):
 
     def product_count(self):
         try:
-            from apps.product.models import Product
+            return self.category_products.count()
         except Exception:
-            from store.models import Product
-        return Product.objects.filter(category=self).count()
+            return 0
 
     def cat_products(self):
         try:
-            from apps.product.models import Product
+            return self.category_products.all()
         except Exception:
-            from store.models import Product
-        return Product.objects.filter(category=self)
+            return []
 
     def save(self, *args, **kwargs):
-        if not self.slug and self.name:
-            import shortuuid
+        # pyrefly: ignore [missing-import]
+        import shortuuid
 
+        if not self.slug and self.name:
             uniqueid = shortuuid.uuid()[:4].lower()
             self.slug = f"{slugify(self.name)}-{uniqueid}"
         super().save(*args, **kwargs)

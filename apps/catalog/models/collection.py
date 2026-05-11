@@ -4,9 +4,11 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
+
+# pyrefly: ignore [missing-import]
 from django.utils.text import slugify
 
-from apps.common.models import SoftDeleteModel
+from apps.common.models import TimeStampedModel, SoftDeleteModel
 
 
 def validate_file_extension(value, field_name):
@@ -32,7 +34,7 @@ def validate_image_cover_extension(value):
     return validate_file_extension(value, "image")
 
 
-class Collections(SoftDeleteModel):
+class Collections(TimeStampedModel, SoftDeleteModel):
     """Admin-managed merchandising collection for curated catalog discovery."""
 
     user = models.ForeignKey(
@@ -64,9 +66,6 @@ class Collections(SoftDeleteModel):
         null=True,
         help_text="Hero background image (public_id).",
     )
-    created_at = models.DateTimeField(default=timezone.now)
-    updated_at = models.DateTimeField(auto_now=True)
-
 
     class Meta:
         managed = True
@@ -77,23 +76,20 @@ class Collections(SoftDeleteModel):
         return self.title or ""
 
     def collection_vendor_count(self):
-        from apps.vendor.models import VendorProfile
-
         try:
-            return VendorProfile.objects.filter(collection=self).count()
+            return self.vendor_collections.count()
         except Exception:
             return 0
 
     def collection_vendors(self):
-        from apps.vendor.models import VendorProfile
-
         try:
-            return VendorProfile.objects.filter(collection=self)
+            return self.vendor_collections.all()
         except Exception:
             return []
 
     def save(self, *args, **kwargs):
         if not self.slug and self.title:
+            # pyrefly: ignore [missing-import]
             import shortuuid
 
             uniqueid = shortuuid.uuid()[:4].lower()

@@ -22,6 +22,7 @@ Audit:
   - Every webhook (success / failure) is written to AuditEventLog.
   - KYC events are compliance-flagged (retention 2555 days = 7 years).
 """
+
 from __future__ import annotations
 
 import json
@@ -58,7 +59,9 @@ def _audit_kyc_webhook(
     Errors are swallowed so they NEVER interrupt the webhook response.
     """
     try:
-        from apps.audit_logs.services.kyc.kyc_audit import KycAuditService  # noqa: PLC0415
+        from apps.audit_logs.services.kyc.kyc_audit import (
+            KycAuditService,
+        )  # noqa: PLC0415
 
         KycAuditService.log_webhook_event(
             event_type=event_type,
@@ -97,15 +100,22 @@ class KycWebhookView(APIView):
             if config.provider_slug != provider_slug:
                 logger.warning(
                     "KycWebhookView: received webhook for slug=%s but active provider is %s",
-                    provider_slug, config.provider_slug,
+                    provider_slug,
+                    config.provider_slug,
                 )
+                # Still process — admin may be in the middle of a switch.
+                # Return 200 to avoid the provider disabling the webhook endpoint.
 
             # ── Parse body ───────────────────────────────────────────────────
             try:
                 payload: dict = json.loads(request.body)
             except (json.JSONDecodeError, ValueError):
-                logger.warning("KycWebhookView: invalid JSON body from provider=%s", provider_slug)
-                return Response({"detail": "Invalid JSON."}, status=status.HTTP_400_BAD_REQUEST)
+                logger.warning(
+                    "KycWebhookView: invalid JSON body from provider=%s", provider_slug
+                )
+                return Response(
+                    {"detail": "Invalid JSON."}, status=status.HTTP_400_BAD_REQUEST
+                )
 
             sig_header_name = get_kyc_webhook_header(provider_slug)
             # Django converts HTTP headers to META format: X-Foo-Bar -> HTTP_X_FOO_BAR
@@ -118,7 +128,9 @@ class KycWebhookView(APIView):
                     signature=signature,
                 )
             except ValueError:
-                logger.error("KycWebhookView: invalid HMAC for provider=%s", provider_slug)
+                logger.error(
+                    "KycWebhookView: invalid HMAC for provider=%s", provider_slug
+                )
                 _audit_kyc_webhook(
                     event_type="KYC_WEBHOOK_SIGNATURE_FAILED",
                     provider_slug=provider_slug,
@@ -140,7 +152,10 @@ class KycWebhookView(APIView):
                     "KycWebhookView: could not extract provider_reference from payload (slug=%s)",
                     provider_slug,
                 )
-                return Response({"detail": "Missing provider_reference."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"detail": "Missing provider_reference."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             # ── Idempotent reconciliation ────────────────────────────────────
             KycService.reconcile_webhook(
@@ -164,10 +179,15 @@ class KycWebhookView(APIView):
 
             logger.info(
                 "KycWebhookView: processed webhook — slug=%s ref=%s success=%s",
-                provider_slug, provider_reference, success,
+                provider_slug,
+                provider_reference,
+                success,
             )
             return Response({"detail": "Webhook received."}, status=status.HTTP_200_OK)
 
         except Exception as exc:
             logger.error("KycWebhookView: unexpected error — %s", exc, exc_info=True)
-            return Response({"detail": "Internal error."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"detail": "Internal error."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

@@ -237,6 +237,8 @@ class Cart(TimeStampedModel, SoftDeleteModel):
         Django does not evaluate them until aaggregate() / afirst() is awaited.
         """
         from decimal import Decimal
+
+        # pyrefly: ignore [missing-import]
         from django.db.models import Count, DecimalField, ExpressionWrapper, F, Sum
 
         aggregate = await self.items.filter(is_saved_for_later=False).aaggregate(

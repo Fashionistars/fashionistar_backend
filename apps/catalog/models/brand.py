@@ -1,12 +1,21 @@
+# pyrefly: ignore [missing-import]
 from cloudinary.models import CloudinaryField
+
+# pyrefly: ignore [missing-import]
 from django.conf import settings
+
+# pyrefly: ignore [missing-import]
 from django.db import models
 from django.utils import timezone
 from django.utils.html import mark_safe
+
+# pyrefly: ignore [missing-import]
 from django.utils.text import slugify
 
+from apps.common.models import SoftDeleteModel, TimeStampedModel
 
-class Brand(models.Model):
+
+class Brand(SoftDeleteModel, TimeStampedModel):
     """Admin-managed brand metadata used by public catalog discovery."""
 
     user = models.ForeignKey(
@@ -33,8 +42,6 @@ class Brand(models.Model):
     )
     active = models.BooleanField(default=True, db_index=True)
     slug = models.SlugField(unique=True, blank=True, null=True, db_index=True)
-    created_at = models.DateTimeField(default=timezone.now)
-    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         managed = True
@@ -55,6 +62,7 @@ class Brand(models.Model):
     def save(self, *args, **kwargs):
         if not self.slug and self.title:
             import shortuuid
+
             uniqueid = shortuuid.uuid()[:4].lower()
             self.slug = f"{slugify(self.title)}-{uniqueid}"
         super().save(*args, **kwargs)
