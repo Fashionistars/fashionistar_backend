@@ -108,3 +108,45 @@ def log_provider_switched(*, actor, from_provider: str, to_provider: str, reason
         is_compliance=True,
         retention_days=1825,
     )
+
+
+def log_provider_config_changed(
+    *, provider: str, instance_pk: str, created: bool = False
+) -> None:
+    """Record a provider config create/update (from post_save signal).
+
+    Every infrastructure-level change to a payment/KYC/email/SMS/Cloudinary
+    provider config is a compliance event — retained indefinitely.
+
+    Args:
+        provider: Model class name (e.g. 'EmailProviderConfig').
+        instance_pk: PK of the provider config instance.
+        created: True if this is a new row (INSERT), False for UPDATE.
+    """
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventCategory
+
+    # Use PROVIDER_HEALTH_CHECK as a generic infrastructure event if a dedicated
+    # PROVIDER_CONFIG_CHANGED type is not yet declared in EventType.
+    # Replace with EventType.PROVIDER_CONFIG_CHANGED once the enum is extended.
+    try:
+        from apps.audit_logs.models import EventType
+        event_type = EventType.PROVIDER_CONFIG_CHANGED
+    except AttributeError:
+        from apps.audit_logs.models import EventType
+        event_type = EventType.PROVIDER_HEALTH_CHECK
+
+    action_verb = "Created" if created else "Updated"
+    AuditService.log(
+        event_type=event_type,
+        event_category=EventCategory.PROVIDER,
+        action=f"{action_verb} provider config: {provider} pk={instance_pk}",
+        actor=None,
+        resource_type=provider,
+        resource_id=instance_pk,
+        severity="warning",
+        new_values={"provider": provider, "created": created},
+        is_compliance=True,
+        retention_days=-1,  # indefinite — infrastructure changes are permanently audited
+    )
+

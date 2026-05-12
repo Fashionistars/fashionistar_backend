@@ -87,19 +87,32 @@ def _make_order_idempotency_key(user_id, cart_snapshot: str) -> str:
 
 def _emit_order_audit(action: str, order: Order, actor=None, **metadata):
     try:
-        from apps.audit_logs.services.audit import AuditService
-        from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
-        AuditService.log(
-            event_type=EventType.RECORD_CREATED if action == "order.placed" else EventType.RECORD_UPDATED,
-            event_category=EventCategory.FINANCIAL,
-            severity=SeverityLevel.INFO,
-            action=action,
-            actor=actor,
-            resource_type="Order",
-            resource_id=str(order.id),
-            metadata={"order_number": order.order_number, **metadata},
-            is_compliance=True,
-        )
+        from apps.audit_logs.services.order import order_audit
+
+        audit_metadata = {"order_number": order.order_number, **metadata}
+        if action == "order.placed":
+            order_audit.log_order_created(
+                actor=actor,
+                order_id=str(order.id),
+                metadata=audit_metadata,
+            )
+        elif action == "order.cancelled":
+            order_audit.log_order_cancelled(
+                actor=actor,
+                order_id=str(order.id),
+                reason=str(metadata.get("reason", "")),
+            )
+        elif action in {"order.fulfilled", "order.completed"}:
+            order_audit.log_order_fulfilled(
+                actor=actor,
+                order_id=str(order.id),
+            )
+        else:
+            order_audit.log_order_updated(
+                actor=actor,
+                order_id=str(order.id),
+                new_values=audit_metadata,
+            )
     except Exception:
         logger.warning("AuditService order event failed: action=%s order=%s", action, getattr(order, "id", "?"))
 

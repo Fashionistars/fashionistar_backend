@@ -33,6 +33,44 @@ def log_wallet_created(*, actor, wallet_id: str, currency: str = "NGN", request=
     )
 
 
+def log_wallet_pin_set(*, actor, wallet_id: str, request=None) -> None:
+    """Record a transaction PIN being created for a wallet."""
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    AuditService.log(
+        event_type=EventType.WALLET_PIN_SET,
+        event_category=EventCategory.WALLET,
+        action=f"Wallet PIN set for wallet={wallet_id}",
+        actor=actor,
+        actor_role=getattr(actor, "user_type", None),
+        resource_type="Wallet",
+        resource_id=wallet_id,
+        request=request,
+        is_compliance=True,
+        retention_days=1095,
+    )
+
+
+def log_wallet_pin_changed(*, actor, wallet_id: str, request=None) -> None:
+    """Record a transaction PIN rotation for a wallet."""
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    AuditService.log(
+        event_type=EventType.WALLET_PIN_CHANGED,
+        event_category=EventCategory.WALLET,
+        action=f"Wallet PIN changed for wallet={wallet_id}",
+        actor=actor,
+        actor_role=getattr(actor, "user_type", None),
+        resource_type="Wallet",
+        resource_id=wallet_id,
+        request=request,
+        is_compliance=True,
+        retention_days=1095,
+    )
+
+
 def log_wallet_topup(
     *, actor, wallet_id: str, amount: str, currency: str = "NGN",
     reference: str = "", request=None
@@ -93,6 +131,64 @@ def log_wallet_withdrawal(
         request=request,
         severity="warning",
         new_values={"amount": amount, "currency": currency, "reference": reference},
+        is_compliance=True,
+        retention_days=-1,
+    )
+
+
+def log_wallet_transfer(
+    *, actor, wallet_id: str, transaction_id: str, amount: str,
+    receiver_id: str = "", reference: str = "", currency: str = "NGN", request=None
+) -> None:
+    """Record a wallet-to-wallet transfer."""
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    AuditService.log(
+        event_type=EventType.WALLET_TRANSFER,
+        event_category=EventCategory.WALLET,
+        action=f"Wallet transfer: {amount} {currency} ref={reference}",
+        actor=actor,
+        actor_role=getattr(actor, "user_type", None),
+        resource_type="WalletTransaction",
+        resource_id=transaction_id,
+        request=request,
+        new_values={
+            "wallet_id": wallet_id,
+            "receiver_id": receiver_id,
+            "amount": amount,
+            "currency": currency,
+            "reference": reference,
+        },
+        is_compliance=True,
+        retention_days=-1,
+    )
+
+
+def log_withdrawal_requested(
+    *, actor, wallet_id: str, transaction_id: str, amount: str,
+    bank_code: str = "", account_number_last4: str = "", currency: str = "NGN", request=None
+) -> None:
+    """Record a pending withdrawal request before provider execution."""
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    AuditService.log(
+        event_type=EventType.WALLET_WITHDRAWAL_REQUESTED,
+        event_category=EventCategory.WALLET,
+        action=f"Withdrawal requested: {amount} {currency} bank={bank_code}",
+        actor=actor,
+        actor_role=getattr(actor, "user_type", None),
+        resource_type="WalletTransaction",
+        resource_id=transaction_id,
+        request=request,
+        new_values={
+            "wallet_id": wallet_id,
+            "amount": amount,
+            "currency": currency,
+            "bank_code": bank_code,
+            "account_number_last4": account_number_last4,
+        },
         is_compliance=True,
         retention_days=-1,
     )

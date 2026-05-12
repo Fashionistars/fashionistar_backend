@@ -105,29 +105,31 @@ class VendorProvisioningService:
                     profile.pk,
                 )
 
-        # Audit trail — vendor onboarding (compliance-grade)
+        # Audit trail — vendor onboarding (compliance-grade).
+        # Uses domain-specific vendor_audit helper (not the generic AuditService directly)
+        # so event_type, event_category, and is_compliance are pre-filled correctly.
         try:
-            from apps.audit_logs.services.audit import AuditService
-            from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
-            AuditService.log(
-                event_type=EventType.VENDOR_PROVISIONED if profile_created else EventType.VENDOR_PROFILE_UPDATED,
-                event_category=EventCategory.VENDOR,
-                severity=SeverityLevel.INFO,
-                action=f"Vendor {'provisioned' if profile_created else 'profile updated'}: user={user.pk} store={data.get('store_name', '')}",
-                actor=user,
-                actor_role="vendor",
-                resource_type="VendorProfile",
-                resource_id=str(profile.pk),
-                new_values={
-                    "store_name": data.get("store_name"),
-                    "city": data.get("city"),
-                    "state": data.get("state"),
-                    "country": data.get("country"),
-                    "collections_count": len(collection_ids),
-                },
-                is_compliance=True,
-                retention_days=2555,
-            )
+            from apps.audit_logs.services.vendor import vendor_audit
+            if profile_created:
+                vendor_audit.log_vendor_provisioned(
+                    actor=user,
+                    vendor_profile=profile,
+                    store_name=data.get("store_name", ""),
+                    collections_count=len(collection_ids),
+                )
+            else:
+                vendor_audit.log_vendor_profile_updated(
+                    actor=user,
+                    vendor_profile=profile,
+                    new_values={
+                        "store_name": data.get("store_name"),
+                        "city": data.get("city"),
+                        "state": data.get("state"),
+                        "country": data.get("country"),
+                        "collections_count": len(collection_ids),
+                    },
+                )
         except Exception:
             pass
         return profile
+

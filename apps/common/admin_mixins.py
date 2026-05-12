@@ -324,6 +324,18 @@ class SoftDeleteAdminMixin:
         except Exception:
             pass  # Never block admin actions for audit counters
 
+        # 5. Admin audit trail (compliance-grade)
+        try:
+            from apps.audit_logs.services.admin_backend import admin_audit
+            admin_audit.log_bulk_delete(
+                actor=request.user,
+                resource_type=klass_name,
+                count=updated,
+                request=request,
+            )
+        except Exception:
+            pass  # Never block admin actions for audit logging
+
         self.message_user(
             request,
             _(
@@ -417,6 +429,19 @@ class SoftDeleteAdminMixin:
             )
         except Exception:
             pass  # Never block admin actions for audit counters
+
+        # 5. Admin audit trail
+        try:
+            from apps.audit_logs.services.admin_backend import admin_audit
+            admin_audit.log_admin_action(
+                actor=request.user,
+                action_description=f"Bulk restore: {updated} {klass_name} records restored",
+                resource_type=klass_name,
+                new_values={"count": updated},
+                request=request,
+            )
+        except Exception:
+            pass
 
         self.message_user(
             request,
@@ -592,7 +617,19 @@ class SoftDeleteAdminMixin:
             except Exception:
                 pass
 
-            # 5. Clear session
+            # 5. Admin audit trail — hard-delete is always compliance-grade
+            try:
+                from apps.audit_logs.services.admin_backend import admin_audit
+                admin_audit.log_bulk_delete(
+                    actor=request.user,
+                    resource_type=klass_name,
+                    count=deleted_count,
+                    request=request,
+                )
+            except Exception:
+                pass
+
+            # 6. Clear session
             request.session.pop('hard_delete_pks', None)
             request.session.pop('hard_delete_model', None)
 

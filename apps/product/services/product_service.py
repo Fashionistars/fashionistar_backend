@@ -69,36 +69,58 @@ def _emit_audit(action: str, product: Product, actor: Any = None, **metadata: An
     """
     def _fire():
         try:
-            from apps.audit_logs.models import EventCategory, EventType, SeverityLevel
-            from apps.audit_logs.services.audit import AuditService
+            from apps.audit_logs.services.catalog import catalog_audit
 
-            type_map = {
-                "product.created":            (EventType.RECORD_CREATED, EventCategory.BUSINESS, SeverityLevel.INFO),
-                "product.updated":            (EventType.RECORD_UPDATED, EventCategory.BUSINESS, SeverityLevel.INFO),
-                "product.published":          (EventType.RECORD_UPDATED, EventCategory.BUSINESS, SeverityLevel.INFO),
-                "product.archived":           (EventType.RECORD_DELETED, EventCategory.BUSINESS, SeverityLevel.WARNING),
-                "product.media.attached":     (EventType.RECORD_UPDATED, EventCategory.BUSINESS, SeverityLevel.INFO),
-                "product.media.removed":      (EventType.RECORD_DELETED, EventCategory.BUSINESS, SeverityLevel.WARNING),
-                "product.review.created":     (EventType.RECORD_CREATED, EventCategory.BUSINESS, SeverityLevel.INFO),
-                "product.inventory.adjusted": (EventType.RECORD_UPDATED, EventCategory.BUSINESS, SeverityLevel.INFO),
-                "product.coupon.applied":     (EventType.RECORD_UPDATED, EventCategory.BUSINESS, SeverityLevel.INFO),
-                "product.wishlist.toggled":   (EventType.RECORD_UPDATED, EventCategory.BUSINESS, SeverityLevel.INFO),
-            }
-            event_type, category, severity = type_map.get(
-                action,
-                (EventType.RECORD_UPDATED, EventCategory.BUSINESS, SeverityLevel.INFO),
-            )
-            AuditService.log(
-                event_type=event_type,
-                event_category=category,
-                severity=severity,
-                action=action,
-                actor=actor,
-                resource_type="Product",
-                resource_id=str(product.id),
-                metadata={"product_slug": product.slug, **metadata},
-                is_compliance=False,
-            )
+            audit_values = {"product_slug": product.slug, **metadata}
+            if action == "product.created":
+                catalog_audit.log_product_created(
+                    actor=actor,
+                    product_id=str(product.id),
+                    name=product.title,
+                )
+            elif action in {"product.updated", "product.inventory.adjusted", "product.coupon.applied", "product.wishlist.toggled", "product.media.attached"}:
+                catalog_audit.log_product_updated(
+                    actor=actor,
+                    product_id=str(product.id),
+                    name=product.title,
+                    new_values=audit_values,
+                )
+            elif action == "product.published":
+                catalog_audit.log_product_published(
+                    actor=actor,
+                    product_id=str(product.id),
+                    name=product.title,
+                )
+            elif action in {"product.archived", "product.media.removed"}:
+                catalog_audit.log_product_deleted(
+                    actor=actor,
+                    product_id=str(product.id),
+                    name=product.title,
+                )
+            elif action == "product.review.created":
+                review_id = metadata.get("review_id")
+                rating = metadata.get("rating")
+                if review_id and rating is not None:
+                    catalog_audit.log_review_posted(
+                        actor=actor,
+                        product_id=str(product.id),
+                        review_id=str(review_id),
+                        rating=int(rating),
+                    )
+                else:
+                    catalog_audit.log_product_updated(
+                        actor=actor,
+                        product_id=str(product.id),
+                        name=product.title,
+                        new_values=audit_values,
+                    )
+            else:
+                catalog_audit.log_product_updated(
+                    actor=actor,
+                    product_id=str(product.id),
+                    name=product.title,
+                    new_values={"action": action, **audit_values},
+                )
         except Exception:
             logger.warning(
                 "Audit event skipped — action=%s product=%s",

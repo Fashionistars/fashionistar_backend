@@ -112,19 +112,11 @@ class WalletProvisioningService:
         )
         if created:
             try:
-                from apps.audit_logs.services.audit import AuditService
-                from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
-                AuditService.log(
-                    event_type=EventType.WALLET_CREATED,
-                    event_category=EventCategory.TRANSACTIONS,
-                    severity=SeverityLevel.INFO,
-                    action=f"Wallet provisioned: owner_type={owner_type} currency={currency_code} user={getattr(user, 'id', '')}",
+                from apps.audit_logs.services.wallet import wallet_audit
+                wallet_audit.log_wallet_created(
                     actor=user,
-                    resource_type="Wallet",
-                    resource_id=str(wallet.pk),
-                    new_values={"owner_type": owner_type, "currency": currency_code, "account_number_last4": wallet.account_number[-4:]},
-                    is_compliance=True,
-                    retention_days=2555,
+                    wallet_id=str(wallet.pk),
+                    currency=currency_code,
                 )
             except Exception:
                 pass
@@ -188,19 +180,8 @@ class WalletPinService:
         wallet.save(update_fields=["pin_hash", "pin_set_at", "failed_pin_attempts", "pin_locked_until", "updated_at"])
         # Audit trail: PIN set event (compliance-grade, no raw PIN stored)
         try:
-            from apps.audit_logs.services.audit import AuditService
-            from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
-            AuditService.log(
-                event_type=EventType.WALLET_PIN_SET,
-                event_category=EventCategory.TRANSACTIONS,
-                severity=SeverityLevel.INFO,
-                action=f"Wallet transaction PIN set for user={getattr(user, 'id', '')}",
-                actor=user,
-                resource_type="Wallet",
-                resource_id=str(wallet.pk),
-                is_compliance=True,
-                retention_days=1095,
-            )
+            from apps.audit_logs.services.wallet import wallet_audit
+            wallet_audit.log_wallet_pin_set(actor=user, wallet_id=str(wallet.pk))
         except Exception:
             pass
         return wallet
@@ -242,19 +223,8 @@ class WalletPinService:
         wallet.set_pin(new_pin)
         wallet.save(update_fields=["pin_hash", "pin_set_at", "failed_pin_attempts", "pin_locked_until", "updated_at"])
         try:
-            from apps.audit_logs.services.audit import AuditService
-            from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
-            AuditService.log(
-                event_type=EventType.WALLET_PIN_CHANGED,
-                event_category=EventCategory.TRANSACTIONS,
-                severity=SeverityLevel.INFO,
-                action=f"Wallet transaction PIN changed for user={getattr(user, 'id', '')}",
-                actor=user,
-                resource_type="Wallet",
-                resource_id=str(wallet.pk),
-                is_compliance=True,
-                retention_days=1095,
-            )
+            from apps.audit_logs.services.wallet import wallet_audit
+            wallet_audit.log_wallet_pin_changed(actor=user, wallet_id=str(wallet.pk))
         except Exception:
             pass
         return wallet
@@ -399,25 +369,14 @@ class WalletBalanceService:
         )
         # Compliance audit trail — permanent retention for CBN/GDPR
         try:
-            from apps.audit_logs.services.audit import AuditService
-            from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
-            AuditService.log(
-                event_type=EventType.WALLET_TRANSFER,
-                event_category=EventCategory.TRANSACTIONS,
-                severity=SeverityLevel.INFO,
-                action=f"Wallet transfer: sender={getattr(sender_user, 'id', '')} receiver={getattr(receiver_user, 'id', '')} amount={amount}",
+            from apps.audit_logs.services.wallet import wallet_audit
+            wallet_audit.log_wallet_transfer(
                 actor=sender_user,
-                actor_role=getattr(sender_user, 'role', None),
-                resource_type="WalletTransaction",
-                resource_id=str(txn.pk),
-                new_values={
-                    "amount": str(amount),
-                    "sender_id": str(getattr(sender_user, 'id', '')),
-                    "receiver_id": str(getattr(receiver_user, 'id', '')),
-                    "reference": txn.reference,
-                },
-                is_compliance=True,
-                retention_days=-1,  # Permanent — financial event
+                wallet_id=str(sender_wallet.pk),
+                transaction_id=str(txn.pk),
+                amount=str(amount),
+                receiver_id=str(getattr(receiver_user, "id", "")),
+                reference=txn.reference,
             )
         except Exception:
             pass
@@ -514,26 +473,14 @@ class WalletWithdrawalService:
         )
         # Compliance audit trail — permanent retention CBN/GDPR
         try:
-            from apps.audit_logs.services.audit import AuditService
-            from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
-            AuditService.log(
-                event_type=EventType.WALLET_WITHDRAWAL_REQUESTED,
-                event_category=EventCategory.TRANSACTIONS,
-                severity=SeverityLevel.INFO,
-                action=f"Withdrawal requested: user={getattr(user, 'id', '')} amount={amount} bank={bank_code} acct=****{account_number[-4:]}",
+            from apps.audit_logs.services.wallet import wallet_audit
+            wallet_audit.log_withdrawal_requested(
                 actor=user,
-                actor_role=getattr(user, 'role', None),
-                resource_type="WalletTransaction",
-                resource_id=str(txn.pk),
-                new_values={
-                    "amount": str(amount),
-                    "bank_code": bank_code,
-                    "account_number_last4": account_number[-4:],
-                    "account_name": account_name,
-                    "status": "PROCESSING",
-                },
-                is_compliance=True,
-                retention_days=-1,
+                wallet_id=str(wallet.pk),
+                transaction_id=str(txn.pk),
+                amount=str(amount),
+                bank_code=bank_code,
+                account_number_last4=account_number[-4:],
             )
         except Exception:
             pass

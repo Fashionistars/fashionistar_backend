@@ -64,9 +64,10 @@ def _resolve_geo(ip: str) -> dict:
     flows that may see the same IP thousands of times per minute.
 
     External Provider:
-        ip-api.com free tier (no API key, 45 req/min).
-        For production scale upgrade to ipinfo.io (50k req/month free)
-        or deploy a local MaxMind GeoIP2 database.
+        IPinfo Lite/Core when an ``IPINFO_TOKEN`` is configured. Falls back
+        to the unauthenticated legacy endpoint for best-effort country data
+        when the token is absent. For very high-volume production workloads,
+        prefer a locally-hosted MaxMind GeoIP2 database.
 
     Args:
         ip: IPv4 or IPv6 address string. May be empty or ``None``.
@@ -109,24 +110,26 @@ def _resolve_geo(ip: str) -> dict:
                     pass
 
         import json as _json
+        import os as _os
         import urllib.request as _req
         import urllib.error as _err
 
-        url = f"http://ip-api.com/json/{ip}?fields=49439"
+        token = _os.getenv("IPINFO_TOKEN", "").strip()
+        if token:
+            url = f"https://api.ipinfo.io/lite/{ip}?token={token}"
+        else:
+            url = f"https://ipinfo.io/{ip}/json"
         try:
             with _req.urlopen(url, timeout=1.5) as resp:
                 data = _json.loads(resp.read().decode())
         except (_err.URLError, _err.HTTPError, OSError, Exception):
             return {}
 
-        if data.get("status") != "success":
-            return {}
-
         result = {
-            "country":      data.get("country") or "",
-            "country_code": data.get("countryCode") or "",
+            "country":      data.get("country_name") or data.get("country") or "",
+            "country_code": data.get("country_code") or data.get("country") or "",
             "city":         data.get("city") or "",
-            "region":       data.get("regionName") or "",
+            "region":       data.get("region") or "",
         }
 
         if r:
@@ -299,6 +302,11 @@ class AuditService:
 
             # ── Resolve session_id ───────────────────────────────────────
             resolved_session = session_id or ctx.get("session_id")
+            resolved_correlation_id = (
+                ctx.get("correlation_id")
+                or (metadata or {}).get("correlation_id")
+                or resolved_session
+            )
 
             # ── Resolve request context ───────────────────────────────
             def _first(*vals):
@@ -377,6 +385,7 @@ class AuditService:
                 country=resolved_country or None,
                 country_code=resolved_country_code or None,
                 city=resolved_city or None,
+                correlation_id=resolved_correlation_id,
                 resource_type=resource_type,
                 resource_id=str(resource_id) if resource_id else None,
                 request_method=resolved_meth,

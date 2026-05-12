@@ -54,9 +54,16 @@ class KycSubmission(TimeStampedModel):
 
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="kyc_submission",
         verbose_name=_("User"),
+        help_text=_(
+            "PROTECT: KYC records are CBN/NDPR/GDPR compliance documents with a 7-year "
+            "retention requirement. User deletion MUST NOT cascade-destroy this record. "
+            "Use the admin anonymization action to null PII fields while retaining the "
+            "compliance audit trail. Attempting to delete a user who has a KYC submission "
+            "will raise ProtectedError — resolve via the anonymize_user management command."
+        ),
     )
 
     status = models.CharField(

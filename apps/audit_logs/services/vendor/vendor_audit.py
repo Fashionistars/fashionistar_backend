@@ -110,3 +110,66 @@ def log_vendor_suspended(*, actor, vendor_id: str, reason: str = "", request=Non
         is_compliance=True,
         retention_days=2555,
     )
+
+
+def log_vendor_provisioned(
+    *, actor, vendor_profile, store_name: str = "", collections_count: int = 0, request=None
+) -> None:
+    """Record a vendor's initial provisioning (first-time setup completed).
+
+    Args:
+        actor: The vendor user completing setup.
+        vendor_profile: VendorProfile instance.
+        store_name: Store name chosen during setup.
+        collections_count: Number of product collections selected.
+        request: Django HttpRequest (optional).
+    """
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    AuditService.log(
+        event_type=EventType.VENDOR_PROVISIONED,
+        event_category=EventCategory.VENDOR,
+        action=(
+            f"Vendor provisioned: {getattr(actor, 'email', str(actor))} "
+            f"— store='{store_name}' collections={collections_count}"
+        ),
+        actor=actor,
+        actor_role="vendor",
+        resource_type="VendorProfile",
+        resource_id=str(getattr(vendor_profile, "pk", "")),
+        request=request,
+        new_values={"store_name": store_name, "collections_count": collections_count},
+        is_compliance=True,
+        retention_days=2555,
+    )
+
+
+def log_vendor_profile_updated(
+    *, actor, vendor_profile, new_values: dict | None = None, request=None
+) -> None:
+    """Record a vendor profile update.
+
+    Args:
+        actor: The vendor or admin who made the update.
+        vendor_profile: VendorProfile instance.
+        new_values: Dict of fields that changed.
+        request: Django HttpRequest (optional).
+    """
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    AuditService.log(
+        event_type=EventType.VENDOR_PROFILE_UPDATED,
+        event_category=EventCategory.VENDOR,
+        action=f"Vendor profile updated: {getattr(actor, 'email', str(actor))}",
+        actor=actor,
+        actor_role=getattr(actor, "user_type", "vendor"),
+        resource_type="VendorProfile",
+        resource_id=str(getattr(vendor_profile, "pk", "")),
+        request=request,
+        new_values=new_values or {},
+        is_compliance=False,
+        retention_days=730,  # 2 years
+    )
+

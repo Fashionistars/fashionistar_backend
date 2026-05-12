@@ -64,6 +64,9 @@ class VendorProductListSerializer(serializers.Serializer):
     categories__name = serializers.CharField()
     date = serializers.DateTimeField()
 
+    class Meta:
+        ref_name = "AnalyticsVendorProductList"
+
 class VendorOrderListSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     total = serializers.DecimalField(max_digits=12, decimal_places=2)

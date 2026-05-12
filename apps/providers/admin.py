@@ -73,7 +73,13 @@ class EmailProviderConfigAdmin(ProviderConfigAdminBase):
         (
             _("Email Backend"),
             {
-                    "fields": ("email_backend", "sender_email", "api_key", "api_secret", "extra_config"),
+                "fields": (
+                    "email_backend",
+                    "sender_email",
+                    "api_key",
+                    "api_secret",
+                    "extra_config",
+                ),
                 "description": _(
                     "Choose the active transactional email backend. "
                     "Credentials saved here are encrypted and let admins rotate "
@@ -114,7 +120,13 @@ class SMSProviderConfigAdmin(ProviderConfigAdminBase):
         (
             _("SMS Provider"),
             {
-                    "fields": ("sms_backend", "sender_id", "api_key", "api_secret", "extra_config"),
+                "fields": (
+                    "sms_backend",
+                    "sender_id",
+                    "api_key",
+                    "api_secret",
+                    "extra_config",
+                ),
                 "description": _(
                     "Choose the active SMS provider class. "
                     "Credentials saved here are encrypted and are used before "

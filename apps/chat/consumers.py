@@ -187,8 +187,18 @@ class ChatConversationConsumer(AsyncJsonWebsocketConsumer):
             close_code,
         )
 
+    # Allowlist of valid client-initiated event types.
+    _ALLOWED_CLIENT_EVENTS = frozenset({"pong", "user.typing"})
+
     async def receive_json(self, content: dict, **kwargs) -> None:
-        """Handle client-originated socket events with rate limiting."""
+        """Handle client-originated socket events with rate limiting.
+
+        Security:
+            - Rate-limited to 60 messages/minute per connection.
+            - Only events in ``_ALLOWED_CLIENT_EVENTS`` are processed.
+            - ``user.typing`` payloads are stripped and rebuilt server-side
+              so the client can NEVER forge sender identity.
+        """
 
         # ── Rate limit ────────────────────────────────────────────────────────
         if not self._rate_limiter.is_allowed():
@@ -202,17 +212,38 @@ class ChatConversationConsumer(AsyncJsonWebsocketConsumer):
 
         event_type = content.get("type")
 
+        # ── Reject unknown event types immediately ─────────────────────────────
+        if event_type not in self._ALLOWED_CLIENT_EVENTS:
+            logger.debug(
+                "ChatConsumer: unknown event_type=%r from user=%s — rejected",
+                event_type,
+                self.auth_user.id,
+            )
+            await self.send_json({"type": "error", "payload": {"code": 4000, "detail": "Unknown event type."}})
+            return
+
         # ── Heartbeat pong ────────────────────────────────────────────────────
         if event_type == "pong":
             self._pong_received = True
             return
 
         # ── Typing indicator ──────────────────────────────────────────────────
+        # SECURITY: always stamp sender_id from the authenticated user.
+        # NEVER trust any sender identity provided in the client payload.
         if event_type == "user.typing":
             try:
                 await self.channel_layer.group_send(
                     self.group_name,
-                    {"type": "user.typing", "payload": content.get("payload", {})},
+                    {
+                        "type": "user.typing",
+                        "payload": {
+                            "conversation_id": self.conversation_id,
+                            "sender_id": str(self.auth_user.id),  # server-stamped
+                            "is_typing": bool(
+                                (content.get("payload") or {}).get("is_typing", True)
+                            ),
+                        },
+                    },
                 )
             except Exception as exc:
                 logger.error("ChatConsumer: group_send user.typing failed: %s", exc)

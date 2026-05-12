@@ -93,24 +93,12 @@ class SupportService:
         )
 
         # Compliance audit trail
-        from apps.audit_logs.services.audit import AuditService
-        from apps.audit_logs.models import EventType, EventCategory
-        AuditService.log(
-            event_type=EventType.TICKET_CREATED,
-            event_category=EventCategory.SUPPORT,
-            action=f"Support ticket created: '{ticket.title[:80]}' category={ticket.category}",
+        from apps.audit_logs.services.support import support_audit
+        support_audit.log_ticket_created(
             actor=user,
-            actor_role=getattr(user, "user_type", None),
-            resource_type="SupportTicket",
-            resource_id=str(ticket.id),
-            new_values={
-                "category": ticket.category,
-                "priority": ticket.priority,
-                "title": ticket.title[:120],
-                "order_id": str(ticket.order_id) if ticket.order_id else None,
-            },
-            is_compliance=True,
-            retention_days=1095,  # 3 years
+            ticket_id=str(ticket.id),
+            category=ticket.category,
+            priority=ticket.priority,
         )
 
         # Fire notification to submitter (async, non-blocking)
@@ -193,17 +181,17 @@ class SupportService:
         )
 
         # Compliance audit trail
-        from apps.audit_logs.services.audit import AuditService
-        from apps.audit_logs.models import EventType, EventCategory
+        from apps.audit_logs.services import AuditService
+        from apps.audit_logs.models import EventCategory, EventType
         AuditService.log(
-            event_type=EventType.TICKET_CREATED,  # reuse closest type; DATA_MODIFICATION if preferred
+            event_type=EventType.TICKET_CREATED,
             event_category=EventCategory.SUPPORT,
-            action=f"Message added to ticket={ticket.id} by {'staff' if is_staff else 'client'}",
+            action=f"Ticket message added: ticket={ticket.id} role={'staff' if is_staff else 'client'}",
             actor=author,
             actor_role="staff" if is_staff else "client",
-            resource_type="SupportTicket",
-            resource_id=str(ticket.id),
-            new_values={"message_id": str(msg.id), "is_staff_reply": is_staff},
+            resource_type="TicketMessage",
+            resource_id=str(msg.id),
+            new_values={"ticket_id": str(ticket.id), "is_staff_reply": is_staff},
             retention_days=1095,
         )
 
@@ -251,21 +239,19 @@ class SupportService:
         )
 
         # Compliance audit trail
-        from apps.audit_logs.services.audit import AuditService
-        from apps.audit_logs.models import EventType, EventCategory
-        AuditService.log(
-            event_type=EventType.TICKET_RESOLVED if new_status in ("resolved", "closed")
-                        else EventType.TICKET_ESCALATED,
-            event_category=EventCategory.SUPPORT,
-            action=f"Ticket status updated: {ticket.id} → {new_status}",
-            actor=staff_user,
-            actor_role="staff",
-            resource_type="SupportTicket",
-            resource_id=str(ticket.id),
-            new_values={"status": new_status, "notes": notes[:500] if notes else ""},
-            is_compliance=True,
-            retention_days=1095,
-        )
+        from apps.audit_logs.services.support import support_audit
+        if new_status in ("resolved", "closed"):
+            support_audit.log_ticket_resolved(
+                actor=staff_user,
+                ticket_id=str(ticket.id),
+                notes=notes,
+            )
+        else:
+            support_audit.log_ticket_escalated(
+                actor=staff_user,
+                ticket_id=str(ticket.id),
+                reason=notes or new_status,
+            )
 
         return ticket
 

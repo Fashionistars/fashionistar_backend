@@ -46,27 +46,20 @@ def _invalidate_on_save(sender, instance, created: bool = False, **kwargs) -> No
             sender.__name__, exc,
         )
     # ── Compliance audit: every provider config change must be logged ──────
+    # Uses the typed domain helper so the event lands in EventCategory.PROVIDER
+    # and is correctly flagged is_compliance=True with indefinite retention.
     try:
-        from apps.audit_logs.services.audit import AuditService
-        from apps.audit_logs.models import EventType, EventCategory
-        AuditService.log(
-            event_type=EventType.ACCOUNT_UPDATED,
-            event_category=EventCategory.SYSTEM,
-            action=(
-                f"{'Created' if created else 'Updated'} provider config: "
-                f"{sender.__name__} pk={instance.pk}"
-            ),
-            actor=None,
-            resource_type=sender.__name__,
-            resource_id=str(instance.pk),
-            severity="warning",
-            is_compliance=True,
-            retention_days=-1,
+        from apps.audit_logs.services.providers import providers_audit
+        providers_audit.log_provider_config_changed(
+            provider=sender.__name__,
+            instance_pk=str(instance.pk),
+            created=created,
         )
     except Exception as exc:
         logger.error(
             "Providers audit log failed for %s: %s", sender.__name__, exc,
         )
+
 
 
 def register_signals() -> None:

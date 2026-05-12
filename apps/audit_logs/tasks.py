@@ -54,10 +54,10 @@ def write_audit_event(self, payload: dict) -> None:
     # never crash with "unexpected keyword argument".
     _KNOWN_FIELDS = {
         "event_type", "event_category", "severity", "action",
-        "actor", "actor_email",
+        "actor", "actor_email", "actor_role", "session_id",
         "ip_address", "user_agent", "device_type",
         "browser_family", "os_family",
-        "country", "correlation_id",
+        "country", "country_code", "city", "correlation_id",
         "resource_type", "resource_id",
         "request_method", "request_path", "response_status", "duration_ms",
         "old_values", "new_values", "metadata", "error_message",
@@ -80,7 +80,22 @@ def write_audit_event(self, payload: dict) -> None:
                 "write_audit_event: stripped unknown payload keys: %s", stripped
             )
 
-        obj = AuditEventLog(**safe_payload)
+        correlation_id = safe_payload.get("correlation_id")
+        if correlation_id:
+            obj, created = AuditEventLog.objects.get_or_create(
+                correlation_id=correlation_id,
+                defaults=safe_payload,
+            )
+            if not created:
+                logger.debug(
+                    "write_audit_event: skipped duplicate correlation_id=%s event_type=%s",
+                    correlation_id,
+                    safe_payload.get("event_type"),
+                )
+                return
+        else:
+            obj = AuditEventLog(**safe_payload)
+
         if actor_id:
             obj.actor_id = actor_id
         obj.save()
