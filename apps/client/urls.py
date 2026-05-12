@@ -29,6 +29,7 @@ Endpoints — Reviews:
 Endpoints — Wallet:
   GET    /api/v1/client/wallet/balance/                     — get wallet balance
   POST   /api/v1/client/wallet/transfer/                    — P2P fund transfer (PIN protected)
+  POST   /api/v1/client/wallet/withdraw/                    — Bank withdrawal request (KYC + PIN gated)
 """
 from django.urls import path
 
@@ -46,6 +47,7 @@ from apps.client.apis.sync.review_views import ClientReviewCreateView
 from apps.client.apis.sync.wallet_views import (
     ClientWalletBalanceView,
     ClientWalletTransferView,
+    ClientWalletWithdrawView,
 )
 from apps.client.apis.sync.wishlist_views import (
     ClientWishlistToggleView,
@@ -81,5 +83,5 @@ urlpatterns = [
     # ── Wallet ─────────────────────────────────────────────────────
     path("wallet/balance/", ClientWalletBalanceView.as_view(), name="wallet-balance"),
     path("wallet/transfer/", ClientWalletTransferView.as_view(), name="wallet-transfer"),
+    path("wallet/withdraw/", ClientWalletWithdrawView.as_view(), name="wallet-withdraw"),
 ]
-
