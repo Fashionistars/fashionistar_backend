@@ -1,0 +1,147 @@
+from rest_framework import serializers
+
+from apps.catalog.models import BlogMedia, BlogPost, BlogPostStatus
+from apps.catalog.serializers.common import safe_media_url
+
+
+class CatalogBlogMediaSerializer(serializers.ModelSerializer):
+    """
+    Read-optimised serialiser for BlogMedia gallery items.
+
+    Exposes derived `public_id` and `image_url` fields sourced from
+    the Cloudinary CloudinaryField.  The raw `image` (CloudinaryField)
+    is intentionally omitted from `fields` to avoid the DRF assertion
+    that fires when a model property shares a name with a declared
+    SerializerMethodField (image_url).
+
+    Architecture note:
+    ─ Uploads use the two-phase direct-upload pattern:
+      1. Frontend → POST /api/v1/upload/presign/ → signed token
+      2. Frontend POSTs file directly to Cloudinary (bypasses Django)
+      3. Cloudinary webhook → Celery task reconciles public_id here
+    ─ `image_url` returns the full HTTPS secure_url from Cloudinary.
+    """
+
+    public_id = serializers.SerializerMethodField()
+    image_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BlogMedia
+        # NOTE: "image" (CloudinaryField) is intentionally absent — we
+        # expose only the derived `image_url` to avoid the DRF assertion
+        # that fires when `image_url` exists as both a model property and
+        # a SerializerMethodField.
+        fields = (
+            "id",
+            "public_id",
+            "image_url",
+            "alt_text",
+            "sort_order",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "created_at", "updated_at", "public_id", "image_url")
+
+    def get_public_id(self, obj) -> str:
+        return str(obj.image) if obj.image else ""
+
+    def get_image_url(self, obj) -> str:
+        return safe_media_url(obj, "image")
+
+
+class CatalogBlogPostSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source="category.name", read_only=True)
+    author_name = serializers.SerializerMethodField()
+    featured_image_url = serializers.SerializerMethodField()
+    image_url = serializers.SerializerMethodField()
+    gallery_media = CatalogBlogMediaSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = BlogPost
+        fields = (
+            "id",
+            "author",
+            "author_name",
+            "category",
+            "category_name",
+            "title",
+            "slug",
+            "excerpt",
+            "content",
+            "featured_image",
+            "featured_image_url",
+            "image_url",
+            "gallery_media",
+            "status",
+            "tags",
+            "seo_title",
+            "seo_description",
+            "is_featured",
+            "published_at",
+            "view_count",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = (
+            "id",
+            "author",
+            "author_name",
+            "slug",
+            "published_at",
+            "view_count",
+            "created_at",
+            "updated_at",
+        )
+
+    def get_author_name(self, obj) -> str:
+        author = getattr(obj, "author", None)
+        if not author:
+            return "Fashionistar Editorial"
+        full_name = getattr(author, "get_full_name", lambda: "")()
+        return full_name or getattr(author, "email", "") or str(author)
+
+    def get_featured_image_url(self, obj) -> str:
+        return safe_media_url(obj, "featured_image")
+
+    def get_image_url(self, obj) -> str:
+        return self.get_featured_image_url(obj)
+
+    def validate_title(self, value: str) -> str:
+        value = value.strip()
+        if len(value) < 5:
+            raise serializers.ValidationError(
+                "Blog title must be at least 5 characters."
+            )
+        return value
+
+    def validate_content(self, value: str) -> str:
+        value = value.strip()
+        if len(value) < 40:
+            raise serializers.ValidationError(
+                "Blog content must be at least 40 characters."
+            )
+        return value
+
+    def validate_tags(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Tags must be a list of strings.")
+        normalized = [str(tag).strip().lower() for tag in value if str(tag).strip()]
+        return normalized[:20]
+
+    def validate(self, attrs):
+        status = attrs.get("status", getattr(self.instance, "status", None))
+        if status == BlogPostStatus.PUBLISHED:
+            excerpt = attrs.get("excerpt", getattr(self.instance, "excerpt", ""))
+            seo_description = attrs.get(
+                "seo_description",
+                getattr(self.instance, "seo_description", ""),
+            )
+            if not excerpt:
+                raise serializers.ValidationError(
+                    {"excerpt": "Published blog posts need an excerpt."}
+                )
+            if not seo_description:
+                raise serializers.ValidationError(
+                    {"seo_description": "Published blog posts need an SEO description."}
+                )
+        return attrs

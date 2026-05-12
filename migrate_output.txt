@@ -1,0 +1,118 @@
+[BackendConfig] Django dev logging ready: StreamHandler on root, per-app file handlers, autoreload DEBUG suppressed.
+[INFO    ] application — ✅ NinjaAPI V2 initialized (namespace=authentication_v2)
+Operations to perform:
+  Apply all migrations: Blog, Paystack_Webhoook_Prod, ShopCart, addon, admin, admin_backend, auditlog, auth, authentication, chat, common, contenttypes, customer, django_celery_beat, measurements, notification, phone_verify, sessions, store, token_blacklist, userauths, vendor
+Running migrations:
+  Applying phone_verify.0002_auto_20190817_1753...Traceback (most recent call last):
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\db\backends\utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\db\backends\sqlite3\base.py", line 359, in execute
+    return super().execute(query, params)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such column: ""otp""
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\manage.py", line 63, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\manage.py", line 59, in main
+    execute_from_command_line(sys.argv)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\core\management\__init__.py", line 443, in execute_from_command_line
+    utility.execute()
+    ~~~~~~~~~~~~~~~^^
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\core\management\__init__.py", line 437, in execute
+    self.fetch_command(subcommand).run_from_argv(self.argv)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\core\management\base.py", line 420, in run_from_argv
+    self.execute(*args, **cmd_options)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\core\management\base.py", line 464, in execute
+    output = self.handle(*args, **options)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\core\management\base.py", line 111, in wrapper
+    res = handle_func(*args, **kwargs)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\core\management\commands\migrate.py", line 354, in handle
+    post_migrate_state = executor.migrate(
+        targets,
+    ...<3 lines>...
+        fake_initial=fake_initial,
+    )
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\db\migrations\executor.py", line 137, in migrate
+    state = self._migrate_all_forwards(
+        state, plan, full_plan, fake=fake, fake_initial=fake_initial
+    )
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\db\migrations\executor.py", line 169, in _migrate_all_forwards
+    state = self.apply_migration(
+        state, migration, fake=fake, fake_initial=fake_initial
+    )
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\db\migrations\executor.py", line 257, in apply_migration
+    state = migration.apply(state, schema_editor)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\db\migrations\migration.py", line 132, in apply
+    operation.database_forwards(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self.app_label, schema_editor, old_state, project_state
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\db\migrations\operations\fields.py", line 309, in database_forwards
+    schema_editor.alter_field(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        from_model,
+        ^^^^^^^^^^^
+        from_model._meta.get_field(self.old_name),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        to_model._meta.get_field(self.new_name),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\db\backends\base\schema.py", line 913, in alter_field
+    self._alter_field(
+    ~~~~~~~~~~~~~~~~~^
+        model,
+        ^^^^^^
+    ...<6 lines>...
+        strict,
+        ^^^^^^^
+    )
+    ^
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\db\backends\sqlite3\schema.py", line 381, in _alter_field
+    return self.execute(
+           ~~~~~~~~~~~~^
+        self._rename_field_sql(
+        ^^^^^^^^^^^^^^^^^^^^^^^
+            model._meta.db_table, old_field, new_field, new_type
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        )
+        ^
+    )
+    ^
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\db\backends\base\schema.py", line 205, in execute
+    cursor.execute(sql, params)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\db\backends\utils.py", line 122, in execute
+    return super().execute(sql, params)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\db\backends\utils.py", line 79, in execute
+    return self._execute_with_wrappers(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        sql, params, many=False, executor=self._execute
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\db\backends\utils.py", line 92, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\db\backends\utils.py", line 100, in _execute
+    with self.db.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\db\utils.py", line 94, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\db\backends\utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "C:\Users\fashi\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\.venv\Lib\site-packages\django\db\backends\sqlite3\base.py", line 359, in execute
+    return super().execute(query, params)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+django.db.utils.OperationalError: no such column: ""otp""

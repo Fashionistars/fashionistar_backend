@@ -1,0 +1,343 @@
+services:
+  # Django web service
+  - type: web
+    name: fashionistar-backend
+    env: python
+    plan: free
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT"
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: backend.settings
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: CELERY_RESULT_BACKEND
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: "fashionistar-backend.onrender.com"
+
+  # Celery Worker
+  - type: worker
+    name: fashionistar-celery-worker
+    env: python
+    plan: free
+    buildCommand: "./build.sh"
+    startCommand: "celery -A backend worker -l info"
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: backend.settings
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: CELERY_RESULT_BACKEND
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+
+  # Celery Beat (optional, for scheduled tasks)
+  - type: worker
+    name: fashionistar-celery-beat
+    env: python
+    plan: free
+    buildCommand: "./build.sh"
+    startCommand: "celery -A backend beat -l info"
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: backend.settings
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: CELERY_RESULT_BACKEND
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+######+++++++++++++++++++++++++++++++ FOR PRODUCTION READY ENV    +++++++++++++++++++++++++++++++++++++++=#
+
+
+# services:
+#   # --------------------------------------------------------------------------
+#   # 1. PostgreSQL Database Service
+#   #    - Essential for production. Using Render's managed PostgreSQL.
+#   # --------------------------------------------------------------------------
+#   - type: pserv
+#     name: fashionistar-db
+#     plan: starter # Or 'standard' for higher performance/storage
+#     region: oregon # Ensure this matches your web service region
+#     ipAllowList: [] # Allow all outgoing connections from Render for simplicity, or specify your service IPs
+#     # autoDeploy: false # Databases rarely need auto-deploys based on code changes
+#     # Remove database specific env vars, Render injects DATABASE_URL automatically
+
+#   # --------------------------------------------------------------------------
+#   # 2. Redis Cache & Celery Broker Service
+#   #    - Highly recommended for performance and Celery.
+#   # --------------------------------------------------------------------------
+#   - type: redis
+#     name: fashionistar-redis
+#     plan: starter # Or 'standard' for higher performance/memory
+#     region: oregon # Ensure this matches your web service region
+#     # Remove redis specific env vars, Render injects REDIS_URL automatically
+
+#   # --------------------------------------------------------------------------
+#   # 3. Django Web Service (Main Application)
+#   #    - Upgraded plan, refined commands, better Gunicorn config.
+#   # --------------------------------------------------------------------------
+#   - type: web
+#     name: fashionistar-backend
+#     env: python
+#     region: oregon # Choose a region closest to your users
+#     plan: standard # Recommended for production (e.g., 2-4 vCPU, 4-8GB RAM). Start with 'starter' and scale up.
+#     numInstances: 2 # Start with at least 2 instances for high availability and load balancing
+#     healthCheckPath: /healthz # Add a health check endpoint in your Django app
+#     maxRetries: 3 # Render will retry failed deploys up to 3 times
+#     # Auto-deploy enabled by default on push to 'main' branch
+
+#     # Consolidate build commands.
+#     # - Install dependencies
+#     # - Collect static files (crucial for Cloudinary)
+#     # - Run database migrations
+#     # - Clear Redis cache (optional, but good for ensuring clean state on deploy)
+#     buildCommand: |
+#       pip install -r requirements.txt
+#       python manage.py collectstatic --noinput
+#       python manage.py migrate --noinput
+#       # You might want to add a command here to clear specific Redis caches if applicable
+#       # E.g., python manage.py shell -c "from django.core.cache import cache; cache.clear()"
+
+#     # Use a production-ready Gunicorn configuration.
+#     # - 'backend.wsgi:application' is standard.
+#     # - '--workers' should be (2 * NUM_CPUS) + 1. Render 'standard' plan could have 2-4 vCPUs.
+#     #   Adjust based on your chosen plan. For a 2 vCPU instance, 5 workers is a good start.
+#     # - '--timeout' for long-running requests.
+#     # - '--log-level' for production logging.
+#     # - '--access-logfile' and '--error-logfile' direct logs to stdout/stderr for Render.
+#     startCommand: |
+#       gunicorn backend.wsgi:application \
+#         --bind 0.0.0.0:$PORT \
+#         --workers 5 \
+#         --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker \
+#         --threads 4 \
+#         --timeout 60 \
+#         --log-level info \
+#         --access-logfile '-' \
+#         --error-logfile '-'
+#     envVars:
+#       # Render automatically injects DATABASE_URL and REDIS_URL for linked services
+#       - key: DJANGO_SETTINGS_MODULE
+#         value: backend.settings
+#       - key: DEBUG
+#         value: "False"
+#       - key: SECRET_KEY
+#         generateValue: true # Render will generate a strong key
+#       - key: SITE_URL
+#         value: https://fashionistar-backend.onrender.com # Use your Render URL
+#       - key: ALLOWED_HOSTS
+#         value: "fashionistar-backend.onrender.com,www.yourcustomdomain.com,yourcustomdomain.com" # Include custom domains
+#       - key: CSRF_TRUSTED_ORIGINS
+#         value: "https://fashionistar-backend.onrender.com,https://www.yourcustomdomain.com" # Include custom domains
+#       - key: CLOUDINARY_CLOUD_NAME
+#         sync: false # Store securely as a secret in Render Environment settings
+#       - key: CLOUDINARY_API_KEY
+#         sync: false
+#       - key: CLOUDINARY_API_SECRET
+#         sync: false
+#       - key: DEFAULT_FROM_EMAIL
+#         sync: false
+#       - key: EMAIL_HOST_USER
+#         sync: false
+#       - key: EMAIL_HOST_PASSWORD
+#         sync: false
+#       - key: MAILGUN_API_KEY
+#         sync: false
+#       - key: MAILGUN_DOMAIN
+#         sync: false
+#       - key: PAYSTACK_TEST_KEY
+#         sync: false
+#       - key: PAYSTACK_SECRET_KEY
+#         sync: false
+#       - key: TWILIO_ACCOUNT_SID
+#         sync: false
+#       - key: TWILIO_AUTH_TOKEN
+#         sync: false
+#       - key: TWILIO_PHONE_NUMBER
+#         sync: false
+#       - key: ZOHO_ZEPTOMAIL_API_KEY_TOKEN
+#         sync: false
+#       - key: ZOHO_ZEPTOMAIL_HOSTED_REGION
+#         sync: false
+#       # Ensure Celery URLs are linked to the Redis service
+#       - key: CELERY_BROKER_URL
+#         value: ${REDIS_URL}
+#       - key: CELERY_RESULT_BACKEND
+#         value: ${REDIS_URL}
+#       - key: DJANGO_SECRET_ADMIN_URL
+#         generateValue: true # Generate a random admin URL for security
+
+#   # --------------------------------------------------------------------------
+#   # 4. Celery Worker (Asynchronous Task Processing)
+#   #    - Upgraded plan, optimized command.
+#   # --------------------------------------------------------------------------
+#   - type: worker
+#     name: fashionistar-celery-worker
+#     env: python
+#     region: oregon
+#     plan: starter # Start with 'starter', scale up if tasks backlog.
+#     numInstances: 1 # Can increase based on workload
+#     maxRetries: 3
+#     # Build commands are the same as web service to ensure all dependencies are met
+#     buildCommand: |
+#       pip install -r requirements.txt
+#       python manage.py migrate --noinput # Ensure worker also has latest DB schema
+
+#     # Production-ready Celery worker command.
+#     # - '-concurrency' should be around 2-4 per CPU core, adjust based on task type (IO vs CPU bound).
+#     #   For 'starter' (1 vCPU), 2-4 is a good start.
+#     # - '-l info' for production logging.
+#     # - '-P gevent' if you have many I/O bound tasks and use gevent/eventlet.
+#     startCommand: |
+#       celery -A backend worker -l info --concurrency=4 -P gevent --without-gossip --without-mingle --max-tasks-per-child 1000
+
+#     envVars:
+#       - key: DJANGO_SETTINGS_MODULE
+#         value: backend.settings
+#       - key: DEBUG
+#         value: "False"
+#       - key: SECRET_KEY
+#         generateValue: true
+#       - key: CELERY_BROKER_URL
+#         value: ${REDIS_URL}
+#       - key: CELERY_RESULT_BACKEND
+#         value: ${REDIS_URL}
+#       # Sync other crucial production variables needed by tasks
+#       - key: CLOUDINARY_CLOUD_NAME
+#         sync: false
+#       - key: CLOUDINARY_API_KEY
+#         sync: false
+#       - key: CLOUDINARY_API_SECRET
+#         sync: false
+#       - key: DEFAULT_FROM_EMAIL
+#         sync: false
+#       - key: EMAIL_HOST_USER
+#         sync: false
+#       - key: EMAIL_HOST_PASSWORD
+#         sync: false
+#       - key: MAILGUN_API_KEY
+#         sync: false
+#       - key: MAILGUN_DOMAIN
+#         sync: false
+#       - key: PAYSTACK_TEST_KEY
+#         sync: false
+#       - key: PAYSTACK_SECRET_KEY
+#         sync: false
+#       - key: TWILIO_ACCOUNT_SID
+#         sync: false
+#       - key: TWILIO_AUTH_TOKEN
+#         sync: false
+#       - key: TWILIO_PHONE_NUMBER
+#         sync: false
+#       - key: ZOHO_ZEPTOMAIL_API_KEY_TOKEN
+#         sync: false
+#       - key: ZOHO_ZEPTOMAIL_HOSTED_REGION
+#         sync: false
+
+#   # --------------------------------------------------------------------------
+#   # 5. Celery Beat (Scheduled Tasks)
+#   #    - Upgraded plan, optimized command.
+#   # --------------------------------------------------------------------------
+#   - type: worker
+#     name: fashionistar-celery-beat
+#     env: python
+#     region: oregon
+#     plan: starter # 'starter' is usually sufficient for Beat, as it's not resource-intensive
+#     numInstances: 1 # Only one instance of Beat should run to prevent duplicate task scheduling
+#     maxRetries: 3
+#     # Build commands are the same as web service
+#     buildCommand: |
+#       pip install -r requirements.txt
+#       python manage.py migrate --noinput # Ensure beat also has latest DB schema
+
+#     # Production-ready Celery Beat command.
+#     # - '-s celerybeat-schedule' tells Beat to store its schedule in a file,
+#     #   which is essential for persistent schedules across restarts.
+#     startCommand: "celery -A backend beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler"
+#     # Note: If you're using django-celery-beat, the schedule should be stored in the database.
+#     # The command should reflect this.
+
+#     envVars:
+#       - key: DJANGO_SETTINGS_MODULE
+#         value: backend.settings
+#       - key: DEBUG
+#         value: "False"
+#       - key: SECRET_KEY
+#         generateValue: true
+#       - key: CELERY_BROKER_URL
+#         value: ${REDIS_URL}
+#       - key: CELERY_RESULT_BACKEND
+#         value: ${REDIS_URL}
+#       # Sync other crucial production variables needed by tasks
+#       - key: CLOUDINARY_CLOUD_NAME
+#         sync: false
+#       - key: CLOUDINARY_API_KEY
+#         sync: false
+#       - key: CLOUDINARY_API_SECRET
+#         sync: false
+#       - key: DEFAULT_FROM_EMAIL
+#         sync: false
+#       - key: EMAIL_HOST_USER
+#         sync: false
+#       - key: EMAIL_HOST_PASSWORD
+#         sync: false
+#       - key: MAILGUN_API_KEY
+#         sync: false
+#       - key: MAILGUN_DOMAIN
+#         sync: false
+#       - key: PAYSTACK_TEST_KEY
+#         sync: false
+#       - key: PAYSTACK_SECRET_KEY
+#         sync: false
+#       - key: TWILIO_ACCOUNT_SID
+#         sync: false
+#       - key: TWILIO_AUTH_TOKEN
+#         sync: false
+#       - key: TWILIO_PHONE_NUMBER
+#         sync: false
+#       - key: ZOHO_ZEPTOMAIL_API_KEY_TOKEN
+#         sync: false
+#       - key: ZOHO_ZEPTOMAIL_HOSTED_REGION
+#         sync: false
+
+
+
+
+
+
+
+

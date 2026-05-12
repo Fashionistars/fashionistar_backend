@@ -1,0 +1,226 @@
+# ===========================================================
+# FASHIONISTAR AI — Backend Dependencies
+# Django 6.0.2 | Python 3.12+ | Dual-Engine (DRF + Ninja)
+# Enterprise-Grade AI Fashion E-Commerce Platform
+# ===========================================================
+
+
+# ═══════════════════════════════════════════════════════════
+# 1. CORE FRAMEWORK  (install first — everything depends on these)
+# ═══════════════════════════════════════════════════════════
+Django==6.0.3
+djangorestframework
+django-ninja
+adrf                            # Async DRF views (used by async_views.py)
+
+
+# ═══════════════════════════════════════════════════════════
+# 2. ENVIRONMENT & CONFIGURATION  (needed before settings load)
+# ═══════════════════════════════════════════════════════════
+django-environ
+environs                        # settings.py: from environs import Env
+python-decouple                 # settings.py: from decouple import config
+
+
+# ═══════════════════════════════════════════════════════════
+# 3. DATABASE
+# ═══════════════════════════════════════════════════════════
+psycopg[binary,pool]                 # PostgreSQL adapter
+dj-database-url                 # DATABASE_URL parsing
+
+
+# ═══════════════════════════════════════════════════════════
+# 4. AUTHENTICATION & SECURITY
+# ═══════════════════════════════════════════════════════════
+djangorestframework-simplejwt
+PyJWT
+cryptography
+pycryptodome
+django-encrypted-model-fields
+django-ratelimit
+fido2                           # WebAuthn / biometric auth
+google-auth                     # Google OAuth2 token verification
+google-auth-oauthlib            # Google OAuth2 flow
+google-auth-httplib2            # Google OAuth2 HTTP transport
+django-axes                     # Brute-force login protection & IP blocking
+django-csp                      # Content Security Policy headers
+
+
+# ═══════════════════════════════════════════════════════════
+# 5. CACHING & REDIS
+# ═══════════════════════════════════════════════════════════
+django-redis
+redis
+hiredis                         # C parser for 10x Redis performance
+
+
+# ═══════════════════════════════════════════════════════════
+# 6. BACKGROUND TASKS
+# ═══════════════════════════════════════════════════════════
+celery
+django-celery-beat
+flower
+
+
+# ═══════════════════════════════════════════════════════════
+# 7. ASGI / WSGI SERVERS
+# ═══════════════════════════════════════════════════════════
+uvicorn
+daphne
+gunicorn
+
+
+# ═══════════════════════════════════════════════════════════
+# 8. CHANNELS (WebSocket / Real-time)
+# ═══════════════════════════════════════════════════════════
+channels
+channels-redis                  # settings.py CHANNEL_LAYERS backend
+
+
+# ═══════════════════════════════════════════════════════════
+# 9. CORS & MIDDLEWARE
+# ═══════════════════════════════════════════════════════════
+django-cors-headers
+whitenoise
+
+
+# ═══════════════════════════════════════════════════════════
+# 10. STORAGE & MEDIA
+# ═══════════════════════════════════════════════════════════
+django-storages
+django-cloudinary-storage
+cloudinary
+pillow
+
+
+# ═══════════════════════════════════════════════════════════
+# 11. PHONE & SMS
+# ═══════════════════════════════════════════════════════════
+django-phonenumber-field[phonenumbers]
+phonenumbers
+twilio
+django-phone-verify
+
+
+# ═══════════════════════════════════════════════════════════
+# 12. EMAIL
+# ═══════════════════════════════════════════════════════════
+django-anymail
+django-zoho-zeptomail
+email-validator
+
+
+# ═══════════════════════════════════════════════════════════
+# 13. API DOCUMENTATION
+# ═══════════════════════════════════════════════════════════
+drf-spectacular
+drf-yasg
+
+
+# ═══════════════════════════════════════════════════════════
+# 14. ADMIN & AUDIT
+# ═══════════════════════════════════════════════════════════
+django-jazzmin
+django-import-export
+
+
+# ═══════════════════════════════════════════════════════════
+# 15. LOGGING, MONITORING & OBSERVABILITY  (Enterprise Grade)
+# ═══════════════════════════════════════════════════════════
+drf-api-logger                  # REST API request/response logging
+prometheus_client               # Prometheus metrics endpoint
+sentry-sdk[django]              # Error tracking, performance monitoring, tracing
+django-silk                     # SQL query profiling & request inspection
+django-health-check             # /health/ endpoint for load balancers & uptime
+django-structlog                # Structured JSON logging (ELK/Datadog ready)
+
+
+# ═══════════════════════════════════════════════════════════
+# 16. DATA & VALIDATION
+# ═══════════════════════════════════════════════════════════
+pydantic
+django-filter
+marshmallow
+tablib
+
+
+# ═══════════════════════════════════════════════════════════
+# 17. HTTP & NETWORKING
+# ═══════════════════════════════════════════════════════════
+requests
+httpx
+aiohttp
+aiohttp-retry
+certifi
+charset-normalizer
+idna
+urllib3
+
+
+# ═══════════════════════════════════════════════════════════
+# 18. PAYMENT GATEWAYS
+# ═══════════════════════════════════════════════════════════
+stripe
+rave-python
+
+
+# ═══════════════════════════════════════════════════════════
+# 19. UTILITIES
+# ═══════════════════════════════════════════════════════════
+asgiref
+attrs
+click
+colorama
+humanize
+jsonschema
+packaging
+python-dateutil
+pytz
+PyYAML
+setuptools
+shortuuid
+six
+sqlparse
+typing_extensions
+tzdata
+uritemplate
+uuid6
+wrapt
+
+
+# ═══════════════════════════════════════════════════════════
+# 20. ASYNC INTERNALS  (transitive — pinned for reproducibility)
+# ═══════════════════════════════════════════════════════════
+aiohappyeyeballs
+aiosignal
+async-timeout
+frozenlist
+multidict
+propcache
+yarl
+
+
+# ============================================================================================
+# 21. TESTING FRAMEWORK
+# ============================================================================================
+pytest
+pytest-django
+pytest-asyncio
+pytest-cov
+factory-boy
+
+
+
+# ============================================================================================
+# 22. PROVIDER FRAMEWORK 
+# ============================================================================================
+django-cryptography                     # Required for encryption and decryption of sensitive data
+django-model-utils                      # Required for time-based field tracking
+
+
+# ============================================================================================
+# IN ORDER TO MAKE SURE DJANGO==6.0.2 INSTALLS AND PINNED AFTER BULK REQUIREMENTS.TXT INSTALLATION 
+# ============================================================================================
+
+Django==6.0.3
+openpyxl>=3.1.0  # Required for xlsx import/export in django-import-export

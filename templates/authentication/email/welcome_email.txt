@@ -1,0 +1,20 @@
+FASHIONISTAR — Welcome! Your Account is Verified
+================================================================
+
+Hello {{ user_first_name|default:"Fashion Lover" }},
+
+Your Fashionistar account is now fully verified and ready to use!
+
+WHAT YOU CAN DO NOW:
+  → Browse the Shop:       https://fashionistar.net/shop/
+  → Update your Profile:  https://fashionistar.net/profile/
+  → Sell on Fashionistar: https://fashionistar.net/vendor/register/
+
+We're excited to have you as part of Nigeria's premier AI-powered
+fashion marketplace.
+
+Start Shopping: https://fashionistar.net
+
+================================================================
+© 2026 Fashionistar Ltd. | fashionistar.net | Lagos, Nigeria
+================================================================

@@ -1,0 +1,80 @@
+### Phase 4 — Cloudinary & Webhook Testing (RapidAPI Client Format)
+### Designed for the VSCode REST Client / RapidAPI extension
+
+@baseUrl = http://127.0.0.1:8000/api/v1
+@authToken = <paste_jwt_token_here>
+
+### 1. Request Cloudinary Upload Presign Signature (Avatar)
+# @name GetAvatarPresign
+GET {{baseUrl}}/upload/presign/?asset_type=avatar
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+
+### 2. Request Cloudinary Upload Presign Signature (Product Image)
+# @name GetProductPresign
+GET {{baseUrl}}/upload/presign/?asset_type=product_image
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+
+### 3. Simulate Cloudinary Upload Webhook (Avatar - Happy Path)
+# Requires valid X-Cld-Signature for the configured API_SECRET if checking signatures
+# (For local dev without secret validation, this will process normally)
+POST {{baseUrl}}/upload/webhook/cloudinary/
+Content-Type: application/json
+X-Cld-Timestamp: 1700000000
+X-Cld-Signature: test_signature_dummy
+
+{
+  "notification_type": "upload",
+  "public_id": "/avatars/user_YOUR_USER_UUID_HERE/avatar_test",
+  "secure_url": "https://res.cloudinary.com/fashionistar/image/upload/v1/avatars/user_test/avatar_test.jpg",
+  "resource_type": "image",
+  "created_at": "2026-03-21T18:00:00Z",
+  "bytes": 102400,
+  "width": 800,
+  "height": 800,
+  "format": "jpg"
+}
+
+
+### 4. Simulate Cloudinary Upload Webhook (Duplicate - Idempotency Test)
+# Run the above request first, then this exact same payload.
+# The server should return 200 OK without updating the DB a second time.
+POST {{baseUrl}}/upload/webhook/cloudinary/
+Content-Type: application/json
+X-Cld-Timestamp: 1700000000
+X-Cld-Signature: test_signature_dummy
+
+{
+  "notification_type": "upload",
+  "public_id": "/avatars/user_YOUR_USER_UUID_HERE/avatar_test",
+  "secure_url": "https://res.cloudinary.com/fashionistar/image/upload/v1/avatars/user_test/avatar_test.jpg",
+  "resource_type": "image",
+  "created_at": "2026-03-21T18:00:00Z",
+  "bytes": 102400,
+  "width": 800,
+  "height": 800,
+  "format": "jpg"
+}
+
+
+### 5. Simulate Cloudinary Webhook (Future App - Graceful Skip)
+# Tests the _safe_resolve_model functionality
+POST {{baseUrl}}/upload/webhook/cloudinary/
+Content-Type: application/json
+X-Cld-Timestamp: 1700000000
+X-Cld-Signature: test_signature_dummy
+
+{
+  "notification_type": "upload",
+  "public_id": "/products/images/PROD-XYZ/front",
+  "secure_url": "https://res.cloudinary.com/fashionistar/image/upload/v1/products/images/PROD-XYZ/front.jpg",
+  "resource_type": "image",
+  "created_at": "2026-03-21T18:00:00Z"
+}
+
+
+### 6. Health Check / Status
+GET {{baseUrl}}/health/

@@ -1,0 +1,4008 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "title": "FASHIONISTAR E-commerce Backend APIs",
+        "description": "API documentation for FASHIONISTAR E-commerce Backend",
+        "termsOfService": "https://www.google.com/policies/terms/",
+        "contact": {
+            "email": "fashionistarclothings@outlook.com"
+        },
+        "license": {
+            "name": "BSD License"
+        },
+        "version": "v1"
+    },
+    "basePath": "/",
+    "consumes": [
+        "application/json"
+    ],
+    "produces": [
+        "application/json"
+    ],
+    "securityDefinitions": {
+        "Bearer": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        }
+    },
+    "security": [
+        {
+            "Bearer": []
+        }
+    ],
+    "paths": {
+        "/admin_backend/admin/brands/all/": {
+            "get": {
+                "operationId": "admin_backend_admin_brands_all_list",
+                "description": "A viewset for viewing and editing BRAND instances.",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "A page number within the paginated result set.",
+                        "required": false,
+                        "type": "integer"
+                    },
+                    {
+                        "name": "page_size",
+                        "in": "query",
+                        "description": "Number of results to return per page.",
+                        "required": false,
+                        "type": "integer"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "required": [
+                                "success",
+                                "count",
+                                "next",
+                                "previous",
+                                "results"
+                            ],
+                            "type": "object",
+                            "properties": {
+                                "success": {
+                                    "type": "boolean"
+                                },
+                                "count": {
+                                    "type": "integer",
+                                    "x-nullable": true
+                                },
+                                "pages": {
+                                    "type": "integer",
+                                    "x-nullable": true
+                                },
+                                "page": {
+                                    "type": "integer",
+                                    "x-nullable": true
+                                },
+                                "page_size": {
+                                    "type": "integer"
+                                },
+                                "next": {
+                                    "type": "string",
+                                    "format": "uri",
+                                    "x-nullable": true
+                                },
+                                "previous": {
+                                    "type": "string",
+                                    "format": "uri",
+                                    "x-nullable": true
+                                },
+                                "results": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/definitions/Brand"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "parameters": []
+        },
+        "/admin_backend/admin/brands/create/": {
+            "post": {
+                "operationId": "admin_backend_admin_brands_create_create",
+                "description": "Create a new BRAND instance.",
+                "parameters": [
+                    {
+                        "name": "title",
+                        "in": "formData",
+                        "required": true,
+                        "type": "string",
+                        "maxLength": 100,
+                        "minLength": 1
+                    },
+                    {
+                        "name": "description",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "image",
+                        "in": "formData",
+                        "required": false,
+                        "type": "file",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "cloudinary_url",
+                        "in": "formData",
+                        "description": "Auto-populated by Cloudinary webhook after presign upload.",
+                        "required": false,
+                        "type": "string",
+                        "format": "uri",
+                        "maxLength": 800,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "active",
+                        "in": "formData",
+                        "required": false,
+                        "type": "boolean"
+                    },
+                    {
+                        "name": "user",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "format": "uuid",
+                        "x-nullable": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Brand"
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "parameters": []
+        },
+        "/admin_backend/admin/brands/{slug}/": {
+            "get": {
+                "operationId": "admin_backend_admin_brands_read",
+                "description": "A viewset for viewing and editing BRAND instances.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Brand"
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "parameters": [
+                {
+                    "name": "slug",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "format": "slug",
+                    "pattern": "^[-a-zA-Z0-9_]+$"
+                }
+            ]
+        },
+        "/admin_backend/admin/brands/{slug}/delete/": {
+            "delete": {
+                "operationId": "admin_backend_admin_brands_delete_delete",
+                "description": "Delete an existing BRAND instance.",
+                "parameters": [],
+                "responses": {
+                    "204": {
+                        "description": ""
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "parameters": [
+                {
+                    "name": "slug",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "format": "slug",
+                    "pattern": "^[-a-zA-Z0-9_]+$"
+                }
+            ]
+        },
+        "/admin_backend/admin/brands/{slug}/update/": {
+            "put": {
+                "operationId": "admin_backend_admin_brands_update_update",
+                "description": "Update an existing BRAND instance.",
+                "parameters": [
+                    {
+                        "name": "title",
+                        "in": "formData",
+                        "required": true,
+                        "type": "string",
+                        "maxLength": 100,
+                        "minLength": 1
+                    },
+                    {
+                        "name": "description",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "image",
+                        "in": "formData",
+                        "required": false,
+                        "type": "file",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "cloudinary_url",
+                        "in": "formData",
+                        "description": "Auto-populated by Cloudinary webhook after presign upload.",
+                        "required": false,
+                        "type": "string",
+                        "format": "uri",
+                        "maxLength": 800,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "active",
+                        "in": "formData",
+                        "required": false,
+                        "type": "boolean"
+                    },
+                    {
+                        "name": "user",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "format": "uuid",
+                        "x-nullable": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Brand"
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "patch": {
+                "operationId": "admin_backend_admin_brands_update_partial_update",
+                "description": "A viewset for viewing and editing BRAND instances.",
+                "parameters": [
+                    {
+                        "name": "title",
+                        "in": "formData",
+                        "required": true,
+                        "type": "string",
+                        "maxLength": 100,
+                        "minLength": 1
+                    },
+                    {
+                        "name": "description",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "image",
+                        "in": "formData",
+                        "required": false,
+                        "type": "file",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "cloudinary_url",
+                        "in": "formData",
+                        "description": "Auto-populated by Cloudinary webhook after presign upload.",
+                        "required": false,
+                        "type": "string",
+                        "format": "uri",
+                        "maxLength": 800,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "active",
+                        "in": "formData",
+                        "required": false,
+                        "type": "boolean"
+                    },
+                    {
+                        "name": "user",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "format": "uuid",
+                        "x-nullable": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Brand"
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "parameters": [
+                {
+                    "name": "slug",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "format": "slug",
+                    "pattern": "^[-a-zA-Z0-9_]+$"
+                }
+            ]
+        },
+        "/admin_backend/admin/category/all/": {
+            "get": {
+                "operationId": "admin_backend_admin_category_all_list",
+                "description": "A viewset for viewing and editing CATEGORY instances.",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "A page number within the paginated result set.",
+                        "required": false,
+                        "type": "integer"
+                    },
+                    {
+                        "name": "page_size",
+                        "in": "query",
+                        "description": "Number of results to return per page.",
+                        "required": false,
+                        "type": "integer"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "required": [
+                                "success",
+                                "count",
+                                "next",
+                                "previous",
+                                "results"
+                            ],
+                            "type": "object",
+                            "properties": {
+                                "success": {
+                                    "type": "boolean"
+                                },
+                                "count": {
+                                    "type": "integer",
+                                    "x-nullable": true
+                                },
+                                "pages": {
+                                    "type": "integer",
+                                    "x-nullable": true
+                                },
+                                "page": {
+                                    "type": "integer",
+                                    "x-nullable": true
+                                },
+                                "page_size": {
+                                    "type": "integer"
+                                },
+                                "next": {
+                                    "type": "string",
+                                    "format": "uri",
+                                    "x-nullable": true
+                                },
+                                "previous": {
+                                    "type": "string",
+                                    "format": "uri",
+                                    "x-nullable": true
+                                },
+                                "results": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/definitions/Category"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "parameters": []
+        },
+        "/admin_backend/admin/category/create/": {
+            "post": {
+                "operationId": "admin_backend_admin_category_create_create",
+                "description": "Create a new CATEGORY instance.",
+                "parameters": [
+                    {
+                        "name": "name",
+                        "in": "formData",
+                        "required": true,
+                        "type": "string",
+                        "maxLength": 100,
+                        "minLength": 1
+                    },
+                    {
+                        "name": "image",
+                        "in": "formData",
+                        "required": false,
+                        "type": "file",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "cloudinary_url",
+                        "in": "formData",
+                        "description": "Auto-populated by Cloudinary webhook after presign upload.",
+                        "required": false,
+                        "type": "string",
+                        "format": "uri",
+                        "maxLength": 800,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "active",
+                        "in": "formData",
+                        "required": false,
+                        "type": "boolean"
+                    },
+                    {
+                        "name": "user",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "format": "uuid",
+                        "x-nullable": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Category"
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "parameters": []
+        },
+        "/admin_backend/admin/category/{slug}/": {
+            "get": {
+                "operationId": "admin_backend_admin_category_read",
+                "description": "A viewset for viewing and editing CATEGORY instances.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Category"
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "parameters": [
+                {
+                    "name": "slug",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "format": "slug",
+                    "pattern": "^[-a-zA-Z0-9_]+$"
+                }
+            ]
+        },
+        "/admin_backend/admin/category/{slug}/delete/": {
+            "delete": {
+                "operationId": "admin_backend_admin_category_delete_delete",
+                "description": "Delete an existing CATEGORY instance.",
+                "parameters": [],
+                "responses": {
+                    "204": {
+                        "description": ""
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "parameters": [
+                {
+                    "name": "slug",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "format": "slug",
+                    "pattern": "^[-a-zA-Z0-9_]+$"
+                }
+            ]
+        },
+        "/admin_backend/admin/category/{slug}/update/": {
+            "put": {
+                "operationId": "admin_backend_admin_category_update_update",
+                "description": "Update an existing CATEGORY instance.",
+                "parameters": [
+                    {
+                        "name": "name",
+                        "in": "formData",
+                        "required": true,
+                        "type": "string",
+                        "maxLength": 100,
+                        "minLength": 1
+                    },
+                    {
+                        "name": "image",
+                        "in": "formData",
+                        "required": false,
+                        "type": "file",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "cloudinary_url",
+                        "in": "formData",
+                        "description": "Auto-populated by Cloudinary webhook after presign upload.",
+                        "required": false,
+                        "type": "string",
+                        "format": "uri",
+                        "maxLength": 800,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "active",
+                        "in": "formData",
+                        "required": false,
+                        "type": "boolean"
+                    },
+                    {
+                        "name": "user",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "format": "uuid",
+                        "x-nullable": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Category"
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "patch": {
+                "operationId": "admin_backend_admin_category_update_partial_update",
+                "description": "A viewset for viewing and editing CATEGORY instances.",
+                "parameters": [
+                    {
+                        "name": "name",
+                        "in": "formData",
+                        "required": true,
+                        "type": "string",
+                        "maxLength": 100,
+                        "minLength": 1
+                    },
+                    {
+                        "name": "image",
+                        "in": "formData",
+                        "required": false,
+                        "type": "file",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "cloudinary_url",
+                        "in": "formData",
+                        "description": "Auto-populated by Cloudinary webhook after presign upload.",
+                        "required": false,
+                        "type": "string",
+                        "format": "uri",
+                        "maxLength": 800,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "active",
+                        "in": "formData",
+                        "required": false,
+                        "type": "boolean"
+                    },
+                    {
+                        "name": "user",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "format": "uuid",
+                        "x-nullable": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Category"
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "parameters": [
+                {
+                    "name": "slug",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "format": "slug",
+                    "pattern": "^[-a-zA-Z0-9_]+$"
+                }
+            ]
+        },
+        "/admin_backend/admin/collections/all/": {
+            "get": {
+                "operationId": "admin_backend_admin_collections_all_list",
+                "description": "A viewset for viewing and editing Collection instances.",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "A page number within the paginated result set.",
+                        "required": false,
+                        "type": "integer"
+                    },
+                    {
+                        "name": "page_size",
+                        "in": "query",
+                        "description": "Number of results to return per page.",
+                        "required": false,
+                        "type": "integer"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "required": [
+                                "success",
+                                "count",
+                                "next",
+                                "previous",
+                                "results"
+                            ],
+                            "type": "object",
+                            "properties": {
+                                "success": {
+                                    "type": "boolean"
+                                },
+                                "count": {
+                                    "type": "integer",
+                                    "x-nullable": true
+                                },
+                                "pages": {
+                                    "type": "integer",
+                                    "x-nullable": true
+                                },
+                                "page": {
+                                    "type": "integer",
+                                    "x-nullable": true
+                                },
+                                "page_size": {
+                                    "type": "integer"
+                                },
+                                "next": {
+                                    "type": "string",
+                                    "format": "uri",
+                                    "x-nullable": true
+                                },
+                                "previous": {
+                                    "type": "string",
+                                    "format": "uri",
+                                    "x-nullable": true
+                                },
+                                "results": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/definitions/Collections"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "parameters": []
+        },
+        "/admin_backend/admin/collections/create/": {
+            "post": {
+                "operationId": "admin_backend_admin_collections_create_create",
+                "description": "Create a new Collection instance.",
+                "parameters": [
+                    {
+                        "name": "title",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "maxLength": 255,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "sub_title",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "maxLength": 255,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "description",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "background_image",
+                        "in": "formData",
+                        "required": false,
+                        "type": "file",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "image",
+                        "in": "formData",
+                        "required": false,
+                        "type": "file",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "cloudinary_url",
+                        "in": "formData",
+                        "description": "Main collection image — auto-populated by Cloudinary webhook.",
+                        "required": false,
+                        "type": "string",
+                        "format": "uri",
+                        "maxLength": 800,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "background_cloudinary_url",
+                        "in": "formData",
+                        "description": "Background hero image — auto-populated by Cloudinary webhook.",
+                        "required": false,
+                        "type": "string",
+                        "format": "uri",
+                        "maxLength": 800,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "user",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "format": "uuid",
+                        "x-nullable": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Collections"
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "parameters": []
+        },
+        "/admin_backend/admin/collections/{slug}/": {
+            "get": {
+                "operationId": "admin_backend_admin_collections_read",
+                "description": "A viewset for viewing and editing Collection instances.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Collections"
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "parameters": [
+                {
+                    "name": "slug",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "format": "slug",
+                    "pattern": "^[-a-zA-Z0-9_]+$"
+                }
+            ]
+        },
+        "/admin_backend/admin/collections/{slug}/delete/": {
+            "delete": {
+                "operationId": "admin_backend_admin_collections_delete_delete",
+                "description": "Delete an existing Collection instance.",
+                "parameters": [],
+                "responses": {
+                    "204": {
+                        "description": ""
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "parameters": [
+                {
+                    "name": "slug",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "format": "slug",
+                    "pattern": "^[-a-zA-Z0-9_]+$"
+                }
+            ]
+        },
+        "/admin_backend/admin/collections/{slug}/update/": {
+            "put": {
+                "operationId": "admin_backend_admin_collections_update_update",
+                "description": "Update an existing Collection instance.",
+                "parameters": [
+                    {
+                        "name": "title",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "maxLength": 255,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "sub_title",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "maxLength": 255,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "description",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "background_image",
+                        "in": "formData",
+                        "required": false,
+                        "type": "file",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "image",
+                        "in": "formData",
+                        "required": false,
+                        "type": "file",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "cloudinary_url",
+                        "in": "formData",
+                        "description": "Main collection image — auto-populated by Cloudinary webhook.",
+                        "required": false,
+                        "type": "string",
+                        "format": "uri",
+                        "maxLength": 800,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "background_cloudinary_url",
+                        "in": "formData",
+                        "description": "Background hero image — auto-populated by Cloudinary webhook.",
+                        "required": false,
+                        "type": "string",
+                        "format": "uri",
+                        "maxLength": 800,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "user",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "format": "uuid",
+                        "x-nullable": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Collections"
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "patch": {
+                "operationId": "admin_backend_admin_collections_update_partial_update",
+                "description": "A viewset for viewing and editing Collection instances.",
+                "parameters": [
+                    {
+                        "name": "title",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "maxLength": 255,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "sub_title",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "maxLength": 255,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "description",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "background_image",
+                        "in": "formData",
+                        "required": false,
+                        "type": "file",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "image",
+                        "in": "formData",
+                        "required": false,
+                        "type": "file",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "cloudinary_url",
+                        "in": "formData",
+                        "description": "Main collection image — auto-populated by Cloudinary webhook.",
+                        "required": false,
+                        "type": "string",
+                        "format": "uri",
+                        "maxLength": 800,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "background_cloudinary_url",
+                        "in": "formData",
+                        "description": "Background hero image — auto-populated by Cloudinary webhook.",
+                        "required": false,
+                        "type": "string",
+                        "format": "uri",
+                        "maxLength": 800,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "user",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "format": "uuid",
+                        "x-nullable": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Collections"
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "parameters": [
+                {
+                    "name": "slug",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "format": "slug",
+                    "pattern": "^[-a-zA-Z0-9_]+$"
+                }
+            ]
+        },
+        "/admin_backend/brands/": {
+            "get": {
+                "operationId": "admin_backend_brands_list",
+                "description": "A viewset for viewing and editing BRAND instances.",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "A page number within the paginated result set.",
+                        "required": false,
+                        "type": "integer"
+                    },
+                    {
+                        "name": "page_size",
+                        "in": "query",
+                        "description": "Number of results to return per page.",
+                        "required": false,
+                        "type": "integer"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "required": [
+                                "success",
+                                "count",
+                                "next",
+                                "previous",
+                                "results"
+                            ],
+                            "type": "object",
+                            "properties": {
+                                "success": {
+                                    "type": "boolean"
+                                },
+                                "count": {
+                                    "type": "integer",
+                                    "x-nullable": true
+                                },
+                                "pages": {
+                                    "type": "integer",
+                                    "x-nullable": true
+                                },
+                                "page": {
+                                    "type": "integer",
+                                    "x-nullable": true
+                                },
+                                "page_size": {
+                                    "type": "integer"
+                                },
+                                "next": {
+                                    "type": "string",
+                                    "format": "uri",
+                                    "x-nullable": true
+                                },
+                                "previous": {
+                                    "type": "string",
+                                    "format": "uri",
+                                    "x-nullable": true
+                                },
+                                "results": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/definitions/Brand"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "post": {
+                "operationId": "admin_backend_brands_create",
+                "description": "Create a new BRAND instance.",
+                "parameters": [
+                    {
+                        "name": "title",
+                        "in": "formData",
+                        "required": true,
+                        "type": "string",
+                        "maxLength": 100,
+                        "minLength": 1
+                    },
+                    {
+                        "name": "description",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "image",
+                        "in": "formData",
+                        "required": false,
+                        "type": "file",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "cloudinary_url",
+                        "in": "formData",
+                        "description": "Auto-populated by Cloudinary webhook after presign upload.",
+                        "required": false,
+                        "type": "string",
+                        "format": "uri",
+                        "maxLength": 800,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "active",
+                        "in": "formData",
+                        "required": false,
+                        "type": "boolean"
+                    },
+                    {
+                        "name": "user",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "format": "uuid",
+                        "x-nullable": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Brand"
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "parameters": []
+        },
+        "/admin_backend/brands/{id}/": {
+            "get": {
+                "operationId": "admin_backend_brands_read",
+                "description": "A viewset for viewing and editing BRAND instances.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Brand"
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "put": {
+                "operationId": "admin_backend_brands_update",
+                "description": "Update an existing BRAND instance.",
+                "parameters": [
+                    {
+                        "name": "title",
+                        "in": "formData",
+                        "required": true,
+                        "type": "string",
+                        "maxLength": 100,
+                        "minLength": 1
+                    },
+                    {
+                        "name": "description",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "image",
+                        "in": "formData",
+                        "required": false,
+                        "type": "file",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "cloudinary_url",
+                        "in": "formData",
+                        "description": "Auto-populated by Cloudinary webhook after presign upload.",
+                        "required": false,
+                        "type": "string",
+                        "format": "uri",
+                        "maxLength": 800,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "active",
+                        "in": "formData",
+                        "required": false,
+                        "type": "boolean"
+                    },
+                    {
+                        "name": "user",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "format": "uuid",
+                        "x-nullable": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Brand"
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "patch": {
+                "operationId": "admin_backend_brands_partial_update",
+                "description": "A viewset for viewing and editing BRAND instances.",
+                "parameters": [
+                    {
+                        "name": "title",
+                        "in": "formData",
+                        "required": true,
+                        "type": "string",
+                        "maxLength": 100,
+                        "minLength": 1
+                    },
+                    {
+                        "name": "description",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "image",
+                        "in": "formData",
+                        "required": false,
+                        "type": "file",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "cloudinary_url",
+                        "in": "formData",
+                        "description": "Auto-populated by Cloudinary webhook after presign upload.",
+                        "required": false,
+                        "type": "string",
+                        "format": "uri",
+                        "maxLength": 800,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "active",
+                        "in": "formData",
+                        "required": false,
+                        "type": "boolean"
+                    },
+                    {
+                        "name": "user",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "format": "uuid",
+                        "x-nullable": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Brand"
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "delete": {
+                "operationId": "admin_backend_brands_delete",
+                "description": "Delete an existing BRAND instance.",
+                "parameters": [],
+                "responses": {
+                    "204": {
+                        "description": ""
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "parameters": [
+                {
+                    "name": "id",
+                    "in": "path",
+                    "description": "A unique integer value identifying this brand.",
+                    "required": true,
+                    "type": "integer"
+                }
+            ]
+        },
+        "/admin_backend/categories/": {
+            "get": {
+                "operationId": "admin_backend_categories_list",
+                "description": "A viewset for viewing and editing CATEGORY instances.",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "A page number within the paginated result set.",
+                        "required": false,
+                        "type": "integer"
+                    },
+                    {
+                        "name": "page_size",
+                        "in": "query",
+                        "description": "Number of results to return per page.",
+                        "required": false,
+                        "type": "integer"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "required": [
+                                "success",
+                                "count",
+                                "next",
+                                "previous",
+                                "results"
+                            ],
+                            "type": "object",
+                            "properties": {
+                                "success": {
+                                    "type": "boolean"
+                                },
+                                "count": {
+                                    "type": "integer",
+                                    "x-nullable": true
+                                },
+                                "pages": {
+                                    "type": "integer",
+                                    "x-nullable": true
+                                },
+                                "page": {
+                                    "type": "integer",
+                                    "x-nullable": true
+                                },
+                                "page_size": {
+                                    "type": "integer"
+                                },
+                                "next": {
+                                    "type": "string",
+                                    "format": "uri",
+                                    "x-nullable": true
+                                },
+                                "previous": {
+                                    "type": "string",
+                                    "format": "uri",
+                                    "x-nullable": true
+                                },
+                                "results": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/definitions/Category"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "post": {
+                "operationId": "admin_backend_categories_create",
+                "description": "Create a new CATEGORY instance.",
+                "parameters": [
+                    {
+                        "name": "name",
+                        "in": "formData",
+                        "required": true,
+                        "type": "string",
+                        "maxLength": 100,
+                        "minLength": 1
+                    },
+                    {
+                        "name": "image",
+                        "in": "formData",
+                        "required": false,
+                        "type": "file",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "cloudinary_url",
+                        "in": "formData",
+                        "description": "Auto-populated by Cloudinary webhook after presign upload.",
+                        "required": false,
+                        "type": "string",
+                        "format": "uri",
+                        "maxLength": 800,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "active",
+                        "in": "formData",
+                        "required": false,
+                        "type": "boolean"
+                    },
+                    {
+                        "name": "user",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "format": "uuid",
+                        "x-nullable": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Category"
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "parameters": []
+        },
+        "/admin_backend/categories/{id}/": {
+            "get": {
+                "operationId": "admin_backend_categories_read",
+                "description": "A viewset for viewing and editing CATEGORY instances.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Category"
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "put": {
+                "operationId": "admin_backend_categories_update",
+                "description": "Update an existing CATEGORY instance.",
+                "parameters": [
+                    {
+                        "name": "name",
+                        "in": "formData",
+                        "required": true,
+                        "type": "string",
+                        "maxLength": 100,
+                        "minLength": 1
+                    },
+                    {
+                        "name": "image",
+                        "in": "formData",
+                        "required": false,
+                        "type": "file",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "cloudinary_url",
+                        "in": "formData",
+                        "description": "Auto-populated by Cloudinary webhook after presign upload.",
+                        "required": false,
+                        "type": "string",
+                        "format": "uri",
+                        "maxLength": 800,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "active",
+                        "in": "formData",
+                        "required": false,
+                        "type": "boolean"
+                    },
+                    {
+                        "name": "user",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "format": "uuid",
+                        "x-nullable": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Category"
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "patch": {
+                "operationId": "admin_backend_categories_partial_update",
+                "description": "A viewset for viewing and editing CATEGORY instances.",
+                "parameters": [
+                    {
+                        "name": "name",
+                        "in": "formData",
+                        "required": true,
+                        "type": "string",
+                        "maxLength": 100,
+                        "minLength": 1
+                    },
+                    {
+                        "name": "image",
+                        "in": "formData",
+                        "required": false,
+                        "type": "file",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "cloudinary_url",
+                        "in": "formData",
+                        "description": "Auto-populated by Cloudinary webhook after presign upload.",
+                        "required": false,
+                        "type": "string",
+                        "format": "uri",
+                        "maxLength": 800,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "active",
+                        "in": "formData",
+                        "required": false,
+                        "type": "boolean"
+                    },
+                    {
+                        "name": "user",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "format": "uuid",
+                        "x-nullable": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Category"
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "delete": {
+                "operationId": "admin_backend_categories_delete",
+                "description": "Delete an existing CATEGORY instance.",
+                "parameters": [],
+                "responses": {
+                    "204": {
+                        "description": ""
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "parameters": [
+                {
+                    "name": "id",
+                    "in": "path",
+                    "description": "A UUID string identifying this category.",
+                    "required": true,
+                    "type": "string",
+                    "format": "uuid"
+                }
+            ]
+        },
+        "/admin_backend/collections/": {
+            "get": {
+                "operationId": "admin_backend_collections_list",
+                "description": "A viewset for viewing and editing Collection instances.",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "A page number within the paginated result set.",
+                        "required": false,
+                        "type": "integer"
+                    },
+                    {
+                        "name": "page_size",
+                        "in": "query",
+                        "description": "Number of results to return per page.",
+                        "required": false,
+                        "type": "integer"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "required": [
+                                "success",
+                                "count",
+                                "next",
+                                "previous",
+                                "results"
+                            ],
+                            "type": "object",
+                            "properties": {
+                                "success": {
+                                    "type": "boolean"
+                                },
+                                "count": {
+                                    "type": "integer",
+                                    "x-nullable": true
+                                },
+                                "pages": {
+                                    "type": "integer",
+                                    "x-nullable": true
+                                },
+                                "page": {
+                                    "type": "integer",
+                                    "x-nullable": true
+                                },
+                                "page_size": {
+                                    "type": "integer"
+                                },
+                                "next": {
+                                    "type": "string",
+                                    "format": "uri",
+                                    "x-nullable": true
+                                },
+                                "previous": {
+                                    "type": "string",
+                                    "format": "uri",
+                                    "x-nullable": true
+                                },
+                                "results": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/definitions/Collections"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "post": {
+                "operationId": "admin_backend_collections_create",
+                "description": "Create a new Collection instance.",
+                "parameters": [
+                    {
+                        "name": "title",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "maxLength": 255,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "sub_title",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "maxLength": 255,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "description",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "background_image",
+                        "in": "formData",
+                        "required": false,
+                        "type": "file",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "image",
+                        "in": "formData",
+                        "required": false,
+                        "type": "file",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "cloudinary_url",
+                        "in": "formData",
+                        "description": "Main collection image — auto-populated by Cloudinary webhook.",
+                        "required": false,
+                        "type": "string",
+                        "format": "uri",
+                        "maxLength": 800,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "background_cloudinary_url",
+                        "in": "formData",
+                        "description": "Background hero image — auto-populated by Cloudinary webhook.",
+                        "required": false,
+                        "type": "string",
+                        "format": "uri",
+                        "maxLength": 800,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "user",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "format": "uuid",
+                        "x-nullable": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Collections"
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "parameters": []
+        },
+        "/admin_backend/collections/{id}/": {
+            "get": {
+                "operationId": "admin_backend_collections_read",
+                "description": "A viewset for viewing and editing Collection instances.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Collections"
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "put": {
+                "operationId": "admin_backend_collections_update",
+                "description": "Update an existing Collection instance.",
+                "parameters": [
+                    {
+                        "name": "title",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "maxLength": 255,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "sub_title",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "maxLength": 255,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "description",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "background_image",
+                        "in": "formData",
+                        "required": false,
+                        "type": "file",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "image",
+                        "in": "formData",
+                        "required": false,
+                        "type": "file",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "cloudinary_url",
+                        "in": "formData",
+                        "description": "Main collection image — auto-populated by Cloudinary webhook.",
+                        "required": false,
+                        "type": "string",
+                        "format": "uri",
+                        "maxLength": 800,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "background_cloudinary_url",
+                        "in": "formData",
+                        "description": "Background hero image — auto-populated by Cloudinary webhook.",
+                        "required": false,
+                        "type": "string",
+                        "format": "uri",
+                        "maxLength": 800,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "user",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "format": "uuid",
+                        "x-nullable": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Collections"
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "patch": {
+                "operationId": "admin_backend_collections_partial_update",
+                "description": "A viewset for viewing and editing Collection instances.",
+                "parameters": [
+                    {
+                        "name": "title",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "maxLength": 255,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "sub_title",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "maxLength": 255,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "description",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "background_image",
+                        "in": "formData",
+                        "required": false,
+                        "type": "file",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "image",
+                        "in": "formData",
+                        "required": false,
+                        "type": "file",
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "cloudinary_url",
+                        "in": "formData",
+                        "description": "Main collection image — auto-populated by Cloudinary webhook.",
+                        "required": false,
+                        "type": "string",
+                        "format": "uri",
+                        "maxLength": 800,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "background_cloudinary_url",
+                        "in": "formData",
+                        "description": "Background hero image — auto-populated by Cloudinary webhook.",
+                        "required": false,
+                        "type": "string",
+                        "format": "uri",
+                        "maxLength": 800,
+                        "x-nullable": true
+                    },
+                    {
+                        "name": "user",
+                        "in": "formData",
+                        "required": false,
+                        "type": "string",
+                        "format": "uuid",
+                        "x-nullable": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/Collections"
+                        }
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "delete": {
+                "operationId": "admin_backend_collections_delete",
+                "description": "Delete an existing Collection instance.",
+                "parameters": [],
+                "responses": {
+                    "204": {
+                        "description": ""
+                    }
+                },
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "admin_backend"
+                ]
+            },
+            "parameters": [
+                {
+                    "name": "id",
+                    "in": "path",
+                    "description": "A unique integer value identifying this collections.",
+                    "required": true,
+                    "type": "integer"
+                }
+            ]
+        },
+        "/api/v1/auth/google/": {
+            "post": {
+                "operationId": "api_v1_auth_google_create",
+                "summary": "POST /api/v1/auth/google/",
+                "description": "Google OAuth2 sign-in via ID token from the frontend.\n\nRequest Body:\n    id_token (str): Google ID token from frontend OAuth2 flow.\n    role     (str): 'vendor' or 'client' (for new registrations).\n\nSuccess 201 (NEW USER):\n    { \"status\": \"success\", \"message\": \"Welcome...\", \"is_new\": true, \"tokens\": {...}, \"redirect\": \"/dashboard?welcome=true\" }\n\nSuccess 200 (EXISTING USER):\n    { \"status\": \"success\", \"message\": \"Welcome back...\", \"is_new\": false, \"tokens\": {...}, \"redirect\": \"/dashboard\" }\n\nError 401 — Invalid or expired Google token.\nError 500 — Unexpected server error.",
+                "parameters": [
+                    {
+                        "name": "data",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/AuthGoogleAuth"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/AuthGoogleAuth"
+                        }
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/auth/login-events/": {
+            "get": {
+                "operationId": "api_v1_auth_login-events_list",
+                "summary": "Return the last 10 login events (attempts) for the authenticated user.",
+                "description": "Useful for the Security Dashboard \"Recent Login Activity\" section.\nAnalogous to Binance's \"Login Activity\" and Google's \"Recent Security Events\".\n\nUses LoginEventSerializer for validated, Swagger-documented responses.\nUses get_login_events() selector for optimized ORM query with select_related.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/auth/login/": {
+            "post": {
+                "operationId": "api_v1_auth_login_create",
+                "summary": "Full enterprise-grade login via SyncAuthService.",
+                "description": "SyncAuthService.login() performs (in order):\n  1. Soft-delete pre-check → SoftDeletedUserError (403)\n  2. Django authenticate() → password verification\n  3. is_verified check    → AccountNotVerifiedError (403) with OTP URLs\n  4. is_active check      → AccountDeactivatedError (403) with support URL\n  5. Invalid credentials  → InvalidCredentialsError (401)\n  6. LoginEvent INSERT (every attempt — success AND failure)\n  7. AuditService.log()  (async via Celery on_commit)\n  8. UserSession.create_from_token() via transaction.on_commit()\n  9. lifecycle_counter Celery task (fire-and-forget)\n\nThis provides a complete, tamper-proof audit trail for every login\nattempt — critical for SIEM dashboards and compliance requirements.",
+                "parameters": [
+                    {
+                        "name": "data",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/AuthLogin"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/AuthLogin"
+                        }
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/auth/logout/": {
+            "post": {
+                "operationId": "api_v1_auth_logout_create",
+                "description": "Blacklists refresh token, invalidating the server-side session.",
+                "parameters": [
+                    {
+                        "name": "data",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/AuthLogout"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/AuthLogout"
+                        }
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/auth/me/": {
+            "get": {
+                "operationId": "api_v1_auth_me_read",
+                "description": "Return the requesting user's profile via MeSerializer.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/AuthMe"
+                        }
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/auth/register/": {
+            "post": {
+                "operationId": "api_v1_auth_register_create",
+                "summary": "POST /api/v1/auth/register/",
+                "description": "Synchronous User Registration.\n\nAccepts email OR phone + password + role, creates the user inside an\natomic transaction, generates a 6-digit OTP, and dispatches it via\nEmail (if email provided) or SMS (if phone only).\n\nMirrors legacy:  ``userauths.views.RegisterViewCelery``\n\nRequest Body:\n    email     (str, optional)  : User email address.\n    phone     (str, optional)  : Phone in E.164 format (+234...).\n    password  (str, required)  : Min 8 chars, must contain upper/lower/digit/special.\n    password2 (str, required)  : Must match password.\n    role      (str, required)  : 'vendor' or 'client'.\n\nSuccess Response 201:\n    {\n      \"message\": \"Registration successful. Check your email/phone for OTP.\",\n      \"user_id\": \"<uuid>\",\n      \"email\":   \"user@example.com\",\n      \"phone\":   null\n    }\n\nError Responses:\n    400 — Validation error (missing fields, weak password, mismatch, duplicate)\n    500 — Unexpected server error (transaction rolled back)",
+                "parameters": [
+                    {
+                        "name": "data",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/AuthUserRegistration"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/AuthUserRegistration"
+                        }
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/auth/resend-otp/": {
+            "post": {
+                "operationId": "api_v1_auth_resend-otp_create",
+                "description": "Resends OTP to user's verified contact.",
+                "parameters": [
+                    {
+                        "name": "data",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/AuthResendOTPRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/AuthResendOTPRequest"
+                        }
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/auth/sessions/": {
+            "get": {
+                "operationId": "api_v1_auth_sessions_list",
+                "summary": "List all active sessions for the authenticated user.",
+                "description": "Returns the 20 most recent sessions, sorted by last_used_at descending.\nEach session includes device, location, and is_current flag.\n\nThe ``is_current`` field marks the session being used for this request,\nallowing the frontend to highlight it (styled differently, no revoke button).",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/auth/sessions/revoke-others/": {
+            "post": {
+                "operationId": "api_v1_auth_sessions_revoke-others_create",
+                "summary": "Logout all other devices — keeps only the current session.",
+                "description": "Useful when a user suspects their account is compromised on another device.\nAll other sessions except the current request's session are blacklisted\nand deleted in a single atomic transaction.\n\nReturns the count of sessions terminated.",
+                "parameters": [],
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/auth/sessions/{session_id}/": {
+            "delete": {
+                "operationId": "api_v1_auth_sessions_delete",
+                "summary": "Revoke a session by its UUID7 primary key (string).",
+                "description": "All models inherit from CommonTimestampModel which uses UUID7 as PK.\nThe URL parameter is <str:session_id> — NOT <int:session_id>.",
+                "parameters": [],
+                "responses": {
+                    "204": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": [
+                {
+                    "name": "session_id",
+                    "in": "path",
+                    "required": true,
+                    "type": "string"
+                }
+            ]
+        },
+        "/api/v1/auth/token/refresh/": {
+            "post": {
+                "operationId": "api_v1_auth_token_refresh_create",
+                "description": "Delegates to SimpleJWT TokenRefreshView with custom renderer.",
+                "parameters": [
+                    {
+                        "name": "data",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/AuthTokenRefresh"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/AuthTokenRefresh"
+                        }
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/auth/verify-otp/": {
+            "post": {
+                "operationId": "api_v1_auth_verify-otp_create",
+                "description": "Verifies OTP (OTP-only, no user_id in request) and issues JWT tokens.",
+                "parameters": [
+                    {
+                        "name": "data",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/AuthOTP"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/AuthOTP"
+                        }
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/client/addresses/": {
+            "get": {
+                "operationId": "api_v1_client_addresses_list",
+                "description": "GET  /api/v1/client/addresses/ — list saved addresses\nPOST /api/v1/client/addresses/ — add new address",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "post": {
+                "operationId": "api_v1_client_addresses_create",
+                "description": "GET  /api/v1/client/addresses/ — list saved addresses\nPOST /api/v1/client/addresses/ — add new address",
+                "parameters": [],
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/client/addresses/{address_id}/": {
+            "delete": {
+                "operationId": "api_v1_client_addresses_delete",
+                "description": "DELETE /api/v1/client/addresses/{id}/ — soft-delete address",
+                "parameters": [],
+                "responses": {
+                    "204": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": [
+                {
+                    "name": "address_id",
+                    "in": "path",
+                    "required": true,
+                    "type": "string"
+                }
+            ]
+        },
+        "/api/v1/client/addresses/{address_id}/set-default/": {
+            "post": {
+                "operationId": "api_v1_client_addresses_set-default_create",
+                "description": "POST /api/v1/client/addresses/{id}/set-default/",
+                "parameters": [],
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": [
+                {
+                    "name": "address_id",
+                    "in": "path",
+                    "required": true,
+                    "type": "string"
+                }
+            ]
+        },
+        "/api/v1/client/orders/": {
+            "get": {
+                "operationId": "api_v1_client_orders_list",
+                "summary": "GET /api/v1/client/orders/",
+                "description": "Return all paid orders for the authenticated client.\nPrefetches orderitems to avoid N+1 on order detail pages.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/client/orders/{oid}/": {
+            "get": {
+                "operationId": "api_v1_client_orders_read",
+                "summary": "GET /api/v1/client/orders/<str:oid>/",
+                "description": "Return detail for a single paid order scoped to this client.\nUses oid (order identifier) — not PK — for public safety.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": [
+                {
+                    "name": "oid",
+                    "in": "path",
+                    "required": true,
+                    "type": "string"
+                }
+            ]
+        },
+        "/api/v1/client/profile/": {
+            "get": {
+                "operationId": "api_v1_client_profile_list",
+                "description": "GET  /api/v1/client/profile/ — retrieve profile\nPATCH /api/v1/client/profile/ — update profile",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "patch": {
+                "operationId": "api_v1_client_profile_partial_update",
+                "description": "GET  /api/v1/client/profile/ — retrieve profile\nPATCH /api/v1/client/profile/ — update profile",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/client/reviews/create/": {
+            "post": {
+                "operationId": "api_v1_client_reviews_create_create",
+                "description": "POST /api/v1/client/reviews/create/",
+                "parameters": [],
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/client/wallet/balance/": {
+            "get": {
+                "operationId": "api_v1_client_wallet_balance_list",
+                "summary": "GET /api/v1/client/wallet/balance/",
+                "description": "Return the authenticated client's current wallet balance.\nReads from the old userauths.Profile.wallet_balance field.",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "A page number within the paginated result set.",
+                        "required": false,
+                        "type": "integer"
+                    },
+                    {
+                        "name": "page_size",
+                        "in": "query",
+                        "description": "Number of results to return per page.",
+                        "required": false,
+                        "type": "integer"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/client/wallet/transfer/": {
+            "post": {
+                "operationId": "api_v1_client_wallet_transfer_create",
+                "description": "POST /api/v1/client/wallet/transfer/",
+                "parameters": [],
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/client/wishlist/": {
+            "get": {
+                "operationId": "api_v1_client_wishlist_list",
+                "summary": "GET /api/v1/client/wishlist/",
+                "description": "Return all wishlist items for the authenticated client.\nProducts are serialized with their full nested data.",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "A page number within the paginated result set.",
+                        "required": false,
+                        "type": "integer"
+                    },
+                    {
+                        "name": "page_size",
+                        "in": "query",
+                        "description": "Number of results to return per page.",
+                        "required": false,
+                        "type": "integer"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/client/wishlist/toggle/": {
+            "post": {
+                "operationId": "api_v1_client_wishlist_toggle_create",
+                "description": "POST /api/v1/client/wishlist/toggle/",
+                "parameters": [],
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/password/change/": {
+            "post": {
+                "operationId": "api_v1_password_change_create",
+                "summary": "Authenticated user changes their own password from the dashboard.",
+                "description": "Permission gate (strictest possible for account-mutating actions):\n  IsVerifiedUser  — user must be authenticated, active, AND OTP-verified.\n\nThe ``@require_verification`` decorator adds an inline double-check so\nthat even if permission_classes is accidentally overridden in a subclass,\nthe verification check still runs inside the method body.",
+                "parameters": [],
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/password/reset-confirm/{uidb64}/{token}/": {
+            "post": {
+                "operationId": "api_v1_password_reset-confirm_create",
+                "summary": "Finalise an email-based password reset.",
+                "description": "URL parameters:\n  uidb64  — base64-encoded user PK (from the magic link).\n  token   — HMAC one-time-use Django password-reset token.",
+                "parameters": [],
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": [
+                {
+                    "name": "uidb64",
+                    "in": "path",
+                    "required": true,
+                    "type": "string"
+                },
+                {
+                    "name": "token",
+                    "in": "path",
+                    "required": true,
+                    "type": "string"
+                }
+            ]
+        },
+        "/api/v1/password/reset-phone-confirm/": {
+            "post": {
+                "operationId": "api_v1_password_reset-phone-confirm_create",
+                "description": "Finalise a phone-based password reset via OTP.",
+                "parameters": [],
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/password/reset-request/": {
+            "post": {
+                "operationId": "api_v1_password_reset-request_create",
+                "summary": "Initiate a password reset — email or phone.",
+                "description": "Accepts ``{ \"email_or_phone\": \"...\" }`` and dispatches either a\nmagic-link email or an SMS OTP, depending on the identifier type.\n\nAlways returns the same generic message (anti-enumeration).\nRate-limited: 100 req/hour per IP.\n\nAuditService event: PASSWORD_RESET_REQUESTED (compliance=True)",
+                "parameters": [],
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/profile/me/": {
+            "get": {
+                "operationId": "api_v1_profile_me_list",
+                "description": "GET  /api/v1/profile/me/ — Return authenticated user's full profile.\nPATCH /api/v1/profile/me/ — Partial update of authenticated user profile.\n\nGET  uses: UserProfileSerializer (all readable fields)\nPATCH uses: update_user_profile() service (guarded, validated writes)",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "patch": {
+                "operationId": "api_v1_profile_me_partial_update",
+                "description": "GET  /api/v1/profile/me/ — Return authenticated user's full profile.\nPATCH /api/v1/profile/me/ — Partial update of authenticated user profile.\n\nGET  uses: UserProfileSerializer (all readable fields)\nPATCH uses: update_user_profile() service (guarded, validated writes)",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/profile/users/": {
+            "get": {
+                "operationId": "api_v1_profile_users_list",
+                "summary": "GET /api/v1/profile/users/ — Admin-only list of all registered users.",
+                "description": "Returns ProtectedUserSerializer shape — no sensitive fields exposed.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/upload/presign/": {
+            "post": {
+                "operationId": "api_v1_upload_presign_create",
+                "summary": "POST /api/v1/upload/presign/",
+                "description": "Generate a time-limited, HMAC-SHA256–signed Cloudinary upload token.\nThe frontend uses this to POST a file DIRECTLY to Cloudinary without\nrouting the upload data through the Django server.",
+                "parameters": [],
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "produces": [
+                    "application/json",
+                    "multipart/form-data; boundary=BoUnDaRyStRiNg",
+                    "application/json"
+                ],
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/vendor/analytics/": {
+            "get": {
+                "operationId": "api_v1_vendor_analytics_list",
+                "summary": "GET /api/v1/vendor/analytics/",
+                "description": "Full analytics snapshot: today's sales, this month's sales, YTD,\naverage order value, total customers, low stock count.\nUses model analytics methods (reverse related_name ORM — no N+1).",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/vendor/analytics/categories/": {
+            "get": {
+                "operationId": "api_v1_vendor_analytics_categories_list",
+                "summary": "GET /api/v1/vendor/analytics/categories/",
+                "description": "Top 5 performing categories by revenue.\nUses vendor_products → category__name / order_item_product__total.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/vendor/analytics/customers/": {
+            "get": {
+                "operationId": "api_v1_vendor_analytics_customers_list",
+                "summary": "GET /api/v1/vendor/analytics/customers/",
+                "description": "Customer behaviour: hourly order distribution + new customers this month.\nUses vendor_orders reverse FK.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/vendor/analytics/distribution/": {
+            "get": {
+                "operationId": "api_v1_vendor_analytics_distribution_list",
+                "summary": "GET /api/v1/vendor/analytics/distribution/",
+                "description": "Revenue distribution by payment_status as percentages.\nUses vendor_orders reverse FK.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/vendor/analytics/orders/": {
+            "get": {
+                "operationId": "api_v1_vendor_analytics_orders_list",
+                "summary": "GET /api/v1/vendor/analytics/orders/",
+                "description": "Monthly count of orders grouped by order_status for chart rendering.\nUses vendor_orders reverse FK.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/vendor/analytics/products/": {
+            "get": {
+                "operationId": "api_v1_vendor_analytics_products_list",
+                "summary": "GET /api/v1/vendor/analytics/products/",
+                "description": "Monthly count of products created over the last 12 months.\nUses vendor_products reverse FK.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/vendor/analytics/revenue/": {
+            "get": {
+                "operationId": "api_v1_vendor_analytics_revenue_list",
+                "summary": "GET /api/v1/vendor/analytics/revenue/?months=6",
+                "description": "Monthly revenue breakdown for the last N months.\nUses vendor.get_revenue_trends() — reverse vendor_orders FK.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/vendor/coupons/": {
+            "get": {
+                "operationId": "api_v1_vendor_coupons_list",
+                "summary": "GET /api/v1/vendor/coupons/\nGET /api/v1/vendor/coupons/?active=true",
+                "description": "Vendor's coupons with optional active/inactive filter.\nUses vendor_coupons reverse FK.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/vendor/earnings/": {
+            "get": {
+                "operationId": "api_v1_vendor_earnings_list",
+                "summary": "GET /api/v1/vendor/earnings/",
+                "description": "Comprehensive earning tracker:\ntoday / this month / last month / year / total.\nAlso returns pending_payouts (unpaid orders total).",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/vendor/orders/": {
+            "get": {
+                "operationId": "api_v1_vendor_orders_list",
+                "summary": "GET /api/v1/vendor/orders/\nGET /api/v1/vendor/orders/?payment_status=paid&order_status=Processing",
+                "description": "Vendor's own orders, with optional filtering by payment_status / order_status.\nUses vendor_orders reverse FK.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/vendor/orders/status-counts/": {
+            "get": {
+                "operationId": "api_v1_vendor_orders_status-counts_list",
+                "summary": "GET /api/v1/vendor/orders/status-counts/",
+                "description": "Count of orders grouped by payment_status for dashboard badges.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/vendor/orders/{order_id}/": {
+            "get": {
+                "operationId": "api_v1_vendor_orders_read",
+                "summary": "GET /api/v1/vendor/orders/<int:order_id>/",
+                "description": "Single order detail for this vendor.\nUses vendor_orders reverse FK to scope the query.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": [
+                {
+                    "name": "order_id",
+                    "in": "path",
+                    "required": true,
+                    "type": "string"
+                }
+            ]
+        },
+        "/api/v1/vendor/orders/{order_id}/status/": {
+            "patch": {
+                "operationId": "api_v1_vendor_orders_status_partial_update",
+                "summary": "PATCH /api/v1/vendor/orders/<int:order_id>/status/",
+                "description": "Update order_status for a vendor's own order.\nAllowed values: Pending, Processing, Shipped, Fulfilled, Cancelled.\nPayment status (paid/unpaid) is immutable here — managed by payment gateway.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": [
+                {
+                    "name": "order_id",
+                    "in": "path",
+                    "required": true,
+                    "type": "string"
+                }
+            ]
+        },
+        "/api/v1/vendor/payout/": {
+            "post": {
+                "operationId": "api_v1_vendor_payout_create",
+                "description": "POST /api/v1/vendor/payout/ — save bank / payout account details",
+                "parameters": [],
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/vendor/pin/set/": {
+            "post": {
+                "operationId": "api_v1_vendor_pin_set_create",
+                "description": "POST /api/v1/vendor/pin/set/ — set 4-digit payout confirmation PIN",
+                "parameters": [],
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/vendor/pin/verify/": {
+            "post": {
+                "operationId": "api_v1_vendor_pin_verify_create",
+                "description": "POST /api/v1/vendor/pin/verify/ — verify payout PIN before withdrawal",
+                "parameters": [],
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/vendor/products/": {
+            "get": {
+                "operationId": "api_v1_vendor_products_list",
+                "summary": "GET /api/v1/vendor/products/\nGET /api/v1/vendor/products/?search=<query>&status=<status>",
+                "description": "Vendor's own product list with optional title/status filtering.\nUses vendor_products reverse FK.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/vendor/products/create/": {
+            "post": {
+                "operationId": "api_v1_vendor_products_create_create",
+                "summary": "POST /api/v1/vendor/products/create/",
+                "description": "Create a new product scoped to this vendor.\nAccepts multipart/form-data with optional nested fields:\n  specifications[0][title], specifications[0][content]\n  colors[0][name], colors[0][color_code], colors[0][image]\n  sizes[0][name], sizes[0][price]\n  gallery[0][image]",
+                "parameters": [],
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/vendor/products/filter/": {
+            "get": {
+                "operationId": "api_v1_vendor_products_filter_list",
+                "description": "GET /api/v1/vendor/products/filter/?status=published|draft|disabled|in-review\nGET /api/v1/vendor/products/filter/?ordering=latest|oldest\n\nFilter + sort vendor's own products using query params.\nAll status values: published, draft, disabled, in-review.\nOrdering values: latest (default), oldest.",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "A page number within the paginated result set.",
+                        "required": false,
+                        "type": "integer"
+                    },
+                    {
+                        "name": "page_size",
+                        "in": "query",
+                        "description": "Number of results to return per page.",
+                        "required": false,
+                        "type": "integer"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/vendor/products/low-stock/": {
+            "get": {
+                "operationId": "api_v1_vendor_products_low-stock_list",
+                "summary": "GET /api/v1/vendor/products/low-stock/?threshold=5",
+                "description": "Products with stock quantity below the given threshold.\nUses vendor_products reverse FK.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/vendor/products/top/": {
+            "get": {
+                "operationId": "api_v1_vendor_products_top_list",
+                "summary": "GET /api/v1/vendor/products/top/?limit=5",
+                "description": "Top products by total quantity sold.\nUses vendor_products → order_item_product__qty.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/vendor/products/{product_pid}/delete/": {
+            "delete": {
+                "operationId": "api_v1_vendor_products_delete_delete",
+                "summary": "DELETE /api/v1/vendor/products/<product_pid>/delete/",
+                "description": "Hard-delete a vendor's own product.\nScoped via vendor_products reverse FK — cannot delete another vendor's product.",
+                "parameters": [],
+                "responses": {
+                    "204": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": [
+                {
+                    "name": "product_pid",
+                    "in": "path",
+                    "required": true,
+                    "type": "string"
+                }
+            ]
+        },
+        "/api/v1/vendor/products/{product_pid}/edit/": {
+            "put": {
+                "operationId": "api_v1_vendor_products_edit_update",
+                "description": "PUT  /api/v1/vendor/products/<product_pid>/edit/  — full update\nPATCH /api/v1/vendor/products/<product_pid>/edit/ — partial update\n\nScoped to this vendor via vendor_products reverse FK.\nReplaces all nested specs/colors/sizes/gallery on update.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "patch": {
+                "operationId": "api_v1_vendor_products_edit_partial_update",
+                "description": "PUT  /api/v1/vendor/products/<product_pid>/edit/  — full update\nPATCH /api/v1/vendor/products/<product_pid>/edit/ — partial update\n\nScoped to this vendor via vendor_products reverse FK.\nReplaces all nested specs/colors/sizes/gallery on update.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": [
+                {
+                    "name": "product_pid",
+                    "in": "path",
+                    "required": true,
+                    "type": "string"
+                }
+            ]
+        },
+        "/api/v1/vendor/profile/": {
+            "get": {
+                "operationId": "api_v1_vendor_profile_list",
+                "description": "GET  /api/v1/vendor/profile/ — retrieve vendor store profile\nPATCH /api/v1/vendor/profile/ — update store profile",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "A page number within the paginated result set.",
+                        "required": false,
+                        "type": "integer"
+                    },
+                    {
+                        "name": "page_size",
+                        "in": "query",
+                        "description": "Number of results to return per page.",
+                        "required": false,
+                        "type": "integer"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "patch": {
+                "operationId": "api_v1_vendor_profile_partial_update",
+                "description": "GET  /api/v1/vendor/profile/ — retrieve vendor store profile\nPATCH /api/v1/vendor/profile/ — update store profile",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/vendor/reviews/": {
+            "get": {
+                "operationId": "api_v1_vendor_reviews_list",
+                "summary": "GET /api/v1/vendor/reviews/",
+                "description": "Reviews on all vendor products.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        },
+        "/api/v1/vendor/reviews/{review_id}/": {
+            "get": {
+                "operationId": "api_v1_vendor_reviews_read",
+                "summary": "GET /api/v1/vendor/reviews/<int:review_id>/",
+                "description": "Single review on a vendor product.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": [
+                {
+                    "name": "review_id",
+                    "in": "path",
+                    "required": true,
+                    "type": "string"
+                }
+            ]
+        },
+        "/api/v1/vendor/setup/": {
+            "get": {
+                "operationId": "api_v1_vendor_setup_list",
+                "description": "GET  /api/v1/vendor/setup/ — retrieve onboarding setup state\nPOST /api/v1/vendor/setup/ — create/update the first vendor setup record",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "A page number within the paginated result set.",
+                        "required": false,
+                        "type": "integer"
+                    },
+                    {
+                        "name": "page_size",
+                        "in": "query",
+                        "description": "Number of results to return per page.",
+                        "required": false,
+                        "type": "integer"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "post": {
+                "operationId": "api_v1_vendor_setup_create",
+                "description": "GET  /api/v1/vendor/setup/ — retrieve onboarding setup state\nPOST /api/v1/vendor/setup/ — create/update the first vendor setup record",
+                "parameters": [],
+                "responses": {
+                    "201": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "api"
+                ]
+            },
+            "parameters": []
+        }
+    },
+    "definitions": {
+        "Brand": {
+            "required": [
+                "title"
+            ],
+            "type": "object",
+            "properties": {
+                "id": {
+                    "title": "ID",
+                    "type": "integer",
+                    "readOnly": true
+                },
+                "title": {
+                    "title": "Title",
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 1
+                },
+                "description": {
+                    "title": "Description",
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "image": {
+                    "title": "Image",
+                    "type": "string",
+                    "readOnly": true,
+                    "x-nullable": true,
+                    "format": "uri"
+                },
+                "cloudinary_url": {
+                    "title": "Cloudinary url",
+                    "description": "Auto-populated by Cloudinary webhook after presign upload.",
+                    "type": "string",
+                    "format": "uri",
+                    "maxLength": 800,
+                    "x-nullable": true
+                },
+                "active": {
+                    "title": "Active",
+                    "type": "boolean"
+                },
+                "slug": {
+                    "title": "Slug",
+                    "type": "string",
+                    "format": "slug",
+                    "pattern": "^[-a-zA-Z0-9_]+$",
+                    "readOnly": true,
+                    "minLength": 1,
+                    "x-nullable": true
+                },
+                "created_at": {
+                    "title": "Created at",
+                    "type": "string",
+                    "format": "date-time",
+                    "readOnly": true
+                },
+                "updated_at": {
+                    "title": "Updated at",
+                    "type": "string",
+                    "format": "date-time",
+                    "readOnly": true
+                },
+                "user": {
+                    "title": "User",
+                    "type": "string",
+                    "format": "uuid",
+                    "x-nullable": true
+                }
+            }
+        },
+        "Category": {
+            "required": [
+                "name"
+            ],
+            "type": "object",
+            "properties": {
+                "id": {
+                    "title": "Id",
+                    "type": "string",
+                    "format": "uuid",
+                    "readOnly": true
+                },
+                "name": {
+                    "title": "Name",
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 1
+                },
+                "image": {
+                    "title": "Image",
+                    "type": "string",
+                    "readOnly": true,
+                    "x-nullable": true,
+                    "format": "uri"
+                },
+                "cloudinary_url": {
+                    "title": "Cloudinary url",
+                    "description": "Auto-populated by Cloudinary webhook after presign upload.",
+                    "type": "string",
+                    "format": "uri",
+                    "maxLength": 800,
+                    "x-nullable": true
+                },
+                "active": {
+                    "title": "Active",
+                    "type": "boolean"
+                },
+                "slug": {
+                    "title": "Slug",
+                    "type": "string",
+                    "format": "slug",
+                    "pattern": "^[-a-zA-Z0-9_]+$",
+                    "readOnly": true,
+                    "minLength": 1,
+                    "x-nullable": true
+                },
+                "created_at": {
+                    "title": "Created at",
+                    "type": "string",
+                    "format": "date-time",
+                    "readOnly": true
+                },
+                "updated_at": {
+                    "title": "Updated at",
+                    "type": "string",
+                    "format": "date-time",
+                    "readOnly": true
+                },
+                "user": {
+                    "title": "User",
+                    "type": "string",
+                    "format": "uuid",
+                    "x-nullable": true
+                }
+            }
+        },
+        "Collections": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "title": "ID",
+                    "type": "integer",
+                    "readOnly": true
+                },
+                "title": {
+                    "title": "Title",
+                    "type": "string",
+                    "maxLength": 255,
+                    "x-nullable": true
+                },
+                "sub_title": {
+                    "title": "Sub title",
+                    "type": "string",
+                    "maxLength": 255,
+                    "x-nullable": true
+                },
+                "description": {
+                    "title": "Description",
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "slug": {
+                    "title": "Slug",
+                    "type": "string",
+                    "format": "slug",
+                    "pattern": "^[-a-zA-Z0-9_]+$",
+                    "readOnly": true,
+                    "minLength": 1,
+                    "x-nullable": true
+                },
+                "background_image": {
+                    "title": "Background image",
+                    "type": "string",
+                    "readOnly": true,
+                    "x-nullable": true,
+                    "format": "uri"
+                },
+                "image": {
+                    "title": "Image",
+                    "type": "string",
+                    "readOnly": true,
+                    "x-nullable": true,
+                    "format": "uri"
+                },
+                "cloudinary_url": {
+                    "title": "Cloudinary url",
+                    "description": "Main collection image — auto-populated by Cloudinary webhook.",
+                    "type": "string",
+                    "format": "uri",
+                    "maxLength": 800,
+                    "x-nullable": true
+                },
+                "background_cloudinary_url": {
+                    "title": "Background cloudinary url",
+                    "description": "Background hero image — auto-populated by Cloudinary webhook.",
+                    "type": "string",
+                    "format": "uri",
+                    "maxLength": 800,
+                    "x-nullable": true
+                },
+                "created_at": {
+                    "title": "Created at",
+                    "type": "string",
+                    "format": "date-time",
+                    "readOnly": true
+                },
+                "updated_at": {
+                    "title": "Updated at",
+                    "type": "string",
+                    "format": "date-time",
+                    "readOnly": true
+                },
+                "user": {
+                    "title": "User",
+                    "type": "string",
+                    "format": "uuid",
+                    "x-nullable": true
+                }
+            }
+        },
+        "AuthGoogleAuth": {
+            "required": [
+                "id_token"
+            ],
+            "type": "object",
+            "properties": {
+                "id_token": {
+                    "title": "Id token",
+                    "description": "Google ID Token (JWT) returned by @react-oauth/google on the frontend.",
+                    "type": "string",
+                    "minLength": 1
+                },
+                "role": {
+                    "title": "Role",
+                    "description": "User's role — required for new registrations, ignored for existing users.",
+                    "type": "string",
+                    "enum": [
+                        "vendor",
+                        "client",
+                        "staff",
+                        "admin",
+                        "editor",
+                        "support",
+                        "assistant",
+                        "moderator",
+                        "super_admin",
+                        "super_vendor",
+                        "super_client",
+                        "super_staff",
+                        "super_editor",
+                        "super_support",
+                        "super_assistant",
+                        "super_moderator"
+                    ],
+                    "default": "client"
+                }
+            }
+        },
+        "AuthLogin": {
+            "required": [
+                "email_or_phone",
+                "password"
+            ],
+            "type": "object",
+            "properties": {
+                "email_or_phone": {
+                    "title": "Email or phone",
+                    "description": "User's email or phone for login",
+                    "type": "string",
+                    "minLength": 1
+                },
+                "password": {
+                    "title": "Password",
+                    "description": "User's password",
+                    "type": "string",
+                    "minLength": 1
+                }
+            }
+        },
+        "AuthLogout": {
+            "required": [
+                "refresh"
+            ],
+            "type": "object",
+            "properties": {
+                "refresh": {
+                    "title": "Refresh",
+                    "description": "Refresh token to blacklist on logout.",
+                    "type": "string",
+                    "minLength": 1
+                }
+            }
+        },
+        "AuthMe": {
+            "type": "object",
+            "properties": {
+                "user_id": {
+                    "title": "User id",
+                    "type": "string",
+                    "readOnly": true
+                },
+                "identifying_info": {
+                    "title": "Identifying info",
+                    "type": "string",
+                    "readOnly": true
+                },
+                "member_id": {
+                    "title": "Member id",
+                    "description": "Unique human-readable brand ID (e.g. FASTAR000062). Auto-generated on user creation. Cannot be changed.",
+                    "type": "string",
+                    "readOnly": true,
+                    "minLength": 1,
+                    "x-nullable": true
+                },
+                "email": {
+                    "title": "Email address",
+                    "description": "Primary unique identifier for email-based auth.",
+                    "type": "string",
+                    "format": "email",
+                    "readOnly": true,
+                    "minLength": 1,
+                    "x-nullable": true
+                },
+                "phone": {
+                    "title": "Phone",
+                    "type": "string",
+                    "readOnly": true
+                },
+                "first_name": {
+                    "title": "First name",
+                    "type": "string",
+                    "readOnly": true,
+                    "default": ""
+                },
+                "last_name": {
+                    "title": "Last name",
+                    "type": "string",
+                    "readOnly": true,
+                    "default": ""
+                },
+                "role": {
+                    "title": "Role",
+                    "description": "RBAC Role. Cannot be changed after creation.",
+                    "type": "string",
+                    "enum": [
+                        "vendor",
+                        "client",
+                        "staff",
+                        "admin",
+                        "editor",
+                        "support",
+                        "assistant",
+                        "moderator",
+                        "super_admin",
+                        "super_vendor",
+                        "super_client",
+                        "super_staff",
+                        "super_editor",
+                        "super_support",
+                        "super_assistant",
+                        "super_moderator"
+                    ],
+                    "readOnly": true
+                },
+                "auth_provider": {
+                    "title": "Auth provider",
+                    "description": "Authentication provider used at signup.",
+                    "type": "string",
+                    "enum": [
+                        "email",
+                        "phone",
+                        "google"
+                    ],
+                    "readOnly": true
+                },
+                "is_verified": {
+                    "title": "Is verified",
+                    "description": "True if email/phone OTP is verified.",
+                    "type": "boolean",
+                    "readOnly": true
+                },
+                "is_active": {
+                    "title": "Is active",
+                    "description": "True if user account is active.",
+                    "type": "boolean",
+                    "readOnly": true
+                },
+                "is_staff": {
+                    "title": "Staff status",
+                    "description": "Designates whether the user can log into this admin site.",
+                    "type": "boolean",
+                    "readOnly": true
+                },
+                "has_client_profile": {
+                    "title": "Has client profile",
+                    "type": "string",
+                    "readOnly": true
+                },
+                "has_vendor_profile": {
+                    "title": "Has vendor profile",
+                    "type": "string",
+                    "readOnly": true
+                },
+                "vendor_onboarding_status": {
+                    "title": "Vendor onboarding status",
+                    "type": "string",
+                    "readOnly": true
+                },
+                "dashboard_entrypoint": {
+                    "title": "Dashboard entrypoint",
+                    "type": "string",
+                    "readOnly": true
+                },
+                "avatar": {
+                    "title": "Avatar",
+                    "type": "string",
+                    "readOnly": true
+                },
+                "bio": {
+                    "title": "Bio",
+                    "description": "User's biography.",
+                    "type": "string",
+                    "readOnly": true,
+                    "minLength": 1
+                },
+                "country": {
+                    "title": "Country",
+                    "description": "User's country.",
+                    "type": "string",
+                    "readOnly": true,
+                    "minLength": 1
+                },
+                "state": {
+                    "title": "State",
+                    "description": "User's state or province.",
+                    "type": "string",
+                    "readOnly": true,
+                    "minLength": 1
+                },
+                "city": {
+                    "title": "City",
+                    "description": "User's city.",
+                    "type": "string",
+                    "readOnly": true,
+                    "minLength": 1
+                },
+                "address": {
+                    "title": "Address",
+                    "description": "User's street address.",
+                    "type": "string",
+                    "readOnly": true,
+                    "minLength": 1
+                },
+                "date_joined": {
+                    "title": "Date joined",
+                    "type": "string",
+                    "format": "date-time",
+                    "readOnly": true
+                },
+                "last_login": {
+                    "title": "Last login",
+                    "type": "string",
+                    "format": "date-time",
+                    "readOnly": true
+                }
+            }
+        },
+        "AuthUserRegistration": {
+            "required": [
+                "role",
+                "password",
+                "password2"
+            ],
+            "type": "object",
+            "properties": {
+                "email": {
+                    "title": "Email",
+                    "description": "User's email address",
+                    "type": "string",
+                    "format": "email"
+                },
+                "phone": {
+                    "title": "Phone",
+                    "description": "User's phone number",
+                    "type": "string"
+                },
+                "role": {
+                    "title": "Role",
+                    "description": "User's role: 'vendor' or 'client'",
+                    "type": "string",
+                    "enum": [
+                        "vendor",
+                        "client"
+                    ]
+                },
+                "first_name": {
+                    "title": "First name",
+                    "description": "User's first name",
+                    "type": "string",
+                    "maxLength": 150
+                },
+                "last_name": {
+                    "title": "Last name",
+                    "description": "User's last name",
+                    "type": "string",
+                    "maxLength": 150
+                },
+                "password": {
+                    "title": "Password",
+                    "description": "User's password",
+                    "type": "string",
+                    "minLength": 1
+                },
+                "password2": {
+                    "title": "Password2",
+                    "description": "Confirm user's password",
+                    "type": "string",
+                    "minLength": 1
+                }
+            }
+        },
+        "AuthResendOTPRequest": {
+            "required": [
+                "email_or_phone"
+            ],
+            "type": "object",
+            "properties": {
+                "email_or_phone": {
+                    "title": "Email or phone",
+                    "description": "User's email or phone for resend OTP",
+                    "type": "string",
+                    "minLength": 1
+                }
+            }
+        },
+        "AuthTokenRefresh": {
+            "required": [
+                "refresh"
+            ],
+            "type": "object",
+            "properties": {
+                "refresh": {
+                    "title": "Refresh",
+                    "description": "A valid refresh token previously issued by the login endpoint.",
+                    "type": "string",
+                    "minLength": 1
+                }
+            }
+        },
+        "AuthOTP": {
+            "required": [
+                "otp"
+            ],
+            "type": "object",
+            "properties": {
+                "otp": {
+                    "title": "Otp",
+                    "description": "One-Time Password (OTP) for verification.",
+                    "type": "string",
+                    "maxLength": 6,
+                    "minLength": 1
+                }
+            }
+        }
+    }
+}

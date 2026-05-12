@@ -1,0 +1,21 @@
+FASHIONISTAR — New OTP Code
+================================================================
+
+Hello,
+
+You requested a new verification code for your Fashionistar account.
+
+Your new One-Time Password:
+
+    {{ otp }}
+
+This code expires in 5 minutes{% if time %} at {{ time }}{% endif %}.
+
+IMPORTANT: Your previously issued OTP is now invalid. Use only this code.
+
+If you did not request a new OTP, please contact support immediately:
+https://fashionistar.net/support/
+
+================================================================
+© 2026 Fashionistar Ltd. | fashionistar.net | Lagos, Nigeria
+================================================================

@@ -1,0 +1,1 @@
+Your Fashionistar new OTP: [ {{ otp }} ]. Expires in 5 mins. Do NOT share.
