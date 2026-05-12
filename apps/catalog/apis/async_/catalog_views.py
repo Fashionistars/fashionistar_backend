@@ -1,4 +1,17 @@
-"""Catalog Django-Ninja async read router."""
+"""Catalog Django-Ninja async read router — with Redis API caching.
+
+Cache Strategy (Section 4 of apps/common/utils/redis.py):
+  - api_cache_get / api_cache_set use Django's cache framework (django-redis backend).
+  - IGNORE_EXCEPTIONS=True ensures cache outages degrade to DB fallback silently.
+  - No retry loop — cache miss is instant, never blocks the response.
+  - TTLs are intentionally short for mutable catalog data:
+      categories / brands  → 5 min  (admin edits are infrequent)
+      collections          → 5 min  (merchandising surfaces)
+      blog posts           → 10 min (editorial content, lower mutation rate)
+  - Cache keys include page + page_size for correct per-page caching.
+  - Write mutations (admin panel) MUST call api_cache_delete_pattern("catalog:*")
+    to invalidate stale entries — currently handled via Django admin post-save signal.
+"""
 
 from __future__ import annotations
 
@@ -14,9 +27,16 @@ from apps.catalog.schemas import (
 from apps.catalog.selectors import CatalogSelector
 from apps.catalog.serializers.common import safe_media_url
 from apps.common.pagination import async_ninja_paginate
+from apps.common.utils.redis import api_cache_get, api_cache_set
 
 router = Router(tags=["Catalog — Async Reads"])
 
+# ── TTLs ────────────────────────────────────────────────────────────────────────
+_TTL_CATALOG = 5 * 60    # 5 minutes — categories, brands, collections
+_TTL_BLOG    = 10 * 60   # 10 minutes — editorial content
+
+
+# ── Serialisers ─────────────────────────────────────────────────────────────────
 
 def _category_out(category) -> dict:
     """Serialize a Category without DRF overhead."""
@@ -130,17 +150,29 @@ async def _paginated(request, queryset, serializer, *, page: int, page_size: int
     return payload
 
 
+# ── List endpoints (Redis-cached) ───────────────────────────────────────────────
+
 @router.get("/categories/", auth=None)
 async def list_categories(request, page: int = 1, page_size: int = 20):
-    """Return active catalog categories."""
+    """Return active catalog categories.
 
-    return await _paginated(
+    Cache: ``catalog:categories:{page}:{page_size}`` — 5 min TTL.
+    Cache miss falls back to DB transparently.
+    """
+    cache_key = f"catalog:categories:{page}:{page_size}"
+    cached = api_cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    result = await _paginated(
         request,
         CatalogSelector.acategories(),
         _category_out,
         page=page,
         page_size=page_size,
     )
+    api_cache_set(cache_key, result, ttl=_TTL_CATALOG)
+    return result
 
 
 @router.get("/categories/{slug}/", response=CatalogCategoryOut, auth=None)
@@ -155,15 +187,24 @@ async def get_category(request, slug: str):
 
 @router.get("/brands/", auth=None)
 async def list_brands(request, page: int = 1, page_size: int = 20):
-    """Return active catalog brands."""
+    """Return active catalog brands.
 
-    return await _paginated(
+    Cache: ``catalog:brands:{page}:{page_size}`` — 5 min TTL.
+    """
+    cache_key = f"catalog:brands:{page}:{page_size}"
+    cached = api_cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    result = await _paginated(
         request,
         CatalogSelector.abrands(),
         _brand_out,
         page=page,
         page_size=page_size,
     )
+    api_cache_set(cache_key, result, ttl=_TTL_CATALOG)
+    return result
 
 
 @router.get("/brands/{slug}/", response=CatalogBrandOut, auth=None)
@@ -178,15 +219,24 @@ async def get_brand(request, slug: str):
 
 @router.get("/collections/", auth=None)
 async def list_collections(request, page: int = 1, page_size: int = 20):
-    """Return merchandising collections."""
+    """Return merchandising collections.
 
-    return await _paginated(
+    Cache: ``catalog:collections:{page}:{page_size}`` — 5 min TTL.
+    """
+    cache_key = f"catalog:collections:{page}:{page_size}"
+    cached = api_cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    result = await _paginated(
         request,
         CatalogSelector.acollections(),
         _collection_out,
         page=page,
         page_size=page_size,
     )
+    api_cache_set(cache_key, result, ttl=_TTL_CATALOG)
+    return result
 
 
 @router.get("/collections/{slug}/", response=CatalogCollectionOut, auth=None)
@@ -201,15 +251,24 @@ async def get_collection(request, slug: str):
 
 @router.get("/blog/", auth=None)
 async def list_blog_posts(request, page: int = 1, page_size: int = 20):
-    """Return published catalog blog posts."""
+    """Return published catalog blog posts.
 
-    return await _paginated(
+    Cache: ``catalog:blog:{page}:{page_size}`` — 10 min TTL.
+    """
+    cache_key = f"catalog:blog:{page}:{page_size}"
+    cached = api_cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    result = await _paginated(
         request,
         CatalogSelector.ablog_posts(),
         _blog_out,
         page=page,
         page_size=page_size,
     )
+    api_cache_set(cache_key, result, ttl=_TTL_BLOG)
+    return result
 
 
 @router.get("/blog/{slug}/", response=CatalogBlogPostOut, auth=None)
