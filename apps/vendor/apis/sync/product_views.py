@@ -310,7 +310,7 @@ class VendorProductFilterView(generics.ListAPIView):
         if status_filter in valid_statuses:
             qs = qs.filter(status=status_filter)
 
-        return qs.order_by("date" if ordering == "oldest" else "-date")
+        return qs.order_by("created_at" if ordering == "oldest" else "-created_at")
 
 
 # ══════════════════════════════════════════════════════════════════

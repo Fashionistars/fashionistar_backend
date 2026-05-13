@@ -245,6 +245,25 @@ start-workers: ## Display instructions to start all workers
 	@echo "  $(CYAN)Terminal 5:$(NC) make flower"
 
 # ═══════════════════════════════════════════════════════════════
+##@ Tunneling
+# ═══════════════════════════════════════════════════════════════
+
+ngrok-dev: ## 🌐 Start ngrok tunnel for backend port 8000 (uses global authtoken)
+	@echo "$(CYAN)Starting ngrok tunnel → backend port 8000...$(NC)"
+	@echo "$(YELLOW)  Authtoken: global (3Dg2r338... stored in ngrok.yml)$(NC)"
+	@echo "$(YELLOW)  Dev server must be running: make dev (port 8000)$(NC)"
+	ngrok http 8000
+
+dev-tunnel: ## 🌐 Alias for ngrok-dev (legacy name)
+	@$(MAKE) ngrok-dev
+
+ngrok-url: ## 🔍 Print active backend ngrok tunnel URL (inspector API)
+	@echo "$(CYAN)Active backend ngrok tunnels:$(NC)"
+	@curl -s http://127.0.0.1:4040/api/tunnels 2>/dev/null | \
+		python -c "import sys,json; d=json.load(sys.stdin); [print('  ✔ ' + t['public_url'] + ' -> port 8000') for t in d.get('tunnels',[])]" \
+		|| echo "$(YELLOW)  ngrok not running. Run: make ngrok-dev$(NC)"
+
+# ═══════════════════════════════════════════════════════════════
 ##@ Docker — Development
 # ═══════════════════════════════════════════════════════════════
 
