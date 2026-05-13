@@ -19,7 +19,7 @@ Auto-Enrichment:
     Every event is automatically enriched with:
     - ``ip_address``, ``user_agent`` — from Django ``HttpRequest.META``
     - ``device_type``, ``browser_family``, ``os_family`` — from UA parsing
-    - ``country``, ``country_code``, ``city`` — geo-IP via ip-api.com
+    - ``country``, ``country_code``, ``city`` — geo-IP via IPinfo
       (Redis-cached 24 hours per IP to stay under the 45 req/min free tier)
 
 Compliance:

@@ -192,25 +192,12 @@ class VendorPayoutService:
                 },
             )
             # Financial audit — failure also permanently retained
-            from apps.audit_logs.services.audit import AuditService
-            from apps.audit_logs.models import EventType, EventCategory
-            AuditService.log(
-                event_type=EventType.PAYOUT_FAILED,
-                event_category=EventCategory.TRANSACTIONS,
-                action=f"Vendor payout failed: ref={reference} provider={active_provider} error={str(exc)[:200]}",
-                severity="error",
+            from apps.audit_logs.services.transactions import transactions_audit
+            transactions_audit.log_payout_failed(
                 actor=vendor,
-                actor_role="vendor",
-                resource_type="VendorPayout",
-                resource_id=reference,
-                new_values={
-                    "amount": str(amount),
-                    "currency": currency,
-                    "provider": active_provider,
-                    "error": str(exc)[:500],
-                },
-                is_compliance=True,
-                retention_days=-1,  # Permanent — financial event
+                payout_id=reference,
+                amount=str(amount),
+                error=f"{active_provider}: {str(exc)[:500]}",
             )
             raise PayoutGatewayError(
                 f"Payment gateway rejected the transfer: {exc}"
@@ -259,28 +246,14 @@ class VendorPayoutService:
         )
 
         # Financial audit trail — PERMANENT RETENTION (CBN / GDPR)
-        from apps.audit_logs.services.audit import AuditService
-        from apps.audit_logs.models import EventType, EventCategory
-        AuditService.log(
-            event_type=EventType.PAYOUT_SUCCESS,
-            event_category=EventCategory.TRANSACTIONS,
-            action=f"Vendor payout succeeded: ref={reference} amount={amount} {currency} provider={active_provider}",
-            severity="info",
+        from apps.audit_logs.services.transactions import transactions_audit
+        transactions_audit.log_payout_success(
             actor=vendor,
-            actor_role="vendor",
-            resource_type="VendorPayout",
-            resource_id=reference,
-            new_values={
-                "amount": str(amount),
-                "currency": currency,
-                "bank_name": bank_name,
-                "account_number_masked": f"****{account_number[-4:]}",
-                "transfer_code": str(transfer_code),
-                "provider": active_provider,
-                "idempotency_key": ik,
-            },
-            is_compliance=True,
-            retention_days=-1,  # Permanent — CBN financial compliance
+            payout_id=reference,
+            amount=str(amount),
+            currency=currency,
+            provider=active_provider,
+            reference=str(transfer_code),
         )
 
         return {

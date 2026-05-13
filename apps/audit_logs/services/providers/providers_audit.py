@@ -124,21 +124,11 @@ def log_provider_config_changed(
         created: True if this is a new row (INSERT), False for UPDATE.
     """
     from apps.audit_logs.services.audit import AuditService
-    from apps.audit_logs.models import EventCategory
-
-    # Use PROVIDER_HEALTH_CHECK as a generic infrastructure event if a dedicated
-    # PROVIDER_CONFIG_CHANGED type is not yet declared in EventType.
-    # Replace with EventType.PROVIDER_CONFIG_CHANGED once the enum is extended.
-    try:
-        from apps.audit_logs.models import EventType
-        event_type = EventType.PROVIDER_CONFIG_CHANGED
-    except AttributeError:
-        from apps.audit_logs.models import EventType
-        event_type = EventType.PROVIDER_HEALTH_CHECK
+    from apps.audit_logs.models import EventCategory, EventType
 
     action_verb = "Created" if created else "Updated"
     AuditService.log(
-        event_type=event_type,
+        event_type=EventType.PROVIDER_CONFIG_CHANGED,
         event_category=EventCategory.PROVIDER,
         action=f"{action_verb} provider config: {provider} pk={instance_pk}",
         actor=None,

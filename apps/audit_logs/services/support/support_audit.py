@@ -85,6 +85,41 @@ def log_ticket_resolved(*, actor, ticket_id: str, notes: str = "", request=None)
     )
 
 
+def log_ticket_message_added(
+    *,
+    actor,
+    ticket_id: str,
+    message_id: str,
+    is_staff_reply: bool,
+    request=None,
+) -> None:
+    """Record a message being appended to a support ticket thread.
+
+    Args:
+        actor: The user or staff authoring the message.
+        ticket_id: SupportTicket PK.
+        message_id: TicketMessage PK.
+        is_staff_reply: Whether the message came from staff.
+        request: Django HttpRequest.
+    """
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    AuditService.log(
+        event_type=EventType.TICKET_CREATED,
+        event_category=EventCategory.SUPPORT,
+        action=f"Ticket message added: ticket={ticket_id} role={'staff' if is_staff_reply else 'client'}",
+        actor=actor,
+        actor_role="staff" if is_staff_reply else getattr(actor, "user_type", None),
+        resource_type="TicketMessage",
+        resource_id=message_id,
+        request=request,
+        new_values={"ticket_id": ticket_id, "is_staff_reply": is_staff_reply},
+        is_compliance=True,
+        retention_days=1095,
+    )
+
+
 def log_sla_breach(*, ticket_id: str, sla_hours: int, elapsed_hours: int) -> None:
     """Record an SLA breach on a support ticket.
 
