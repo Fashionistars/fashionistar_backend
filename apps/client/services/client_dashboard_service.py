@@ -23,11 +23,8 @@ class ClientDashboardService:
         """
         Build the complete dashboard payload for `user`.
 
-        Returns a dict with:
-          - profile completeness
-          - total_orders, total_spent_ngn
-          - recent activity snapshot
-          - ai_recommendations stub (future)
+        Returns a dict fully compatible with DashboardOut → ProfileOut so
+        Pydantic validation never fails on required fields.
         """
         try:
             from apps.client.selectors.client_selectors import (
@@ -48,16 +45,40 @@ class ClientDashboardService:
 
             return {
                 "profile": {
+                    # ── Primary key ──────────────────────────────────────────
                     "id": str(profile.pk),
-                    "bio": profile.bio,
-                    "preferred_size": profile.preferred_size,
-                    "style_preferences": profile.style_preferences,
-                    "favourite_colours": profile.favourite_colours,
-                    "country": profile.country,
-                    "is_profile_complete": profile.is_profile_complete,
+
+                    # ── User identity (required by ProfileOut) ───────────────
+                    "user_id":    str(user.pk),
+                    "user_email": getattr(user, "email", "") or "",
+
+                    # ── Profile text fields ──────────────────────────────────
+                    "bio":                      profile.bio or "",
+                    "default_shipping_address": profile.default_shipping_address or "",
+                    "preferred_size":           profile.preferred_size or "",
+                    "style_preferences":        profile.style_preferences or [],
+                    "favourite_colours":        profile.favourite_colours or [],
+                    "country":                  profile.country or "",
+                    "state":                    profile.state or "",
+                    "is_profile_complete":      profile.is_profile_complete,
+
+                    # ── Counters ─────────────────────────────────────────────
+                    "total_orders":    profile.total_orders,
+                    "total_spent_ngn": profile.total_spent_ngn,
+
+                    # ── Notification prefs (required by ProfileOut) ──────────
+                    "email_notifications_enabled": getattr(
+                        profile, "email_notifications_enabled", True
+                    ),
+                    "sms_notifications_enabled": getattr(
+                        profile, "sms_notifications_enabled", True
+                    ),
+
+                    # ── Addresses (detail read; empty on dashboard summary) ───
+                    "addresses": [],
                 },
                 "analytics": {
-                    "total_orders": profile.total_orders,
+                    "total_orders":    profile.total_orders,
                     "total_spent_ngn": float(profile.total_spent_ngn),
                     "saved_addresses": address_count,
                 },
