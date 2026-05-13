@@ -29,7 +29,6 @@ Session ID Note:
 
 import logging
 from django.urls import path
-from apps.authentication.ninja_api import api
 
 # ── Core Auth Views (Register, Login, OTP, Logout, Refresh) ──────────────────
 from apps.authentication.apis.auth_views.sync_views import (
@@ -179,21 +178,9 @@ v1_session_patterns = [
     ),
 ]
 
-# ========================================================================
-# V1 Ninja API — Asynchronous Endpoints (High-Concurrency, ASGI-Ready)
-# ========================================================================
-# All Ninja endpoints MUST be mounted under /api/v1/ninja/ to:
-#   1. Stay on v1 (uniform versioning across the whole API)
-#   2. Avoid URL collisions with DRF v1 endpoints at /api/v1/auth/
-#   3. Make versioning explicit: /api/v1/ninja/auth/*, /api/v1/ninja/products/*, etc.
-v1_ninja_patterns = [
-    path("v1/ninja/auth/", api.urls),
-]
-
 urlpatterns = (
     v1_auth_patterns
     + v1_profile_patterns
     + v1_password_patterns
     + v1_session_patterns
-    + v1_ninja_patterns
 )
