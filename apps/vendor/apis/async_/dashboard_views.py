@@ -120,7 +120,14 @@ async def get_vendor_profile_async(request):
                 id_verified=setup_state.id_verified,
                 first_product=setup_state.first_product,
                 onboarding_done=setup_state.onboarding_done,
-                completion_percentage=setup_state.completion_percentage,
+                # Computed — completion_percentage is NOT a DB column
+                completion_percentage=sum(1 for m in [
+                    setup_state.profile_complete,
+                    setup_state.bank_details,
+                    setup_state.id_verified,
+                    setup_state.first_product,
+                    setup_state.onboarding_done,
+                ] if m) * 20,
             )
             if setup_state is not None
             else None

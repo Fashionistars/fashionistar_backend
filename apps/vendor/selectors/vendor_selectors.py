@@ -210,23 +210,33 @@ async def aget_vendor_setup_state_data(vendor_profile) -> dict[str, Any]:
     from apps.vendor.models import VendorSetupState
     try:
         setup = await VendorSetupState.objects.aget(vendor=vendor_profile)
+        # Compute % from milestones: profile_complete, bank_details, id_verified,
+        # first_product, onboarding_done  (each = 20% of 100%)
+        milestones = [
+            setup.profile_complete,
+            setup.bank_details,
+            setup.id_verified,
+            setup.first_product,
+            setup.onboarding_done,
+        ]
+        computed_pct = sum(1 for m in milestones if m) * 20
         return {
-            "current_step": setup.current_step,
-            "profile_complete": setup.profile_complete,
-            "bank_details": setup.bank_details,
-            "id_verified": setup.id_verified,
-            "first_product": setup.first_product,
-            "onboarding_done": setup.onboarding_done,
-            "completion_percentage": setup.completion_percentage,
+            "current_step":          setup.current_step,
+            "profile_complete":      setup.profile_complete,
+            "bank_details":          setup.bank_details,
+            "id_verified":           setup.id_verified,
+            "first_product":         setup.first_product,
+            "onboarding_done":       setup.onboarding_done,
+            "completion_percentage": computed_pct,
         }
     except VendorSetupState.DoesNotExist:
         return {
-            "current_step": 1,
-            "profile_complete": False,
-            "bank_details": False,
-            "id_verified": False,
-            "first_product": False,
-            "onboarding_done": False,
+            "current_step":          1,
+            "profile_complete":      False,
+            "bank_details":          False,
+            "id_verified":           False,
+            "first_product":         False,
+            "onboarding_done":       False,
             "completion_percentage": 0,
         }
 
