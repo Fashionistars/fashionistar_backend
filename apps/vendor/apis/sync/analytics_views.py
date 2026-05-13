@@ -248,11 +248,11 @@ class VendorEarningTrackerView(GenericAPIView):
 
         last_month_sales = (
             profile.vendor_orders.filter(
-                payment_status="paid",
-                date__month=last_month_cutoff.month,
-                date__year=last_month_cutoff.year,
+                status__in=["payment_confirmed","completed","delivered"],
+                created_at__month=last_month_cutoff.month,
+                created_at__year=last_month_cutoff.year,
             )
-            .aggregate(total=Sum("total"))
+            .aggregate(total=Sum("total_amount"))
             .get("total")
             or 0
         )
@@ -397,8 +397,8 @@ class VendorProductListView(ListAPIView):
                 "stock_qty",
                 "status",
                 "categories__name",
-                "date",
-            ).order_by("-date")
+                "created_at",
+            ).order_by("-created_at")
         )
         return Response(
             {
@@ -437,7 +437,7 @@ class VendorLowStockView(ListAPIView):
                 "stock_qty",
                 "status",
                 "categories__name",
-                "date",
+                "created_at",
             )
             .order_by("stock_qty")
         )
@@ -469,7 +469,7 @@ class VendorTopSellingProductsView(ListAPIView):
             "stock_qty",
             "status",
             "categories__name",
-            "date",
+            "created_at",
         )
 
 
@@ -502,18 +502,18 @@ class VendorOrderListView(ListAPIView):
         order_status = self.request.query_params.get("order_status", "").strip()
 
         if payment_status:
-            qs = qs.filter(payment_status=payment_status)
+            qs = qs.filter(status=payment_status)
         if order_status:
-            qs = qs.filter(order_status=order_status)
+            qs = qs.filter(status=order_status)
 
         return qs.values(
             "id",
-            "total",
-            "payment_status",
-            "order_status",
-            "date",
-            "buyer__email",
-        ).order_by("-date")
+            "total_amount",
+            "status",
+            "status",
+            "created_at",
+            "user__email",
+        ).order_by("-created_at")
 
 
 class VendorOrderDetailView(RetrieveAPIView):
@@ -544,11 +544,11 @@ class VendorOrderDetailView(RetrieveAPIView):
 
         return {
             "id": order.pk,
-            "total": str(order.total),
-            "payment_status": order.payment_status,
-            "order_status": order.order_status,
-            "date": order.date,
-            "buyer_email": getattr(order.buyer, "email", ""),
+            "total": str(order.total_amount),
+            "status": order.status,
+            "status_label": order.status,
+            "date": order.created_at,
+            "buyer_email": getattr(order.user, "email", ""),
         }
 
 
@@ -675,7 +675,7 @@ class VendorCouponListView(ListAPIView):
         elif active_param == "false":
             qs = qs.filter(active=False)
 
-        return qs.values("id", "code", "discount", "date", "active").order_by("-date")
+        return qs.values("id", "code", "discount", "date", "active").order_by("-created_at")
 
 
 # apps/vendor/apis/sync/analytics_views.py
@@ -908,11 +908,11 @@ class VendorEarningTrackerView(GenericAPIView):
 
         last_month_sales = (
             profile.vendor_orders.filter(
-                payment_status="paid",
-                date__month=last_month_cutoff.month,
-                date__year=last_month_cutoff.year,
+                status__in=["payment_confirmed","completed","delivered"],
+                created_at__month=last_month_cutoff.month,
+                created_at__year=last_month_cutoff.year,
             )
-            .aggregate(total=Sum("total"))
+            .aggregate(total=Sum("total_amount"))
             .get("total")
             or 0
         )
@@ -1021,7 +1021,7 @@ class VendorProductListView(ListAPIView):
         try:
             profile = _get_profile_or_404(self.request.user)
         except (ValueError, AttributeError):
-            return Product.objects.none()
+            return []
 
         search = self.request.query_params.get("search", "").strip()
         status_filter = self.request.query_params.get("status", "").strip()
@@ -1042,8 +1042,8 @@ class VendorProductListView(ListAPIView):
             "stock_qty",
             "status",
             "categories__name",
-            "date",
-        ).order_by("-date")
+            "created_at",
+        ).order_by("-created_at")
 
 
 class VendorLowStockView(ListAPIView):
@@ -1060,7 +1060,7 @@ class VendorLowStockView(ListAPIView):
         try:
             profile = _get_profile_or_404(self.request.user)
         except (ValueError, AttributeError):
-            return Product.objects.none()
+            return []
 
         threshold = int(self.request.query_params.get("threshold", 5))
         return (
@@ -1072,7 +1072,7 @@ class VendorLowStockView(ListAPIView):
                 "stock_qty",
                 "status",
                 "categories__name",
-                "date",
+                "created_at",
             )
             .order_by("stock_qty")
         )
@@ -1092,7 +1092,7 @@ class VendorTopSellingProductsView(ListAPIView):
         try:
             profile = _get_profile_or_404(self.request.user)
         except (ValueError, AttributeError):
-            return Product.objects.none()
+            return []
 
         limit = int(self.request.query_params.get("limit", 5))
         return profile.get_top_selling_products(limit=limit).values(
@@ -1102,7 +1102,7 @@ class VendorTopSellingProductsView(ListAPIView):
             "stock_qty",
             "status",
             "categories__name",
-            "date",
+            "created_at",
         )
 
 
@@ -1123,25 +1123,25 @@ class VendorOrderListView(ListAPIView):
         try:
             profile = _get_profile_or_404(self.request.user)
         except (ValueError, AttributeError):
-            return CartOrder.objects.none()
+            return []
 
         qs = profile.vendor_orders.all()
         payment_status = self.request.query_params.get("payment_status", "").strip()
         order_status = self.request.query_params.get("order_status", "").strip()
 
         if payment_status:
-            qs = qs.filter(payment_status=payment_status)
+            qs = qs.filter(status=payment_status)
         if order_status:
-            qs = qs.filter(order_status=order_status)
+            qs = qs.filter(status=order_status)
 
         return qs.values(
             "id",
-            "total",
-            "payment_status",
-            "order_status",
-            "date",
-            "buyer__email",
-        ).order_by("-date")
+            "total_amount",
+            "status",
+            "status",
+            "created_at",
+            "user__email",
+        ).order_by("-created_at")
 
 
 class VendorOrderDetailView(RetrieveAPIView):
@@ -1174,11 +1174,11 @@ class VendorOrderDetailView(RetrieveAPIView):
 
         return {
             "id": order.pk,
-            "total": str(order.total),
-            "payment_status": order.payment_status,
-            "order_status": order.order_status,
-            "date": order.date,
-            "buyer_email": getattr(order.buyer, "email", ""),
+            "total": str(order.total_amount),
+            "status": order.status,
+            "status_label": order.status,
+            "date": order.created_at,
+            "buyer_email": getattr(order.user, "email", ""),
         }
 
 
@@ -1297,4 +1297,4 @@ class VendorCouponListView(ListAPIView):
         elif active_param == "false":
             qs = qs.filter(active=False)
 
-        return qs.values("id", "code", "discount", "date", "active").order_by("-date")
+        return qs.values("id", "code", "discount", "date", "active").order_by("-created_at")
