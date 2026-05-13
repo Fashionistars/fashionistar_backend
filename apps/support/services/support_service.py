@@ -181,18 +181,12 @@ class SupportService:
         )
 
         # Compliance audit trail
-        from apps.audit_logs.services import AuditService
-        from apps.audit_logs.models import EventCategory, EventType
-        AuditService.log(
-            event_type=EventType.TICKET_CREATED,
-            event_category=EventCategory.SUPPORT,
-            action=f"Ticket message added: ticket={ticket.id} role={'staff' if is_staff else 'client'}",
+        from apps.audit_logs.services.support import support_audit
+        support_audit.log_ticket_message_added(
             actor=author,
-            actor_role="staff" if is_staff else "client",
-            resource_type="TicketMessage",
-            resource_id=str(msg.id),
-            new_values={"ticket_id": str(ticket.id), "is_staff_reply": is_staff},
-            retention_days=1095,
+            ticket_id=str(ticket.id),
+            message_id=str(msg.id),
+            is_staff_reply=is_staff,
         )
 
         return msg
@@ -316,24 +310,11 @@ class SupportService:
             )
 
             # Compliance audit trail — escalations are high-significance events
-            from apps.audit_logs.services.audit import AuditService
-            from apps.audit_logs.models import EventType, EventCategory
-            AuditService.log(
-                event_type=EventType.TICKET_ESCALATED,
-                event_category=EventCategory.SUPPORT,
-                action=f"Ticket escalated: ticket={ticket.id} reason={reason[:200]}",
+            from apps.audit_logs.services.support import support_audit
+            support_audit.log_ticket_escalated(
                 actor=staff_user,
-                actor_role="staff",
-                resource_type="TicketEscalation",
-                resource_id=str(escalation.id),
-                new_values={
-                    "ticket_id": str(ticket.id),
-                    "reason": reason[:500],
-                    "escalation_status": escalation.status,
-                },
-                severity="warning",
-                is_compliance=True,
-                retention_days=1095,
+                ticket_id=str(ticket.id),
+                reason=reason[:500],
             )
 
         return escalation

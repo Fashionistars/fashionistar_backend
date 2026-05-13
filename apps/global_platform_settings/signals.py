@@ -74,22 +74,14 @@ def bust_platform_settings_cache(sender, instance, created: bool = False, **kwar
     # ── Compliance audit: every settings change is retained forever ─────────
     if not created:  # Skip the initial seed row — only audit real mutations
         try:
-            from apps.audit_logs.services.audit import AuditService
-            from apps.audit_logs.models import EventType, EventCategory
-            AuditService.log(
-                event_type=EventType.ACCOUNT_UPDATED,
-                event_category=EventCategory.SYSTEM,
-                action="PlatformSettings singleton saved (commission/fee values updated)",
+            from apps.audit_logs.services.global_platform_settings import settings_audit
+            settings_audit.log_setting_changed(
                 actor=None,
-                resource_type="PlatformSettings",
-                resource_id=str(instance.pk),
-                severity="warning",
-                new_values={
+                setting_key="platform_settings.singleton",
+                new_value={
                     "vendor_commission_rate": str(getattr(instance, "vendor_commission_rate", "")),
                     "measurement_fee_ngn": str(getattr(instance, "measurement_fee_ngn", "")),
                 },
-                is_compliance=True,
-                retention_days=-1,
             )
         except Exception as exc:
             logger.error("GlobalPlatformSettings: audit log failed: %s", exc)
