@@ -2,27 +2,51 @@
 """
 Fashionistar — Central Django-Ninja API (Async).
 
-All high-performance async endpoints are registered here.
-Mounted at: /api/v1/ninja/
+Architecture:
+    All high-performance async endpoints are registered here as a SINGLE
+    NinjaAPI instance.  Never instantiate NinjaAPI anywhere else in the
+    project — import this module's `ninja_api` object.
 
-Usage in backend/urls.py:
-    from backend.ninja_api import ninja_api
-    urlpatterns += [path("api/v1/ninja/", ninja_api.urls)]
+Mounted at:
+    /api/v1/ninja/         (see backend/urls.py)
 
 Authentication:
-    All routes use JWT Bearer by default.
-    Unauthenticated endpoints explicitly override with auth=None.
+    All routes use JWT Bearer (AsyncJWTAuth) by default.
+    Public endpoints explicitly override with auth=None.
+
+Router registry  ← SINGLE source-of-truth:
+    /api/v1/ninja/common/          → apps/common
+    /api/v1/ninja/client/          → apps/client
+    /api/v1/ninja/vendor/          → apps/vendor
+    /api/v1/ninja/notifications/   → apps/notification
+    /api/v1/ninja/support/         → apps/support
+    /api/v1/ninja/catalog/         → apps/catalog
+    /api/v1/ninja/products/        → apps/product
+    /api/v1/ninja/cart/            → apps/cart
+    /api/v1/ninja/orders/          → apps/order
+    /api/v1/ninja/wallet/          → apps/wallet
+    /api/v1/ninja/transactions/    → apps/transactions
+    /api/v1/ninja/payments/        → apps/payment
+    /api/v1/ninja/kyc/             → apps/kyc
+    /api/v1/ninja/measurements/    → apps/measurements
 """
+import logging
+
 from ninja import NinjaAPI
 from ninja.security import HttpBearer
 
+logger = logging.getLogger("application")
+
+
+# ── JWT Bearer Authentication ─────────────────────────────────────────────────
 
 class AsyncJWTAuth(HttpBearer):
     """
     JWT Bearer authentication for Ninja endpoints.
 
     Validates the same SimpleJWT access token used by DRF.
-    Returns the UnifiedUser instance so request.auth is the user.
+    Returns the UnifiedUser instance so `request.auth` is the user object,
+    with client_profile, vendor_profile, and kyc_submission pre-fetched.
     """
 
     async def authenticate(self, request, token: str):
@@ -35,12 +59,11 @@ class AsyncJWTAuth(HttpBearer):
             user_id = decoded.get("user_id")
             if not user_id:
                 return None
-
-            # Async ORM lookup. Reverse OneToOne profiles are hydrated here so
-            # Ninja read handlers can use request.auth.client_profile,
+            # Async ORM lookup. Reverse OneToOne prefetch related profiles are hydrated here so
+            # Ninja Async read downstream handlers can acces use request.auth.client_profile,
             # request.auth.vendor_profile, and request.auth.kyc_submission
-            # without issuing another profile/KYC query.
-            user = await (
+            # without issuing another extra profile/KYC queries.
+            return await (
                 UnifiedUser.objects.select_related(
                     "client_profile",
                     "vendor_profile",
@@ -48,28 +71,20 @@ class AsyncJWTAuth(HttpBearer):
                 )
                 .aget(pk=user_id, is_active=True)
             )
-            return user
-
-        except Exception:
+        except Exception as exc:
+            logger.warning(" ninja_api.AsyncJWTAuth: failed to validate token: %s", exc)
             return None
 
 
+# ── Central Ninja API (singleton) ─────────────────────────────────────────────
+#
+#  All Ninja endpoints MUST be mounted under /api/v1/ninja/ to:
+#    1. Maintain uniform v1 versioning across the whole API surface.
+#    2. Avoid URL collisions with DRF sync endpoints at /api/v1/<domain>/.
+#    3. Make the async/sync split explicit for clients:
+#          Reads  → Ninja  /api/v1/ninja/*
+#          Writes → DRF    /api/v1/*
 
-
-
-# ========================================================================
-# V1 Ninja API — Asynchronous Endpoints (High-Concurrency, ASGI-Ready)
-# ========================================================================
-# All Ninja endpoints MUST be mounted under /api/v1/ninja/ to:
-#   1. Stay on v1 (uniform versioning across the whole API)
-#   2. Avoid URL collisions with DRF v1 endpoints at /api/v1/auth/
-#   3. Make versioning explicit: /api/v1/ninja/auth/*, /api/v1/ninja/products/*, etc.
-
-
-
-
-
-# ── Central Ninja API ──────────────────────────────────────────────────────────
 ninja_api = NinjaAPI(
     title="Fashionistar Async API",
     version="1.0.0",
@@ -84,152 +99,131 @@ ninja_api = NinjaAPI(
 )
 
 
-
-
-
-
-"""
-Django Ninja API Instance — Async V1.
-
-Registers async domain routers for high-concurrency reads:
-  - /api/v1/ninja/products/   → catalog reads, featured, search, wishlist
-  - /api/v1/ninja/catalog/    → category/brand lists
-  - /api/v1/ninja/cart/       → cart reads
-  - Additional domains wired as they are built.
-"""
-import logging
-from ninja import NinjaAPI
-
-logger = logging.getLogger('application')
-
-# ── Singleton guard ───────────────────────────────────────────────────────────
-_api_instance = None
-
-
-def _get_api() -> NinjaAPI:
-    """Returns the NinjaAPI singleton with all domain routers registered."""
-    global _api_instance
-    if _api_instance is not None:
-        return _api_instance
-
-    _api_instance = NinjaAPI(
-        title="Fashionistar API V1",
-        version="1.0.0",
-        description="Async API using Django Ninja — high-concurrency reads.",
-        urls_namespace='authentication_v1',
-    )
-
-    # ── Product domain ─────────────────────────────────────────────────────────
-    try:
-        from apps.product.apis.async_.product_views import router as product_router
-        _api_instance.add_router("/products/", product_router)
-        logger.info("✅ NinjaAPI: product router registered at /api/v1/ninja/products/")
-    except Exception as exc:  # pragma: no cover
-        logger.error("❌ NinjaAPI: product router FAILED to register: %s", exc)
-
-    # ── Catalog domain ─────────────────────────────────────────────────────────
-    try:
-        from apps.catalog.apis.async_.catalog_views import router as catalog_router
-        _api_instance.add_router("/catalog/", catalog_router)
-        logger.info("✅ NinjaAPI: catalog router registered at /api/v1/ninja/catalog/")
-    except Exception as exc:
-        logger.info("ℹ️  NinjaAPI: catalog router not available (%s)", exc)
-
-    # ── Cart domain ────────────────────────────────────────────────────────────
-    try:
-        from apps.cart.apis.async_.cart_views import router as cart_router
-        _api_instance.add_router("/cart/", cart_router)
-        logger.info("✅ NinjaAPI: cart router registered at /api/v1/ninja/cart/")
-    except Exception as exc:
-        logger.info("ℹ️  NinjaAPI: cart router not available (%s)", exc)
-
-    # ── Vendor domain ──────────────────────────────────────────────────────────
-    try:
-        from apps.vendor.apis.async_.dashboard_views import router as vendor_async_router
-        _api_instance.add_router("/vendor/", vendor_async_router)
-        logger.info("✅ NinjaAPI: vendor dashboard router registered at /api/v1/ninja/vendor/")
-    except Exception as exc:
-        logger.info("ℹ️  NinjaAPI: vendor async router not available (%s)", exc)
-
-    # ── Client domain ──────────────────────────────────────────────────────────
-    try:
-        from apps.client.apis.async_.dashboard_views import router as client_async_router
-        _api_instance.add_router("/client/", client_async_router)
-        logger.info("✅ NinjaAPI: client dashboard router registered at /api/v1/ninja/client/")
-    except Exception as exc:
-        logger.info("ℹ️  NinjaAPI: client async router not available (%s)", exc)
-
-    logger.info("✅ NinjaAPI V1 initialized (namespace=authentication_v1, path=/api/v1/ninja/)")
-    return _api_instance
-
-
-# ── Module-level export (used by urls.py) ─────────────────────────────────────
-api = _get_api()
-
-
-
-
-
-
-
-
-
-
-
-# ── Register Domain Routers ────────────────────────────────────────────────────
+# ── Domain Router Registry ────────────────────────────────────────────────────
+# One add_router call per domain — guard with try/except so a missing
+# optional router never crashes the other 13 domains.
 
 # Common reference-data domain: /api/v1/ninja/common/
-from apps.common.apis.async_.reference_views import router as common_router
-ninja_api.add_router("/common/", common_router)
+try:
+    from apps.common.apis.async_.reference_views import router as common_router
+    ninja_api.add_router("/common/", common_router)
+    logger.info("✅ NinjaAPI: common router registered at /api/v1/ninja/common/")
+except Exception as exc:  # pragma: no cover
+    logger.warning("ℹ️ NinjaAPI: common router FAILED to register: %s", exc)
+
 
 # Client domain: /api/v1/ninja/client/
-from apps.client.apis.async_.dashboard_views import router as client_router
-ninja_api.add_router("/client/", client_router)
+try:
+    from apps.client.apis.async_.dashboard_views import router as client_router
+    ninja_api.add_router("/client/", client_router)
+    logger.info("✅ NinjaAPI: client router registered at /api/v1/ninja/client/")
+except Exception as exc:  # pragma: no cover
+    logger.warning("ℹ️ NinjaAPI: client router FAILED to register: %s", exc)
+
 
 # Vendor domain: /api/v1/ninja/vendor/
-from apps.vendor.apis.async_.dashboard_views import router as vendor_router
-ninja_api.add_router("/vendor/", vendor_router)
+try:
+    from apps.vendor.apis.async_.dashboard_views import router as vendor_router
+    ninja_api.add_router("/vendor/", vendor_router)
+    logger.info("✅ NinjaAPI: vendor router registered at /api/v1/ninja/vendor/")
+except Exception as exc:  # pragma: no cover
+    logger.warning("ℹ️ NinjaAPI: vendor router FAILED to register: %s", exc)
+
 
 # Notification domain: /api/v1/ninja/notifications/
-from apps.notification.apis.async_.notification_views import router as notification_async_router
-ninja_api.add_router("/notifications/", notification_async_router)
+try:
+    from apps.notification.apis.async_.notification_views import router as notification_router
+    ninja_api.add_router("/notifications/", notification_router)
+    logger.info("✅ NinjaAPI: notification router registered at /api/v1/ninja/notifications/")
+except Exception as exc:  # pragma: no cover
+    logger.warning("ℹ️ NinjaAPI: notification router FAILED to register: %s", exc)
+
 
 # Support domain: /api/v1/ninja/support/
-from apps.support.apis.async_.support_views import router as support_async_router
-ninja_api.add_router("/support/", support_async_router)
+try:
+    from apps.support.apis.async_.support_views import router as support_router
+    ninja_api.add_router("/support/", support_router)
+    logger.info("✅ NinjaAPI: support router registered at /api/v1/ninja/support/")
+except Exception as exc:  # pragma: no cover
+    logger.warning("ℹ️ NinjaAPI: support router FAILED to register: %s", exc)
+
 
 # Catalog domain: /api/v1/ninja/catalog/
-from apps.catalog.apis.async_.catalog_views import router as catalog_async_router
-ninja_api.add_router("/catalog/", catalog_async_router)
+try:
+    from apps.catalog.apis.async_.catalog_views import router as catalog_router
+    ninja_api.add_router("/catalog/", catalog_router)
+    logger.info("✅ NinjaAPI: catalog router registered at /api/v1/ninja/catalog/")
+except Exception as exc:  # pragma: no cover
+    logger.warning("ℹ️ NinjaAPI: catalog router FAILED to register: %s", exc)
+
 
 # Product domain: /api/v1/ninja/products/
-from apps.product.apis.async_.product_views import router as product_async_router
-ninja_api.add_router("/products/", product_async_router)
+try:
+    from apps.product.apis.async_.product_views import router as product_router
+    ninja_api.add_router("/products/", product_router)
+    logger.info("✅ NinjaAPI: product router registered at /api/v1/ninja/products/")
+except Exception as exc:  # pragma: no cover
+    logger.warning("ℹ️ NinjaAPI: product router FAILED to register: %s", exc)
+
 
 # Cart domain: /api/v1/ninja/cart/
-from apps.cart.apis.async_.cart_views import router as cart_async_router
-ninja_api.add_router("/cart/", cart_async_router)
+try:
+    from apps.cart.apis.async_.cart_views import router as cart_router
+    ninja_api.add_router("/cart/", cart_router)
+    logger.info("✅ NinjaAPI: cart router registered at /api/v1/ninja/cart/")
+except Exception as exc:  # pragma: no cover
+    logger.warning("ℹ️ NinjaAPI: cart router FAILED to register: %s", exc)
+
 
 # Order domain: /api/v1/ninja/orders/
-from apps.order.apis.async_.order_views import router as order_async_router
-ninja_api.add_router("/orders/", order_async_router)
+try:
+    from apps.order.apis.async_.order_views import router as order_router
+    ninja_api.add_router("/orders/", order_router)
+    logger.info("✅ NinjaAPI: order router registered at /api/v1/ninja/orders/")
+except Exception as exc:  # pragma: no cover
+    logger.warning("ℹ️ NinjaAPI: order router FAILED to register: %s", exc)
+
 
 # Wallet domain: /api/v1/ninja/wallet/
-from apps.wallet.apis.async_.wallet_views import router as wallet_async_router
-ninja_api.add_router("/wallet/", wallet_async_router)
+try:
+    from apps.wallet.apis.async_.wallet_views import router as wallet_router
+    ninja_api.add_router("/wallet/", wallet_router)
+    logger.info("✅ NinjaAPI: wallet router registered at /api/v1/ninja/wallet/")
+except Exception as exc:  # pragma: no cover
+    logger.warning("ℹ️ NinjaAPI: wallet router FAILED to register: %s", exc)
+
 
 # Transactions domain: /api/v1/ninja/transactions/
-from apps.transactions.apis.async_.transaction_views import router as transaction_async_router
-ninja_api.add_router("/transactions/", transaction_async_router)
+try:
+    from apps.transactions.apis.async_.transaction_views import router as transaction_router
+    ninja_api.add_router("/transactions/", transaction_router)
+    logger.info("✅ NinjaAPI: transactions router registered at /api/v1/ninja/transactions/")
+except Exception as exc:  # pragma: no cover
+    logger.warning("ℹ️ NinjaAPI: transactions router FAILED to register: %s", exc)
+
 
 # Payment domain: /api/v1/ninja/payments/
-from apps.payment.apis.async_.payment_views import router as payment_async_router
-ninja_api.add_router("/payments/", payment_async_router)
+try:
+    from apps.payment.apis.async_.payment_views import router as payment_router
+    ninja_api.add_router("/payments/", payment_router)
+    logger.info("✅ NinjaAPI: payment router registered at /api/v1/ninja/payments/")
+except Exception as exc:  # pragma: no cover
+    logger.warning("ℹ️ NinjaAPI: payment router FAILED to register: %s", exc)
+
 
 # KYC domain: /api/v1/ninja/kyc/
-from apps.kyc.apis.async_.kyc_views import router as kyc_async_router
-ninja_api.add_router("/kyc/", kyc_async_router)
+try:
+    from apps.kyc.apis.async_.kyc_views import router as kyc_router
+    ninja_api.add_router("/kyc/", kyc_router)
+    logger.info("✅ NinjaAPI: kyc router registered at /api/v1/ninja/kyc/")
+except Exception as exc:  # pragma: no cover
+    logger.warning("ℹ️ NinjaAPI: kyc router FAILED to register: %s", exc)
+
 
 # Measurements domain: /api/v1/ninja/measurements/
-from apps.measurements.apis.async_.measurement_views import router as measurements_async_router
-ninja_api.add_router("/measurements/", measurements_async_router)
+try:
+    from apps.measurements.apis.async_.measurement_views import router as measurements_router
+    ninja_api.add_router("/measurements/", measurements_router)
+    logger.info("✅ NinjaAPI: measurements router registered at /api/v1/ninja/measurements/")
+except Exception as exc:  # pragma: no cover
+    logger.warning("ℹ️ NinjaAPI: measurements router FAILED to register: %s", exc)
