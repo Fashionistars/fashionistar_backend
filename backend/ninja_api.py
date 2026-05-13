@@ -54,6 +54,21 @@ class AsyncJWTAuth(HttpBearer):
             return None
 
 
+
+
+
+# ========================================================================
+# V1 Ninja API — Asynchronous Endpoints (High-Concurrency, ASGI-Ready)
+# ========================================================================
+# All Ninja endpoints MUST be mounted under /api/v1/ninja/ to:
+#   1. Stay on v1 (uniform versioning across the whole API)
+#   2. Avoid URL collisions with DRF v1 endpoints at /api/v1/auth/
+#   3. Make versioning explicit: /api/v1/ninja/auth/*, /api/v1/ninja/products/*, etc.
+
+
+
+
+
 # ── Central Ninja API ──────────────────────────────────────────────────────────
 ninja_api = NinjaAPI(
     title="Fashionistar Async API",
@@ -67,6 +82,99 @@ ninja_api = NinjaAPI(
     urls_namespace="ninja",
     docs_url="/docs/",
 )
+
+
+
+
+
+
+"""
+Django Ninja API Instance — Async V1.
+
+Registers async domain routers for high-concurrency reads:
+  - /api/v1/ninja/products/   → catalog reads, featured, search, wishlist
+  - /api/v1/ninja/catalog/    → category/brand lists
+  - /api/v1/ninja/cart/       → cart reads
+  - Additional domains wired as they are built.
+"""
+import logging
+from ninja import NinjaAPI
+
+logger = logging.getLogger('application')
+
+# ── Singleton guard ───────────────────────────────────────────────────────────
+_api_instance = None
+
+
+def _get_api() -> NinjaAPI:
+    """Returns the NinjaAPI singleton with all domain routers registered."""
+    global _api_instance
+    if _api_instance is not None:
+        return _api_instance
+
+    _api_instance = NinjaAPI(
+        title="Fashionistar API V1",
+        version="1.0.0",
+        description="Async API using Django Ninja — high-concurrency reads.",
+        urls_namespace='authentication_v1',
+    )
+
+    # ── Product domain ─────────────────────────────────────────────────────────
+    try:
+        from apps.product.apis.async_.product_views import router as product_router
+        _api_instance.add_router("/products/", product_router)
+        logger.info("✅ NinjaAPI: product router registered at /api/v1/ninja/products/")
+    except Exception as exc:  # pragma: no cover
+        logger.error("❌ NinjaAPI: product router FAILED to register: %s", exc)
+
+    # ── Catalog domain ─────────────────────────────────────────────────────────
+    try:
+        from apps.catalog.apis.async_.catalog_views import router as catalog_router
+        _api_instance.add_router("/catalog/", catalog_router)
+        logger.info("✅ NinjaAPI: catalog router registered at /api/v1/ninja/catalog/")
+    except Exception as exc:
+        logger.info("ℹ️  NinjaAPI: catalog router not available (%s)", exc)
+
+    # ── Cart domain ────────────────────────────────────────────────────────────
+    try:
+        from apps.cart.apis.async_.cart_views import router as cart_router
+        _api_instance.add_router("/cart/", cart_router)
+        logger.info("✅ NinjaAPI: cart router registered at /api/v1/ninja/cart/")
+    except Exception as exc:
+        logger.info("ℹ️  NinjaAPI: cart router not available (%s)", exc)
+
+    # ── Vendor domain ──────────────────────────────────────────────────────────
+    try:
+        from apps.vendor.apis.async_.dashboard_views import router as vendor_async_router
+        _api_instance.add_router("/vendor/", vendor_async_router)
+        logger.info("✅ NinjaAPI: vendor dashboard router registered at /api/v1/ninja/vendor/")
+    except Exception as exc:
+        logger.info("ℹ️  NinjaAPI: vendor async router not available (%s)", exc)
+
+    # ── Client domain ──────────────────────────────────────────────────────────
+    try:
+        from apps.client.apis.async_.dashboard_views import router as client_async_router
+        _api_instance.add_router("/client/", client_async_router)
+        logger.info("✅ NinjaAPI: client dashboard router registered at /api/v1/ninja/client/")
+    except Exception as exc:
+        logger.info("ℹ️  NinjaAPI: client async router not available (%s)", exc)
+
+    logger.info("✅ NinjaAPI V1 initialized (namespace=authentication_v1, path=/api/v1/ninja/)")
+    return _api_instance
+
+
+# ── Module-level export (used by urls.py) ─────────────────────────────────────
+api = _get_api()
+
+
+
+
+
+
+
+
+
+
 
 # ── Register Domain Routers ────────────────────────────────────────────────────
 
