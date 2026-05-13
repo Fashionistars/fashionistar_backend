@@ -24,13 +24,13 @@ from pydantic import Field
 
 
 class SetupStateOut(Schema):
-    current_step:          int
-    profile_complete:      bool
-    bank_details:          bool
-    id_verified:           bool   # informational: KYC future sprint, does NOT gate access
-    first_product:         bool
-    onboarding_done:       bool
-    completion_percentage: int
+    current_step:          int  = 1
+    profile_complete:      bool = False
+    bank_details:          bool = False
+    id_verified:           bool = False   # informational: KYC future sprint, does NOT gate access
+    first_product:         bool = False
+    onboarding_done:       bool = False
+    completion_percentage: int  = 0       # Computed in selector, not a DB column
 
 
 class AnalyticsOut(Schema):
