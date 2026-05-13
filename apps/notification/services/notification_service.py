@@ -24,7 +24,7 @@ from apps.notification.models import (
     NotificationPreference,
     NotificationTemplate,
 )
-from apps.notification.realtime import push_unread_badge_count
+from apps.notification.realtime import push_new_notification, push_unread_badge_count
 
 logger = logging.getLogger(__name__)
 
@@ -150,10 +150,12 @@ def create_notification(
     # Schedule async dispatch (Celery) after commit so workers never read
     # uncommitted notification rows during order/chat/payment write flows.
     transaction.on_commit(_dispatch_after_commit)
+    # ── Real-time WebSocket push — fires after the DB row is committed ────────
+    # push_new_notification internally refreshes the badge count via
+    # push_unread_badge_count so only one on_commit hook is needed.
     if channel == NotificationChannel.IN_APP and notification.recipient_id:
-        transaction.on_commit(
-            lambda: push_unread_badge_count(notification.recipient_id)
-        )
+        _notif_ref = notification  # capture for the closure
+        transaction.on_commit(lambda: push_new_notification(_notif_ref))
     # ── Audit event (fire after commit alongside Celery dispatch) ─────────
     _notif_id = str(notification.id)
     _recipient_id = str(getattr(recipient, 'id', ''))
