@@ -106,6 +106,32 @@ def log_checkout_completed(*, actor, order_id: str, cart_id: str, request=None) 
     )
 
 
+def log_cart_cleared(*, actor=None, cart_id: str, request=None) -> None:
+    """Record a post-checkout cart clear without inventing an order reference.
+
+    Args:
+        actor: The user whose cart was cleared, if known.
+        cart_id: Source Cart PK.
+        request: Django HttpRequest.
+    """
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    AuditService.log(
+        event_type=EventType.CART_UPDATED,
+        event_category=EventCategory.CART,
+        action=f"Cart cleared after checkout: cart={cart_id}",
+        actor=actor,
+        actor_role=getattr(actor, "user_type", None) if actor else None,
+        resource_type="Cart",
+        resource_id=cart_id,
+        request=request,
+        new_values={"status": "cleared"},
+        is_compliance=True,
+        retention_days=-1,
+    )
+
+
 def log_coupon_applied(*, actor, cart_id: str, coupon_code: str, discount: str, request=None) -> None:
     """Record a coupon being applied at checkout.
 

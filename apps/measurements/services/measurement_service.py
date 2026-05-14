@@ -207,18 +207,10 @@ def delete_measurement_profile(*, profile_id, owner) -> None:
     logger.info("MeasurementProfile deleted: id=%s owner=%s", profile_id, owner.id)
     # ── Audit (GDPR: right-to-erasure events must be logged) ────────────────
     try:
-        from apps.audit_logs.services.audit import AuditService
-        from apps.audit_logs.models import EventType, EventCategory
-        AuditService.log(
-            event_type=EventType.ACCOUNT_SOFT_DELETED,
-            event_category=EventCategory.MEASUREMENT,
-            action=f"MeasurementProfile deleted (GDPR): id={profile_id} owner={owner.id}",
+        from apps.audit_logs.services.measurements import measurements_audit
+        measurements_audit.log_measurement_deleted(
             actor=owner,
-            resource_type="MeasurementProfile",
-            resource_id=str(profile_id),
-            severity="warning",
-            is_compliance=True,
-            retention_days=2555,  # 7 years for GDPR erasure audit trail
+            measurement_id=str(profile_id),
         )
     except Exception:
         logger.warning(

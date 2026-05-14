@@ -172,24 +172,9 @@ class RegistrationService:
 
             def _audit_registered():
                 try:
-                    from apps.audit_logs.services.audit import AuditService
-                    from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
-                    AuditService.log(
-                        event_type=EventType.USER_REGISTERED,
-                        event_category=EventCategory.AUTHENTICATION,
-                        severity=SeverityLevel.INFO,
-                        action=f"New user registered: role={_user_role} identifier={_user_email or _user_phone}",
-                        resource_type="UnifiedUser",
-                        resource_id=_user_id_str,
-                        new_values={
-                            "user_id": _user_id_str,
-                            "email": _user_email,
-                            "phone": _user_phone,
-                            "role": _user_role,
-                        },
-                        is_compliance=True,
-                        retention_days=2555,  # 7 years — NDPR/GDPR
-                    )
+                    from apps.audit_logs.services.authentication import auth_audit
+
+                    auth_audit.log_register_success(actor=user)
                 except Exception:
                     pass  # Never block registration on audit failure
 
@@ -262,15 +247,11 @@ class RegistrationService:
             )
             # Best-effort audit: log the registration failure for security review
             try:
-                from apps.audit_logs.services.audit import AuditService
-                from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
-                AuditService.log(
-                    event_type=EventType.REGISTRATION_FAILED,
-                    event_category=EventCategory.AUTHENTICATION,
-                    severity=SeverityLevel.WARNING,
-                    action=f"Registration failed for identifier={email or phone}: {str(exc)[:200]}",
-                    new_values={"email": email, "phone": phone, "role": role, "error": str(exc)[:500]},
-                    is_compliance=False,
+                from apps.audit_logs.services.authentication import auth_audit
+
+                auth_audit.log_register_failed(
+                    email=str(email or phone or "unknown"),
+                    reason=str(exc)[:200],
                 )
             except Exception:
                 pass

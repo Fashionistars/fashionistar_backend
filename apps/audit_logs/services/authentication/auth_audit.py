@@ -51,6 +51,33 @@ def log_login_failed(*, email: str, request=None, reason: str = "") -> None:
     )
 
 
+def log_login_blocked(
+    *,
+    email: str,
+    actor=None,
+    request=None,
+    reason: str = "",
+    resource_id: str | None = None,
+) -> None:
+    """Record a blocked login attempt such as inactive, deleted, or unverified."""
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    AuditService.log(
+        event_type=EventType.LOGIN_BLOCKED,
+        event_category=EventCategory.SECURITY,
+        action=f"Login blocked for {email}: {reason or 'blocked'}",
+        actor=actor,
+        actor_email=getattr(actor, "email", None) or email,
+        resource_type="UnifiedUser" if resource_id else None,
+        resource_id=resource_id,
+        severity="warning",
+        request=request,
+        metadata={"reason": reason} if reason else None,
+        is_compliance=True,
+    )
+
+
 def log_logout(*, actor, request=None, session_id: str | None = None) -> None:
     """Record a user logout event.
 
