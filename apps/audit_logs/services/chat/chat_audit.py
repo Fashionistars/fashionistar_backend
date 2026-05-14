@@ -58,6 +58,39 @@ def log_message_sent(
     )
 
 
+def log_offer_created(
+    *,
+    actor,
+    conversation_id: str,
+    offer_id: str,
+    offered_price: str,
+    quantity: int,
+    request=None,
+) -> None:
+    """Record a structured chat offer event using the chat helper namespace."""
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    AuditService.log(
+        event_type=EventType.MESSAGE_SENT,
+        event_category=EventCategory.CHAT,
+        action=f"Offer created: offer={offer_id} conv={conversation_id} price={offered_price}",
+        actor=actor,
+        actor_role=getattr(actor, "user_type", None),
+        resource_type="ChatOffer",
+        resource_id=offer_id,
+        request=request,
+        new_values={
+            "conversation_id": conversation_id,
+            "offered_price": offered_price,
+            "quantity": quantity,
+            "type": "offer",
+        },
+        is_compliance=True,
+        retention_days=-1,
+    )
+
+
 def log_message_deleted(
     *, actor, message_id: str, conversation_id: str, request=None
 ) -> None:
@@ -131,4 +164,31 @@ def log_websocket_disconnected(
         resource_id=conversation_id,
         session_id=session_id,
         new_values={"reason": reason},
+    )
+
+
+def log_conversation_flagged(
+    *,
+    actor,
+    conversation_id: str,
+    flag_id: str,
+    reason: str,
+    details: str = "",
+    request=None,
+) -> None:
+    """Record moderation escalation or flagging for a conversation."""
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    AuditService.log(
+        event_type=EventType.CHAT_MESSAGE_FLAGGED,
+        event_category=EventCategory.CHAT,
+        action=f"Conversation flagged: conv={conversation_id} reason={reason}",
+        actor=actor,
+        actor_role=getattr(actor, "user_type", None),
+        resource_type="ModerationFlag",
+        resource_id=flag_id,
+        request=request,
+        severity="warning",
+        new_values={"conversation_id": conversation_id, "reason": reason, "details": details},
     )

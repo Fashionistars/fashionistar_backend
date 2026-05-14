@@ -334,15 +334,12 @@ def clear_cart(*, user=None, session_key: str | None = None) -> None:
     # ── Audit event (fire after commit — inside @transaction.atomic) ──────────
     try:
         from apps.audit_logs.services.cart import cart_audit
-        from apps.audit_logs.services.audit import AuditService
-        from apps.audit_logs.models import EventType, EventCategory
-        transaction.on_commit(lambda: AuditService.log(
-            event_type=EventType.CHECKOUT_COMPLETED,
-            event_category=EventCategory.CART,
-            action=f"Cart cleared: cart={cart.id}",
-            resource_type="Cart",
-            resource_id=str(cart.id),
-        ))
+        transaction.on_commit(
+            lambda: cart_audit.log_cart_cleared(
+                actor=user,
+                cart_id=str(cart.id),
+            )
+        )
     except Exception:
         logger.warning("cart_audit.cart_cleared failed silently", exc_info=True)
 

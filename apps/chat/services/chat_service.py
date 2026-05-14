@@ -279,19 +279,16 @@ def create_chat_offer(
     transaction.on_commit(lambda: broadcast_offer_updated(offer.id))
     # ── Audit event ──────────────────────────────────────────────────────────
     try:
-        from apps.audit_logs.services.audit import AuditService
-        from apps.audit_logs.models import EventType, EventCategory
-        transaction.on_commit(lambda: AuditService.log(
-            event_type=EventType.MESSAGE_SENT,
-            event_category=EventCategory.CHAT,
-            action=f"ChatOffer created: offer={offer.id} conv={conversation.id} price={offered_price}",
-            actor=vendor,
-            resource_type="ChatOffer",
-            resource_id=str(offer.id),
-            new_values={"offered_price": str(offered_price), "quantity": quantity},
-            is_compliance=True,
-            retention_days=-1,
-        ))
+        from apps.audit_logs.services.chat import chat_audit
+        transaction.on_commit(
+            lambda: chat_audit.log_offer_created(
+                actor=vendor,
+                conversation_id=str(conversation.id),
+                offer_id=str(offer.id),
+                offered_price=str(offered_price),
+                quantity=quantity,
+            )
+        )
     except Exception:
         logger.warning("chat_audit.log_offer_created failed silently", exc_info=True)
     return offer
@@ -364,17 +361,13 @@ def flag_conversation(
     )
     # ── Audit event ──────────────────────────────────────────────────────────
     try:
-        from apps.audit_logs.services.audit import AuditService
-        from apps.audit_logs.models import EventType, EventCategory
-        AuditService.log(
-            event_type=EventType.CONVERSATION_STARTED,  # closest generic event
-            event_category=EventCategory.MODERATION,
-            action=f"Conversation flagged: conv={conversation.id} reason={reason} by={reported_by.id}",
+        from apps.audit_logs.services.chat import chat_audit
+        chat_audit.log_conversation_flagged(
             actor=reported_by,
-            resource_type="ModerationFlag",
-            resource_id=str(flag.id),
-            severity="warning",
-            new_values={"reason": reason, "details": details},
+            conversation_id=str(conversation.id),
+            flag_id=str(flag.id),
+            reason=reason,
+            details=details,
         )
     except Exception:
         logger.warning("chat_audit.flag_conversation failed silently", exc_info=True)

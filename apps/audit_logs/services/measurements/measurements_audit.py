@@ -82,3 +82,23 @@ def log_ai_scan_completed(
         request=request,
         new_values={"confidence": confidence},
     )
+
+
+def log_measurement_deleted(*, actor, measurement_id: str, request=None) -> None:
+    """Record deletion of a measurement profile or set for compliance traceability."""
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    AuditService.log(
+        event_type=EventType.MEASUREMENT_DELETED,
+        event_category=EventCategory.MEASUREMENT,
+        action=f"Measurement profile deleted: id={measurement_id}",
+        actor=actor,
+        actor_role=getattr(actor, "user_type", None),
+        resource_type="MeasurementProfile",
+        resource_id=measurement_id,
+        request=request,
+        severity="warning",
+        is_compliance=True,
+        retention_days=2555,
+    )

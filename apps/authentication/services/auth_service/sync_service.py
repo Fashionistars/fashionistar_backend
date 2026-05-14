@@ -174,18 +174,12 @@ class SyncAuthService:
                 )
                 # AuditEventLog — structured high-value event
                 try:
-                    from apps.audit_logs.services import AuditService
-                    from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
-                    AuditService.log(
-                        event_type=EventType.LOGIN_BLOCKED,
-                        event_category=EventCategory.SECURITY,
-                        severity=SeverityLevel.WARNING,
-                        action=f"Login blocked — account soft-deleted: {email_or_phone}",
+                    from apps.audit_logs.services.authentication import auth_audit
+
+                    auth_audit.log_login_blocked(
+                        email=email_or_phone,
                         request=request,
-                        ip_address=ip,
-                        user_agent=ua,
-                        metadata={"reason": "account_deleted", "identifier": email_or_phone},
-                        is_compliance=True,
+                        reason="account_deleted",
                     )
                 except Exception:
                     pass
@@ -227,22 +221,14 @@ class SyncAuthService:
                         is_successful=False,
                     )
                     try:
-                        from apps.audit_logs.services import AuditService
-                        from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
-                        AuditService.log(
-                            event_type=EventType.LOGIN_BLOCKED,
-                            event_category=EventCategory.SECURITY,
-                            severity=SeverityLevel.WARNING,
-                            action=f"Login blocked — account not OTP-verified: {email_or_phone}",
-                            request=request,
+                        from apps.audit_logs.services.authentication import auth_audit
+
+                        auth_audit.log_login_blocked(
+                            email=email_or_phone,
                             actor=candidate,
-                            actor_email=getattr(candidate, 'email', None),
-                            ip_address=ip,
-                            user_agent=ua,
-                            resource_type="UnifiedUser",
+                            request=request,
+                            reason="account_not_verified",
                             resource_id=str(candidate.pk) if candidate else None,
-                            metadata={"reason": "account_not_verified"},
-                            is_compliance=True,
                         )
                     except Exception:
                         pass
@@ -264,22 +250,14 @@ class SyncAuthService:
                     )
                     # AuditEventLog
                     try:
-                        from apps.audit_logs.services import AuditService
-                        from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
-                        AuditService.log(
-                            event_type=EventType.LOGIN_BLOCKED,
-                            event_category=EventCategory.SECURITY,
-                            severity=SeverityLevel.WARNING,
-                            action=f"Login blocked — account inactive: {email_or_phone}",
-                            request=request,
+                        from apps.audit_logs.services.authentication import auth_audit
+
+                        auth_audit.log_login_blocked(
+                            email=email_or_phone,
                             actor=candidate,
-                            actor_email=getattr(candidate, 'email', None),
-                            ip_address=ip,
-                            user_agent=ua,
-                            resource_type="UnifiedUser",
+                            request=request,
+                            reason="account_inactive",
                             resource_id=str(candidate.pk) if candidate else None,
-                            metadata={"reason": "account_inactive"},
-                            is_compliance=True,
                         )
                     except Exception:
                         pass
@@ -299,18 +277,12 @@ class SyncAuthService:
                 )
                 # AuditEventLog
                 try:
-                    from apps.audit_logs.services import AuditService
-                    from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
-                    AuditService.log(
-                        event_type=EventType.LOGIN_FAILED,
-                        event_category=EventCategory.AUTHENTICATION,
-                        severity=SeverityLevel.WARNING,
-                        action=f"Login failed — invalid credentials: {email_or_phone}",
+                    from apps.audit_logs.services.authentication import auth_audit
+
+                    auth_audit.log_login_failed(
+                        email=email_or_phone,
                         request=request,
-                        ip_address=ip,
-                        user_agent=ua,
-                        metadata={"reason": "invalid_credentials"},
-                        is_compliance=False,
+                        reason="invalid_credentials",
                     )
                 except Exception:
                     pass
@@ -335,22 +307,12 @@ class SyncAuthService:
 
             # AuditEventLog — async via transaction.on_commit() → Celery
             try:
-                from apps.audit_logs.services import AuditService
-                from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
-                AuditService.log(
-                    event_type=EventType.LOGIN_SUCCESS,
-                    event_category=EventCategory.AUTHENTICATION,
-                    severity=SeverityLevel.INFO,
-                    action=f"Successful login: {user.email or user.phone}",
-                    request=request,
+                from apps.audit_logs.services.authentication import auth_audit
+
+                auth_audit.log_login_success(
                     actor=user,
-                    actor_email=user.email,
-                    ip_address=ip,
-                    user_agent=ua,
-                    resource_type="UnifiedUser",
-                    resource_id=str(user.pk),
-                    metadata={"auth_method": auth_method, "member_id": user.member_id or ""},
-                    is_compliance=True,
+                    request=request,
+                    session_id=str(refresh.access_token.get("jti", "")),
                 )
             except Exception:
                 pass
