@@ -249,6 +249,19 @@ class AccountDeactivatedError(AuthenticationError):
         super().__init__(detail=detail)
 
 
+class GoogleUserCannotResetPasswordError(AuthenticationError):
+    """
+    Raised when a Google user attempts to reset their password.
+
+    HTTP 403 Forbidden.
+    """
+    status_code    = status.HTTP_403_FORBIDDEN
+    default_detail = (
+        "Google users cannot reset their password. "
+        "Please log in with Google."
+    )
+    default_code   = "google_user_cannot_reset_password"
+
 class AccountSuspendedError(AuthenticationError):
     """
     Raised when an account is suspended (is_active=False due to suspension).

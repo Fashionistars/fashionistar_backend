@@ -45,7 +45,7 @@ import hashlib
 import logging
 from decimal import Decimal
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from apps.order.models import (
@@ -236,24 +236,35 @@ def place_order(
         user.id, f"{cart.id}:{subtotal}"
     )
 
-    order = Order.objects.create(
-        user=user,
-        vendor=vendor,
-        status=OrderStatus.PENDING_PAYMENT,
-        fulfillment_type=fulfillment_type,
-        subtotal=subtotal,
-        shipping_amount=shipping,
-        discount_amount=discount,
-        total_amount=total,
-        commission_amount=commission_total,
-        vendor_payout=vendor_payout,
-        currency="NGN",
-        coupon_code=cart.coupon.code if cart.coupon else "",
-        delivery_address=delivery_address,
-        measurement_profile_id=measurement_profile_id,
-        idempotency_key=idem_key,
-        notes=notes,
-    )
+    try:
+        order = Order.objects.create(
+            user=user,
+            vendor=vendor,
+            status=OrderStatus.PENDING_PAYMENT,
+            fulfillment_type=fulfillment_type,
+            subtotal=subtotal,
+            shipping_amount=shipping,
+            discount_amount=discount,
+            total_amount=total,
+            commission_amount=commission_total,
+            vendor_payout=vendor_payout,
+            currency="NGN",
+            coupon_code=cart.coupon.code if cart.coupon else "",
+            delivery_address=delivery_address,
+            measurement_profile_id=measurement_profile_id,
+            idempotency_key=idem_key,
+            notes=notes,
+        )
+    except IntegrityError:
+        existing_order = Order.objects.filter(idempotency_key=idem_key).first()
+        if existing_order:
+            logger.info(
+                "Concurrent idempotent order replay recovered: key=%s order=%s",
+                idem_key,
+                existing_order.order_number,
+            )
+            return existing_order
+        raise
 
     # ── Step 7: Create OrderItems with snapshots ─────────────────────────
     order_items = []
