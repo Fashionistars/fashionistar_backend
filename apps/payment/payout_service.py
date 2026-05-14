@@ -185,6 +185,7 @@ class VendorPayoutService:
                 amount=amount,
                 error=str(exc),
                 request_payload={
+                    "vendor_id": str(getattr(vendor, "id", "")),
                     "account_number": f"****{account_number[-4:]}",
                     "bank_code": bank_code,
                     "amount": str(amount),
@@ -220,22 +221,24 @@ class VendorPayoutService:
         )
 
         # ── ⑤ Audit log ────────────────────────────────────────────────────────
-        PaymentProviderLog.objects.create(
-            provider=active_provider,
-            action="transfer.initiate",
-            reference=reference,
-            success=True,
-            request_payload={
-                "vendor_id": str(getattr(vendor, "id", "")),
-                "account_number": f"****{account_number[-4:]}",
-                "bank_code": bank_code,
-                "bank_name": bank_name,
-                "amount": str(amount),
-                "currency": currency,
-                "narration": narration,
-                "idempotency_key": ik,
-            },
-            response_payload=gateway_response,
+        db_transaction.on_commit(
+            lambda: PaymentProviderLog.objects.create(
+                provider=active_provider,
+                action="transfer.initiate",
+                reference=reference,
+                success=True,
+                request_payload={
+                    "vendor_id": str(getattr(vendor, "id", "")),
+                    "account_number": f"****{account_number[-4:]}",
+                    "bank_code": bank_code,
+                    "bank_name": bank_name,
+                    "amount": str(amount),
+                    "currency": currency,
+                    "narration": narration,
+                    "idempotency_key": ik,
+                },
+                response_payload=gateway_response,
+            )
         )
 
         logger.info(
@@ -248,14 +251,18 @@ class VendorPayoutService:
         )
 
         # Financial audit trail — PERMANENT RETENTION (CBN / GDPR)
-        from apps.audit_logs.services.transactions import transactions_audit
-        transactions_audit.log_payout_success(
-            actor=vendor,
-            payout_id=reference,
-            amount=str(amount),
-            currency=currency,
-            provider=active_provider,
-            reference=str(transfer_code),
+        db_transaction.on_commit(
+            lambda: __import__(
+                "apps.audit_logs.services.transactions",
+                fromlist=["transactions_audit"],
+            ).transactions_audit.log_payout_success(
+                actor=vendor,
+                payout_id=reference,
+                amount=str(amount),
+                currency=currency,
+                provider=active_provider,
+                reference=str(transfer_code),
+            )
         )
 
         return {
@@ -334,6 +341,7 @@ class VendorPayoutService:
                 reference=reference,
                 success=False,
                 request_payload={
+                    "vendor_id": str(getattr(vendor, "id", "")),
                     "amount": str(amount),
                     "reference": reference,
                     "idempotency_key": ik,
@@ -386,7 +394,10 @@ class VendorPayoutService:
         exists = PaymentProviderLog.objects.filter(
             action="transfer.initiate",
             reference__startswith="PAYOUT-",
-            request_payload__contains={"idempotency_key": idempotency_key},
+            request_payload__contains={
+                "vendor_id": str(getattr(vendor, "id", "")),
+                "idempotency_key": idempotency_key,
+            },
             success=True,
         ).exists()
         if exists:
@@ -401,7 +412,10 @@ class VendorPayoutService:
         exists = await PaymentProviderLog.objects.filter(
             action="transfer.initiate",
             reference__startswith="PAYOUT-",
-            request_payload__contains={"idempotency_key": idempotency_key},
+            request_payload__contains={
+                "vendor_id": str(getattr(vendor, "id", "")),
+                "idempotency_key": idempotency_key,
+            },
             success=True,
         ).aexists()
         if exists:

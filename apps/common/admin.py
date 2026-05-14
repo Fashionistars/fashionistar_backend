@@ -134,6 +134,8 @@ class DeletedRecordsAdmin(admin.ModelAdmin):
             This is completely irreversible.  The source record is
             physically removed from the database.
         """
+        archive_pks_to_delete = []
+
         for archive_obj in queryset.iterator(chunk_size=200):
             model_class = archive_obj.resolve_original_model()
             if model_class is None:
@@ -169,6 +171,8 @@ class DeletedRecordsAdmin(admin.ModelAdmin):
                     archive_obj.model_name,
                     archive_obj.record_id,
                 )
+                if deleted_count:
+                    archive_pks_to_delete.append(archive_obj.pk)
             except Exception:
                 logger.exception(
                     "Failed to hard-delete source record %s[%s]",
@@ -176,8 +180,8 @@ class DeletedRecordsAdmin(admin.ModelAdmin):
                     archive_obj.record_id,
                 )
 
-        # Now delete the archive entries themselves
-        queryset.delete()
+        if archive_pks_to_delete:
+            DeletedRecords.objects.filter(pk__in=archive_pks_to_delete).delete()
 
     # ----------------------------------------------------------------
     # Restore from archive action (Bug 5 — read-path)
@@ -223,12 +227,16 @@ class DeletedRecordsAdmin(admin.ModelAdmin):
 
             try:
                 if hasattr(model_class.objects, 'all_with_deleted'):
-                    updated = (
+                    instance = (
                         model_class.objects
                         .all_with_deleted()
                         .filter(pk=archive_obj.record_id)
-                        .update(is_deleted=False, deleted_at=None)
+                        .first()
                     )
+                    updated = 0
+                    if instance is not None and hasattr(instance, "restore"):
+                        instance.restore()
+                        updated = 1
                 else:
                     updated = (
                         model_class.objects
@@ -663,5 +671,4 @@ class UserLifecycleRegistryAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         """Registry rows are NEVER deleted — they are permanent by design."""
         return False
-
 

@@ -360,7 +360,9 @@ def place_order(
     _record_status_history(order, "", OrderStatus.PENDING_PAYMENT, actor=user, note="Order placed.")
 
     # ── Step 14: Emit audit event ────────────────────────────────────────
-    _emit_order_audit("order.placed", order, actor=user, total=str(total))
+    transaction.on_commit(
+        lambda: _emit_order_audit("order.placed", order, actor=user, total=str(total))
+    )
     from apps.common.events import event_bus
     event_bus.emit_on_commit(
         "order.placed",
@@ -389,7 +391,14 @@ def confirm_payment(*, order: Order, payment_reference: str, actor=None) -> Orde
     order.paid_at = timezone.now()
     order.save(update_fields=["status", "payment_reference", "paid_at", "updated_at"])
     _record_status_history(order, from_status, OrderStatus.PAYMENT_CONFIRMED, actor=actor, note="Payment confirmed via webhook.")
-    _emit_order_audit("order.payment_confirmed", order, actor=actor, ref=payment_reference)
+    transaction.on_commit(
+        lambda: _emit_order_audit(
+            "order.payment_confirmed",
+            order,
+            actor=actor,
+            ref=payment_reference,
+        )
+    )
     return order
 
 
@@ -410,7 +419,14 @@ def transition_status(*, order: Order, new_status: str, actor=None, note: str = 
     order.status = new_status
     order.save(update_fields=["status", "updated_at"])
     _record_status_history(order, from_status, new_status, actor=actor, note=note)
-    _emit_order_audit(f"order.status.{new_status}", order, actor=actor, from_status=from_status)
+    transaction.on_commit(
+        lambda: _emit_order_audit(
+            f"order.status.{new_status}",
+            order,
+            actor=actor,
+            from_status=from_status,
+        )
+    )
     return order
 
 
@@ -485,7 +501,9 @@ def release_escrow(*, order: Order, actor=None) -> Order:
     order.escrow_released = True
     order.save(update_fields=["status", "escrow_released", "updated_at"])
     _record_status_history(order, from_status, OrderStatus.COMPLETED, actor=actor, note="Escrow released by client.")
-    _emit_order_audit("order.completed", order, actor=actor)
+    transaction.on_commit(
+        lambda: _emit_order_audit("order.completed", order, actor=actor)
+    )
     return order
 
 
@@ -514,5 +532,7 @@ def cancel_order(*, order: Order, actor=None, reason: str = "") -> Order:
     order.status = OrderStatus.CANCELLED
     order.save(update_fields=["status", "updated_at"])
     _record_status_history(order, from_status, OrderStatus.CANCELLED, actor=actor, note=reason or "Order cancelled.")
-    _emit_order_audit("order.cancelled", order, actor=actor, reason=reason)
+    transaction.on_commit(
+        lambda: _emit_order_audit("order.cancelled", order, actor=actor, reason=reason)
+    )
     return order

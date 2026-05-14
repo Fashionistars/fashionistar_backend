@@ -68,27 +68,21 @@ class DeliveryStatusUpdateView(generics.GenericAPIView):
             order.save(update_fields=update_fields)
         # ── Compliance audit: admin delivery status changes affect escrow release ──
         try:
-            from apps.audit_logs.services.audit import AuditService
-            from apps.audit_logs.models import EventType, EventCategory
-            AuditService.log(
-                event_type=EventType.ORDER_STATUS_CHANGED,
-                event_category=EventCategory.ORDER,
-                action=(
+            from apps.audit_logs.services.admin_backend import admin_audit
+
+            admin_audit.log_admin_action(
+                actor=request.user,
+                action_description=(
                     f"Admin delivery status update: order={kwargs.get(self.lookup_url_kwarg)} "
                     f"status={delivery_status} tracking={tracking_id}"
                 ),
-                actor=request.user,
-                actor_role="admin",
                 resource_type="CartOrder",
                 resource_id=str(kwargs.get(self.lookup_url_kwarg)),
-                severity="warning",
                 new_values={
                     "delivery_status": delivery_status,
                     "tracking_id": tracking_id,
                 },
                 request=request,
-                is_compliance=True,
-                retention_days=-1,
             )
         except Exception:
             import logging as _log
