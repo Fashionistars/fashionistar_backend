@@ -189,6 +189,7 @@ class VendorPayoutService:
                     "bank_code": bank_code,
                     "amount": str(amount),
                     "reference": reference,
+                    "idempotency_key": ik,
                 },
             )
             # Financial audit — failure also permanently retained
@@ -232,6 +233,7 @@ class VendorPayoutService:
                 "amount": str(amount),
                 "currency": currency,
                 "narration": narration,
+                "idempotency_key": ik,
             },
             response_payload=gateway_response,
         )
@@ -331,7 +333,11 @@ class VendorPayoutService:
                 action="transfer.initiate",
                 reference=reference,
                 success=False,
-                request_payload={"amount": str(amount), "reference": reference},
+                request_payload={
+                    "amount": str(amount),
+                    "reference": reference,
+                    "idempotency_key": ik,
+                },
                 response_payload={},
                 error_message=str(exc),
             )
@@ -356,6 +362,7 @@ class VendorPayoutService:
                 "bank_code": bank_code,
                 "amount": str(amount),
                 "currency": currency,
+                "idempotency_key": ik,
             },
             response_payload=gateway_response,
         )
@@ -420,6 +427,9 @@ class VendorPayoutService:
             if isinstance(exc, InsufficientWalletBalanceError):
                 raise
             logger.warning("_validate_wallet_balance: wallet lookup failed — %s", exc)
+            raise InsufficientWalletBalanceError(
+                f"Unable to validate vendor wallet for payout in {currency}."
+            ) from exc
 
     @staticmethod
     async def _avalidate_wallet_balance(*, vendor, amount: Decimal, currency: str) -> None:
@@ -436,6 +446,9 @@ class VendorPayoutService:
             raise
         except Exception as exc:
             logger.warning("_avalidate_wallet_balance: wallet lookup failed — %s", exc)
+            raise InsufficientWalletBalanceError(
+                f"Unable to validate vendor wallet for payout in {currency}."
+            ) from exc
 
     @staticmethod
     def _debit_wallet_and_record_ledger(

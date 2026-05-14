@@ -52,41 +52,6 @@ install-dev: ## Install dev dependencies (linting, testing, typing)
 setup: install install-dev migrate static ## Full first-time setup
 	@echo "$(GREEN)✓ Setup complete — run 'make dev' to start$(NC)"
 
-dev: ## Start Django development server (sync WSGI — port 8000, console email)
-	@echo "$(CYAN)Starting Django dev server (WSGI, DEBUG=True, ConsoleEmail)...$(NC)"
-	@echo "$(YELLOW)  Settings: backend.config.development$(NC)"
-	@echo "$(YELLOW)  Email:    console (OTP printed to this terminal)$(NC)"
-	@echo "$(YELLOW)  URL:      http://127.0.0.1:8000/$(NC)"
-	uv run manage.py runserver --settings=$(DJANGO_SETTINGS_MODULE)
-
-# ── ASGI / Uvicorn / Daphne shortcuts ──────────────────────────────────────
-asgi: run-asgi ## Alias: start ASGI server with Uvicorn (same as run-asgi)
-
-uvicorn: ## Start Uvicorn ASGI (dev, port 8001, console email, access logs)
-	@echo "$(CYAN)Starting Uvicorn ASGI server (development settings)...$(NC)"
-	@echo "$(YELLOW)  Settings: backend.config.development (ALLOWED_HOSTS=*)$(NC)"
-	@echo "$(YELLOW)  URL:      http://127.0.0.1:8001/ or http://localhost:8001/$(NC)"
-	@echo "$(YELLOW)  Logs:     Access log printed here (ALL requests — 2xx, 4xx, 5xx)$(NC)"
-	uv run uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto --log-config uvicorn_log_config.json
-
-wsgi: ## Start Gunicorn WSGI (sync production — port 8000)
-	@echo "$(CYAN)Starting Gunicorn WSGI server...$(NC)"
-	uv run gunicorn backend.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 120
-
-daphne: run-daphne ## Alias: start Daphne ASGI (same as run-daphne)
-
-run-asgi: ## Start ASGI + Uvicorn (auto-starts Redis first)
-	@echo "$(CYAN)Ensuring Redis is running ...$(NC)"
-	@$(ENSURE_TMP_REDIS)
-	@echo "$(CYAN)Starting Uvicorn ASGI server (access logs on)...$(NC)"
-	uv run uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto --log-config uvicorn_log_config.json
-
-run-daphne: ## Start Daphne ASGI (WebSocket — auto-starts Redis first)
-	@echo "$(CYAN)Ensuring Redis is running ...$(NC)"
-	@$(ENSURE_TMP_REDIS)
-	@echo "$(CYAN)Starting Daphne ASGI server (development settings)...$(NC)"
-	uv run daphne -b 0.0.0.0 -p 8001 backend.asgi:application
-
 shell: ## Open Django interactive shell (development settings)
 	uv run manage.py shell --settings=$(DJANGO_SETTINGS_MODULE)
 
@@ -244,24 +209,6 @@ start-workers: ## Display instructions to start all workers
 	@echo "  $(CYAN)Terminal 4:$(NC) make celery-beat"
 	@echo "  $(CYAN)Terminal 5:$(NC) make flower"
 
-# ═══════════════════════════════════════════════════════════════
-##@ Tunneling
-# ═══════════════════════════════════════════════════════════════
-
-ngrok-dev: ## 🌐 Start ngrok tunnel for backend port 8000 (uses global authtoken)
-	@echo "$(CYAN)Starting ngrok tunnel → backend port 8000...$(NC)"
-	@echo "$(YELLOW)  Authtoken: global (3Dg2r338... stored in ngrok.yml)$(NC)"
-	@echo "$(YELLOW)  Dev server must be running: make dev (port 8000)$(NC)"
-	ngrok http 8000
-
-dev-tunnel: ## 🌐 Alias for ngrok-dev (legacy name)
-	@$(MAKE) ngrok-dev
-
-ngrok-url: ## 🔍 Print active backend ngrok tunnel URL (inspector API)
-	@echo "$(CYAN)Active backend ngrok tunnels:$(NC)"
-	@curl -s http://127.0.0.1:4040/api/tunnels 2>/dev/null | \
-		python -c "import sys,json; d=json.load(sys.stdin); [print('  ✔ ' + t['public_url'] + ' -> port 8000') for t in d.get('tunnels',[])]" \
-		|| echo "$(YELLOW)  ngrok not running. Run: make ngrok-dev$(NC)"
 
 # ═══════════════════════════════════════════════════════════════
 ##@ Docker — Development
@@ -456,7 +403,7 @@ urls: ## Display key API endpoints
 	@echo "  $(CYAN)Swagger:$(NC)      http://localhost:8000/swagger/"
 	@echo "  $(CYAN)ReDoc:$(NC)        http://localhost:8000/redoc/"
 	@echo "  $(CYAN)Admin:$(NC)        http://localhost:8000/$${DJANGO_SECRET_ADMIN_URL:-admin/}"
-	@echo "  $(CYAN)Ninja Async:$(NC)  http://localhost:8000/api/v2/"
+	@echo "  $(CYAN)Ninja Async:$(NC)  http://localhost:8000/api/v1/ninja/"
 
 deps: ## List installed Python packages
 	uv pip list --format=columns
@@ -526,38 +473,68 @@ dashboards: ## 📊 Show all service URLs
 # 	fi)
 
 
-
+# ═══════════════════════════════════════════════════════════════
+##@ Tunneling
+# ═══════════════════════════════════════════════════════════════
 
 ## ngrok launcher — Windows-safe: pnpm dlx resolves ngrok binary without WindowsApps PATH issues.
 ## ngrok v5 beta removed --web-addr; the web UI always starts on 127.0.0.1:4040 by default.
 ## Use stable v4 channel (--package ngrok@4) for full flag compatibility on Windows Git Bash.
 NGROK ?= pnpm.cmd dlx --package ngrok@4 ngrok
 NGROK_WEB_ADDR ?= 127.0.0.1:4040
+NGROK_URL ?= 127.0.0.1:8000
 
-ngrok-dev: ## 🔗 Start ngrok tunnel → localhost:8000 (Django WSGI/dev)
-	@echo "$(CYAN)Starting ngrok tunnel → http://localhost:8000 ...$(NC)"
+ngrok-backend: ## 🌐 🔗 Start ngrok tunnel for backend port 8000 → localhost:8000 (Django WSGI/dev)  -----  (uses global authtoken)
+	@echo "$(CYAN)Starting ngrok tunnel for backend port 8000 → http://$(NGROK_URL) ...$(NC)"
 	@echo "$(YELLOW)  Webhook URL: https://<tunnel>.ngrok-free.app/api/v1/upload/webhook/cloudinary/$(NC)"
 	@echo "$(YELLOW)  ngrok Web UI: http://$(NGROK_WEB_ADDR)$(NC)"
+	@echo "$(YELLOW)  Authtoken: global (3Dg2r338... stored in ngrok.yml)$(NC)"
+	@echo "$(YELLOW)  Dev server must be running: make dev (port 8000)$(NC)"
 	$(NGROK) http 8000
 
-ngrok-asgi: ## 🔗 Start ngrok tunnel → localhost:8001 (Uvicorn ASGI/WebSocket)
-	@echo "$(CYAN)Starting ngrok tunnel → http://localhost:8001 (ASGI) ...$(NC)"
+
+ngrok-dev: ## 🌐 🔗 Start ngrok tunnel for backend port 8000 → localhost:8000 (Django WSGI/dev)  -----  (uses global authtoken)
+	@echo "$(CYAN)Starting ngrok tunnel for backend port 8000 → http://$(NGROK_URL) ...$(NC)"
 	@echo "$(YELLOW)  Webhook URL: https://<tunnel>.ngrok-free.app/api/v1/upload/webhook/cloudinary/$(NC)"
 	@echo "$(YELLOW)  ngrok Web UI: http://$(NGROK_WEB_ADDR)$(NC)"
+	@echo "$(YELLOW)  Authtoken: global (3Dg2r338... stored in ngrok.yml)$(NC)"
+	@echo "$(YELLOW)  Dev server must be running: make dev (port 8000)$(NC)"
+	$(NGROK) http 8000
+
+
+ngrok-asgi: ## 🔗 🌐 Start ngrok tunnel for backend port 8001 → localhost:8001 (Django ASGI/dev)  -----  (uses global authtoken)
+	@echo "$(CYAN)Starting ngrok tunnel → http://$(NGROK_URL) (ASGI) ...$(NC)"
+	@echo "$(YELLOW)  Webhook URL: https://<tunnel>.ngrok-free.app/api/v1/upload/webhook/cloudinary/$(NC)"
+	@echo "$(YELLOW)  ngrok Web UI: http://$(NGROK_WEB_ADDR)$(NC)"
+	@echo "$(YELLOW)  Authtoken: global (3Dg2r338... stored in ngrok.yml)$(NC)"
+	@echo "$(YELLOW)  Dev server must be running: make dev (port 8001)$(NC)"
 	$(NGROK) http 8001
 
-ngrok-url: ## 🔍 Print current active ngrok public URL (must already be running)
-	@echo "$(CYAN)Active ngrok tunnels:$(NC)"
-	@curl -s http://127.0.0.1:4040/api/tunnels 2>/dev/null | \
-		uv run python -c "import sys,json; d=json.load(sys.stdin); [print('  ✔ ' + t['public_url'] + ' → ' + t['config']['addr']) for t in d.get('tunnels',[])]" \
-		|| echo "$(RED)✗ ngrok not running — start with 'make ngrok-dev'$(NC)"
 
-dev-tunnel: ## 🚀 Django dev server (port 8000) — then open ngrok in new terminal
+
+
+
+
+
+
+
+# ── USAGE: ──────────────────────────────────────────────────────────────────────────────────────────────────────
+#   1. In Terminal A: make dev         (starts Django WSGI on :8000)
+#   2. In Terminal B: make ngrok-dev   (creates public HTTPS tunnel → :8000)
+#      OR combine:    make dev-tunnel  (sequential: dev server + ngrok)
+#
+# For ASGI/WebSocket support:
+#   1. In Terminal A: make uvicorn        (starts Uvicorn ASGI on :8001)
+#   2. In Terminal B: make ngrok-asgi     (tunnel → :8001)
+#      OR combine:    make asgi-tunnel
+
+dev-tunnel: ## 🚀 Django dev server (port 8000) — then open ngrok in new terminal`
 	@echo "$(BOLD)$(CYAN)FASHIONISTAR — Dev Server + Tunnel$(NC)"
 	@echo "  $(CYAN)Step 1:$(NC) Starting Django WSGI dev server on :8000 ..."
 	@echo "  $(YELLOW)To also start tunnel → open a second terminal and run:$(NC)"
 	@echo "  $(CYAN)          make ngrok-dev$(NC)"
 	uv run manage.py runserver --settings=$(DJANGO_SETTINGS_MODULE)
+	$(NGROK) http 8000
 
 asgi-tunnel: ## 🚀 Uvicorn ASGI server (port 8001) — then open ngrok-asgi in new terminal
 	@echo "$(BOLD)$(CYAN)FASHIONISTAR — ASGI Server + Tunnel$(NC)"
@@ -565,7 +542,137 @@ asgi-tunnel: ## 🚀 Uvicorn ASGI server (port 8001) — then open ngrok-asgi in
 	@echo "  $(YELLOW)To also start tunnel → open a second terminal and run:$(NC)"
 	@echo "  $(CYAN)          make ngrok-asgi$(NC)"
 	uv run uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto --log-config uvicorn_log_config.json
+	$(NGROK) http 8001
+
+
+ngrok-url: ## 🔍 Print current active backend ngrok tunnel public URL (inspector API) ---( Make sure ngrok is already running: `make ngrok-backend` or `make ngrok-asgi`)
+	@echo "$(CYAN)Active backend ngrok tunnels:$(NC)"
+	@curl -s http://127.0.0.1:4040/api/tunnels 2>/dev/null | \
+		uv run python -c "import sys,json; d=json.load(sys.stdin); [print('  ✔ ' + t['public_url'] + ' -> port 8000:' + t['config']['addr']) for t in d.get('tunnels',[])]" \
+		|| echo "$(RED)✗ ngrok not running — start with / Run: 'make ngrok-backend' or 'make ngrok-asgi'$(NC)"
+
+
 
 ngrok-inspect: ## 🔍 Open ngrok web inspector in browser (localhost:4040)
 	@echo "$(CYAN)ngrok Web Inspector: http://127.0.0.1:4040$(NC)"
 	@start http://127.0.0.1:4040 2>/dev/null || xdg-open http://127.0.0.1:4040 2>/dev/null || echo "Open: http://127.0.0.1:4040"
+
+
+
+
+# DEVELOPMENT SERVER COMMANDS
+# ═══════════════════════════════════════════════════════════════
+dev: ## Start Django development server (sync WSGI — port 8000, console email)
+	@echo "$(CYAN)Starting Django dev server (WSGI, DEBUG=True, ConsoleEmail)...$(NC)"
+	@echo "$(YELLOW)  Settings: backend.config.development$(NC)"
+	@echo "$(YELLOW)  Email:    console (OTP printed to this terminal)$(NC)"
+	@echo "$(YELLOW)  URL:      http://127.0.0.1:8000/$(NC)"
+	uv run manage.py runserver --settings=$(DJANGO_SETTINGS_MODULE)
+
+uvicorn: ## Start Uvicorn ASGI (dev, port 8001, console email, access logs)
+	@echo "$(CYAN)Starting Uvicorn ASGI server (development settings)...$(NC)"
+	@$(ENSURE_TMP_REDIS)
+	@echo "$(YELLOW)  Settings: backend.config.development (ALLOWED_HOSTS=*)$(NC)"
+	@echo "$(YELLOW)  URL:      http://127.0.0.1:8001/ or http://localhost:8001/$(NC)"
+	@echo "$(YELLOW)  Logs:     Access log printed here (ALL requests — 2xx, 4xx, 5xx)$(NC)"
+	uv run uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto --log-config uvicorn_log_config.json
+
+run-asgi: ## Start ASGI + Uvicorn (auto-starts Redis first)
+	@echo "$(CYAN)Ensuring Redis is running ...$(NC)"
+	@$(ENSURE_TMP_REDIS)
+	@echo "$(CYAN)Starting Uvicorn ASGI server (access logs on)...$(NC)"
+	uv run uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto --log-config uvicorn_log_config.json
+
+run-daphne: ## Start Daphne ASGI (WebSocket — auto-starts Redis first)
+	@echo "$(CYAN)Ensuring Redis is running ...$(NC)"
+	@$(ENSURE_TMP_REDIS)
+	@echo "$(CYAN)Starting Daphne ASGI server (development settings)...$(NC)"
+	uv run daphne -b 0.0.0.0 -p 8001 backend.asgi:application
+
+
+# ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+##@ Django + Uvicorn/Daphne + Cloudflare Tunnel commands
+# ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+# These commands start Django + Uvicorn/Daphne, then open ngrok tunnels.
+# Run them in two terminals or combine sequential-start variants.
+
+# ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+##@ Development Server + Tunnel (combined)
+# ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+dev-tunnel: ## 🚀 Django dev server (port 8000) + ngrok tunnel — then open ngrok in new terminal
+	@echo "$(CYAN)Starting Django WSGI dev server → :8000 ...$(NC)"
+	uv run manage.py runserver --settings=$(DJANGO_SETTINGS_MODULE) &
+	@echo ""
+	@echo "$(YELLOW)Open a second terminal and run:$(NC)"
+	@echo "  $(CYAN)make ngrok-dev$(NC)"
+
+
+# ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+##@ ASGI Server + Tunnel (combined)
+# ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+asgi-tunnel: ## 🚀 Uvicorn ASGI (port 8001) + ngrok tunnel — then open ngrok in new terminal
+	@echo "$(CYAN)Starting Uvicorn ASGI server → :8001 ...$(NC)"
+	@$(ENSURE_TMP_REDIS)
+	@echo ""
+	@echo "$(YELLOW)Open a second terminal and run:$(NC)"
+	@echo "  $(CYAN)make ngrok-asgi$(NC)"
+	uv run uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto --log-config uvicorn_log_config.json
+
+
+# ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+##@ Development Server + ngrok (sequential execution)
+# ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+run-dev-then-ngrok: ## 🚀 First Django dev server, then ngrok tunnel (both start sequentially)
+	@echo "$(CYAN)Starting Django dev server ...$(NC)"
+	uv run manage.py runserver --settings=$(DJANGO_SETTINGS_MODULE)
+
+run-ngrok-then-dev: ## 🚀 First ngrok tunnel, then Django dev server (both start sequentially)
+	@echo "$(CYAN)Starting ngrok tunnel → :8000 ...$(NC)"
+	$(NGROK) http 8000
+	@echo ""
+	@echo "$(CYAN)Starting Django dev server ...$(NC)"
+	uv run manage.py runserver --settings=$(DJANGO_SETTINGS_MODULE)
+
+
+# ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+##@ ASGI Server + ngrok (sequential execution)
+# ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+run-asgi-then-ngrok: ## 🚀 First Uvicorn ASGI server, then ngrok tunnel (both start sequentially)
+	@echo "$(CYAN)Starting Uvicorn ASGI server → :8001 ...$(NC)"
+	@$(ENSURE_TMP_REDIS)
+	uv run uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto --log-config uvicorn_log_config.json
+
+run-ngrok-then-asgi: ## 🚀 First ngrok tunnel, then Uvicorn ASGI server (both start sequentially)
+	@echo "$(CYAN)Starting ngrok tunnel → :8001 ...$(NC)"
+	$(NGROK) http 8001
+	@echo ""
+	@echo "$(CYAN)Starting Uvicorn ASGI server ...$(NC)"
+	@$(ENSURE_TMP_REDIS)
+	uv run uvicorn backend.asgi:application --host 0.0.0.0 --port 8001 --reload --ws auto --log-config uvicorn_log_config.json
+
+
+# ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+##@ Development (alternative aliases)
+# ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+run-dev: dev ## Alias for make dev
+
+run-uvicorn: uvicorn ## Alias for make uvicorn
+
+
+
+# ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+##@ ASGI / Uvicorn / Daphne shortcuts
+# ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+asgi: run-asgi ## Alias: start ASGI server with Uvicorn (same as run-asgi)
+
+daphne: run-daphne ## Alias: start Daphne ASGI (same as run-daphne)
+
+wsgi: ## Start Gunicorn WSGI (sync production — port 8000)
+	@echo "$(CYAN)Starting Gunicorn WSGI server...$(NC)"
+	uv run gunicorn backend.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 120

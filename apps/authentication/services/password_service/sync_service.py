@@ -19,6 +19,7 @@ from apps.authentication.services.otp import OTPService
 from apps.common.managers.email import EmailManager
 from apps.common.managers.sms import SMSManager
 from apps.authentication.tasks import send_email_task, send_sms_task
+from apps.authentication.exceptions import GoogleUserCannotResetPasswordError, AccountDeactivatedError
 
 logger = logging.getLogger('application')
 
@@ -92,15 +93,24 @@ class SyncPasswordService:
         """
         try:
             is_email = "@" in email_or_phone
+            if is_email:
+                # Normalise email domain to lowercase only for email (phone remains unchanged)
+                from django.contrib.auth.base_user import BaseUserManager as _BUM
+                email_or_phone = _BUM.normalize_email(email_or_phone)
 
             # ✅ OPTIMIZED: Single database query using Q object
             try:
-                user = UnifiedUser.objects.filter(
-                Q(email=email_or_phone) if "@" in email_or_phone else Q(phone=email_or_phone)
-            ).first()
-            except UnifiedUser.DoesNotExist:
-                logger.warning(f"User with identifier '{email_or_phone}' not found during password reset request.")
-                user = None
+                user_qs = UnifiedUser.objects.all_with_deleted().filter(
+                    Q(email=email_or_phone) if is_email else Q(phone=email_or_phone)
+                )
+                soft_deleted = user_qs.filter(is_deleted=True).exists()
+                if soft_deleted:
+                    logger.warning(
+                        "⛔ Password reset requested for soft-deleted account: %s",
+                        email_or_phone,
+                    )
+                    raise AccountDeactivatedError
+                user = user_qs.first()
             except Exception as e:
                 logger.error(f"Error querying UnifiedUser for password reset request: {str(e)}")
                 user = None
@@ -133,7 +143,7 @@ class SyncPasswordService:
 
             if user.auth_provider == UnifiedUser.PROVIDER_GOOGLE:
                 logger.info("ℹ️ Google user %s attempted password reset.", user.email)
-                return "If an account exists, a reset code has been sent."
+                raise GoogleUserCannotResetPasswordError
 
             if is_email:
                 # EMAIL FLOW
