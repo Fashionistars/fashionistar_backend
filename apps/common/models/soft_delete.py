@@ -29,7 +29,7 @@ Design Principles:
 import logging
 
 from django.core.exceptions import PermissionDenied
-from django.db import models
+from django.db import models, transaction as db_transaction
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -106,30 +106,40 @@ class SoftDeleteModel(models.Model):
             from apps.common.models import DeletedRecords
             from django.forms.models import model_to_dict
 
-            # ── 1. Archive snapshot ──────────────────────────────
-            try:
-                archive_data = model_to_dict(self)
-                serialized = {
-                    k: str(v) if v is not None else None
-                    for k, v in archive_data.items()
-                }
-            except Exception:
-                serialized = {'pk': str(self.pk)}
+            with db_transaction.atomic():
+                # ── 1. Archive snapshot ──────────────────────────────
+                try:
+                    archive_data = model_to_dict(self)
+                    serialized = {
+                        k: str(v) if v is not None else None
+                        for k, v in archive_data.items()
+                    }
+                except Exception:
+                    serialized = {'pk': str(self.pk)}
 
-            DeletedRecords.objects.create(
-                model_name=self.__class__.__name__,
-                record_id=str(self.pk),
-                data=serialized,
-            )
+                DeletedRecords.objects.create(
+                    model_name=self.__class__.__name__,
+                    record_id=str(self.pk),
+                    data=serialized,
+                )
 
-            # ── 2. Bulk UPDATE — bypasses full_clean() ───────────
-            now = timezone.now()
-            self.__class__.objects.filter(
-                pk=self.pk
-            ).update(
-                is_deleted=True,
-                deleted_at=now,
-            )
+                # ── 2. Bulk UPDATE — bypasses full_clean() ───────────
+                now = timezone.now()
+                updated = self.__class__.objects.filter(
+                    pk=self.pk,
+                    is_deleted=False,
+                ).update(
+                    is_deleted=True,
+                    deleted_at=now,
+                )
+
+            if updated == 0:
+                logger.warning(
+                    "soft_delete() matched 0 rows for %s %s — already deleted or missing",
+                    self.__class__.__name__,
+                    self.pk,
+                )
+                return
 
             # ── 3. Sync in-memory state ──────────────────────────
             self.is_deleted = True
@@ -254,35 +264,38 @@ class SoftDeleteModel(models.Model):
         """
         try:
             # ── 1. Bulk UPDATE via unfiltered manager ────────────
-            updated = self.__class__.objects.all_with_deleted().filter(
-                pk=self.pk,
-                is_deleted=True,
-            ).update(
-                is_deleted=False,
-                deleted_at=None,
-            )
-
-            if updated == 0:
-                logger.warning(
-                    "restore() matched 0 rows for %s %s "
-                    "— already active or not found",
-                    self.__class__.__name__,
-                    self.pk,
-                )
-
-            # ── 2. Purge archive entry ───────────────────────────
             from apps.common.models import DeletedRecords
-            purged = DeletedRecords.objects.filter(
-                model_name=self.__class__.__name__,
-                record_id=str(self.pk),
-            ).delete()
-            if purged[0]:
-                logger.debug(
-                    "Purged %d archive entries for %s %s",
-                    purged[0],
-                    self.__class__.__name__,
-                    self.pk,
+
+            with db_transaction.atomic():
+                updated = self.__class__.objects.all_with_deleted().filter(
+                    pk=self.pk,
+                    is_deleted=True,
+                ).update(
+                    is_deleted=False,
+                    deleted_at=None,
                 )
+
+                if updated == 0:
+                    logger.warning(
+                        "restore() matched 0 rows for %s %s "
+                        "— already active or not found",
+                        self.__class__.__name__,
+                        self.pk,
+                    )
+                    return
+
+                # ── 2. Purge archive entry ───────────────────────────
+                purged = DeletedRecords.objects.filter(
+                    model_name=self.__class__.__name__,
+                    record_id=str(self.pk),
+                ).delete()
+                if purged[0]:
+                    logger.debug(
+                        "Purged %d archive entries for %s %s",
+                        purged[0],
+                        self.__class__.__name__,
+                        self.pk,
+                    )
 
             # ── 3. Sync in-memory state ──────────────────────────
             self.is_deleted = False
@@ -332,6 +345,7 @@ class SoftDeleteModel(models.Model):
                 deleted_at=None,
             )
 
+            from apps.common.models import DeletedRecords
             if updated == 0:
                 logger.warning(
                     "arestore() matched 0 rows for %s %s "
@@ -339,8 +353,8 @@ class SoftDeleteModel(models.Model):
                     self.__class__.__name__,
                     self.pk,
                 )
+                return
 
-            from apps.common.models import DeletedRecords
             purged, _ = await DeletedRecords.objects.filter(
                 model_name=self.__class__.__name__,
                 record_id=str(self.pk),
