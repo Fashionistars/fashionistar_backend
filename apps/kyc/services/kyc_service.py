@@ -238,22 +238,17 @@ class KycService:
             "KycService.initiate_submission: created submission=%s for user=%s",
             submission.id, user.id,
         )
-        # Compliance audit trail
         try:
-            from apps.audit_logs.services.audit import AuditService
-            from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
-            AuditService.log(
-                event_type=EventType.KYC_SUBMITTED,
-                event_category=EventCategory.COMPLIANCE,
-                severity=SeverityLevel.INFO,
-                action=f"KYC submission initiated for user={user.id}",
+            from apps.audit_logs.services.kyc import kyc_audit
+
+            kyc_audit.log_kyc_submitted(
                 actor=user,
-                actor_role=getattr(user, 'role', None),
-                resource_type="KycSubmission",
-                resource_id=str(submission.id),
-                new_values={"status": "PENDING", "has_nin": bool(nin), "has_bvn": bool(bvn)},
-                is_compliance=True,
-                retention_days=2555,  # 7 years NDPR/CBN
+                submission_id=str(submission.id),
+                metadata={
+                    "status": "PENDING",
+                    "has_nin": bool(nin),
+                    "has_bvn": bool(bvn),
+                },
             )
         except Exception:
             pass
@@ -330,22 +325,15 @@ class KycService:
             document_type,
             user.id,
         )
-        # Compliance audit trail
         try:
-            from apps.audit_logs.services.audit import AuditService
-            from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
-            AuditService.log(
-                event_type=EventType.KYC_DOCUMENT_UPLOADED,
-                event_category=EventCategory.COMPLIANCE,
-                severity=SeverityLevel.INFO,
-                action=f"KYC document {'created' if created else 'updated'}: type={document_type} for user={user.id}",
+            from apps.audit_logs.services.kyc import kyc_audit
+
+            kyc_audit.log_kyc_document_uploaded(
                 actor=user,
-                actor_role=getattr(user, 'role', None),
-                resource_type="KycDocument",
-                resource_id=str(doc.id),
-                new_values={"document_type": document_type, "submission_id": str(submission.id), "created": created},
-                is_compliance=True,
-                retention_days=2555,
+                submission_id=str(submission.id),
+                document_id=str(doc.id),
+                document_type=document_type,
+                created=created,
             )
         except Exception:
             pass
@@ -408,22 +396,15 @@ class KycService:
             "KycService.approve_submission: approved submission=%s by admin=%s",
             submission_id, getattr(admin_user, "id", "provider-webhook"),
         )
-        # Compliance audit trail — permanent for CBN
         try:
-            from apps.audit_logs.services.audit import AuditService
-            from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
-            AuditService.log(
-                event_type=EventType.KYC_APPROVED,
-                event_category=EventCategory.COMPLIANCE,
-                severity=SeverityLevel.INFO,
-                action=f"KYC approved: submission={submission_id} admin={getattr(admin_user, 'id', 'webhook')}",
+            from apps.audit_logs.services.kyc import kyc_audit
+
+            kyc_audit.log_kyc_approved(
+                submission_id=str(submission_id),
                 actor=admin_user,
-                actor_role="staff" if admin_user else "provider-webhook",
-                resource_type="KycSubmission",
-                resource_id=str(submission_id),
-                new_values={"status": "APPROVED", "provider_reference": provider_reference},
-                is_compliance=True,
-                retention_days=-1,  # Permanent — financial compliance
+                user=submission.user,
+                actor_email=getattr(submission.user, "email", ""),
+                provider_reference=provider_reference,
             )
         except Exception:
             pass
@@ -467,22 +448,14 @@ class KycService:
             "KycService.reject_submission: rejected submission=%s by admin=%s",
             submission_id, getattr(admin_user, "id", "provider-webhook"),
         )
-        # Compliance audit trail
         try:
-            from apps.audit_logs.services.audit import AuditService
-            from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
-            AuditService.log(
-                event_type=EventType.KYC_REJECTED,
-                event_category=EventCategory.COMPLIANCE,
-                severity=SeverityLevel.WARNING,
-                action=f"KYC rejected: submission={submission_id} admin={getattr(admin_user, 'id', 'webhook')} allow_resubmit={allow_resubmit}",
+            from apps.audit_logs.services.kyc import kyc_audit
+
+            kyc_audit.log_kyc_rejected(
                 actor=admin_user,
-                actor_role="staff" if admin_user else "provider-webhook",
-                resource_type="KycSubmission",
-                resource_id=str(submission_id),
-                new_values={"status": "RESUBMIT" if allow_resubmit else "REJECTED", "review_notes": review_notes[:500]},
-                is_compliance=True,
-                retention_days=2555,
+                user=submission.user,
+                submission_id=str(submission_id),
+                reason=review_notes[:500],
             )
         except Exception:
             pass

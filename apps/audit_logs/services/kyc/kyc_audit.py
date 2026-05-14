@@ -46,14 +46,18 @@ class KycAuditService:
     def log_kyc_approved(
         *,
         submission_id: str,
+        actor,
+        user,
+        provider_reference: str = "",
         actor_email: str,
         request: "HttpRequest | None" = None,
     ) -> None:
         """Log admin manually approved a KYC submission."""
-        log_kyc_verified(
-            actor=None,
-            user=type("_u", (), {"email": actor_email})(),
+        log_kyc_approved(
+            actor=actor,
+            user=user or type("_u", (), {"email": actor_email})(),
             submission_id=submission_id,
+            provider_reference=provider_reference,
             request=request,
         )
 
@@ -71,6 +75,25 @@ class KycAuditService:
             submission_id=submission_id,
             request=request,
             metadata=metadata,
+        )
+
+    @staticmethod
+    def log_kyc_document_uploaded(
+        *,
+        actor,
+        submission_id: str,
+        document_id: str,
+        document_type: str,
+        created: bool,
+        request: "HttpRequest | None" = None,
+    ) -> None:
+        log_kyc_document_uploaded(
+            actor=actor,
+            submission_id=submission_id,
+            document_id=document_id,
+            document_type=document_type,
+            created=created,
+            request=request,
         )
 
 
@@ -129,6 +152,34 @@ def log_kyc_verified(*, actor, user, submission_id: str, provider: str = "", req
     )
 
 
+def log_kyc_approved(
+    *,
+    actor,
+    user,
+    submission_id: str,
+    provider_reference: str = "",
+    request=None,
+) -> None:
+    """Record an approved KYC submission using the canonical approved event."""
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
+
+    AuditService.log(
+        event_type=EventType.KYC_APPROVED,
+        event_category=EventCategory.KYC,
+        severity=SeverityLevel.INFO,
+        action=f"KYC approved: user={getattr(user, 'email', str(user))}",
+        actor=actor,
+        actor_role="staff" if actor else "provider-webhook",
+        resource_type="KYCSubmission",
+        resource_id=submission_id,
+        request=request,
+        new_values={"provider_reference": provider_reference},
+        is_compliance=True,
+        retention_days=-1,
+    )
+
+
 def log_kyc_rejected(*, actor, user, submission_id: str, reason: str = "", request=None) -> None:
     """Record a KYC rejection.
 
@@ -152,6 +203,42 @@ def log_kyc_rejected(*, actor, user, submission_id: str, reason: str = "", reque
         request=request,
         severity="warning",
         new_values={"reason": reason},
+        is_compliance=True,
+        retention_days=2555,
+    )
+
+
+def log_kyc_document_uploaded(
+    *,
+    actor,
+    submission_id: str,
+    document_id: str,
+    document_type: str,
+    created: bool,
+    request=None,
+) -> None:
+    """Record a KYC document upload or replacement."""
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
+
+    AuditService.log(
+        event_type=EventType.KYC_DOCUMENT_UPLOADED,
+        event_category=EventCategory.KYC,
+        severity=SeverityLevel.INFO,
+        action=(
+            f"KYC document {'created' if created else 'updated'}: "
+            f"type={document_type} submission={submission_id}"
+        ),
+        actor=actor,
+        actor_role=getattr(actor, "user_type", None),
+        resource_type="KycDocument",
+        resource_id=document_id,
+        request=request,
+        new_values={
+            "document_type": document_type,
+            "submission_id": submission_id,
+            "created": created,
+        },
         is_compliance=True,
         retention_days=2555,
     )
