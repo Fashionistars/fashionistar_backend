@@ -10,6 +10,10 @@ from rest_framework import serializers
 
 from apps.vendor.models import VendorPayoutProfile, VendorProfile, VendorSetupState
 
+def _catalog_has_any_collections() -> bool:
+    from apps.catalog.models import Collections as CollectionModel
+    return CollectionModel.objects.exists()
+
 
 class VendorSetupStateSerializer(serializers.ModelSerializer):
     completion_percentage = serializers.ReadOnlyField()
@@ -121,6 +125,8 @@ class VendorProfileUpdateSerializer(serializers.Serializer):
     def validate_collection_ids(self, value):
         """Require one to fifteen unique catalog collections for vendor setup/profile."""
         unique_ids = list(dict.fromkeys(value))
+        if not _catalog_has_any_collections() and len(unique_ids) == 0:
+            return unique_ids
         if not (1 <= len(unique_ids) <= 15):
             raise serializers.ValidationError("Select between 1 and 15 collections.")
         return unique_ids
@@ -149,14 +155,16 @@ class VendorSetupSerializer(serializers.Serializer):
     website_url = serializers.URLField(required=False, allow_blank=True)
     collection_ids = serializers.ListField(
         child=serializers.CharField(),
-        required=True,
-        allow_empty=False,
+        required=False,
+        allow_empty=True,
         max_length=15,
     )
 
     def validate_collection_ids(self, value):
         """Require one to fifteen unique catalog collections during first setup."""
         unique_ids = list(dict.fromkeys(value))
+        if not _catalog_has_any_collections() and len(unique_ids) == 0:
+            return unique_ids
         if not (1 <= len(unique_ids) <= 15):
             raise serializers.ValidationError("Select between 1 and 15 collections.")
         return unique_ids
