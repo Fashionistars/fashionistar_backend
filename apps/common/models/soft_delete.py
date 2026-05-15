@@ -201,12 +201,21 @@ class SoftDeleteModel(models.Model):
             )
 
             now = timezone.now()
-            await self.__class__.objects.filter(
-                pk=self.pk
+            updated = await self.__class__.objects.filter(
+                pk=self.pk,
+                is_deleted=False,
             ).aupdate(
                 is_deleted=True,
                 deleted_at=now,
             )
+
+            if updated == 0:
+                logger.warning(
+                    "asoft_delete() matched 0 rows for %s %s — already deleted or missing",
+                    self.__class__.__name__,
+                    self.pk,
+                )
+                return
 
             self.is_deleted = True
             self.deleted_at = now

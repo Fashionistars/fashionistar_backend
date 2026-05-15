@@ -12,12 +12,6 @@ from urllib.parse import parse_qs
 
 from channels.db import database_sync_to_async
 from channels.middleware import BaseMiddleware
-from django.contrib.auth.models import AnonymousUser
-from rest_framework_simplejwt.tokens import AccessToken
-
-from apps.authentication.models import UnifiedUser
-
-
 class JWTQueryAuthMiddleware(BaseMiddleware):
     """Attach ``scope['user']`` from ``?token=<access_token>`` when present."""
 
@@ -27,6 +21,10 @@ class JWTQueryAuthMiddleware(BaseMiddleware):
 
     async def _resolve_user(self, scope):
         """Resolve the WebSocket user or fall back to ``AnonymousUser``."""
+        from django.contrib.auth.models import AnonymousUser
+        from apps.authentication.models import UnifiedUser
+        from rest_framework_simplejwt.tokens import AccessToken
+
         query_string = scope.get("query_string", b"").decode("utf-8")
         token = parse_qs(query_string).get("token", [None])[0]
         if not token:
