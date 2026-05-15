@@ -22,9 +22,14 @@ class ClientDashboardService:
     async def get_dashboard_summary(cls, user) -> dict[str, Any]:
         """
         Build the complete dashboard payload for `user`.
-
         Returns a dict fully compatible with DashboardOut → ProfileOut so
         Pydantic validation never fails on required fields.
+
+        Returns a dict with:
+          - profile completeness
+          - total_orders, total_spent_ngn
+          - recent activity snapshot
+          - ai_recommendations stub (future)
         """
         try:
             from apps.client.selectors.client_selectors import (

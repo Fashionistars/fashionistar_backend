@@ -76,6 +76,14 @@ class SoftDeleteModel(models.Model):
     class Meta:
         abstract = True
 
+    @classmethod
+    def _all_records_queryset(cls):
+        """Return an unfiltered queryset that includes deleted rows."""
+        manager = getattr(cls, "objects", None)
+        if manager is not None and hasattr(manager, "all_with_deleted"):
+            return manager.all_with_deleted()
+        return cls._base_manager.all()
+
     # ----------------------------------------------------------------
     # Soft-delete
     # ----------------------------------------------------------------
@@ -117,13 +125,6 @@ class SoftDeleteModel(models.Model):
                 except Exception:
                     serialized = {'pk': str(self.pk)}
 
-                DeletedRecords.objects.create(
-                    model_name=self.__class__.__name__,
-                    record_id=str(self.pk),
-                    data=serialized,
-                )
-
-                # ── 2. Bulk UPDATE — bypasses full_clean() ───────────
                 now = timezone.now()
                 updated = self.__class__.objects.filter(
                     pk=self.pk,
@@ -131,6 +132,20 @@ class SoftDeleteModel(models.Model):
                 ).update(
                     is_deleted=True,
                     deleted_at=now,
+                )
+
+                if updated == 0:
+                    logger.warning(
+                        "soft_delete() matched 0 rows for %s %s — already deleted or missing",
+                        self.__class__.__name__,
+                        self.pk,
+                    )
+                    return
+
+                DeletedRecords.objects.create(
+                    model_name=self.__class__.__name__,
+                    record_id=str(self.pk),
+                    data=serialized,
                 )
 
             if updated == 0:
@@ -194,12 +209,6 @@ class SoftDeleteModel(models.Model):
             except Exception:
                 serialized = {'pk': str(self.pk)}
 
-            await DeletedRecords.objects.acreate(
-                model_name=self.__class__.__name__,
-                record_id=str(self.pk),
-                data=serialized,
-            )
-
             now = timezone.now()
             updated = await self.__class__.objects.filter(
                 pk=self.pk,
@@ -216,6 +225,12 @@ class SoftDeleteModel(models.Model):
                     self.pk,
                 )
                 return
+
+            await DeletedRecords.objects.acreate(
+                model_name=self.__class__.__name__,
+                record_id=str(self.pk),
+                data=serialized,
+            )
 
             self.is_deleted = True
             self.deleted_at = now
@@ -276,7 +291,7 @@ class SoftDeleteModel(models.Model):
             from apps.common.models import DeletedRecords
 
             with db_transaction.atomic():
-                updated = self.__class__.objects.all_with_deleted().filter(
+                updated = self.__class__._all_records_queryset().filter(
                     pk=self.pk,
                     is_deleted=True,
                 ).update(
@@ -346,7 +361,7 @@ class SoftDeleteModel(models.Model):
         an async Django view or Channels consumer.
         """
         try:
-            updated = await self.__class__.objects.all_with_deleted().filter(
+            updated = await self.__class__._all_records_queryset().filter(
                 pk=self.pk,
                 is_deleted=True,
             ).aupdate(

@@ -28,6 +28,7 @@ GDPR / CBN Compliance
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import secrets
 from decimal import Decimal
@@ -218,6 +219,8 @@ class VendorPayoutService:
             transfer_code=str(transfer_code),
             provider=active_provider,
             gateway_response=gateway_response,
+            currency=currency,
+            idempotency_key=ik,
         )
 
         # ── ⑤ Audit log ────────────────────────────────────────────────────────
@@ -349,6 +352,14 @@ class VendorPayoutService:
                 response_payload={},
                 error_message=str(exc),
             )
+            await asyncio.to_thread(
+                cls._audit_payout_failed,
+                vendor=vendor,
+                payout_id=reference,
+                amount=amount,
+                provider=active_provider,
+                error=str(exc),
+            )
             raise PayoutGatewayError(f"Payment gateway rejected the transfer: {exc}") from exc
 
         transfer_code = (
@@ -357,22 +368,20 @@ class VendorPayoutService:
             or reference
         )
 
-        # Ledger write must be sync (atomic block)
-        # This is intentionally deferred to a sync task / on_commit handler
-        await PaymentProviderLog.objects.acreate(
-            provider=active_provider,
-            action="transfer.initiate",
+        await asyncio.to_thread(
+            cls._finalize_async_successful_transfer,
+            vendor=vendor,
+            amount=amount,
+            account_number=account_number,
+            bank_code=bank_code,
+            bank_name=bank_name,
+            narration=narration,
+            currency=currency,
+            idempotency_key=ik,
             reference=reference,
-            success=True,
-            request_payload={
-                "vendor_id": str(getattr(vendor, "id", "")),
-                "account_number": f"****{account_number[-4:]}",
-                "bank_code": bank_code,
-                "amount": str(amount),
-                "currency": currency,
-                "idempotency_key": ik,
-            },
-            response_payload=gateway_response,
+            transfer_code=str(transfer_code),
+            provider=active_provider,
+            gateway_response=gateway_response,
         )
 
         return {
@@ -473,6 +482,8 @@ class VendorPayoutService:
         transfer_code: str,
         provider: str,
         gateway_response: dict,
+        currency: str,
+        idempotency_key: str = "",
     ) -> None:
         """Debit vendor wallet and record payout in the transaction ledger (sync)."""
         try:
@@ -481,7 +492,7 @@ class VendorPayoutService:
             from apps.transactions.services import TransactionLedgerService
 
             wallet = Wallet.objects.select_for_update().get(
-                user=vendor, currency="NGN"
+                user=vendor, currency=currency
             )
             WalletBalanceService.debit(wallet, amount)
 
@@ -493,6 +504,7 @@ class VendorPayoutService:
                 transfer_code=transfer_code,
                 provider=provider,
                 gateway_response=gateway_response,
+                idempotency_key=idempotency_key,
             )
         except Exception as exc:
             logger.error(
@@ -503,6 +515,79 @@ class VendorPayoutService:
                 exc_info=True,
             )
             raise
+
+    @classmethod
+    @db_transaction.atomic
+    def _finalize_async_successful_transfer(
+        cls,
+        *,
+        vendor,
+        amount: Decimal,
+        account_number: str,
+        bank_code: str,
+        bank_name: str,
+        narration: str,
+        currency: str,
+        idempotency_key: str,
+        reference: str,
+        transfer_code: str,
+        provider: str,
+        gateway_response: dict[str, Any],
+    ) -> None:
+        """Apply the same durable post-transfer settlement path used by sync payouts."""
+        cls._debit_wallet_and_record_ledger(
+            vendor=vendor,
+            amount=amount,
+            reference=reference,
+            transfer_code=transfer_code,
+            provider=provider,
+            gateway_response=gateway_response,
+            currency=currency,
+            idempotency_key=idempotency_key,
+        )
+
+        PaymentProviderLog.objects.create(
+            provider=provider,
+            action="transfer.initiate",
+            reference=reference,
+            success=True,
+            request_payload={
+                "vendor_id": str(getattr(vendor, "id", "")),
+                "account_number": f"****{account_number[-4:]}",
+                "bank_code": bank_code,
+                "bank_name": bank_name,
+                "amount": str(amount),
+                "currency": currency,
+                "narration": narration,
+                "idempotency_key": idempotency_key,
+            },
+            response_payload=gateway_response,
+        )
+
+        db_transaction.on_commit(
+            lambda: __import__(
+                "apps.audit_logs.services.transactions",
+                fromlist=["transactions_audit"],
+            ).transactions_audit.log_payout_success(
+                actor=vendor,
+                payout_id=reference,
+                amount=str(amount),
+                currency=currency,
+                provider=provider,
+                reference=transfer_code,
+            )
+        )
+
+    @staticmethod
+    def _audit_payout_failed(*, vendor, payout_id: str, amount: Decimal, provider: str, error: str) -> None:
+        from apps.audit_logs.services.transactions import transactions_audit
+
+        transactions_audit.log_payout_failed(
+            actor=vendor,
+            payout_id=payout_id,
+            amount=str(amount),
+            error=f"{provider}: {error[:500]}",
+        )
 
     @staticmethod
     def _log_failure(

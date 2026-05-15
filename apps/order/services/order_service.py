@@ -45,7 +45,10 @@ import hashlib
 import logging
 from decimal import Decimal
 
+# pyrefly: ignore [missing-import]
 from django.db import IntegrityError, transaction
+# pyrefly: ignore [missing-import]
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.order.models import (
@@ -68,9 +71,9 @@ except ImportError:
     adjust_inventory = None  # type: ignore[assignment]
 
 try:
-    from apps.wallet.services import escrow_service
+    from apps.wallet.services import EscrowService
 except (ImportError, AttributeError):
-    escrow_service = None  # type: ignore[assignment]
+    EscrowService = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +127,34 @@ def _record_status_history(order: Order, from_status: str, to_status: str, actor
         to_status=to_status,
         actor=actor,
         note=note,
+    )
+
+
+def _get_succeeded_payment_intent(*, order: Order, payment_reference: str = ""):
+    from apps.payment.models import PaymentIntent, PaymentIntentStatus, PaymentPurpose
+
+    queryset = PaymentIntent.objects.filter(
+        order_id=str(order.pk),
+        purpose=PaymentPurpose.ORDER_PAYMENT,
+        status=PaymentIntentStatus.SUCCEEDED,
+    ).order_by("-updated_at", "-created_at")
+
+    if payment_reference:
+        queryset = queryset.filter(
+            Q(reference=payment_reference) | Q(provider_reference=payment_reference)
+        )
+
+    return queryset.first()
+
+
+def _get_active_order_hold(*, order: Order):
+    from apps.wallet.models import WalletHold, WalletHoldStatus
+
+    return (
+        WalletHold.objects.select_for_update()
+        .filter(order_id=str(order.pk), status=WalletHoldStatus.ACTIVE)
+        .order_by("-created_at")
+        .first()
     )
 
 
@@ -338,28 +369,20 @@ def place_order(
             usage_count=cart.coupon.usage_count + 1
         )
 
-    # ── Step 10: Trigger escrow ──────────────────────────────────
-    try:
-        if escrow_service is not None:
-            escrow_service.hold_escrow(order=order, amount=total, actor=user)
-    except Exception as exc:
-        logger.warning("Escrow hold failed for order %s: %s", order.order_number, exc)
-        # Do not abort — escrow can be reconciled via Celery task
-
-    # ── Step 11: Store idempotency record ────────────────────────────────
+    # ── Step 10: Store idempotency record ────────────────────────────────
     OrderIdempotencyRecord.objects.create(
         key=idem_key,
         order=order,
         expires_at=timezone.now() + timezone.timedelta(hours=24),
     )
 
-    # ── Step 12: Clear cart ──────────────────────────────────────────────
+    # ── Step 11: Clear cart ──────────────────────────────────────────────
     clear_cart(user=user)
 
-    # ── Step 13: Log initial status history ──────────────────────────────
+    # ── Step 12: Log initial status history ──────────────────────────────
     _record_status_history(order, "", OrderStatus.PENDING_PAYMENT, actor=user, note="Order placed.")
 
-    # ── Step 14: Emit audit event ────────────────────────────────────────
+    # ── Step 13: Emit audit event ────────────────────────────────────────
     transaction.on_commit(
         lambda: _emit_order_audit("order.placed", order, actor=user, total=str(total))
     )
@@ -385,9 +408,19 @@ def confirm_payment(*, order: Order, payment_reference: str, actor=None) -> Orde
     order = Order.objects.select_for_update().get(pk=order.pk)
     if not order.can_transition_to(OrderStatus.PAYMENT_CONFIRMED):
         raise ValueError(f"Cannot confirm payment for order in status '{order.status}'.")
+    intent = _get_succeeded_payment_intent(order=order, payment_reference=payment_reference)
+    if intent is None:
+        raise ValueError(
+            "Cannot confirm payment without a succeeded payment intent and escrow hold for this order."
+        )
+    hold = _get_active_order_hold(order=order)
+    if hold is None:
+        raise ValueError(
+            "Cannot confirm payment because no active escrow hold exists for this order."
+        )
     from_status = order.status
     order.status = OrderStatus.PAYMENT_CONFIRMED
-    order.payment_reference = payment_reference
+    order.payment_reference = payment_reference or intent.reference
     order.paid_at = timezone.now()
     order.save(update_fields=["status", "payment_reference", "paid_at", "updated_at"])
     _record_status_history(order, from_status, OrderStatus.PAYMENT_CONFIRMED, actor=actor, note="Payment confirmed via webhook.")
@@ -488,10 +521,23 @@ def release_escrow(*, order: Order, actor=None) -> Order:
     if not order.can_transition_to(OrderStatus.COMPLETED):
         raise ValueError(f"Cannot complete order in status '{order.status}'.")
 
-    # Release escrow in wallet
+    if EscrowService is None:
+        raise ValueError("Escrow service is unavailable for this order release.")
+
+    hold = _get_active_order_hold(order=order)
+    if hold is None:
+        raise ValueError("No active escrow hold exists for this order.")
+
+    vendor_user = getattr(getattr(order, "vendor", None), "user", None)
+    if vendor_user is None:
+        raise ValueError("Order vendor user is missing for escrow release.")
+
     try:
-        if escrow_service is not None:
-            escrow_service.release_escrow(order=order, actor=actor)
+        EscrowService.release_order_payment(
+            hold_reference=hold.reference,
+            vendor_user=vendor_user,
+            idempotency_key=f"order-release:{order.pk}",
+        )
     except Exception as exc:
         logger.error("Escrow release failed: order=%s error=%s", order.order_number, exc)
         raise
@@ -517,6 +563,14 @@ def cancel_order(*, order: Order, actor=None, reason: str = "") -> Order:
     order = Order.objects.select_for_update().get(pk=order.pk)
     if not order.can_transition_to(OrderStatus.CANCELLED):
         raise ValueError(f"Cannot cancel order in status '{order.status}'.")
+    hold = _get_active_order_hold(order=order)
+    if hold is not None:
+        if EscrowService is None:
+            raise ValueError("Escrow service is unavailable for order cancellation.")
+        EscrowService.refund_escrow(
+            hold_reference=hold.reference,
+            idempotency_key=f"order-cancel-refund:{order.pk}",
+        )
     # Release stock for each item
     for item in order.cart_order_items.select_related("product", "variant"):
         if item.product and adjust_inventory is not None:
