@@ -418,6 +418,44 @@ class TransactionLedgerService:
         )
 
     @classmethod
+    def record_vendor_payout(
+        cls,
+        *,
+        vendor,
+        wallet,
+        amount: Decimal,
+        reference: str,
+        transfer_code: str = "",
+        provider: str = "",
+        gateway_response: dict | None = None,
+        idempotency_key: str = "",
+    ) -> Transaction:
+        """Record a completed vendor payout ledger entry.
+
+        This is the durable ledger companion to the wallet debit that happens
+        during a successful vendor payout transfer.
+        """
+        return cls.create_entry(
+            transaction_type=TransactionType.PAYOUT,
+            status=TransactionStatus.COMPLETED,
+            direction=TransactionDirection.OUTBOUND,
+            amount=amount,
+            net_amount=amount,
+            from_user=vendor,
+            from_wallet=wallet,
+            reference=reference,
+            external_reference=transfer_code,
+            provider_reference=transfer_code,
+            idempotency_key=idempotency_key,
+            description="Vendor payout debited from wallet after provider transfer success.",
+            completed_at=timezone.now(),
+            metadata={
+                "provider": provider,
+                "gateway_response": gateway_response or {},
+            },
+        )
+
+    @classmethod
     @db_transaction.atomic
     def record_measurement_fee(
         cls,

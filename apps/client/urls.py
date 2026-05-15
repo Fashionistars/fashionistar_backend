@@ -85,3 +85,4 @@ urlpatterns = [
     path("wallet/transfer/", ClientWalletTransferView.as_view(), name="wallet-transfer"),
     path("wallet/withdraw/", ClientWalletWithdrawView.as_view(), name="wallet-withdraw"),
 ]
+

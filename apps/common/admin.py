@@ -19,6 +19,7 @@ import json
 import logging
 
 from django.contrib import admin
+from django.db import transaction
 from django.utils.html import format_html, mark_safe
 from django.utils.translation import gettext_lazy as _
 
@@ -226,23 +227,29 @@ class DeletedRecordsAdmin(admin.ModelAdmin):
                 continue
 
             try:
-                if hasattr(model_class.objects, 'all_with_deleted'):
-                    instance = (
-                        model_class.objects
-                        .all_with_deleted()
-                        .filter(pk=archive_obj.record_id)
-                        .first()
-                    )
+                with transaction.atomic():
+                    if hasattr(model_class, "_all_records_queryset"):
+                        queryset = model_class._all_records_queryset().filter(
+                            pk=archive_obj.record_id
+                        )
+                    elif hasattr(model_class.objects, "all_with_deleted"):
+                        queryset = model_class.objects.all_with_deleted().filter(
+                            pk=archive_obj.record_id
+                        )
+                    else:
+                        queryset = model_class._base_manager.filter(pk=archive_obj.record_id)
+
+                    instance = queryset.first()
                     updated = 0
-                    if instance is not None and hasattr(instance, "restore"):
-                        instance.restore()
-                        updated = 1
-                else:
-                    updated = (
-                        model_class.objects
-                        .filter(pk=archive_obj.record_id)
-                        .update(is_deleted=False, deleted_at=None)
-                    )
+                    if instance is not None and getattr(instance, "is_deleted", False):
+                        if hasattr(instance, "restore"):
+                            instance.restore()
+                            updated = 1 if instance.is_deleted is False else 0
+                        else:
+                            updated = queryset.filter(is_deleted=True).update(
+                                is_deleted=False,
+                                deleted_at=None,
+                            )
                 if updated:
                     archive_pks_to_delete.append(archive_obj.pk)
                     restored += 1
@@ -671,4 +678,3 @@ class UserLifecycleRegistryAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         """Registry rows are NEVER deleted — they are permanent by design."""
         return False
-
