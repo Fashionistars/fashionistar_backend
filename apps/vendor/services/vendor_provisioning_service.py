@@ -17,6 +17,13 @@ logger = logging.getLogger(__name__)
 MIN_COLLECTIONS = 1
 MAX_COLLECTIONS = 15
 
+
+def _collection_requirements() -> tuple[int, int, bool]:
+    from apps.catalog.models import Collections as CollectionModel
+
+    has_any_collections = CollectionModel.objects.exists()
+    return (MIN_COLLECTIONS if has_any_collections else 0, MAX_COLLECTIONS, has_any_collections)
+
 # ── Fields the provisioner is allowed to write on first-time setup ──
 PROVISION_ALLOWED_FIELDS = {
     "store_name",
@@ -63,8 +70,11 @@ class VendorProvisioningService:
 
         # Extract non-field data before iterating.
         collection_ids = list(dict.fromkeys(data.get("collection_ids", [])))
-        if not (MIN_COLLECTIONS <= len(collection_ids) <= MAX_COLLECTIONS):
-            raise ValueError("Vendor setup requires between 1 and 15 collections.")
+        min_collections, max_collections, has_any_collections = _collection_requirements()
+        if not (min_collections <= len(collection_ids) <= max_collections):
+            if has_any_collections:
+                raise ValueError("Vendor setup requires between 1 and 15 collections.")
+            raise ValueError("Vendor setup currently accepts zero collections because none exist in the catalog yet.")
 
         with transaction.atomic():
             profile, profile_created = VendorProfile.objects.get_or_create(user=user)
@@ -80,10 +90,13 @@ class VendorProvisioningService:
             # ── Collections M2M ────────────────────────────────────
             from apps.catalog.models import Collections as CollectionModel
 
-            qs = CollectionModel.objects.filter(pk__in=collection_ids)
-            if qs.count() != len(collection_ids):
-                raise ValueError("One or more selected collections do not exist.")
-            profile.collections.set(qs)
+            if collection_ids:
+                qs = CollectionModel.objects.filter(pk__in=collection_ids)
+                if qs.count() != len(collection_ids):
+                    raise ValueError("One or more selected collections do not exist.")
+                profile.collections.set(qs)
+            else:
+                profile.collections.clear()
 
             # ── Setup State ────────────────────────────────────────
             setup_state, setup_created = VendorSetupState.objects.get_or_create(

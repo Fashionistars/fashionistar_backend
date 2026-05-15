@@ -22,6 +22,12 @@ logger = logging.getLogger(__name__)
 MIN_COLLECTIONS = 1
 MAX_COLLECTIONS = 15
 
+
+def _minimum_collection_count() -> int:
+    from apps.catalog.models import Collections as CollectionModel
+
+    return MIN_COLLECTIONS if CollectionModel.objects.exists() else 0
+
 # ── Fields the vendor is allowed to update on their own profile ──
 VENDOR_PROFILE_ALLOWED_FIELDS = {
     "store_name",
@@ -97,12 +103,18 @@ class VendorService:
             from apps.catalog.models import Collections as CollectionModel
 
             ids = list(dict.fromkeys(data["collection_ids"]))
-            if not (MIN_COLLECTIONS <= len(ids) <= MAX_COLLECTIONS):
+            min_collections = _minimum_collection_count()
+            if not (min_collections <= len(ids) <= MAX_COLLECTIONS):
+                if min_collections == 0:
+                    raise ValueError("Vendor profile can keep zero collections only while the catalog has none.")
                 raise ValueError("Vendor profile requires between 1 and 15 collections.")
-            qs = CollectionModel.objects.filter(pk__in=ids)
-            if qs.count() != len(ids):
-                raise ValueError("One or more selected collections do not exist.")
-            profile.collections.set(qs)
+            if ids:
+                qs = CollectionModel.objects.filter(pk__in=ids)
+                if qs.count() != len(ids):
+                    raise ValueError("One or more selected collections do not exist.")
+                profile.collections.set(qs)
+            else:
+                profile.collections.clear()
 
         # ── Auto-advance onboarding step ───────────────────────────
         has_basics = bool(profile.store_name and profile.description)
