@@ -186,7 +186,7 @@ class TransactionLedgerService:
         )
 
     @classmethod
-    def create_entry(cls, **kwargs) -> Transaction:
+    def create_entry(cls, request=None, **kwargs) -> Transaction:
         """Create a new ``Transaction`` ledger entry and its initial log entry.
 
         Args:
@@ -220,6 +220,7 @@ class TransactionLedgerService:
                     transaction_id=_txn_id,
                     amount=_amount,
                     tx_type=_tx_type,
+                    request=request,
                 )
             except Exception:
                 import logging as _logging
@@ -231,7 +232,7 @@ class TransactionLedgerService:
         return txn
 
     @classmethod
-    def complete(cls, txn: Transaction, reason: str = "Transaction completed") -> Transaction:
+    def complete(cls, txn: Transaction, reason: str = "Transaction completed", request=None) -> Transaction:
         """Transition a transaction to COMPLETED status and log the change.
 
         Args:
@@ -257,6 +258,7 @@ class TransactionLedgerService:
                     transaction_id=_txn_id,
                     amount=_amount,
                     tx_type=f"COMPLETED:{_previous}\u2192{txn.status}",
+                    request=request,
                 )
             except Exception:
                 import logging as _logging
@@ -277,6 +279,7 @@ class TransactionLedgerService:
         order_id: str = "",
         provider_reference: str = "",
         idempotency_key: str = "",
+        request=None,
     ) -> Transaction:
         """Record a client escrow hold transaction when an order is placed.
 
@@ -309,6 +312,7 @@ class TransactionLedgerService:
             order_id=order_id,
             description="Client order payment held in Fashionistar escrow.",
             completed_at=timezone.now(),
+            request=request,
         )
         return txn
 
@@ -324,6 +328,7 @@ class TransactionLedgerService:
         vendor_amount: Decimal,
         commission_amount: Decimal,
         idempotency_key: str = "",
+        request=None,
     ) -> None:
         """Record escrow release: split gross amount between vendor and Fashionistar.
 
@@ -356,6 +361,7 @@ class TransactionLedgerService:
             order_id=hold.order_id,
             description="Escrow released to vendor after client confirmation.",
             completed_at=timezone.now(),
+            request=request,
         )
         commission_txn = cls.create_entry(
             transaction_type=TransactionType.COMMISSION,
@@ -369,6 +375,7 @@ class TransactionLedgerService:
             order_id=hold.order_id,
             description="Fashionistar commission credited to company wallet.",
             completed_at=timezone.now(),
+            request=request,
             metadata={"gross_amount": str(gross_amount)},
         )
         CompanyRevenueEntry.objects.create(
@@ -389,6 +396,7 @@ class TransactionLedgerService:
         reference: str,
         order_id: str = "",
         idempotency_key: str = "",
+        request=None,
     ) -> Transaction:
         """Record an escrow refund when an order is cancelled or disputed.
 
@@ -415,6 +423,7 @@ class TransactionLedgerService:
             order_id=order_id,
             description="Escrow refund returned to client wallet.",
             completed_at=timezone.now(),
+            request=request,
         )
 
     @classmethod
@@ -429,6 +438,7 @@ class TransactionLedgerService:
         provider: str = "",
         gateway_response: dict | None = None,
         idempotency_key: str = "",
+        request=None,
     ) -> Transaction:
         """Record a completed vendor payout ledger entry.
 
@@ -449,6 +459,7 @@ class TransactionLedgerService:
             idempotency_key=idempotency_key,
             description="Vendor payout debited from wallet after provider transfer success.",
             completed_at=timezone.now(),
+            request=request,
             metadata={
                 "provider": provider,
                 "gateway_response": gateway_response or {},
@@ -467,6 +478,7 @@ class TransactionLedgerService:
         amount: Decimal | None = None,
         measurement_request_id: str = "",
         idempotency_key: str = "",
+        request=None,
     ) -> Transaction:
         """Deduct the MirrorSize measurement fee from a client wallet (atomic).
 
@@ -513,6 +525,7 @@ class TransactionLedgerService:
             measurement_request_id=measurement_request_id,
             description="Digital precision measurement processing fee.",
             completed_at=timezone.now(),
+            request=request,
         )
         CompanyRevenueEntry.objects.create(
             transaction=txn,
@@ -612,6 +625,7 @@ class DisputeService:
         transaction_id,
         reason: str,
         amount: Decimal,
+        request=None,
     ) -> TransactionDispute:
         """Open a dispute against a completed transaction.
 
@@ -657,6 +671,7 @@ class DisputeService:
                 transaction_id=str(txn.id),
                 amount=str(amount),
                 tx_type="DISPUTE_OPENED",
+                request=request,
             )
         except Exception:
             import logging as _logging

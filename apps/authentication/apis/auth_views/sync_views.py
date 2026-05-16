@@ -141,7 +141,7 @@ class RegisterView(generics.CreateAPIView):
             validated_data.pop("password2", None)
             validated_data.pop("password_confirm", None)
 
-            result = RegistrationService.register_sync(**validated_data)
+            result = RegistrationService.register_sync(request=self.request, **validated_data)
 
             logger.info(
                 "✅ RegisterView: user_id=%s identifier=%s",
@@ -337,7 +337,7 @@ class VerifyOTPView(generics.GenericAPIView):
             serializer.is_valid(raise_exception=True)
             otp_code = serializer.validated_data["otp"]
 
-            result = OTPService.verify_by_otp_sync(otp_code, purpose="verify")
+            result = OTPService.verify_by_otp_sync(otp_code, purpose="verify", request=request)
             if not result:
                 return error_response(
                     message="Invalid or expired OTP.",
@@ -439,7 +439,8 @@ class ResendOTPView(generics.GenericAPIView):
             serializer.is_valid(raise_exception=True)
 
             msg = OTPService.resend_otp_sync(
-                email_or_phone=serializer.validated_data.get("email_or_phone")
+                email_or_phone=serializer.validated_data.get("email_or_phone"),
+                request=request
             )
             return success_response(message=msg, status=status.HTTP_200_OK)
 

@@ -104,6 +104,15 @@ def _serialize_order(order) -> dict:
         "payment_reference": order.payment_reference,
         "payment_gateway": order.payment_gateway,
         "paid_at": order.paid_at.isoformat() if order.paid_at else None,
+        "amount_paid_total": str(order.amount_paid_total),
+        "percent_paid_total": str(order.percent_paid_total),
+        "amount_outstanding": str(order.amount_outstanding),
+        "is_fully_paid": order.is_fully_paid,
+        "first_paid_at": order.first_paid_at.isoformat() if order.first_paid_at else None,
+        "final_paid_at": order.final_paid_at.isoformat() if order.final_paid_at else None,
+        "active_payment_path": order.active_payment_path,
+        "cash_payment_mode_snapshot": order.cash_payment_mode_snapshot,
+        "delivery_mode": order.delivery_mode,
         "tracking_number": order.tracking_number,
         "estimated_delivery": (
             order.estimated_delivery.isoformat() if order.estimated_delivery else None
@@ -129,6 +138,8 @@ def _serialize_order(order) -> dict:
         ),
         "items": _serialize_order_items(order),
         "status_history": _serialize_status_history(order),
+        "payment_records": _serialize_payment_records(order),
+        "commercial_transition_logs": _serialize_commercial_transitions(order),
     }
 
 
@@ -191,6 +202,57 @@ def _serialize_status_history(order) -> list[dict]:
                 "created_at": h.created_at.isoformat(),
             }
             for h in order.order_status_history.all()
+        ]
+    except AttributeError:
+        return []
+
+
+def _serialize_payment_records(order) -> list[dict]:
+    try:
+        return [
+            {
+                "sequence_number": row.sequence_number,
+                "payment_source": row.payment_source,
+                "provider": row.provider,
+                "selected_percent": row.selected_percent,
+                "applied_percent": str(row.applied_percent),
+                "amount": str(row.amount),
+                "currency": row.currency,
+                "cumulative_amount_paid": str(row.cumulative_amount_paid),
+                "cumulative_percent_paid": str(row.cumulative_percent_paid),
+                "remaining_amount": str(row.remaining_amount),
+                "remaining_percent": str(row.remaining_percent),
+                "is_final_payment": row.is_final_payment,
+                "paid_at": row.paid_at.isoformat() if row.paid_at else None,
+                "correlation_id": row.correlation_id,
+                "metadata": row.metadata or {},
+            }
+            for row in order.payment_records.all()
+        ]
+    except AttributeError:
+        return []
+
+
+def _serialize_commercial_transitions(order) -> list[dict]:
+    try:
+        return [
+            {
+                "transition_type": row.transition_type,
+                "from_status": row.from_status,
+                "to_status": row.to_status,
+                "delivery_mode": row.delivery_mode,
+                "cash_payment_mode_snapshot": row.cash_payment_mode_snapshot,
+                "selected_percent": row.selected_percent,
+                "cumulative_percent_paid": str(row.cumulative_percent_paid),
+                "amount_delta": str(row.amount_delta),
+                "balance_after": str(row.balance_after),
+                "actor_role": row.actor_role,
+                "occurred_at": row.occurred_at.isoformat() if row.occurred_at else None,
+                "correlation_id": row.correlation_id,
+                "note": row.note,
+                "metadata": row.metadata or {},
+            }
+            for row in order.commercial_transition_logs.all()
         ]
     except AttributeError:
         return []

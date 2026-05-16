@@ -57,45 +57,65 @@ logger = logging.getLogger(__name__)
 # INTERNAL HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _emit_audit(action: str, product: Product, actor: Any = None, **metadata: Any) -> None:
+def _emit_audit(
+    action: str,
+    product: Product,
+    actor: Any = None,
+    request: Any = None,
+    **metadata: Any,
+) -> None:
     """
     Schedule an audit event via transaction.on_commit.
 
-    Best-practice #2 (on_commit): audit is deferred until after the outer
-    atomic block commits so a failed audit never rolls back the real mutation.
-
-    Best-practice #5 (circuit breaker): every exception is swallowed so a
-    broken audit service never surface-kills the caller.
+    Enterprise Strategy:
+    - Best-practice #2 (on_commit): Audit is deferred until after the outer
+      atomic block commits so a failed audit never rolls back the real mutation.
+    - Forensic Context: Propagates the 'request' object to capture IP/User-Agent.
+    - Best-practice #5 (circuit breaker): Every exception is swallowed so a
+      broken audit service never surface-kills the caller.
     """
     def _fire():
         try:
+            # Deferred import to prevent circular dependency at module level
             from apps.audit_logs.services.catalog import catalog_audit
 
+            # Standardize metadata for forensic tracking
             audit_values = {"product_slug": product.slug, **metadata}
+
             if action == "product.created":
                 catalog_audit.log_product_created(
                     actor=actor,
                     product_id=str(product.id),
                     name=product.title,
+                    request=request,
                 )
-            elif action in {"product.updated", "product.inventory.adjusted", "product.coupon.applied", "product.wishlist.toggled", "product.media.attached"}:
+            elif action in {
+                "product.updated",
+                "product.inventory.adjusted",
+                "product.coupon.applied",
+                "product.wishlist.toggled",
+                "product.media.attached"
+            }:
                 catalog_audit.log_product_updated(
                     actor=actor,
                     product_id=str(product.id),
                     name=product.title,
                     new_values=audit_values,
+                    request=request,
                 )
             elif action == "product.published":
                 catalog_audit.log_product_published(
                     actor=actor,
                     product_id=str(product.id),
                     name=product.title,
+                    request=request,
                 )
             elif action in {"product.archived", "product.media.removed"}:
                 catalog_audit.log_product_deleted(
                     actor=actor,
                     product_id=str(product.id),
                     name=product.title,
+                    request=request,
                 )
             elif action == "product.review.created":
                 review_id = metadata.get("review_id")
@@ -106,6 +126,7 @@ def _emit_audit(action: str, product: Product, actor: Any = None, **metadata: An
                         product_id=str(product.id),
                         review_id=str(review_id),
                         rating=int(rating),
+                        request=request,
                     )
                 else:
                     catalog_audit.log_product_updated(
@@ -113,6 +134,7 @@ def _emit_audit(action: str, product: Product, actor: Any = None, **metadata: An
                         product_id=str(product.id),
                         name=product.title,
                         new_values=audit_values,
+                        request=request,
                     )
             else:
                 catalog_audit.log_product_updated(
@@ -120,8 +142,10 @@ def _emit_audit(action: str, product: Product, actor: Any = None, **metadata: An
                     product_id=str(product.id),
                     name=product.title,
                     new_values={"action": action, **audit_values},
+                    request=request,
                 )
         except Exception:
+            # Circuit breaker pattern: failure in audit must not affect production traffic
             logger.warning(
                 "Audit event skipped — action=%s product=%s",
                 action,
@@ -129,9 +153,10 @@ def _emit_audit(action: str, product: Product, actor: Any = None, **metadata: An
             )
 
     try:
+        # Schedule for execution AFTER DB commit to ensure consistency
         transaction.on_commit(_fire)
     except Exception:
-        # If we are not inside an atomic block, fire immediately
+        # Fallback for non-atomic contexts (e.g., shell or management commands)
         _fire()
 
 
@@ -186,13 +211,19 @@ def _sync_product_m2m(product: Product, relations: dict[str, Any], *, partial: b
 # ─────────────────────────────────────────────────────────────────────────────
 
 @transaction.atomic
-def create_product(*, vendor, validated_data: dict, idempotency_key: str | None = None) -> Product:
+def create_product(
+    *,
+    vendor: Any,
+    validated_data: dict,
+    idempotency_key: str | None = None,
+    request: Any = None,
+) -> Product:
     """
     Create a new product for a vendor. Status starts as DRAFT.
 
-    Best-practice #1 (idempotency): if idempotency_key is supplied and a
-    product with that key already exists for this vendor, it is returned
-    immediately — no duplicate row created, safe for network retries.
+    Enterprise Compliance:
+    - Best-practice #1 (idempotency): Checks for duplicate creation requests.
+    - Forensic Capture: Schedule audit with full request context.
     """
     # ── Idempotency guard ──────────────────────────────────────────────────────
     if idempotency_key:
@@ -220,17 +251,25 @@ def create_product(*, vendor, validated_data: dict, idempotency_key: str | None 
     )
     _sync_product_m2m(product, relations, partial=False)
 
+    # Dispatch audit via on_commit hook for atomic integrity
     _emit_audit(
         "product.created",
         product,
         actor=vendor.user if hasattr(vendor, "user") else None,
+        request=request,
     )
     logger.info("Product created: %s by vendor %s", product.slug, vendor)
     return product
 
 
 @transaction.atomic
-def update_product(*, product: Product, validated_data: dict, actor: Any = None) -> Product:
+def update_product(
+    *,
+    product: Product,
+    validated_data: dict,
+    actor: Any = None,
+    request: Any = None,
+) -> Product:
     """Update product fields. Vendor-owned products only."""
     relations = {
         key: validated_data.pop(key)
@@ -244,45 +283,72 @@ def update_product(*, product: Product, validated_data: dict, actor: Any = None)
 
     _sync_product_m2m(product, relations, partial=True)
 
-    _emit_audit("product.updated", product, actor=actor)
+    _emit_audit("product.updated", product, actor=actor, request=request)
     return product
 
 
 @transaction.atomic
-def publish_product(*, product: Product, actor: Any = None) -> Product:
+def publish_product(
+    *,
+    product: Product,
+    actor: Any = None,
+    request: Any = None,
+) -> Product:
     """Submit product for review → status: PENDING."""
     if product.status not in (ProductStatus.DRAFT, ProductStatus.REJECTED):
         raise ValueError(f"Cannot publish product with status '{product.status}'.")
     product.status = ProductStatus.PENDING
     product.save(update_fields=["status", "updated_at"])
-    _emit_audit("product.published", product, actor=actor)
+    _emit_audit("product.published", product, actor=actor, request=request)
     return product
 
 
 @transaction.atomic
-def approve_product(*, product: Product, actor: Any = None) -> Product:
+def approve_product(
+    *,
+    product: Product,
+    actor: Any = None,
+    request: Any = None,
+) -> Product:
     """Admin / moderator approves product → status: PUBLISHED."""
     product.status = ProductStatus.PUBLISHED
     product.save(update_fields=["status", "updated_at"])
-    _emit_audit("product.published", product, actor=actor, new_status="published")
+    _emit_audit(
+        "product.published",
+        product,
+        actor=actor,
+        request=request,
+        new_status="published",
+    )
     return product
 
 
 @transaction.atomic
-def reject_product(*, product: Product, actor: Any = None, reason: str = "") -> Product:
+def reject_product(
+    *,
+    product: Product,
+    actor: Any = None,
+    reason: str = "",
+    request: Any = None,
+) -> Product:
     """Admin / moderator rejects product → status: REJECTED."""
     product.status = ProductStatus.REJECTED
     product.save(update_fields=["status", "updated_at"])
-    _emit_audit("product.archived", product, actor=actor, reason=reason)
+    _emit_audit("product.archived", product, actor=actor, request=request, reason=reason)
     return product
 
 
 @transaction.atomic
-def archive_product(*, product: Product, actor: Any = None) -> Product:
+def archive_product(
+    *,
+    product: Product,
+    actor: Any = None,
+    request: Any = None,
+) -> Product:
     """Soft-archive — removes from storefront but keeps record."""
     product.status = ProductStatus.ARCHIVED
     product.save(update_fields=["status", "updated_at"])
-    _emit_audit("product.archived", product, actor=actor)
+    _emit_audit("product.archived", product, actor=actor, request=request)
     return product
 
 
@@ -298,6 +364,7 @@ def attach_gallery_media(
     media_type: str = "image",
     alt_text: str = "",
     actor: Any = None,
+    request: Any = None,
 ) -> ProductGalleryMedia:
     """Attach a Cloudinary-uploaded media asset to a product gallery."""
     # Use the canonical reverse relation for ordering in one aggregate query.
@@ -313,13 +380,20 @@ def attach_gallery_media(
         "product.media.attached",
         product,
         actor=actor,
+        request=request,
         media_id=str(gallery_item.id),
     )
     return gallery_item
 
 
 @transaction.atomic
-def remove_gallery_media(*, product: Product, gallery_id: Any, actor: Any = None) -> None:
+def remove_gallery_media(
+    *,
+    product: Product,
+    gallery_id: Any,
+    actor: Any = None,
+    request: Any = None,
+) -> None:
     """Soft-delete a gallery media item by ID."""
     try:
         item = ProductGalleryMedia.objects.get(id=gallery_id, product=product)
@@ -332,6 +406,7 @@ def remove_gallery_media(*, product: Product, gallery_id: Any, actor: Any = None
         "product.media.removed",
         product,
         actor=actor,
+        request=request,
         media_id=str(gallery_id),
     )
 
@@ -350,6 +425,7 @@ def adjust_inventory(
     variant: Any = None,
     reference_id: str = "",
     note: str = "",
+    request: Any = None,
 ) -> ProductInventoryLog:
     """
     Atomic stock adjustment.
@@ -357,6 +433,9 @@ def adjust_inventory(
     Best-practice #4 (stock floor + ceiling):
     - Floor: stock cannot go below 0.
     - Ceiling: if product.max_stock is set, stock cannot exceed it.
+
+    Forensic Tracking:
+    - Schedules audit via on_commit hook with request context.
     """
     # Row-level lock prevents concurrent over-deductions
     product = Product.objects.select_for_update().get(pk=product.pk)
@@ -390,6 +469,7 @@ def adjust_inventory(
         "product.inventory.adjusted",
         product,
         actor=actor,
+        request=request,
         delta=quantity_delta,
         before=before,
         after=after,
@@ -410,6 +490,7 @@ def create_review(
     rating: int,
     review_text: str,
     idempotency_key: str | None = None,
+    request: Any = None,
 ) -> ProductReview:
     """
     Create a product review and update the product aggregate in one pass.
@@ -420,8 +501,6 @@ def create_review(
     Best-practice #3 (N+1 elimination):
     The rating + count aggregate is computed in a SINGLE annotated query
     instead of two separate .aggregate() + .count() calls.
-    Product.objects.filter(...).update() fires one UPDATE statement —
-    zero additional SELECT round-trips.
     """
     # ── Idempotency guard ──────────────────────────────────────────────────────
     existing_review = get_user_review_for_product(user.id, product.id)
@@ -454,7 +533,9 @@ def create_review(
         "product.review.created",
         product,
         actor=user,
+        request=request,
         rating=rating,
+        review_id=obj.id,
     )
     return obj
 
@@ -480,6 +561,7 @@ def toggle_wishlist(
     user: Any | None = None,
     session_key: str | None = None,
     product: Product,
+    request: Any = None,
 ) -> dict:
     """Toggle product in a user or anonymous wishlist. Returns {added: bool}."""
     identity = _wishlist_identity(user=user, session_key=session_key)
@@ -495,6 +577,7 @@ def toggle_wishlist(
         "product.wishlist.toggled",
         product,
         actor=identity.get("user"),
+        request=request,
         added=added,
         session_key=identity.get("session_key"),
     )
@@ -554,6 +637,7 @@ def validate_and_apply_coupon(
     code: str,
     user: Any,
     order_subtotal: Decimal,
+    request: Any = None,
 ) -> dict:
     """
     Validate coupon and return discount amount.
@@ -583,6 +667,7 @@ def validate_and_apply_coupon(
         # Coupon has no product reference — use a dummy product attribute safely
         type("_Stub", (), {"id": coupon.id, "slug": coupon.code})(),  # type: ignore[call-arg]
         actor=user,
+        request=request,
         code=coupon.code,
         discount=str(discount),
     )

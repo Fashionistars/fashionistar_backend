@@ -36,7 +36,7 @@ def log_transaction_created(
 
 def log_ledger_entry_posted(
     *, actor=None, entry_id: str, wallet_id: str, amount: str,
-    entry_type: str = "", currency: str = "NGN"
+    entry_type: str = "", currency: str = "NGN", request=None
 ) -> None:
     """Record a wallet ledger entry being posted.
 
@@ -58,6 +58,7 @@ def log_ledger_entry_posted(
         actor=actor,
         resource_type="WalletLedgerEntry",
         resource_id=entry_id,
+        request=request,
         new_values={
             "wallet_id": wallet_id, "amount": amount,
             "currency": currency, "type": entry_type,

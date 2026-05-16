@@ -214,6 +214,7 @@ def log_escrow_hold(
         event_category=EventCategory.WALLET,
         action=f"Escrow hold: {amount} NGN for order={order_id}",
         actor=actor,
+        actor_role=getattr(actor, "user_type", None),
         resource_type="Wallet",
         resource_id=wallet_id,
         request=request,
@@ -243,6 +244,37 @@ def log_escrow_release(
         event_category=EventCategory.WALLET,
         action=f"Escrow released: {amount} NGN for order={order_id}",
         actor=actor,
+        actor_role=getattr(actor, "user_type", None),
+        resource_type="Wallet",
+        resource_id=wallet_id,
+        request=request,
+        new_values={"amount": amount, "order_id": order_id},
+        is_compliance=True,
+        retention_days=-1,
+    )
+
+
+def log_escrow_refunded(
+    *, actor, wallet_id: str, amount: str, order_id: str = "", request=None
+) -> None:
+    """Record an escrow refund to a wallet.
+
+    Args:
+        actor: The admin or system performing the refund.
+        wallet_id: Wallet PK.
+        amount: Refunded amount as string.
+        order_id: Associated order PK.
+        request: Django HttpRequest.
+    """
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    AuditService.log(
+        event_type=EventType.WALLET_ESCROW_REFUNDED,
+        event_category=EventCategory.WALLET,
+        action=f"Escrow refunded: {amount} NGN for order={order_id}",
+        actor=actor,
+        actor_role=getattr(actor, "user_type", None),
         resource_type="Wallet",
         resource_id=wallet_id,
         request=request,

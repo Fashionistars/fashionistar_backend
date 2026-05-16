@@ -113,6 +113,7 @@ class VendorPayoutService:
         currency: str = "NGN",
         idempotency_key: str = "",
         provider_code: Optional[str] = None,
+        request: Optional[Any] = None,
     ) -> dict[str, Any]:
         """
         Initiate a bank transfer payout to a vendor (synchronous / DRF).
@@ -181,6 +182,7 @@ class VendorPayoutService:
         except (ProviderHTTPError, Exception) as exc:
             cls._log_failure(
                 provider=active_provider,
+                request=request,
                 reference=reference,
                 vendor=vendor,
                 amount=amount,
@@ -201,6 +203,7 @@ class VendorPayoutService:
                 payout_id=reference,
                 amount=str(amount),
                 error=f"{active_provider}: {str(exc)[:500]}",
+                request=request,
             )
             raise PayoutGatewayError(
                 f"Payment gateway rejected the transfer: {exc}"
@@ -265,6 +268,7 @@ class VendorPayoutService:
                 currency=currency,
                 provider=active_provider,
                 reference=str(transfer_code),
+                request=request,
             )
         )
 
@@ -295,6 +299,7 @@ class VendorPayoutService:
         currency: str = "NGN",
         idempotency_key: str = "",
         provider_code: Optional[str] = None,
+        request: Optional[Any] = None,
     ) -> dict[str, Any]:
         """
         Initiate a bank transfer payout to a vendor (asynchronous / Ninja).
@@ -355,6 +360,7 @@ class VendorPayoutService:
             await asyncio.to_thread(
                 cls._audit_payout_failed,
                 vendor=vendor,
+                request=request,
                 payout_id=reference,
                 amount=amount,
                 provider=active_provider,
@@ -371,6 +377,7 @@ class VendorPayoutService:
         await asyncio.to_thread(
             cls._finalize_async_successful_transfer,
             vendor=vendor,
+            request=request,
             amount=amount,
             account_number=account_number,
             bank_code=bank_code,
@@ -545,6 +552,7 @@ class VendorPayoutService:
         transfer_code: str,
         provider: str,
         gateway_response: dict[str, Any],
+        request: Optional[Any] = None,
     ) -> None:
         """Apply the same durable post-transfer settlement path used by sync payouts."""
         cls._debit_wallet_and_record_ledger(
@@ -587,11 +595,12 @@ class VendorPayoutService:
                 currency=currency,
                 provider=provider,
                 reference=transfer_code,
+                request=request,
             )
         )
 
     @staticmethod
-    def _audit_payout_failed(*, vendor, payout_id: str, amount: Decimal, provider: str, error: str) -> None:
+    def _audit_payout_failed(*, vendor, payout_id: str, amount: Decimal, provider: str, error: str, request: Optional[Any] = None) -> None:
         from apps.audit_logs.services.transactions import transactions_audit
 
         transactions_audit.log_payout_failed(
@@ -599,6 +608,7 @@ class VendorPayoutService:
             payout_id=payout_id,
             amount=str(amount),
             error=f"{provider}: {error[:500]}",
+            request=request,
         )
 
     @staticmethod
@@ -610,6 +620,7 @@ class VendorPayoutService:
         amount: Decimal,
         error: str,
         request_payload: dict,
+        request: Optional[Any] = None,
     ) -> None:
         """Record a failed payout attempt in the audit log."""
         try:

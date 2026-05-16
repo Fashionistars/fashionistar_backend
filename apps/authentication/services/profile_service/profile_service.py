@@ -19,6 +19,7 @@ Functions:
   - update_client_profile(user, data) -> ClientProfile
 """
 
+from apps.authentication.models import UnifiedUser
 from __future__ import annotations
 
 import logging
@@ -81,43 +82,60 @@ def update_user_profile(
     *,
     user: "UnifiedUser",
     data: dict[str, Any],
+    request: Any = None,
 ) -> "UnifiedUser":
-    """
-    Partially update a user profile. Only PROFILE_EDITABLE_FIELDS are applied.
-    Raises ValueError if no valid fields provided.
+    """Update a user's core profile information.
 
-    attempting to update immutable fields (email, role, etc.) is silently
-    ignored here; the serializer layer should catch them first.
-
-    Runs inside ``transaction.atomic()`` to ensure partial updates don't
-    leave inconsistent state in the DB.
+    This service handles partial updates to the UnifiedUser model, specifically
+    filtering for PROFILE_EDITABLE_FIELDS to ensure security-sensitive or 
+    immutable fields (like email, role, or password) are not modified through 
+    this non-privileged path.
 
     Args:
-        user: The UnifiedUser instance to update.
-        data: Dict of field names → new values (already validated by serializer).
+        user: The UnifiedUser instance to be updated.
+        data: A dictionary containing the fields to update (validated by serializer).
+        request: Optional Django HttpRequest for audit logging context (IP, User-Agent).
 
     Returns:
-        The updated UnifiedUser instance (refreshed from DB).
+        UnifiedUser: The updated and refreshed user instance.
 
     Raises:
-        ValueError: If data is empty or no valid fields are provided.
+        ValueError: If no valid editable fields are provided in the data.
     """
+    from apps.audit_logs.services.authentication import auth_audit
+
+    # 1. Filter data for only allowed editable fields
     update_fields = {
         field: value
         for field, value in data.items()
         if field in PROFILE_EDITABLE_FIELDS
     }
 
+    # 2. Guard against empty updates
     if not update_fields:
+        logger.warning("Empty profile update attempted for user=%s", user.pk)
         raise ValueError(
             "No editable profile fields provided. "
             f"Allowed fields: {sorted(PROFILE_EDITABLE_FIELDS)}"
         )
 
+    # 3. Perform atomic update
     with transaction.atomic():
         for field, value in update_fields.items():
             setattr(user, field, value)
-        user.save(update_fields=list(update_fields.keys()) + ["updated_at"])
+        
+        # Save only the modified fields plus the timestamp
+        save_fields = list(update_fields.keys()) + ["updated_at"]
+        user.save(update_fields=save_fields)
+
+        # 4. Dispatch audit log on successful commit
+        transaction.on_commit(
+            lambda: auth_audit.log_account_updated(
+                actor=user,
+                request=request,
+                fields_changed=list(update_fields.keys())
+            )
+        )
 
     logger.info(
         "✅ Profile updated for user=%s fields=%s",
@@ -149,33 +167,55 @@ def update_client_profile(
     *,
     user: "UnifiedUser",
     data: dict[str, Any],
+    request: Any = None,
 ) -> "ClientProfile":
-    """
-    Partially update a user's ClientProfile with validated data.
+    """Update a user's extended ClientProfile with validated data.
+
+    Fetches or creates the ClientProfile linked to the user, filters for 
+    CLIENT_PROFILE_EDITABLE_FIELDS, and commits changes atomically.
 
     Args:
-        user: UnifiedUser instance.
-        data: Dict of field names → new values (validated by serializer).
+        user: UnifiedUser instance (the owner of the profile).
+        data: Dict of field names -> new values (validated by serializer).
+        request: Optional Django HttpRequest for audit logging.
 
     Returns:
-        Updated ClientProfile instance.
+        ClientProfile: The updated client profile instance.
     """
     from apps.authentication.models import ClientProfile
+    from apps.audit_logs.services.authentication import auth_audit
 
+    # 1. Ensure profile exists
     profile = ClientProfile.get_or_create_for_user(user)
 
+    # 2. Filter for allowed fields
     update_fields_clean = {
         field: value
         for field, value in data.items()
         if field in CLIENT_PROFILE_EDITABLE_FIELDS
     }
 
+    # 3. Atomic commit
     with transaction.atomic():
         for field, value in update_fields_clean.items():
             setattr(profile, field, value)
+        
         fields_to_save = list(update_fields_clean.keys()) + ["updated_at"]
         profile.save(update_fields=fields_to_save)
+        
+        # Trigger any post-save profile logic (e.g. completeness score)
         profile.update_completeness()
+
+        # 4. Dispatch audit log on commit
+        if update_fields_clean:
+            transaction.on_commit(
+                lambda: auth_audit.log_account_updated(
+                    actor=user,
+                    request=request,
+                    fields_changed=list(update_fields_clean.keys()),
+                    metadata={"profile_type": "client"}
+                )
+            )
 
     logger.info(
         "✅ ClientProfile updated for user=%s fields=%s",

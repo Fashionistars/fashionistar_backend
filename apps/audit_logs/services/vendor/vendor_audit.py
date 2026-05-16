@@ -173,3 +173,57 @@ def log_vendor_profile_updated(
         retention_days=730,  # 2 years
     )
 
+
+def log_vendor_payout_updated(
+    *, actor, vendor_profile, created: bool = False, request=None
+) -> None:
+    """Record a vendor payout/bank details update.
+
+    Args:
+        actor: The vendor or admin making the update.
+        vendor_profile: VendorProfile instance.
+        created: Whether this was the initial creation.
+        request: Django HttpRequest (optional).
+    """
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    action = "initial setup" if created else "updated"
+    AuditService.log(
+        event_type=EventType.VENDOR_PAYOUT_UPDATED,
+        event_category=EventCategory.VENDOR,
+        action=f"Vendor payout details {action}: {getattr(actor, 'email', str(actor))}",
+        actor=actor,
+        actor_role=getattr(actor, "user_type", "vendor"),
+        resource_type="VendorPayoutProfile",
+        resource_id=str(getattr(vendor_profile, "pk", "")),
+        request=request,
+        is_compliance=True,
+        retention_days=2555,  # 7 years (financial regulation)
+    )
+
+
+def log_vendor_pin_updated(*, actor, vendor_profile, request=None) -> None:
+    """Record a vendor transaction PIN update.
+
+    Args:
+        actor: The vendor user.
+        vendor_profile: VendorProfile instance.
+        request: Django HttpRequest (optional).
+    """
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    AuditService.log(
+        event_type=EventType.VENDOR_PIN_UPDATED,
+        event_category=EventCategory.VENDOR,
+        action=f"Vendor transaction PIN updated: {getattr(actor, 'email', str(actor))}",
+        actor=actor,
+        actor_role="vendor",
+        resource_type="VendorProfile",
+        resource_id=str(getattr(vendor_profile, "pk", "")),
+        request=request,
+        is_compliance=True,
+        retention_days=2555,
+    )
+

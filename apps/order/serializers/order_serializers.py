@@ -1,6 +1,12 @@
 # apps/order/serializers/order_serializers.py
 from rest_framework import serializers
-from apps.order.models import Order, CartOrderItem, OrderStatusHistory
+from apps.order.models import (
+    Order,
+    CartOrderItem,
+    OrderStatusHistory,
+    OrderPaymentRecord,
+    OrderCommercialTransitionLog,
+)
 
 OrderItem = CartOrderItem  # alias for clarity in serializers below
 
@@ -23,6 +29,49 @@ class OrderStatusHistorySerializer(serializers.ModelSerializer):
         fields = ["from_status", "to_status", "note", "created_at"]
 
 
+class OrderPaymentRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrderPaymentRecord
+        fields = [
+            "sequence_number",
+            "payment_source",
+            "provider",
+            "selected_percent",
+            "applied_percent",
+            "amount",
+            "currency",
+            "cumulative_amount_paid",
+            "cumulative_percent_paid",
+            "remaining_amount",
+            "remaining_percent",
+            "is_final_payment",
+            "paid_at",
+            "correlation_id",
+            "metadata",
+        ]
+
+
+class OrderCommercialTransitionLogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrderCommercialTransitionLog
+        fields = [
+            "transition_type",
+            "from_status",
+            "to_status",
+            "delivery_mode",
+            "cash_payment_mode_snapshot",
+            "selected_percent",
+            "cumulative_percent_paid",
+            "amount_delta",
+            "balance_after",
+            "actor_role",
+            "occurred_at",
+            "correlation_id",
+            "note",
+            "metadata",
+        ]
+
+
 class OrderListSerializer(serializers.ModelSerializer):
     item_count = serializers.SerializerMethodField()
     vendor_name = serializers.SerializerMethodField()
@@ -32,6 +81,8 @@ class OrderListSerializer(serializers.ModelSerializer):
         fields = [
             "id", "order_number", "status", "fulfillment_type",
             "total_amount", "currency", "item_count",
+            "amount_paid_total", "percent_paid_total", "amount_outstanding",
+            "is_fully_paid", "cash_payment_mode_snapshot", "delivery_mode",
             "vendor_name", "paid_at", "created_at",
         ]
 
@@ -47,6 +98,8 @@ class OrderListSerializer(serializers.ModelSerializer):
 class OrderDetailSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(source="cart_order_items", many=True, read_only=True)
     status_history = OrderStatusHistorySerializer(source="order_status_history", many=True, read_only=True)
+    payment_records = OrderPaymentRecordSerializer(many=True, read_only=True)
+    commercial_transition_logs = OrderCommercialTransitionLogSerializer(many=True, read_only=True)
 
     class Meta:
         model = Order
@@ -55,11 +108,14 @@ class OrderDetailSerializer(serializers.ModelSerializer):
             "subtotal", "shipping_amount", "discount_amount",
             "total_amount", "commission_amount", "vendor_payout", "currency",
             "payment_reference", "payment_gateway", "paid_at",
+            "amount_paid_total", "percent_paid_total", "amount_outstanding",
+            "is_fully_paid", "first_paid_at", "final_paid_at",
+            "active_payment_path", "cash_payment_mode_snapshot", "delivery_mode",
             "coupon_code", "delivery_address",
             "tracking_number", "estimated_delivery",
             "measurement_profile_id", "notes",
             "escrow_released", "is_test_order",
-            "items", "status_history",
+            "items", "status_history", "payment_records", "commercial_transition_logs",
             "created_at", "updated_at",
         ]
 

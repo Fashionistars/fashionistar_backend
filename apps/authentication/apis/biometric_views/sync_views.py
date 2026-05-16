@@ -58,6 +58,7 @@ class BiometricRegisterVerifyView(generics.GenericAPIView):
 
             SyncBiometricService.verify_registration_response(
                 request.user,
+                request,
                 request.data,
                 state,
                 device_name=request.data.get("device_name", "Unknown Device"),
@@ -122,7 +123,7 @@ class BiometricLoginVerifyView(generics.GenericAPIView):
                 )
 
             user = UnifiedUser.objects.get(pk=user_id)
-            SyncBiometricService.verify_auth_response(user, request.data, state)
+            SyncBiometricService.verify_auth_response(user, request, request.data, state)
 
             # Login successful, generate tokens
             from apps.authentication.services.auth_service import SyncAuthService

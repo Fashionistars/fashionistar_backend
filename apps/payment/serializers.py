@@ -2,7 +2,13 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
-from apps.payment.models import PaymentIntent, PaymentPurpose, PaystackTransferRecipient
+from apps.order.models import CashPaymentMode, OrderPaymentPath
+from apps.payment.models import (
+    PaymentIntent,
+    PaymentProviderCode,
+    PaymentPurpose,
+    PaystackTransferRecipient,
+)
 
 
 class PaystackInitializeSerializer(serializers.Serializer):
@@ -22,7 +28,7 @@ class PaymentIntentSerializer(serializers.ModelSerializer):
     class Meta:
         model = PaymentIntent
         fields = [
-            "id", "purpose", "amount", "currency", "status", "reference",
+            "id", "provider", "purpose", "amount", "currency", "status", "reference",
             "provider_reference", "authorization_url", "access_code", "order_id",
             "measurement_request_id", "created_at", "provider_response",
         ]
@@ -71,3 +77,46 @@ class PaystackBanksResponseSerializer(serializers.Serializer):
 class PaystackWebhookSerializer(serializers.Serializer):
     event = serializers.CharField()
     data = serializers.JSONField()
+
+
+class WalletFundPaymentSerializer(serializers.Serializer):
+    order_id = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    amount = serializers.DecimalField(
+        max_digits=20,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+        required=False,
+    )
+    purpose = serializers.ChoiceField(choices=PaymentPurpose.choices)
+    provider = serializers.ChoiceField(
+        choices=[
+            PaymentProviderCode.WALLET,
+            PaymentProviderCode.PAYSTACK,
+            PaymentProviderCode.FLUTTERWAVE,
+            PaymentProviderCode.OLIVE_PAY,
+        ]
+    )
+    currency = serializers.CharField(max_length=10, default="NGN")
+    selected_percent = serializers.IntegerField(min_value=1, max_value=100, default=100)
+    cash_payment_mode = serializers.ChoiceField(
+        choices=CashPaymentMode.choices,
+        default=CashPaymentMode.DISABLED,
+    )
+    payment_path = serializers.ChoiceField(
+        choices=OrderPaymentPath.choices,
+        default=OrderPaymentPath.GATEWAY,
+    )
+    metadata = serializers.JSONField(required=False, default=dict)
+
+
+class CashConfirmationCreateSerializer(serializers.Serializer):
+    order_id = serializers.CharField(max_length=120)
+
+
+class CashConfirmationResendSerializer(serializers.Serializer):
+    order_id = serializers.CharField(max_length=120)
+
+
+class CashConfirmationConfirmSerializer(serializers.Serializer):
+    order_id = serializers.CharField(max_length=120)
+    client_token = serializers.CharField(max_length=255)
