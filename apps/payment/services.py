@@ -460,7 +460,7 @@ class PaymentIntentService:
 
         Performs all downstream state changes in a single atomic transaction:
         - Wallet topup: credits user's wallet.
-        - Order payment: creates an escrow hold for the order amount.
+        - Order payment: credits user wallet, then performs escrow hold.
         - Measurement fee: records a platform fee ledger entry.
 
         Idempotent: calling ``mark_success()`` on an already-succeeded intent
@@ -480,10 +480,11 @@ class PaymentIntentService:
         intent.save(update_fields=["status", "provider_response", "updated_at"])
         user_wallet = WalletProvisioningService.ensure_wallet(intent.user, intent.currency)
         company_wallet = WalletProvisioningService.ensure_company_wallet(intent.currency)
+        from apps.wallet.services import WalletBalanceService
         if intent.purpose == PaymentPurpose.WALLET_TOPUP:
-            from apps.wallet.services import WalletBalanceService
             WalletBalanceService.credit(user_wallet, intent.amount)
         elif intent.purpose == PaymentPurpose.ORDER_PAYMENT:
+            WalletBalanceService.credit(user_wallet, intent.amount)
             EscrowService.hold_order_payment(
                 client_user=intent.user,
                 amount=intent.amount,

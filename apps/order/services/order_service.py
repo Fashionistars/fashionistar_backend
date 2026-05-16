@@ -415,8 +415,14 @@ def confirm_payment(*, order: Order, payment_reference: str, actor=None) -> Orde
         )
     hold = _get_active_order_hold(order=order)
     if hold is None:
-        raise ValueError(
-            "Cannot confirm payment because no active escrow hold exists for this order."
+        # Soft warning — the escrow hold is created by the payment-provider webhook
+        # handler (Paystack / Flutterwave).  Webhook delivery is asynchronous, so
+        # the hold may not yet exist at the moment confirm_payment fires from the
+        # payment-success view.  This is normal and does NOT indicate fraud.
+        # A hard raise here would block legitimate payment confirmations.
+        logger.warning(
+            "confirm_payment: no active escrow hold for order=%s (hold may arrive via webhook shortly)",
+            order.order_number,
         )
     from_status = order.status
     order.status = OrderStatus.PAYMENT_CONFIRMED

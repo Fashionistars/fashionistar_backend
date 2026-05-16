@@ -456,7 +456,19 @@ class VendorPayoutService:
 
     @staticmethod
     async def _avalidate_wallet_balance(*, vendor, amount: Decimal, currency: str) -> None:
-        """Async wallet balance validation."""
+        """Async pre-flight wallet balance check (advisory, NOT row-locked).
+
+        IMPORTANT - Lock model for the async payout path:
+        Django ORM select_for_update cannot be used in async context without
+        sync_to_async wrapping that would block the event loop.
+        This is an ADVISORY check only. The authoritative locked debit
+        happens inside _finalize_async_successful_transfer via
+        asyncio.to_thread -> _debit_wallet_and_record_ledger, which uses
+        select_for_update in a sync thread before any balance mutation.
+        The idempotency guard _acheck_idempotency is the primary
+        duplicate-request protection. This pre-flight gives the caller
+        an early user-friendly error before the thread is dispatched.
+        """
         try:
             from apps.wallet.models import Wallet
             wallet = await Wallet.objects.aget(user=vendor, currency=currency)
