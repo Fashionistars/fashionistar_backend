@@ -784,6 +784,7 @@ def get_published_products_list(
             "rating", "review_count", "requires_measurement", "is_customisable",
             "created_at",
             "vendor__id", "vendor__store_name", "vendor__store_slug",
+            "vendor__logo_url", "vendor__is_verified",
         )
         .annotate(
             computed_review_count=Count("reviews", distinct=True),
