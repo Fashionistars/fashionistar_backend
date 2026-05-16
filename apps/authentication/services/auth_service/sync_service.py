@@ -243,8 +243,9 @@ class SyncAuthService:
             # ── 3. Classify auth failures ────────────────────────────────────
             if not user:
                 # ── 3a: Not-verified check (FIRST — before is_active) ────────
-                # Django authenticate() returns None for users with is_active=False.
-                # We check is_verified FIRST to give the precise error to the user.
+                # Django authenticate() returns None for users with is_active=False,
+                # which happens to BOTH unverified AND admin-disabled users.
+                # We must check is_verified FIRST to give the user the precise error.                
                 if candidate is not None and not candidate.is_verified:
                     logger.warning(
                         "⛔ Login blocked — account not OTP-verified: %s", email_or_phone
