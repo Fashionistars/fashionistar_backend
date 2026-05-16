@@ -227,12 +227,14 @@ def log_password_reset_failed(*, request=None, reason: str, actor=None, actor_em
     from apps.audit_logs.services.audit import AuditService
     from apps.audit_logs.models import EventType, EventCategory
 
+    # ── Forensic: Precise failure tracking ──────────────────────────────
+    # Records exactly why the reset failed (expired token, invalid link, etc.)
     AuditService.log(
-        event_type=EventType.PASSWORD_RESET_DONE,
+        event_type=EventType.PASSWORD_RESET_FAILED,
         event_category=EventCategory.SECURITY,
         action=f"Password reset failed: {reason}",
         actor=actor,
-        actor_email=actor_email,
+        actor_email=actor_email or getattr(actor, 'email', None),
         request=request,
         severity="warning",
         error_message=reason,

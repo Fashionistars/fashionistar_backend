@@ -156,3 +156,155 @@ def log_cloudinary_webhook(*, asset_id: str, event: str, metadata: dict | None =
         resource_id=asset_id,
         metadata=metadata,
     )
+
+
+def log_collection_created(*, actor, collection_id: str, name: str = "", request=None) -> None:
+    """Record a new merchandising collection creation."""
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    AuditService.log(
+        event_type=EventType.COLLECTION_CREATED,
+        event_category=EventCategory.CATALOG,
+        action=f"Collection created: '{name}' id={collection_id}",
+        actor=actor,
+        resource_type="Collection",
+        resource_id=collection_id,
+        request=request,
+        is_compliance=True,
+    )
+
+
+def log_collection_updated(
+    *, actor, collection_id: str, name: str = "",
+    old_values: dict | None = None, new_values: dict | None = None, request=None
+) -> None:
+    """Record a collection update."""
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    AuditService.log(
+        event_type=EventType.COLLECTION_UPDATED,
+        event_category=EventCategory.CATALOG,
+        action=f"Collection updated: '{name}' id={collection_id}",
+        actor=actor,
+        resource_type="Collection",
+        resource_id=collection_id,
+        request=request,
+        old_values=old_values,
+        new_values=new_values,
+    )
+
+
+def log_brand_created(*, actor, brand_id: str, name: str = "", request=None) -> None:
+    """Record a new brand creation."""
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    AuditService.log(
+        event_type=EventType.BRAND_CREATED,
+        event_category=EventCategory.CATALOG,
+        action=f"Brand created: '{name}' id={brand_id}",
+        actor=actor,
+        resource_type="Brand",
+        resource_id=brand_id,
+        request=request,
+        is_compliance=True,
+    )
+
+
+def log_brand_updated(
+    *, actor, brand_id: str, name: str = "",
+    old_values: dict | None = None, new_values: dict | None = None, request=None
+) -> None:
+    """Record a brand update."""
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    AuditService.log(
+        event_type=EventType.BRAND_UPDATED,
+        event_category=EventCategory.CATALOG,
+        action=f"Brand updated: '{name}' id={brand_id}",
+        actor=actor,
+        resource_type="Brand",
+        resource_id=brand_id,
+        request=request,
+        old_values=old_values,
+        new_values=new_values,
+    )
+
+
+def log_category_created(*, actor, category_id: str, name: str = "", request=None) -> None:
+    """Record a new category creation."""
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    AuditService.log(
+        event_type=EventType.CATEGORY_CREATED,
+        event_category=EventCategory.CATALOG,
+        action=f"Category created: '{name}' id={category_id}",
+        actor=actor,
+        resource_type="Category",
+        resource_id=category_id,
+        request=request,
+        is_compliance=True,
+    )
+
+
+def log_category_updated(
+    *, actor, category_id: str, name: str = "",
+    old_values: dict | None = None, new_values: dict | None = None, request=None
+) -> None:
+    """Record a category update."""
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    AuditService.log(
+        event_type=EventType.CATEGORY_UPDATED,
+        event_category=EventCategory.CATALOG,
+        action=f"Category updated: '{name}' id={category_id}",
+        actor=actor,
+        resource_type="Category",
+        resource_id=category_id,
+        request=request,
+        old_values=old_values,
+        new_values=new_values,
+    )
+
+
+def log_blog_post_created(*, actor, post_id: str, title: str = "", request=None) -> None:
+    """Record a new blog post creation."""
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    AuditService.log(
+        event_type=EventType.BLOG_POST_CREATED,
+        event_category=EventCategory.CATALOG,
+        action=f"Blog post created: '{title}' id={post_id}",
+        actor=actor,
+        resource_type="BlogPost",
+        resource_id=post_id,
+        request=request,
+        is_compliance=True,
+    )
+
+
+def log_blog_post_updated(
+    *, actor, post_id: str, title: str = "",
+    old_values: dict | None = None, new_values: dict | None = None, request=None
+) -> None:
+    """Record a blog post update."""
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    AuditService.log(
+        event_type=EventType.BLOG_POST_UPDATED,
+        event_category=EventCategory.CATALOG,
+        action=f"Blog post updated: '{title}' id={post_id}",
+        actor=actor,
+        resource_type="BlogPost",
+        resource_id=post_id,
+        request=request,
+        old_values=old_values,
+        new_values=new_values,
+    )

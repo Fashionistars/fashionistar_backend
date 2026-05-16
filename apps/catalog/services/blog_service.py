@@ -1,4 +1,4 @@
-from apps.catalog.services.catalog_service import CatalogAuditService
+# apps/catalog/services/blog_service.py
 
 
 class BlogService:
@@ -10,37 +10,69 @@ class BlogService:
     def create(cls, *, serializer, request):
         user = getattr(request, "user", None)
         instance = serializer.save(author=user if getattr(user, "is_authenticated", False) else None)
-        CatalogAuditService.log_mutation(
-            request=request,
-            action="catalog.blog.created",
-            resource_type=cls.resource_type,
-            resource_id=instance.pk,
-            new_values=serializer.data,
-        )
+
+        from apps.audit_logs.services.catalog import catalog_audit
+        from django.db import transaction
+
+        def _dispatch():
+            try:
+                catalog_audit.log_blog_post_created(
+                    actor=user,
+                    post_id=str(instance.pk),
+                    title=instance.title,
+                    request=request,
+                )
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"BlogService.create: Audit failed: {e}")
+
+        transaction.on_commit(_dispatch)
         return instance
 
     @classmethod
     def update(cls, *, serializer, request, old_values: dict):
         instance = serializer.save()
-        CatalogAuditService.log_mutation(
-            request=request,
-            action="catalog.blog.updated",
-            resource_type=cls.resource_type,
-            resource_id=instance.pk,
-            old_values=old_values,
-            new_values=serializer.data,
-        )
+
+        from apps.audit_logs.services.catalog import catalog_audit
+        from django.db import transaction
+
+        def _dispatch():
+            try:
+                catalog_audit.log_blog_post_updated(
+                    actor=getattr(request, "user", None),
+                    post_id=str(instance.pk),
+                    title=instance.title,
+                    old_values=old_values,
+                    new_values=serializer.data,
+                    request=request,
+                )
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"BlogService.update: Audit failed: {e}")
+
+        transaction.on_commit(_dispatch)
         return instance
 
     @classmethod
     def archive(cls, *, instance, request, old_values: dict):
         instance.soft_delete()
-        CatalogAuditService.log_mutation(
-            request=request,
-            action="catalog.blog.archived",
-            resource_type=cls.resource_type,
-            resource_id=instance.pk,
-            old_values=old_values,
-            new_values={"is_deleted": True},
-        )
+
+        from apps.audit_logs.services.catalog import catalog_audit
+        from django.db import transaction
+
+        def _dispatch():
+            try:
+                catalog_audit.log_blog_post_updated(
+                    actor=getattr(request, "user", None),
+                    post_id=str(instance.pk),
+                    title=instance.title,
+                    old_values=old_values,
+                    new_values={"is_deleted": True},
+                    request=request,
+                )
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"BlogService.archive: Audit failed: {e}")
+
+        transaction.on_commit(_dispatch)
         return instance

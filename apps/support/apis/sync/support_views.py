@@ -86,6 +86,7 @@ class SupportTicketListCreateView(APIView):
             ticket = SupportService.create_ticket(
                 user=request.user,
                 data=serializer.validated_data,
+                request=request,
             )
         except Exception as exc:
             logger.exception("SupportTicketListCreateView.post: error for user=%s", request.user.id)
@@ -156,6 +157,7 @@ class TicketMessageView(APIView):
                 body=serializer.validated_data["body"],
                 is_staff=request.user.is_staff,
                 attachments=serializer.validated_data.get("attachments", []),
+                request=request,
             )
         except ValueError as exc:
             return error_response(
@@ -201,6 +203,7 @@ class TicketStatusUpdateView(APIView):
                 ticket_id=ticket_id,
                 new_status=serializer.validated_data["status"],
                 notes=serializer.validated_data.get("notes", ""),
+                request=request,
             )
         except (ValueError, PermissionError) as exc:
             return error_response(
@@ -245,6 +248,7 @@ class TicketEscalateView(APIView):
                 staff_user=request.user,
                 ticket_id=ticket_id,
                 reason=serializer.validated_data["reason"],
+                request=request,
             )
         except (ValueError, PermissionError) as exc:
             return error_response(

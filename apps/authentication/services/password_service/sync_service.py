@@ -89,11 +89,15 @@ class SyncPasswordService:
 
             # ── Audit: Specialized helper for reset requests ─────────────
             # Records the attempt with security signals (user_exists)
-            auth_audit.log_password_reset_requested(
-                email=email_or_phone,
-                user_exists=user is not None,
-                request=request
-            )
+            # Failsafe: Wrapped in try-except to ensure audit failures never block reset requests
+            try:
+                auth_audit.log_password_reset_requested(
+                    email=email_or_phone,
+                    user_exists=user is not None,
+                    request=request
+                )
+            except Exception as audit_exc:
+                logger.warning("⚠️ Audit log password reset request failed: %s", audit_exc)
 
             if not user:
                 logger.warning("⚠️ Password reset requested for non-existent: %s", email_or_phone)
@@ -181,20 +185,26 @@ class SyncPasswordService:
                     uid = force_str(urlsafe_base64_decode(data['uidb64']))
                     user = UnifiedUser.objects.get(pk=uid)
                 except (TypeError, ValueError, OverflowError, UnifiedUser.DoesNotExist):
-                    auth_audit.log_password_reset_failed(
-                        reason="Invalid reset link (uidb64 decode failed)",
-                        request=request,
-                        metadata={"flow": "email"}
-                    )
+                    try:
+                        auth_audit.log_password_reset_failed(
+                            reason="Invalid reset link (uidb64 decode failed)",
+                            request=request,
+                            metadata={"flow": "email"}
+                        )
+                    except Exception as audit_exc:
+                        logger.warning("⚠️ Audit log password reset failure failed: %s", audit_exc)
                     raise Exception("Invalid reset link.")
 
                 if not default_token_generator.check_token(user, data['token']):
-                    auth_audit.log_password_reset_failed(
-                        reason="Token invalid or expired",
-                        request=request,
-                        actor=user,
-                        metadata={"flow": "email"}
-                    )
+                    try:
+                        auth_audit.log_password_reset_failed(
+                            reason="Token invalid or expired",
+                            request=request,
+                            actor=user,
+                            metadata={"flow": "email"}
+                        )
+                    except Exception as audit_exc:
+                        logger.warning("⚠️ Audit log password reset failure failed: %s", audit_exc)
                     raise Exception("Invalid or expired token.")
 
             elif 'token' in data and data['token'] and 'phone' not in data:
@@ -203,21 +213,27 @@ class SyncPasswordService:
                     data['token'], purpose='password_reset'
                 )
                 if not otp_result:
-                    auth_audit.log_password_reset_failed(
-                        reason="OTP invalid or expired",
-                        request=request,
-                        metadata={"flow": "phone"}
-                    )
+                    try:
+                        auth_audit.log_password_reset_failed(
+                            reason="OTP invalid or expired",
+                            request=request,
+                            metadata={"flow": "phone"}
+                        )
+                    except Exception as audit_exc:
+                        logger.warning("⚠️ Audit log password reset failure failed: %s", audit_exc)
                     raise Exception("Invalid or expired OTP.")
 
                 try:
                     user = UnifiedUser.objects.get(pk=otp_result['user_id'])
                 except UnifiedUser.DoesNotExist:
-                    auth_audit.log_password_reset_failed(
-                        reason="User not found for OTP user_id",
-                        request=request,
-                        metadata={"flow": "phone"}
-                    )
+                    try:
+                        auth_audit.log_password_reset_failed(
+                            reason="User not found for OTP user_id",
+                            request=request,
+                            metadata={"flow": "phone"}
+                        )
+                    except Exception as audit_exc:
+                        logger.warning("⚠️ Audit log password reset failure failed: %s", audit_exc)
                     raise Exception("User not found.")
 
             else:
@@ -243,13 +259,21 @@ class SyncPasswordService:
                     ))
 
             # ── Audit: Success completion via specialized helper ──────────
-            auth_audit.log_password_reset_completed(
-                actor=user,
-                request=request,
-                metadata={
-                    "flow": "email" if ('uidb64' in data and data['uidb64']) else "phone",
-                }
-            )
+            # ✅ TRANSACTIONAL INTEGRITY: Wrapped in on_commit to ensure the audit
+            # event only fires if the password was successfully saved to the database.
+            def _log_reset_success():
+                try:
+                    auth_audit.log_password_reset_completed(
+                        actor=user,
+                        request=request,
+                        metadata={
+                            "flow": "email" if ('uidb64' in data and data['uidb64']) else "phone",
+                        }
+                    )
+                except Exception as audit_exc:
+                    logger.warning("⚠️ Audit log password reset success failed: %s", audit_exc)
+
+            transaction.on_commit(_log_reset_success)
 
             logger.info("✅ Password reset successful for User %s", user.id)
             return "Password has been reset successfully."
@@ -286,12 +310,15 @@ class SyncPasswordService:
         try:
             # 🔐 SECURITY GUARD: Must verify old password before change
             if not user.check_password(old_password):
-                auth_audit.log_password_changed(
-                    actor=user,
-                    success=False,
-                    reason="Incorrect current password provided",
-                    request=request
-                )
+                try:
+                    auth_audit.log_password_changed(
+                        actor=user,
+                        success=False,
+                        reason="Incorrect current password provided",
+                        request=request
+                    )
+                except Exception as audit_exc:
+                    logger.warning("⚠️ Audit log password change failure failed: %s", audit_exc)
                 raise Exception("Current password is incorrect.")
 
             with transaction.atomic():
@@ -312,11 +339,18 @@ class SyncPasswordService:
                     ))
 
             # ── Audit: Specialized helper for password change ──────────────
-            auth_audit.log_password_changed(
-                actor=user,
-                success=True,
-                request=request
-            )
+            # ✅ TRANSACTIONAL INTEGRITY: Fired on_commit to maintain atomic consistency.
+            def _log_change_success():
+                try:
+                    auth_audit.log_password_changed(
+                        actor=user,
+                        success=True,
+                        request=request
+                    )
+                except Exception as audit_exc:
+                    logger.warning("⚠️ Audit log password change success failed: %s", audit_exc)
+
+            transaction.on_commit(_log_change_success)
 
             logger.info("✅ Password changed for User %s", user.pk)
             return "Password changed successfully."
@@ -326,3 +360,4 @@ class SyncPasswordService:
                 raise
             logger.error("❌ Password Change Error (Sync): %s", e)
             raise Exception(str(e))
+

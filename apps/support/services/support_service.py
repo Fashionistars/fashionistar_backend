@@ -38,7 +38,7 @@ class SupportService:
 
     @staticmethod
     @transaction.atomic
-    def create_ticket(user, data: dict) -> "SupportTicket":  # noqa: F821
+    def create_ticket(user, data: dict, request=None) -> "SupportTicket":  # noqa: F821
         """
         Create a new support ticket for the given user.
 
@@ -54,6 +54,7 @@ class SupportService:
                   - priority (str, TicketPriority value, optional)
                   - order_id (UUID | None, optional)
                   - metadata (dict, optional)
+            request: Optional HttpRequest for audit logging.
 
         Returns:
             SupportTicket instance (new or existing).
@@ -92,14 +93,22 @@ class SupportService:
             user.id,
         )
 
-        # Compliance audit trail
+        # Compliance audit trail — modernized with on_commit
         from apps.audit_logs.services.support import support_audit
-        support_audit.log_ticket_created(
-            actor=user,
-            ticket_id=str(ticket.id),
-            category=ticket.category,
-            priority=ticket.priority,
-        )
+
+        def _dispatch_audit():
+            try:
+                support_audit.log_ticket_created(
+                    actor=user,
+                    ticket_id=str(ticket.id),
+                    category=ticket.category,
+                    priority=ticket.priority,
+                    request=request,
+                )
+            except Exception as e:
+                logger.warning(f"SupportService.create_ticket: Audit dispatch failed: {e}")
+
+        transaction.on_commit(_dispatch_audit)
 
         # Fire notification to submitter (async, non-blocking)
         SupportService._notify_ticket_created(ticket, user)
@@ -117,6 +126,7 @@ class SupportService:
         *,
         is_staff: bool = False,
         attachments: list | None = None,
+        request=None,
     ) -> "TicketMessage":  # noqa: F821
         """
         Append a reply to a ticket's message thread.
@@ -132,6 +142,7 @@ class SupportService:
             body: Message text.
             is_staff: True if the author is a staff member.
             attachments: List of Cloudinary public_ids (optional).
+            request: Optional HttpRequest for audit logging.
 
         Returns:
             TicketMessage instance.
@@ -180,14 +191,22 @@ class SupportService:
             is_staff,
         )
 
-        # Compliance audit trail
+        # Compliance audit trail — modernized with on_commit
         from apps.audit_logs.services.support import support_audit
-        support_audit.log_ticket_message_added(
-            actor=author,
-            ticket_id=str(ticket.id),
-            message_id=str(msg.id),
-            is_staff_reply=is_staff,
-        )
+
+        def _dispatch_audit():
+            try:
+                support_audit.log_ticket_message_added(
+                    actor=author,
+                    ticket_id=str(ticket.id),
+                    message_id=str(msg.id),
+                    is_staff_reply=is_staff,
+                    request=request,
+                )
+            except Exception as e:
+                logger.warning(f"SupportService.add_message: Audit dispatch failed: {e}")
+
+        transaction.on_commit(_dispatch_audit)
 
         return msg
 
@@ -200,6 +219,7 @@ class SupportService:
         ticket_id: UUID | str,
         new_status: str,
         notes: str = "",
+        request=None,
     ) -> "SupportTicket":  # noqa: F821
         """
         Staff-only status transition with optional resolution notes.
@@ -209,6 +229,7 @@ class SupportService:
             ticket_id: UUID of the SupportTicket.
             new_status: Target TicketStatus value.
             notes: Optional resolution/closure notes.
+            request: Optional HttpRequest for audit logging.
 
         Returns:
             Updated SupportTicket.
@@ -226,26 +247,35 @@ class SupportService:
         ticket.transition(new_status=new_status, notes=notes)
 
         logger.info(
-            "SupportService.update_status: ticket=%s → %s by staff=%s",
+            "SupportService.update_status: ticket=%s \u2192 %s by staff=%s",
             ticket_id,
             new_status,
             staff_user.id,
         )
 
-        # Compliance audit trail
+        # Compliance audit trail — modernized with on_commit
         from apps.audit_logs.services.support import support_audit
-        if new_status in ("resolved", "closed"):
-            support_audit.log_ticket_resolved(
-                actor=staff_user,
-                ticket_id=str(ticket.id),
-                notes=notes,
-            )
-        else:
-            support_audit.log_ticket_escalated(
-                actor=staff_user,
-                ticket_id=str(ticket.id),
-                reason=notes or new_status,
-            )
+
+        def _dispatch_audit():
+            try:
+                if new_status in ("resolved", "closed"):
+                    support_audit.log_ticket_resolved(
+                        actor=staff_user,
+                        ticket_id=str(ticket.id),
+                        notes=notes,
+                        request=request,
+                    )
+                else:
+                    support_audit.log_ticket_escalated(
+                        actor=staff_user,
+                        ticket_id=str(ticket.id),
+                        reason=notes or new_status,
+                        request=request,
+                    )
+            except Exception as e:
+                logger.warning(f"SupportService.update_status: Audit dispatch failed: {e}")
+
+        transaction.on_commit(_dispatch_audit)
 
         return ticket
 
@@ -257,10 +287,11 @@ class SupportService:
         staff_user,
         ticket_id: UUID | str,
         reason: str,
+        request=None,
     ) -> "TicketEscalation":  # noqa: F821
         """
         Create or return a TicketEscalation for the given ticket.
-        Idempotent — returns the existing escalation if one already exists.
+        Idempotent \u2014 returns the existing escalation if one already exists.
 
         Also transitions the ticket to IN_REVIEW and assigns the escalating
         staff member.
@@ -269,6 +300,7 @@ class SupportService:
             staff_user: UnifiedUser with is_staff=True.
             ticket_id: UUID of the SupportTicket.
             reason: Text description of why escalation is needed.
+            request: Optional HttpRequest for audit logging.
 
         Returns:
             TicketEscalation instance.
@@ -309,13 +341,21 @@ class SupportService:
                 ticket_id,
             )
 
-            # Compliance audit trail — escalations are high-significance events
+            # Compliance audit trail \u2014 escalations are high-significance events
             from apps.audit_logs.services.support import support_audit
-            support_audit.log_ticket_escalated(
-                actor=staff_user,
-                ticket_id=str(ticket.id),
-                reason=reason[:500],
-            )
+
+            def _dispatch_audit():
+                try:
+                    support_audit.log_ticket_escalated(
+                        actor=staff_user,
+                        ticket_id=str(ticket.id),
+                        reason=reason[:500],
+                        request=request,
+                    )
+                except Exception as e:
+                    logger.warning(f"SupportService.escalate: Audit dispatch failed: {e}")
+
+            transaction.on_commit(_dispatch_audit)
 
         return escalation
 
@@ -327,6 +367,7 @@ class SupportService:
         staff_user,
         ticket_id: UUID | str,
         resolution_notes: str,
+        request=None,
     ) -> "SupportTicket":  # noqa: F821
         """
         Mark a ticket as RESOLVED and dispatch a resolution notification.
@@ -335,6 +376,7 @@ class SupportService:
             staff_user: UnifiedUser with is_staff=True.
             ticket_id: UUID of the SupportTicket.
             resolution_notes: Staff notes on how the ticket was resolved.
+            request: Optional HttpRequest for audit logging.
 
         Returns:
             Resolved SupportTicket.
@@ -349,6 +391,7 @@ class SupportService:
             ticket_id=ticket_id,
             new_status=TicketStatus.RESOLVED,
             notes=resolution_notes,
+            request=request,
         )
 
         # Notify the submitter of resolution
