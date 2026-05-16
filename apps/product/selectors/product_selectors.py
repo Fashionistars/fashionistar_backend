@@ -136,7 +136,20 @@ def get_published_products_list():
         Product.objects
         .filter(status=ProductStatus.PUBLISHED, is_deleted=False)
         .select_related("vendor__user")
-        .prefetch_related("categories", "sub_categories", "sizes", "colors")
+        .prefetch_related(
+            "categories",
+            "sub_categories",
+            Prefetch(
+                "sizes",
+                queryset=ProductSize.objects.only("id", "name"),
+                to_attr="_prefetched_sizes",
+            ),
+            Prefetch(
+                "colors",
+                queryset=ProductColor.objects.only("id", "name", "hex_code"),
+                to_attr="_prefetched_colors",
+            ),
+        )
         .annotate(
             computed_review_count=Count("reviews", distinct=True),
             computed_avg_rating=Avg("reviews__rating"),
@@ -145,7 +158,8 @@ def get_published_products_list():
             "id", "slug", "title", "price", "old_price",
             "image", "in_stock", "rating", "review_count",
             "featured", "created_at",
-            "vendor__id", "vendor__store_name",
+            "vendor__id", "vendor__store_name", "vendor__store_slug",
+            "vendor__logo_url", "vendor__is_verified",
             "vendor__user__id", "vendor__user__email",
         )
         .order_by("-created_at")
