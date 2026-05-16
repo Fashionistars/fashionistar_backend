@@ -43,6 +43,7 @@ release_escrow()
 
 import hashlib
 import logging
+from datetime import timedelta
 from decimal import Decimal
 from uuid import uuid4
 
@@ -66,6 +67,7 @@ from apps.order.models import (
     OrderPaymentRecord,
     OrderCommercialTransitionLog,
     OrderDeliveryMode,
+    FulfillmentType,
 )
 
 OrderItem = CartOrderItem  # alias: both names used in this service for clarity
@@ -179,9 +181,9 @@ def _emit_order_financial_audit(
     Records high-integrity financial audit events for the order domain.
     Captures IP and User-Agent for forensic traceability.
     """
-    from apps.audit_logs.utils import get_client_ip
+    from apps.common.middleware import _get_client_ip
 
-    ip_address = get_client_ip(request) if request else None
+    ip_address = _get_client_ip(request) if request else None
     user_agent = request.META.get("HTTP_USER_AGENT") if request else None
 
     def _dispatch():
@@ -457,7 +459,6 @@ def register_payment_tranche(
         amount_delta=amount,
         balance_after=order.amount_outstanding,
         correlation_id=correlation_id,
-        request=request,
         metadata=metadata,
     )
     return record
@@ -496,14 +497,16 @@ def _get_active_order_hold(*, order: Order):
 # ─────────────────────────────────────────────────────────────────────────────
 
 @transaction.atomic
-def place_order(*, user, delivery_address, fulfillment_type, measurement_profile_id=None, notes="", idempotency_key=None, adjust_inventory=None, request=None) -> Order:
+def place_order(
     *,
     user,
     delivery_address: dict,
-    fulfillment_type: str = "delivery",
-    idempotency_key: str = None,
+    fulfillment_type: str = FulfillmentType.DELIVERY,
     measurement_profile_id=None,
     notes: str = "",
+    idempotency_key: str | None = None,
+    adjust_inventory=None,
+    request=None,
 ) -> Order:
     """
     Atomic order placement.
@@ -522,87 +525,81 @@ def place_order(*, user, delivery_address, fulfillment_type, measurement_profile
       11. Log status history.
       12. Emit audit event.
     """
-    # ── Step 1: Idempotency check ────────────────────────────────────────
+    inventory_adjuster = adjust_inventory or globals().get("adjust_inventory")
+
     if idempotency_key:
-        existing_record = OrderIdempotencyRecord.objects.filter(
-            key=idempotency_key
-        .select_related("order").first()
+        existing_record = (
+            OrderIdempotencyRecord.objects.filter(key=idempotency_key)
+            .select_related("order")
+            .first()
+        )
         if existing_record:
-            logger.info("Idempotent order replay: key=%s order=%s", idempotency_key, existing_record.order.order_number)
+            logger.info(
+                "Idempotent order replay: key=%s order=%s",
+                idempotency_key,
+                existing_record.order.order_number,
+            )
             return existing_record.order
 
-    # ── Step 2: Fetch and lock cart ──────────────────────────────────────
     cart = get_or_create_cart(user)
     if cart.items.filter(is_saved_for_later=False).count() == 0:
         raise ValueError("Cart is empty. Cannot place an order.")
 
-    # Re-acquire cart with lock inside the transaction
     cart = type(cart).objects.select_for_update().get(pk=cart.pk)
     active_items = list(
-        cart.items
-        .filter(is_saved_for_later=False)
-        .select_related(
+        cart.items.filter(is_saved_for_later=False).select_related(
             "product",
             "product__vendor",
             "variant",
             "variant__size",
             "variant__color",
-        
-    
+        )
+    )
+    if not active_items:
+        raise ValueError("Cart is empty. Cannot place an order.")
 
-    # ── Step 3: Lock all product rows ────────────────────────────────────
     product_ids = [item.product_id for item in active_items]
     product_model = type(active_items[0].product)
-    # Product rows are reached through the cart item relationship already
-    # prefetched above, then the concrete model class is reused for the lock.
-    # This avoids importing the product domain model directly inside order
-    # services while preserving the same SELECT ... FOR UPDATE protection.
     products_map = {
-        p.id: p
-        for p in product_model.objects.select_for_update().filter(id__in=product_ids)
+        product.id: product
+        for product in product_model.objects.select_for_update().filter(id__in=product_ids)
     }
 
-    # ── Step 4: Stock validation ─────────────────────────────────────────
     for item in active_items:
         product = products_map.get(item.product_id)
-        if not product or product.is_deleted:
+        if not product or getattr(product, "is_deleted", False):
             raise ValueError(f"Product '{item.product.title}' is no longer available.")
         available = item.variant.stock_qty if item.variant else product.stock_qty
         if available < item.quantity:
             raise ValueError(
                 f"'{product.title}': only {available} unit(s) available, "
                 f"but {item.quantity} requested."
-            
+            )
 
-    # ── Step 5: Calculate order totals ───────────────────────────────────
     subtotal = cart.subtotal
     shipping = sum(
-        (products_map[i.product_id].shipping_amount for i in active_items),
-        Decimal("0")
-    
+        (products_map[item.product_id].shipping_amount for item in active_items),
+        Decimal("0"),
+    )
     discount = cart.coupon_discount
     total = max(Decimal("0"), subtotal + shipping - discount)
 
-    # Commission calculation
     commission_total = Decimal("0")
     for item in active_items:
         product = products_map[item.product_id]
         rate = product.commission_rate
         commission_total += (rate / 100) * item.unit_price * item.quantity
 
-    vendor_payout = total - commission_total
-
-    # Resolve vendor (from first item)
     vendor = active_items[0].product.vendor if active_items else None
+    vendor_payout = total - commission_total
     cash_payment_mode_snapshot = _resolve_cash_payment_mode_snapshot(
         active_items=active_items,
         vendor=vendor,
-    
-
-    # ── Step 6: Create Order ─────────────────────────────────────────────
+    )
     idem_key = idempotency_key or _make_order_idempotency_key(
-        user.id, f"{cart.id}:{subtotal}"
-    
+        user.id,
+        f"{cart.id}:{subtotal}",
+    )
 
     try:
         order = Order.objects.create(
@@ -628,8 +625,8 @@ def place_order(*, user, delivery_address, fulfillment_type, measurement_profile
                 OrderDeliveryMode.VENDOR_SHOP_PICKUP
                 if fulfillment_type == FulfillmentType.PICKUP
                 else OrderDeliveryMode.PLATFORM_COURIER
-            ,
-        
+            ),
+        )
     except IntegrityError:
         existing_order = Order.objects.filter(idempotency_key=idem_key).first()
         if existing_order:
@@ -637,18 +634,17 @@ def place_order(*, user, delivery_address, fulfillment_type, measurement_profile
                 "Concurrent idempotent order replay recovered: key=%s order=%s",
                 idem_key,
                 existing_order.order_number,
-            
+            )
             return existing_order
         raise
 
-    # ── Step 7: Create OrderItems with snapshots ─────────────────────────
     order_items = []
     cart_order_snapshot_payload = []
     for item in active_items:
         product = products_map[item.product_id]
         rate = product.commission_rate
         line_total = item.unit_price * item.quantity
-        comm_amount = (rate / 100) * line_total
+        commission_amount = (rate / 100) * line_total
         variant = item.variant
         size = getattr(variant, "size", None) if variant else None
         color = getattr(variant, "color", None) if variant else None
@@ -656,23 +652,29 @@ def place_order(*, user, delivery_address, fulfillment_type, measurement_profile
             cover_image_url = str(product.image.url) if product.image else ""
         except (AttributeError, ValueError):
             cover_image_url = ""
+
         order_items.append(
             CartOrderItem(
                 order=order,
                 product=item.product,
-                variant=item.variant,
+                variant=variant,
                 vendor=product.vendor,
                 product_title_snapshot=product.title,
                 product_sku_snapshot=product.sku,
-                variant_description_snapshot=str(item.variant) if item.variant else "",
+                variant_description_snapshot=str(variant) if variant else "",
+                vendor_name_snapshot=getattr(product.vendor, "store_name", ""),
                 unit_price=item.unit_price,
                 quantity=item.quantity,
-                commission_rate=rate,
-                commission_amount=comm_amount,
                 line_total=line_total,
+                commission_rate=rate,
+                commission_amount=commission_amount,
+                vendor_payout=line_total - commission_amount,
                 is_custom_order=product.is_customisable,
-            
-        
+                size_snapshot=getattr(size, "name", "") if size else "",
+                color_snapshot=getattr(color, "name", "") if color else "",
+                cart_item_idempotency_key=item.idempotency_key,
+            )
+        )
         cart_order_snapshot_payload.append(
             {
                 "product_id": str(product.pk),
@@ -689,54 +691,61 @@ def place_order(*, user, delivery_address, fulfillment_type, measurement_profile
                 "color_snapshot": getattr(color, "name", "") if color else "",
                 "cart_item_idempotency_key": str(item.idempotency_key),
             }
-        
+        )
     CartOrderItem.objects.bulk_create(order_items)
 
-    # ── Step 8: Deduct stock ─────────────────────────────────────
     for item in active_items:
         product = products_map[item.product_id]
-        if adjust_inventory is not None:
-            adjust_inventory(
+        if inventory_adjuster is not None:
+            inventory_adjuster(
                 product=product,
                 quantity_delta=-item.quantity,
                 reason="sale",
                 reference_id=order.order_number,
                 actor=user,
                 variant=item.variant,
-            
-        # Update product.orders_count
-        type(product).objects.filter(pk=product.pk).update(orders_count=product.orders_count + 1)
+            )
+        type(product).objects.filter(pk=product.pk).update(
+            orders_count=product.orders_count + 1
+        )
 
-    # ── Step 9: Increment coupon usage ───────────────────────────────────
     if cart.coupon:
         type(cart.coupon).objects.filter(pk=cart.coupon.pk).update(
             usage_count=cart.coupon.usage_count + 1
-        
+        )
 
-    # ── Step 10: Store idempotency record ────────────────────────────────
     OrderIdempotencyRecord.objects.create(
         key=idem_key,
         order=order,
-        expires_at=timezone.now() + timezone.timedelta(hours=24),
-    
+        expires_at=timezone.now() + timedelta(hours=24),
+    )
 
-    # ── Step 11: Clear cart ──────────────────────────────────────────────
     clear_cart(user=user)
+    _record_status_history(
+        order,
+        "",
+        OrderStatus.PENDING_PAYMENT,
+        actor=user,
+        note="Order placed.",
+    )
 
-    # ── Step 12: Log initial status history ──────────────────────────────
-    _record_status_history(order, "", OrderStatus.PENDING_PAYMENT, actor=user, note="Order placed.")
-
-    # ── Step 13: Emit audit event ────────────────────────────────────────
     transaction.on_commit(
-        lambda: _emit_order_audit("order.placed", order, actor=user,request=request, total=str(total))
+        lambda: _emit_order_audit(
+            "order.placed",
+            order,
+            actor=user,
+            request=request,
+            total=str(total),
+        )
     )
     from apps.common.events import event_bus
+
     event_bus.emit_on_commit(
         "order.placed",
         order_id=str(order.pk),
         order_number=order.order_number,
         cart_items=cart_order_snapshot_payload,
-    
+    )
 
     logger.info("Order placed: %s total=%s user=%s", order.order_number, total, user)
     return order

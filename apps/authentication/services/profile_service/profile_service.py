@@ -1,4 +1,6 @@
 # apps/authentication/services/profile_service/profile_service.py
+from __future__ import annotations
+
 """
 Profile Business Logic Service — Enterprise Edition
 ====================================================
@@ -20,7 +22,6 @@ Functions:
 """
 
 from apps.authentication.models import UnifiedUser
-from __future__ import annotations
 
 import logging
 from typing import Any, Optional

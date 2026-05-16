@@ -1,4 +1,4 @@
-from apps.catalog.services.catalog_service import CatalogAuditService
+# apps/catalog/services/category_service.py
 
 
 class CategoryService:
@@ -10,39 +10,71 @@ class CategoryService:
     def create(cls, *, serializer, request):
         user = getattr(request, "user", None)
         instance = serializer.save(user=user if getattr(user, "is_authenticated", False) else None)
-        CatalogAuditService.log_mutation(
-            request=request,
-            action="catalog.category.created",
-            resource_type=cls.resource_type,
-            resource_id=instance.pk,
-            new_values=serializer.data,
-        )
+
+        from apps.audit_logs.services.catalog import catalog_audit
+        from django.db import transaction
+
+        def _dispatch():
+            try:
+                catalog_audit.log_category_created(
+                    actor=user,
+                    category_id=str(instance.pk),
+                    name=instance.name,
+                    request=request,
+                )
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"CategoryService.create: Audit failed: {e}")
+
+        transaction.on_commit(_dispatch)
         return instance
 
     @classmethod
     def update(cls, *, serializer, request, old_values: dict):
         user = getattr(request, "user", None)
         instance = serializer.save(user=user if getattr(user, "is_authenticated", False) else None)
-        CatalogAuditService.log_mutation(
-            request=request,
-            action="catalog.category.updated",
-            resource_type=cls.resource_type,
-            resource_id=instance.pk,
-            old_values=old_values,
-            new_values=serializer.data,
-        )
+
+        from apps.audit_logs.services.catalog import catalog_audit
+        from django.db import transaction
+
+        def _dispatch():
+            try:
+                catalog_audit.log_category_updated(
+                    actor=user,
+                    category_id=str(instance.pk),
+                    name=instance.name,
+                    old_values=old_values,
+                    new_values=serializer.data,
+                    request=request,
+                )
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"CategoryService.update: Audit failed: {e}")
+
+        transaction.on_commit(_dispatch)
         return instance
 
     @classmethod
     def archive(cls, *, instance, request, old_values: dict):
         instance.active = False
         instance.save(update_fields=["active", "updated_at"])
-        CatalogAuditService.log_mutation(
-            request=request,
-            action="catalog.category.archived",
-            resource_type=cls.resource_type,
-            resource_id=instance.pk,
-            old_values=old_values,
-            new_values={"active": False},
-        )
+
+        from apps.audit_logs.services.catalog import catalog_audit
+        from django.db import transaction
+
+        def _dispatch():
+            try:
+                catalog_audit.log_category_updated(
+                    actor=getattr(request, "user", None),
+                    category_id=str(instance.pk),
+                    name=instance.name,
+                    old_values=old_values,
+                    new_values={"active": False},
+                    request=request,
+                )
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"CategoryService.archive: Audit failed: {e}")
+
+        transaction.on_commit(_dispatch)
         return instance

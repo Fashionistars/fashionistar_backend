@@ -92,6 +92,7 @@ class EventType(models.TextChoices):
     PASSWORD_CHANGED       = "password_changed",       _("Password Changed")
     PASSWORD_RESET_REQUEST   = "password_reset_request",   _("Password Reset Requested")
     PASSWORD_RESET_DONE      = "password_reset_done",      _("Password Reset Completed")
+    PASSWORD_RESET_FAILED    = "password_reset_failed",    _("Password Reset Failed")
     MFA_ENABLED            = "mfa_enabled",          _("MFA Enabled")
     MFA_DISABLED           = "mfa_DISABLED",         _("MFA Disabled")
     OTP_GENERATED          = "otp_generated",        _("OTP Generated")
@@ -192,6 +193,20 @@ class EventType(models.TextChoices):
     REVIEW_POSTED          = "review_posted",         _("Review Posted")
     REVIEW_FLAGGED         = "review_flagged",        _("Review Flagged")
     CLOUDINARY_WEBHOOK     = "cloudinary_webhook",    _("Cloudinary Webhook")
+
+    # ── Catalog: Collections, Brands, Categories ──────────────────────
+    COLLECTION_CREATED     = "collection_created",    _("Collection Created")
+    COLLECTION_UPDATED     = "collection_updated",    _("Collection Updated")
+    COLLECTION_DELETED     = "collection_deleted",    _("Collection Deleted")
+    BRAND_CREATED          = "brand_created",         _("Brand Created")
+    BRAND_UPDATED          = "brand_updated",         _("Brand Updated")
+    BRAND_DELETED          = "brand_deleted",         _("Brand Deleted")
+    CATEGORY_CREATED       = "category_created",      _("Category Created")
+    CATEGORY_UPDATED       = "category_updated",      _("Category Updated")
+    CATEGORY_DELETED       = "category_deleted",      _("Category Deleted")
+    BLOG_POST_CREATED      = "blog_post_created",     _("Blog Post Created")
+    BLOG_POST_UPDATED      = "blog_post_updated",     _("Blog Post Updated")
+    BLOG_POST_DELETED      = "blog_post_deleted",     _("Blog Post Deleted")
 
     # ── Customer Support ──────────────────────────────────────────────
     TICKET_CREATED         = "ticket_created",        _("Support Ticket Created")
