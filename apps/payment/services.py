@@ -40,6 +40,15 @@ from apps.common.http import (
     ProviderSyncHTTPClient,
     RetryPolicy,
 )
+from apps.global_platform_settings.cache import get_platform_settings
+from apps.order.models import (
+    CashPaymentMode,
+    Order,
+    OrderPaymentPath,
+    OrderPaymentSource,
+)
+from apps.order.services import register_payment_tranche
+from apps.payment.orchestrator import PaymentOrchestrator
 from apps.payment.models import (
     PaymentIntent,
     PaymentIntentStatus,
@@ -416,8 +425,178 @@ class PaymentIntentService:
         """
         return f"{prefix}_{secrets.token_urlsafe(24)}"
 
+    @staticmethod
+    def _extract_checkout_url(response: dict[str, Any]) -> str:
+        data = response.get("data") or {}
+        return (
+            data.get("authorization_url")
+            or data.get("link")
+            or data.get("checkout_url")
+            or ""
+        )
+
+    @staticmethod
+    def _get_allowed_percentages() -> list[int]:
+        cfg = get_platform_settings()
+        raw = getattr(cfg, "order_payment_allowed_percentages", [30, 50, 70, 100])
+        if isinstance(raw, str):
+            raw = [int(part.strip()) for part in raw.split(",") if part.strip()]
+        return sorted({int(value) for value in raw}) or [30, 50, 70, 100]
+
+    @staticmethod
+    def _get_minimum_commitment_amount() -> Decimal:
+        cfg = get_platform_settings()
+        minimum = getattr(cfg, "order_payment_minimum_commitment_ngn", Decimal("0.00"))
+        return Decimal(str(minimum or "0.00")).quantize(Decimal("0.01"))
+
+    @classmethod
+    def _get_order_for_payment(cls, *, user, order_id: str) -> Order:
+        try:
+            return (
+                Order.objects.select_related("vendor", "vendor__user")
+                .prefetch_related("cart_order_items__product")
+                .get(pk=order_id, user=user)
+            )
+        except Order.DoesNotExist as exc:
+            raise ValidationError("Order not found for this user.") from exc
+
+    @staticmethod
+    def _payment_path_allowed(order: Order, payment_path: str) -> bool:
+        mode = order.cash_payment_mode_snapshot or CashPaymentMode.DISABLED
+        if payment_path == OrderPaymentPath.COD:
+            return mode in {CashPaymentMode.COD, CashPaymentMode.BOTH}
+        if payment_path == OrderPaymentPath.PAY_AT_SHOP:
+            return mode in {CashPaymentMode.PAY_AT_SHOP, CashPaymentMode.BOTH}
+        return True
+
+    @classmethod
+    def _validate_order_payment_request(
+        cls,
+        *,
+        order: Order,
+        provider: str,
+        payment_path: str,
+        selected_percent: int,
+    ) -> None:
+        allowed_percentages = cls._get_allowed_percentages()
+        if selected_percent not in allowed_percentages:
+            raise ValidationError(f"selected_percent must be one of {allowed_percentages}.")
+        if order.status not in {"pending_payment", "awaiting_cash_confirmation", "payment_confirmed"}:
+            raise ValidationError("This order is not open for additional payment.")
+        if order.is_fully_paid:
+            raise ValidationError("This order is already fully paid.")
+        if payment_path == OrderPaymentPath.WALLET and provider != PaymentProviderCode.WALLET:
+            raise ValidationError("Wallet payment path must use provider='wallet'.")
+        if payment_path == OrderPaymentPath.GATEWAY and provider == PaymentProviderCode.WALLET:
+            raise ValidationError("Gateway payment path cannot use provider='wallet'.")
+        if payment_path in {OrderPaymentPath.COD, OrderPaymentPath.PAY_AT_SHOP} and not cls._payment_path_allowed(order, payment_path):
+            raise ValidationError("Requested cash payment mode is not enabled for this order.")
+        if order.cash_payment_mode_snapshot == CashPaymentMode.DISABLED and selected_percent != 100:
+            raise ValidationError("This order requires full payment because COD / Pay At Shop is disabled.")
+
+    @classmethod
+    def calculate_order_payment_amount(
+        cls,
+        *,
+        order: Order,
+        selected_percent: int,
+    ) -> Decimal:
+        minimum_amount = cls._get_minimum_commitment_amount()
+        requested_amount = (order.total_amount * Decimal(selected_percent) / Decimal("100")).quantize(Decimal("0.01"))
+        payable = max(requested_amount, minimum_amount)
+        outstanding = order.amount_outstanding or order.total_amount
+        return min(payable, outstanding).quantize(Decimal("0.01"))
+
+    @classmethod
+    def initialize_gateway_payment(
+        cls,
+        *,
+        user,
+        order: Order,
+        provider: str,
+        selected_percent: int,
+        payment_path: str,
+        currency: str = "NGN",
+        idempotency_key: str = "",
+        cash_payment_mode: str = CashPaymentMode.DISABLED,
+        metadata: dict | None = None,
+    ) -> PaymentIntent:
+        amount = cls.calculate_order_payment_amount(order=order, selected_percent=selected_percent)
+        idempotency_key = idempotency_key or (
+            f"order-payment:{user.pk}:{order.pk}:{payment_path}:{provider}:{selected_percent}"
+        )
+        existing = PaymentIntent.objects.filter(
+            user=user,
+            provider=provider,
+            purpose=PaymentPurpose.ORDER_PAYMENT,
+            order_id=str(order.pk),
+            idempotency_key=idempotency_key,
+        ).order_by("-created_at").first()
+        if existing and existing.status in {PaymentIntentStatus.PENDING, PaymentIntentStatus.INITIALIZED, PaymentIntentStatus.SUCCEEDED}:
+            return existing
+
+        reference = cls.make_reference(prefix="FSORD")
+        orchestrator = PaymentOrchestrator.for_provider(provider)
+        payload_metadata = {
+            "purpose": PaymentPurpose.ORDER_PAYMENT,
+            "order_id": str(order.pk),
+            "selected_percent": selected_percent,
+            "payment_path": payment_path,
+            "cash_payment_mode": cash_payment_mode,
+            "amount_outstanding_before": str(order.amount_outstanding or order.total_amount),
+            **(metadata or {}),
+        }
+        response = orchestrator.initialize_payment(
+            email=str(user.email),
+            amount=amount,
+            reference=reference,
+            currency=currency,
+            metadata=payload_metadata,
+        )
+        checkout_url = cls._extract_checkout_url(response)
+        with db_transaction.atomic():
+            intent = PaymentIntent.objects.create(
+                user=user,
+                provider=provider,
+                purpose=PaymentPurpose.ORDER_PAYMENT,
+                amount=amount,
+                currency=currency,
+                status=PaymentIntentStatus.INITIALIZED if checkout_url else PaymentIntentStatus.PENDING,
+                reference=reference,
+                provider_reference=((response.get("data") or {}).get("reference") or reference),
+                authorization_url=checkout_url,
+                access_code=((response.get("data") or {}).get("access_code") or ""),
+                order_id=str(order.pk),
+                idempotency_key=idempotency_key,
+                metadata=payload_metadata,
+                provider_response=response,
+            )
+        return intent
+
     @classmethod
     def initialize_paystack(cls, *, user, amount: Decimal, purpose: str, currency: str = "NGN", order_id: str = "", measurement_request_id: str = "", idempotency_key: str = "", metadata: dict | None = None) -> PaymentIntent:
+        if purpose == PaymentPurpose.ORDER_PAYMENT and order_id:
+            order = cls._get_order_for_payment(user=user, order_id=order_id)
+            selected_percent = int((metadata or {}).get("selected_percent") or 100)
+            payment_path = (metadata or {}).get("payment_path") or OrderPaymentPath.GATEWAY
+            cash_payment_mode = (metadata or {}).get("cash_payment_mode") or order.cash_payment_mode_snapshot
+            cls._validate_order_payment_request(
+                order=order,
+                provider=PaymentProviderCode.PAYSTACK,
+                payment_path=payment_path,
+                selected_percent=selected_percent,
+            )
+            return cls.initialize_gateway_payment(
+                user=user,
+                order=order,
+                provider=PaymentProviderCode.PAYSTACK,
+                selected_percent=selected_percent,
+                payment_path=payment_path,
+                currency=currency,
+                idempotency_key=idempotency_key,
+                cash_payment_mode=cash_payment_mode,
+                metadata=metadata,
+            )
         reference = cls.make_reference()
         response = PaystackClient.initialize_transaction(
             email=str(user.email),
@@ -452,6 +631,80 @@ class PaymentIntentService:
                 intent.status = PaymentIntentStatus.FAILED
             intent.save(update_fields=["provider_response", "status", "provider_reference", "authorization_url", "access_code", "updated_at"])
             return intent
+
+    @classmethod
+    @db_transaction.atomic
+    def pay_order_from_wallet(
+        cls,
+        *,
+        user,
+        order: Order,
+        selected_percent: int,
+        payment_path: str,
+        idempotency_key: str = "",
+        metadata: dict | None = None,
+    ) -> tuple[PaymentIntent, Any]:
+        amount = cls.calculate_order_payment_amount(order=order, selected_percent=selected_percent)
+        idempotency_key = idempotency_key or (
+            f"wallet-order-payment:{user.pk}:{order.pk}:{payment_path}:{selected_percent}"
+        )
+        existing = PaymentIntent.objects.filter(
+            user=user,
+            provider=PaymentProviderCode.WALLET,
+            purpose=PaymentPurpose.ORDER_PAYMENT,
+            order_id=str(order.pk),
+            idempotency_key=idempotency_key,
+            status=PaymentIntentStatus.SUCCEEDED,
+        ).order_by("-created_at").first()
+        if existing:
+            latest_record = order.payment_records.order_by("-sequence_number").first()
+            return existing, latest_record
+
+        intent = PaymentIntent.objects.create(
+            user=user,
+            provider=PaymentProviderCode.WALLET,
+            purpose=PaymentPurpose.ORDER_PAYMENT,
+            amount=amount,
+            currency=order.currency,
+            status=PaymentIntentStatus.SUCCEEDED,
+            reference=cls.make_reference(prefix="FSWALLET"),
+            provider_reference="wallet-internal",
+            order_id=str(order.pk),
+            idempotency_key=idempotency_key,
+            metadata={
+                "selected_percent": selected_percent,
+                "payment_path": payment_path,
+                "cash_payment_mode": order.cash_payment_mode_snapshot,
+                **(metadata or {}),
+            },
+        )
+        EscrowService.hold_order_payment(
+            client_user=user,
+            amount=amount,
+            reference=intent.reference,
+            order_id=str(order.pk),
+            provider_reference=intent.provider_reference,
+            idempotency_key=idempotency_key,
+        )
+        record = register_payment_tranche(
+            order=order,
+            amount=amount,
+            selected_percent=selected_percent,
+            payment_source=(
+                OrderPaymentSource.COD_COMMITMENT
+                if payment_path == OrderPaymentPath.COD
+                else OrderPaymentSource.PAY_AT_SHOP_COMMITMENT
+                if payment_path == OrderPaymentPath.PAY_AT_SHOP
+                else OrderPaymentSource.WALLET
+            ),
+            payment_path=payment_path,
+            provider=PaymentProviderCode.WALLET,
+            actor=user,
+            payment_intent=intent,
+            correlation_id=idempotency_key,
+            metadata=metadata or {},
+        )
+        return intent, record
 
     @classmethod
     @db_transaction.atomic
@@ -493,6 +746,27 @@ class PaymentIntentService:
                 provider_reference=intent.provider_reference,
                 idempotency_key=intent.idempotency_key,
             )
+            if intent.order_id:
+                order = cls._get_order_for_payment(user=intent.user, order_id=intent.order_id)
+                payment_path = (intent.metadata or {}).get("payment_path", OrderPaymentPath.GATEWAY)
+                register_payment_tranche(
+                    order=order,
+                    amount=intent.amount,
+                    selected_percent=int((intent.metadata or {}).get("selected_percent") or 100),
+                    payment_source=(
+                        OrderPaymentSource.COD_COMMITMENT
+                        if payment_path == OrderPaymentPath.COD
+                        else OrderPaymentSource.PAY_AT_SHOP_COMMITMENT
+                        if payment_path == OrderPaymentPath.PAY_AT_SHOP
+                        else OrderPaymentSource.GATEWAY
+                    ),
+                    payment_path=payment_path,
+                    provider=intent.provider,
+                    actor=intent.user,
+                    payment_intent=intent,
+                    correlation_id=intent.idempotency_key or intent.reference,
+                    metadata=intent.metadata or {},
+                )
         elif intent.purpose == PaymentPurpose.MEASUREMENT_FEE:
             TransactionLedgerService.record_measurement_fee(
                 user=intent.user,

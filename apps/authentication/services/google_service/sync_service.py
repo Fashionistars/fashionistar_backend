@@ -41,36 +41,38 @@ class SyncGoogleAuthService:
         token: str,
         role: str = 'client',
         *,
-        ip_address: str | None = None,
-        user_agent: str | None = None,
+        request: Any = None,
     ) -> dict:
-        """
-        Verify the Google ID-token, find-or-create the user, and return JWT tokens.
+        """Verify Google ID-token, find-or-create user, and return JWT tokens.
+
+        This service implements the Google OAuth2 Hybrid Flow backend verification.
+        It validates the token against Google's public keys, extracts profile data,
+        and either logs in an existing user or registers a new one.
 
         Args:
-            token:      The ``id_token`` returned by Google to the Next.js frontend.
-            role:       The role to assign on first registration ('client' or 'vendor').
-            ip_address: Forwarded for the LoginAuditLog (optional).
-            user_agent: HTTP User-Agent string (optional).
+            token: The Google-provided ID token from the frontend.
+            role: The role to assign if a new user is created ('client' or 'vendor').
+            request: Optional Django HttpRequest for audit metadata (IP, UA).
 
         Returns:
-            {
-                "user":   <UnifiedUser instance>,
-                "tokens": {"access": "...", "refresh": "..."},
-                "is_new": bool,
+            dict: {
+                "user": UnifiedUser instance,
+                "tokens": {"access": str, "refresh": str},
+                "is_new": bool
             }
 
         Raises:
-            ValueError: on invalid token.
-            Exception:  on unexpected errors.
+            ValueError: If the Google token is invalid or email is unverified.
+            Exception: For unexpected infrastructure failures.
         """
         from google.oauth2 import id_token as google_id_token
         from google.auth.transport import requests as google_requests
         from apps.authentication.models import UnifiedUser
         from rest_framework_simplejwt.tokens import RefreshToken
+        from apps.audit_logs.services.authentication import auth_audit
 
+        # ── 1. Token Verification ──────────────────────────────────────────
         try:
-            # ── 1. Verify token with Google ────────────────────────────────
             id_info = google_id_token.verify_oauth2_token(
                 token,
                 google_requests.Request(),
@@ -84,44 +86,43 @@ class SyncGoogleAuthService:
             if not id_info.get('email_verified', False):
                 raise ValueError("Google email is not verified.")
 
-            # Normalise email domain to lowercase only for email (phone remains unchanged)
+            # Normalise email domain
             from django.contrib.auth.base_user import BaseUserManager as _BUM
             if email and "@" in email:
                 email = _BUM.normalize_email(email)
 
-            # ── 2. Extract rich profile data ───────────────────────────────
+            # ── 2. Data Extraction ─────────────────────────────────────────
             first_name        = id_info.get('given_name', '')   or ''
             last_name         = id_info.get('family_name', '')  or ''
-            full_name         = id_info.get('name', '')         or ''
             google_avatar_url = id_info.get('picture', '')      or ''
-            locale            = id_info.get('locale', '')        or ''
-            google_sub        = id_info.get('sub', '')           or ''  # Google's stable user ID
+            google_sub        = id_info.get('sub', '')           or ''
 
-            logger.info(
-                "🔍 Google token verified — email=%s sub=%s", email, google_sub
-            )
+            logger.info("🔍 Google token verified: email=%s", email)
 
         except ValueError as exc:
             logger.error("❌ Google token verification failed: %s", exc)
             raise ValueError("Invalid or expired Google Token.") from exc
         except Exception as exc:
-            logger.error("❌ Unexpected error during Google token verification: %s", exc, exc_info=True)
-            raise Exception("Google authentication failed. Please try again.") from exc
+            logger.error("❌ Google Auth Failure: %s", exc, exc_info=True)
+            raise Exception("Google authentication failed.") from exc
 
+        # ── 3. Find or Create User ─────────────────────────────────────────
         try:
-            # ── 3. Find or Create user ─────────────────────────────────────
             is_new = False
+            user = None
 
             try:
                 user = UnifiedUser.objects.get(email=email)
                 logger.info("✅ Google Login: existing user %s", email)
-
             except UnifiedUser.DoesNotExist:
-                # New user — create via create_user() to go through the full
-                # manager pipeline: member_id generation, unusable password,
-                # full_clean() validation.
                 with transaction.atomic():
-                    # Attempt to resolve geolocation silently
+                    # Resolve geo-data for the new account
+                    ip_address = None
+                    if request:
+                        # Extract IP if request object provided
+                        from apps.audit_logs.services.audit import _get_client_ip
+                        ip_address = _get_client_ip(request)
+
                     geo_data = {}
                     if ip_address:
                         try:
@@ -130,79 +131,47 @@ class SyncGoogleAuthService:
                         except Exception as geo_exc:
                             logger.warning("⚠️ Google Auth geo-resolve failed: %s", geo_exc)
 
+                    # Create user via manager pipeline
                     user = UnifiedUser.objects.create_user(
                         email=email,
-                        password=None,          # Sets unusable password hash
+                        password=None,
                         first_name=first_name,
                         last_name=last_name,
                         auth_provider=UnifiedUser.PROVIDER_GOOGLE,
-                        is_verified=True,       # Google guarantees email ownership
-                        is_active=True,         # Google users skip OTP activation
+                        is_verified=True,
+                        is_active=True,
                         role=role,
                         country=geo_data.get('country', ''),
                         city=geo_data.get('city', ''),
                         state=geo_data.get('region', ''),
                     )
-
                     is_new = True
-                    logger.info(
-                        "🆕 Google Register: new user %s (member_id=%s, role=%s, country=%s)",
-                        email, user.member_id, role, geo_data.get('country', 'Unknown')
-                    )
 
-                    # ── 4. Google Avatar → Cloudinary (fire-and-forget Celery) ──
-                    # We download the Google CDN avatar and re-upload it to our
-                    # Cloudinary account so we own the CDN path.
-                    # The avatar field is updated after the Celery task finishes.
+                    # ── 4. Avatar & Events ──────────────────────────────────
                     if google_avatar_url:
-                        try:
-                            from apps.authentication.tasks import (
-                                upload_google_avatar_to_cloudinary,
-                            )
-                            transaction.on_commit(
-                                lambda: upload_google_avatar_to_cloudinary.delay(
-                                    str(user.pk), google_avatar_url
-                                )
-                            )
-                            logger.info(
-                                "📸 Scheduled Google avatar Cloudinary upload for user=%s",
-                                email,
-                            )
-                        except Exception as avatar_exc:
-                            # Non-fatal — user is already created
-                            logger.warning(
-                                "⚠️ Could not schedule avatar upload for %s: %s",
-                                email, avatar_exc,
-                            )
+                        from apps.authentication.tasks import upload_google_avatar_to_cloudinary
+                        transaction.on_commit(
+                            lambda: upload_google_avatar_to_cloudinary.delay(str(user.pk), google_avatar_url)
+                        )
 
-                    # ── 5. EventBus — emit user.registered ────────────────────
-                    try:
-                        from apps.common.events import event_bus
-
-                        event_bus.emit_on_commit(
+                    # Emit registration events
+                    from apps.common.events import event_bus
+                    transaction.on_commit(
+                        lambda: event_bus.emit(
                             'user.registered',
                             user_uuid=str(user.pk),
                             email=user.email,
                             role=user.role,
-                            auth_provider='google',
-                            member_id=user.member_id,
+                            auth_provider='google'
                         )
-                        event_bus.emit_on_commit(
-                            'user.verified',
-                            user_uuid=str(user.pk),
-                            email=user.email,
-                            role=user.role,
-                            auth_provider='google',
-                            member_id=user.member_id,
-                        )
+                    )
 
-                    except Exception as event_exc:
-                        logger.warning(
-                            "⚠️ EventBus emit failed for user %s: %s", email, event_exc
-                        )
+                    # Success registration audit: Atomic dispatch on commit
+                    transaction.on_commit(
+                        lambda: auth_audit.log_register_success(actor=user, request=request)
+                    )
 
-            # ── 6. Update profile fields on returning Google users ─────────
-            # We silently update name + avatar URL if Google changes them.
+            # ── 5. Profile Sync (Existing Users) ───────────────────────────
             if not is_new:
                 update_fields = []
                 if first_name and user.first_name != first_name:
@@ -211,46 +180,41 @@ class SyncGoogleAuthService:
                 if last_name and user.last_name != last_name:
                     user.last_name = last_name
                     update_fields.append('last_name')
+                
                 if update_fields:
                     user.save(update_fields=update_fields)
-                    logger.info(
-                        "🔄 Updated profile for returning Google user=%s fields=%s",
-                        email, update_fields,
-                    )
+                    logger.info("🔄 Google profile sync for user=%s", email)
 
-            # ── 7. Update last_login ─────────────────────────────────────────────────
-            # Explicitly update Django's last_login field for Google OAuth users.
-            # This bypasses the normal authenticate() signal path, so it MUST be
-            # called manually. Non-fatal: wrapped in try/except to never block auth.
-            try:
-                from django.contrib.auth.models import update_last_login as _ull
-                _ull(None, user)
-                logger.info(
-                    "🗓️ last_login updated for Google user user_id=%s is_new=%s",
-                    user.id, is_new,
-                )
-            except Exception as ll_exc:
-                logger.warning(
-                    "⚠️ update_last_login failed for Google user %s: %s", user.id, ll_exc
-                )
-
-            # ── 8. Issue JWT tokens ────────────────────────────────────────
+            # ── 6. Token Generation & Login Audit ──────────────────────────
             refresh = RefreshToken.for_user(user)
             tokens = {
                 'access':  str(refresh.access_token),
                 'refresh': str(refresh),
             }
 
+            # Update last_login
+            from django.contrib.auth.models import update_last_login
+            update_last_login(None, user)
+
+            # Success login audit (for both new and existing users)
+            transaction.on_commit(
+                lambda: auth_audit.log_login_success(
+                    actor=user,
+                    request=request,
+                    session_id=str(refresh.payload.get('jti'))
+                )
+            )
+
             return {
-                'user':   user,
+                'user': user,
                 'tokens': tokens,
                 'is_new': is_new,
             }
 
-        except (ValueError, Exception):
-            raise
         except Exception as exc:
-            logger.error(
-                "❌ Unexpected error in SyncGoogleAuthService: %s", exc, exc_info=True
-            )
-            raise Exception("Google authentication failed.") from exc
+            # Audit failed login attempt if possible
+            if email:
+                auth_audit.log_login_failed(email=email, request=request, reason=str(exc))
+            
+            logger.error("❌ Google Auth processing error: %s", exc, exc_info=True)
+            raise

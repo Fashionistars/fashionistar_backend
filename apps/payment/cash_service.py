@@ -37,6 +37,7 @@ COD SECURITY MEASURES:
 """
 from __future__ import annotations
 
+import datetime
 import logging
 import secrets
 from decimal import Decimal
@@ -44,9 +45,17 @@ from decimal import Decimal
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import transaction as db_transaction
+from django.core import signing
 from django.utils import timezone
 
 from apps.global_platform_settings.cache import get_platform_settings
+from apps.order.models import Order, OrderCommercialTransitionType, OrderDeliveryMode, OrderPaymentPath, OrderPaymentSource, OrderStatus
+from apps.order.services.order_service import (
+    _emit_order_financial_audit,
+    _log_commercial_transition,
+    _record_status_history,
+    register_payment_tranche,
+)
 from apps.payment.models import PaymentIntent, PaymentIntentStatus, PaymentProviderCode, PaymentPurpose
 from apps.transactions.models import (
     CompanyRevenueEntry,
@@ -151,15 +160,107 @@ class CashOrderService:
     @staticmethod
     def _format_response(intent: PaymentIntent, token: str, cfg) -> dict:
         from django.utils import timezone as tz
-        import datetime
         expires_at = tz.now() + datetime.timedelta(hours=cfg.cod_confirmation_window_hours)
+        payment_path = "pay_at_shop" if intent.metadata.get("is_in_store") else "cod"
+        qr_payload = signing.dumps(
+            {
+                "order_id": intent.order_id,
+                "reference": intent.reference,
+                "payment_path": payment_path,
+                "token": token,
+                "expires_at": expires_at.isoformat(),
+            },
+            salt="fashionistar-cash-confirmation",
+        )
         return {
             "intent_id": str(intent.pk),
             "reference": intent.reference,
             "confirmation_token": token,
+            "qr_payload": qr_payload,
             "confirmation_expires_at": expires_at.isoformat(),
             "provider": intent.provider,
         }
+
+    @classmethod
+    @db_transaction.atomic
+    def create_confirmation_token(
+        cls,
+        *,
+        order_id: str,
+        client_user,
+    ) -> dict:
+        cfg = get_platform_settings()
+        order = Order.objects.select_for_update().get(pk=order_id, user=client_user)
+        if order.status not in {
+            OrderStatus.AWAITING_CASH_CONFIRMATION,
+            OrderStatus.PAYMENT_CONFIRMED,
+        }:
+            raise ValidationError("Order is not ready for cash confirmation.")
+        payment_path = order.active_payment_path or OrderPaymentPath.COD
+        is_in_store = payment_path == OrderPaymentPath.PAY_AT_SHOP
+        existing = PaymentIntent.objects.filter(
+            order_id=str(order.pk),
+            provider__in=[PaymentProviderCode.COD, PaymentProviderCode.CASH],
+        ).order_by("-created_at").first()
+        if existing is None:
+            existing = PaymentIntent.objects.create(
+                user=client_user,
+                provider=PaymentProviderCode.CASH if is_in_store else PaymentProviderCode.COD,
+                purpose=PaymentPurpose.ORDER_PAYMENT,
+                amount=order.amount_outstanding,
+                currency=order.currency,
+                status=PaymentIntentStatus.PENDING,
+                reference=f"FSCOD_{secrets.token_urlsafe(20)}",
+                order_id=str(order.pk),
+                metadata={
+                    "is_cod": not is_in_store,
+                    "is_in_store": is_in_store,
+                    "requires_cash_confirmation": True,
+                },
+            )
+        token = cls._issue_token(str(order.pk), cfg)
+        delivery_mode = (
+            OrderDeliveryMode.VENDOR_SHOP_PICKUP
+            if is_in_store
+            else OrderDeliveryMode.COD
+        )
+        if order.delivery_mode != delivery_mode:
+            order.delivery_mode = delivery_mode
+            order.save(update_fields=["delivery_mode", "updated_at"])
+        correlation_id = f"cash-token:{order.pk}:{token}"
+        _log_commercial_transition(
+            order=order,
+            transition_type=OrderCommercialTransitionType.COMMITMENT_CREATED,
+            actor=client_user,
+            payment_intent=existing,
+            from_status=order.status,
+            to_status=order.status,
+            delivery_mode=delivery_mode,
+            selected_percent=int(order.percent_paid_total or 0),
+            cumulative_percent_paid=order.percent_paid_total,
+            amount_delta=Decimal("0.00"),
+            balance_after=order.amount_outstanding,
+            correlation_id=correlation_id,
+            note="Cash confirmation token issued.",
+            metadata={"payment_path": payment_path},
+        )
+        _log_commercial_transition(
+            order=order,
+            transition_type=OrderCommercialTransitionType.DELIVERY_MODE_SELECTED,
+            actor=client_user,
+            payment_intent=existing,
+            from_status=order.status,
+            to_status=order.status,
+            delivery_mode=delivery_mode,
+            selected_percent=int(order.percent_paid_total or 0),
+            cumulative_percent_paid=order.percent_paid_total,
+            amount_delta=Decimal("0.00"),
+            balance_after=order.amount_outstanding,
+            correlation_id=correlation_id,
+            note="Cash delivery mode selected.",
+            metadata={"payment_path": payment_path},
+        )
+        return cls._format_response(existing, token, cfg)
 
     # ── Step 2: Vendor confirms delivery ──────────────────────────────────────
 
@@ -202,6 +303,9 @@ class CashOrderService:
             raise ValidationError("No pending COD/cash payment found for this order.")
         if intent.status == PaymentIntentStatus.SUCCEEDED:
             raise ValidationError("This COD order has already been confirmed.")
+
+        order = Order.objects.select_for_update().get(pk=order_id)
+        previous_status = order.status
 
         cfg = get_platform_settings()
         commission_rate = cfg.cod_platform_commission_rate
@@ -262,6 +366,129 @@ class CashOrderService:
             currency=company_wallet.currency,
             source_reference=intent.reference,
             metadata={"order_id": order_id, "type": "cod"},
+        )
+
+        remaining_amount = order.amount_outstanding
+        correlation_id = f"cash-confirm:{order.pk}:{intent.reference}"
+        if remaining_amount > Decimal("0.00"):
+            remaining_percent = int(
+                min(
+                    Decimal("100"),
+                    Decimal("100") - (order.percent_paid_total or Decimal("0.00")),
+                )
+            )
+            register_payment_tranche(
+                order=order,
+                amount=remaining_amount,
+                selected_percent=remaining_percent,
+                payment_source=OrderPaymentSource.MANUAL_ADJUSTMENT,
+                payment_path=(
+                    OrderPaymentPath.PAY_AT_SHOP
+                    if intent.metadata.get("is_in_store")
+                    else OrderPaymentPath.COD
+                ),
+                provider=intent.provider,
+                actor=vendor_user,
+                payment_intent=None,
+                correlation_id=correlation_id,
+                metadata={
+                    "offline_cash_settlement": True,
+                    "source_reference": intent.reference,
+                },
+            )
+            order.refresh_from_db()
+
+        order.delivery_mode = (
+            OrderDeliveryMode.VENDOR_SHOP_PICKUP
+            if intent.metadata.get("is_in_store")
+            else OrderDeliveryMode.COD
+        )
+        order.status = OrderStatus.COMPLETED
+        order.final_paid_at = order.final_paid_at or timezone.now()
+        order.is_fully_paid = True
+        order.amount_outstanding = Decimal("0.00")
+        order.save(
+            update_fields=[
+                "delivery_mode",
+                "status",
+                "final_paid_at",
+                "is_fully_paid",
+                "amount_outstanding",
+                "updated_at",
+            ]
+        )
+        _record_status_history(
+            order,
+            previous_status,
+            OrderStatus.COMPLETED,
+            actor=vendor_user,
+            note="Cash order confirmed by vendor.",
+        )
+        transition_type = (
+            OrderCommercialTransitionType.VENDOR_SHOP_COLLECTED
+            if intent.metadata.get("is_in_store")
+            else OrderCommercialTransitionType.COD_CONFIRMED
+        )
+        _log_commercial_transition(
+            order=order,
+            transition_type=OrderCommercialTransitionType.COMMITMENT_CONFIRMED,
+            actor=vendor_user,
+            payment_intent=intent,
+            from_status=previous_status,
+            to_status=OrderStatus.COMPLETED,
+            delivery_mode=order.delivery_mode,
+            selected_percent=int(order.percent_paid_total or 0),
+            cumulative_percent_paid=order.percent_paid_total,
+            amount_delta=Decimal("0.00"),
+            balance_after=order.amount_outstanding,
+            correlation_id=correlation_id,
+            note="Commitment confirmed and offline settlement completed.",
+            metadata={"payment_status": payment_status},
+        )
+        _log_commercial_transition(
+            order=order,
+            transition_type=transition_type,
+            actor=vendor_user,
+            payment_intent=intent,
+            from_status=previous_status,
+            to_status=OrderStatus.COMPLETED,
+            delivery_mode=order.delivery_mode,
+            selected_percent=int(order.percent_paid_total or 0),
+            cumulative_percent_paid=order.percent_paid_total,
+            amount_delta=Decimal("0.00"),
+            balance_after=order.amount_outstanding,
+            correlation_id=correlation_id,
+            note="Vendor confirmed final delivery / collection.",
+            metadata={"payment_status": payment_status},
+        )
+        _log_commercial_transition(
+            order=order,
+            transition_type=OrderCommercialTransitionType.ORDER_COMPLETED,
+            actor=vendor_user,
+            payment_intent=intent,
+            from_status=previous_status,
+            to_status=OrderStatus.COMPLETED,
+            delivery_mode=order.delivery_mode,
+            selected_percent=int(order.percent_paid_total or 0),
+            cumulative_percent_paid=order.percent_paid_total,
+            amount_delta=Decimal("0.00"),
+            balance_after=order.amount_outstanding,
+            correlation_id=correlation_id,
+            note="Order completed after cash confirmation.",
+            metadata={"payment_status": payment_status},
+        )
+        _emit_order_financial_audit(
+            order=order,
+            actor=vendor_user,
+            event_type="order.cash_confirmation.completed",
+            correlation_id=correlation_id,
+            new_values={
+                "status": order.status,
+                "delivery_mode": order.delivery_mode,
+                "amount_paid_total": str(order.amount_paid_total),
+                "amount_outstanding": str(order.amount_outstanding),
+            },
+            metadata={"payment_status": payment_status},
         )
 
         # Invalidate the confirmation token

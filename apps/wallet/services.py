@@ -80,7 +80,7 @@ class WalletProvisioningService:
         return WalletOwnerType.CLIENT
 
     @classmethod
-    def ensure_wallet(cls, user, currency_code: str = "NGN") -> Wallet:
+    def ensure_wallet(cls, user, currency_code: str = "NGN", request=None) -> Wallet:
         """Retrieve or create the default wallet for ``user``.
 
         Uses the ``user.financial_wallets`` reverse FK manager so wallet
@@ -113,10 +113,14 @@ class WalletProvisioningService:
         if created:
             try:
                 from apps.audit_logs.services.wallet import wallet_audit
-                wallet_audit.log_wallet_created(
-                    actor=user,
-                    wallet_id=str(wallet.pk),
-                    currency=currency_code,
+
+                db_transaction.on_commit(
+                    lambda: wallet_audit.log_wallet_created(
+                        actor=user,
+                        wallet_id=str(wallet.pk),
+                        currency=currency_code,
+                        request=request,
+                    )
                 )
             except Exception:
                 pass
@@ -164,7 +168,7 @@ class WalletPinService:
 
     @staticmethod
     @db_transaction.atomic
-    def set_pin(user, raw_pin: str) -> Wallet:
+    def set_pin(user, raw_pin: str, request=None) -> Wallet:
         """Set a new transaction PIN for the user's default wallet.
 
         Args:
@@ -174,20 +178,26 @@ class WalletPinService:
         Returns:
             Wallet: The updated wallet instance.
         """
-        provisioned = WalletProvisioningService.ensure_wallet(user)
+        provisioned = WalletProvisioningService.ensure_wallet(user, request=request)
         wallet = user.financial_wallets.select_for_update().get(pk=provisioned.pk)
         wallet.set_pin(raw_pin)
         wallet.save(update_fields=["pin_hash", "pin_set_at", "failed_pin_attempts", "pin_locked_until", "updated_at"])
         # Audit trail: PIN set event (compliance-grade, no raw PIN stored)
         try:
             from apps.audit_logs.services.wallet import wallet_audit
-            wallet_audit.log_wallet_pin_set(actor=user, wallet_id=str(wallet.pk))
+            db_transaction.on_commit(
+                lambda: wallet_audit.log_wallet_pin_set(
+                    actor=user,
+                    wallet_id=str(wallet.pk),
+                    request=request,
+                )
+            )
         except Exception:
             pass
         return wallet
 
     @staticmethod
-    def verify_pin(user, raw_pin: str) -> bool:
+    def verify_pin(user, raw_pin: str, request=None) -> bool:
         """Verify a PIN against the stored bcrypt hash.
 
         Args:
@@ -197,12 +207,12 @@ class WalletPinService:
         Returns:
             bool: ``True`` if the PIN matches, ``False`` otherwise.
         """
-        wallet = WalletProvisioningService.ensure_wallet(user)
+        wallet = WalletProvisioningService.ensure_wallet(user, request=request)
         return wallet.verify_pin(raw_pin)
 
     @staticmethod
     @db_transaction.atomic
-    def change_pin(user, current_pin: str, new_pin: str) -> Wallet:
+    def change_pin(user, current_pin: str, new_pin: str, request=None) -> Wallet:
         """Verify the current PIN then replace it with a new one.
 
         Args:
@@ -216,7 +226,7 @@ class WalletPinService:
         Raises:
             ValidationError: If ``current_pin`` does not match the stored hash.
         """
-        provisioned = WalletProvisioningService.ensure_wallet(user)
+        provisioned = WalletProvisioningService.ensure_wallet(user, request=request)
         wallet = user.financial_wallets.select_for_update().get(pk=provisioned.pk)
         if not wallet.verify_pin(current_pin):
             raise ValidationError("Current transaction PIN is invalid.")
@@ -224,7 +234,13 @@ class WalletPinService:
         wallet.save(update_fields=["pin_hash", "pin_set_at", "failed_pin_attempts", "pin_locked_until", "updated_at"])
         try:
             from apps.audit_logs.services.wallet import wallet_audit
-            wallet_audit.log_wallet_pin_changed(actor=user, wallet_id=str(wallet.pk))
+            db_transaction.on_commit(
+                lambda: wallet_audit.log_wallet_pin_changed(
+                    actor=user,
+                    wallet_id=str(wallet.pk),
+                    request=request,
+                )
+            )
         except Exception:
             pass
         return wallet
@@ -304,7 +320,17 @@ class WalletBalanceService:
 
     @classmethod
     @db_transaction.atomic
-    def transfer(cls, *, sender_user, receiver_user, amount: Decimal, pin: str, reference: str = "", idempotency_key: str = "") -> dict:
+    def transfer(
+        cls,
+        *,
+        sender_user,
+        receiver_user,
+        amount: Decimal,
+        pin: str,
+        reference: str = "",
+        idempotency_key: str = "",
+        request=None,
+    ) -> dict:
         """KYC-gated wallet-to-wallet transfer between two platform users.
 
         Acquires ``SELECT FOR UPDATE`` locks on both wallets in a deterministic
@@ -337,10 +363,10 @@ class WalletBalanceService:
         # ───────────────────────────────────────────────────────────────────
 
         sender_wallet = sender_user.financial_wallets.select_for_update().get(
-            pk=WalletProvisioningService.ensure_wallet(sender_user).pk
+            pk=WalletProvisioningService.ensure_wallet(sender_user, request=request).pk
         )
         receiver_wallet = receiver_user.financial_wallets.select_for_update().get(
-            pk=WalletProvisioningService.ensure_wallet(receiver_user, sender_wallet.currency.code).pk
+            pk=WalletProvisioningService.ensure_wallet(receiver_user, sender_wallet.currency.code, request=request).pk
         )
         if not sender_wallet.verify_pin(pin):
             raise ValidationError("Invalid transaction PIN.")
@@ -370,13 +396,16 @@ class WalletBalanceService:
         # Compliance audit trail — permanent retention for CBN/GDPR
         try:
             from apps.audit_logs.services.wallet import wallet_audit
-            wallet_audit.log_wallet_transfer(
-                actor=sender_user,
-                wallet_id=str(sender_wallet.pk),
-                transaction_id=str(txn.pk),
-                amount=str(amount),
-                receiver_id=str(getattr(receiver_user, "id", "")),
-                reference=txn.reference,
+            db_transaction.on_commit(
+                lambda: wallet_audit.log_wallet_transfer(
+                    actor=sender_user,
+                    wallet_id=str(sender_wallet.pk),
+                    transaction_id=str(txn.pk),
+                    amount=str(amount),
+                    receiver_id=str(getattr(receiver_user, "id", "")),
+                    reference=txn.reference,
+                    request=request,
+                )
             )
         except Exception:
             pass
@@ -403,6 +432,7 @@ class WalletWithdrawalService:
         account_number: str,
         account_name: str,
         idempotency_key: str = "",
+        request=None,
     ) -> dict:
         """Create a pending withdrawal after the KYC gate passes.
 
@@ -430,7 +460,7 @@ class WalletWithdrawalService:
                     "available_balance": str(existing.from_balance_after or "0.00"),
                 }
 
-        provisioned = WalletProvisioningService.ensure_wallet(user)
+        provisioned = WalletProvisioningService.ensure_wallet(user, request=request)
         wallet = user.financial_wallets.select_for_update().get(pk=provisioned.pk)
         WalletBalanceService._assert_active(wallet)
         if not wallet.verify_pin(pin):
@@ -474,13 +504,16 @@ class WalletWithdrawalService:
         # Compliance audit trail — permanent retention CBN/GDPR
         try:
             from apps.audit_logs.services.wallet import wallet_audit
-            wallet_audit.log_withdrawal_requested(
-                actor=user,
-                wallet_id=str(wallet.pk),
-                transaction_id=str(txn.pk),
-                amount=str(amount),
-                bank_code=bank_code,
-                account_number_last4=account_number[-4:],
+            db_transaction.on_commit(
+                lambda: wallet_audit.log_withdrawal_requested(
+                    actor=user,
+                    wallet_id=str(wallet.pk),
+                    transaction_id=str(txn.pk),
+                    amount=str(amount),
+                    bank_code=bank_code,
+                    account_number_last4=account_number[-4:],
+                    request=request,
+                )
             )
         except Exception:
             pass
@@ -512,7 +545,7 @@ class EscrowService:
 
     @staticmethod
     @db_transaction.atomic
-    def hold_order_payment(*, client_user, amount: Decimal, reference: str, order_id: str = "", provider_reference: str = "", idempotency_key: str = "") -> WalletHold:
+    def hold_order_payment(*, client_user, amount: Decimal, reference: str, order_id: str = "", provider_reference: str = "", idempotency_key: str = "", request=None) -> WalletHold:
         """Place an escrow hold on client funds for a pending order payment.
 
         Moves ``amount`` from client ``available_balance`` into
@@ -536,7 +569,7 @@ class EscrowService:
         """
         from apps.transactions.services import TransactionLedgerService
 
-        provisioned = WalletProvisioningService.ensure_wallet(client_user)
+        provisioned = WalletProvisioningService.ensure_wallet(client_user, request=request)
         client_wallet = client_user.financial_wallets.select_for_update().get(pk=provisioned.pk)
         WalletBalanceService._assert_active(client_wallet)
         if client_wallet.available_balance < amount:
@@ -560,6 +593,20 @@ class EscrowService:
                 provider_reference=provider_reference,
                 idempotency_key=idempotency_key,
             )
+            # Audit trail: Escrow hold
+            try:
+                from apps.audit_logs.services.wallet import wallet_audit
+                db_transaction.on_commit(
+                    lambda: wallet_audit.log_escrow_hold(
+                        actor=client_user,
+                        wallet_id=str(client_wallet.pk),
+                        amount=str(amount),
+                        order_id=order_id,
+                        request=request,
+                    )
+                )
+            except Exception:
+                pass
         return hold
 
     @staticmethod
@@ -570,6 +617,7 @@ class EscrowService:
         vendor_user,
         commission_rate: Decimal | None = None,
         idempotency_key: str = "",
+        request=None,
     ) -> dict:
         """Release an active escrow hold to the vendor and company accounts.
 
@@ -607,7 +655,7 @@ class EscrowService:
             raise ValidationError("No escrow balance remains to release.")
         client_wallet = hold.wallet.user.financial_wallets.select_for_update().get(pk=hold.wallet_id)
         vendor_wallet = vendor_user.financial_wallets.select_for_update().get(
-            pk=WalletProvisioningService.ensure_wallet(vendor_user, client_wallet.currency.code).pk
+            pk=WalletProvisioningService.ensure_wallet(vendor_user, client_wallet.currency.code, request=request).pk
         )
         company_wallet = Wallet.objects.select_for_update().get(pk=WalletProvisioningService.ensure_company_wallet(client_wallet.currency.code).pk)
         commission_amount = (amount * commission_rate).quantize(Decimal("0.01"))
@@ -636,6 +684,21 @@ class EscrowService:
             commission_amount=commission_amount,
             idempotency_key=idempotency_key,
         )
+        # Audit trail: Escrow release
+        try:
+            from apps.audit_logs.services.wallet import wallet_audit
+            # Use current transaction actor if available, or vendor_user
+            db_transaction.on_commit(
+                lambda: wallet_audit.log_escrow_release(
+                    actor=vendor_user,  # Usually triggered by vendor or system
+                    wallet_id=str(client_wallet.pk),
+                    amount=str(amount),
+                    order_id=hold.order_id,
+                    request=request,
+                )
+            )
+        except Exception:
+            pass
         return {"gross_amount": amount, "vendor_amount": vendor_amount, "commission_amount": commission_amount}
 
     @staticmethod
@@ -646,6 +709,7 @@ class EscrowService:
         hold_reference: str,
         commission_rate: Decimal | None = None,
         idempotency_key: str = "",
+        request=None,
     ) -> dict:
         """Release a client's escrow hold to the vendor attached to its order.
 
@@ -695,11 +759,12 @@ class EscrowService:
             vendor_user=vendor_user,
             commission_rate=commission_rate,
             idempotency_key=idempotency_key,
+            request=request,
         )
 
     @staticmethod
     @db_transaction.atomic
-    def refund_escrow(*, hold_reference: str, idempotency_key: str = "") -> WalletHold:
+    def refund_escrow(*, hold_reference: str, idempotency_key: str = "", request=None) -> WalletHold:
         """Refund an active escrow hold back to the client's available balance.
 
         Called on order cancellation or dispute resolution in favour of the
@@ -732,4 +797,18 @@ class EscrowService:
         hold.status = WalletHoldStatus.REFUNDED
         hold.save(update_fields=["refunded_amount", "status", "updated_at"])
         TransactionLedgerService.record_refund(wallet=wallet, amount=amount, reference=hold.reference, order_id=hold.order_id, idempotency_key=idempotency_key)
+        # Audit trail: Escrow refund
+        try:
+            from apps.audit_logs.services.wallet import wallet_audit
+            db_transaction.on_commit(
+                lambda: wallet_audit.log_escrow_refunded(
+                    actor=wallet.user,
+                    wallet_id=str(wallet.pk),
+                    amount=str(amount),
+                    order_id=hold.order_id,
+                    request=request,
+                )
+            )
+        except Exception:
+            pass
         return hold

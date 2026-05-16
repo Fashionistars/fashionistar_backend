@@ -88,6 +88,7 @@ class UserProfileDetailView(generics.RetrieveUpdateAPIView):
             updated_user = update_user_profile(
                 user=instance,
                 data=serializer.validated_data,
+                request=request,
             )
             return success_response(
                 data=UserProfileSerializer(updated_user).data,

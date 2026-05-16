@@ -24,6 +24,9 @@ from apps.common.renderers import CustomJSONRenderer
 from apps.common.responses import success_response, error_response
 from apps.payment.selectors import get_payment_intent_for_user_reference
 from apps.payment.serializers import (
+    CashConfirmationConfirmSerializer,
+    CashConfirmationCreateSerializer,
+    CashConfirmationResendSerializer,
     PaymentIntentSerializer,
     PaystackBanksResponseSerializer,
     PaystackInitializeSerializer,
@@ -31,7 +34,9 @@ from apps.payment.serializers import (
     PaystackVerifySerializer,
     PaystackWebhookSerializer,
     TransferRecipientCreateSerializer,
+    WalletFundPaymentSerializer,
 )
+from apps.payment.cash_service import CashOrderService
 from apps.payment.services import (
     PaymentIntentService,
     PaystackClient,
@@ -237,4 +242,154 @@ class PaystackTransferRecipientView(generics.GenericAPIView):
             data=PaystackTransferRecipientSerializer(recipient).data,
             message="Transfer recipient created successfully.",
             status=status.HTTP_201_CREATED,
+        )
+
+
+class WalletFundPaymentView(generics.GenericAPIView):
+    """Shared order-payment and wallet-topup entrypoint."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = WalletFundPaymentSerializer
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+
+        try:
+            if payload["purpose"] == "order_payment":
+                order = PaymentIntentService._get_order_for_payment(
+                    user=request.user,
+                    order_id=payload.get("order_id", ""),
+                )
+                PaymentIntentService._validate_order_payment_request(
+                    order=order,
+                    provider=payload["provider"],
+                    payment_path=payload["payment_path"],
+                    selected_percent=payload["selected_percent"],
+                )
+                if payload["provider"] == "wallet":
+                    intent, record = PaymentIntentService.pay_order_from_wallet(
+                        user=request.user,
+                        order=order,
+                        selected_percent=payload["selected_percent"],
+                        payment_path=payload["payment_path"],
+                        idempotency_key=request.headers.get("Idempotency-Key", ""),
+                        metadata=payload.get("metadata", {}),
+                    )
+                    return success_response(
+                        data={
+                            "intent": PaymentIntentSerializer(intent).data,
+                            "order_id": str(order.pk),
+                            "payment_record_id": str(record.pk) if record else "",
+                            "authorization_url": "",
+                        },
+                        message="Wallet payment completed successfully.",
+                        status=status.HTTP_201_CREATED,
+                    )
+
+                intent = PaymentIntentService.initialize_gateway_payment(
+                    user=request.user,
+                    order=order,
+                    provider=payload["provider"],
+                    selected_percent=payload["selected_percent"],
+                    payment_path=payload["payment_path"],
+                    currency=payload.get("currency", "NGN"),
+                    idempotency_key=request.headers.get("Idempotency-Key", ""),
+                    cash_payment_mode=payload.get("cash_payment_mode", order.cash_payment_mode_snapshot),
+                    metadata=payload.get("metadata", {}),
+                )
+                return success_response(
+                    data={
+                        "intent": PaymentIntentSerializer(intent).data,
+                        "order_id": str(order.pk),
+                        "authorization_url": intent.authorization_url,
+                    },
+                    message="Payment initialized successfully.",
+                    status=status.HTTP_201_CREATED,
+                )
+
+            intent = PaymentIntentService.initialize_paystack(
+                user=request.user,
+                amount=payload["amount"],
+                purpose=payload["purpose"],
+                currency=payload.get("currency", "NGN"),
+                idempotency_key=request.headers.get("Idempotency-Key", ""),
+                metadata=payload.get("metadata", {}),
+            )
+        except ValidationError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+
+        return success_response(
+            data={
+                "intent": PaymentIntentSerializer(intent).data,
+                "authorization_url": intent.authorization_url,
+            },
+            message="Payment initialized successfully.",
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class CashConfirmationCreateView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = CashConfirmationCreateSerializer
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            payload = CashOrderService.create_confirmation_token(
+                order_id=serializer.validated_data["order_id"],
+                client_user=request.user,
+            )
+        except ValidationError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(
+            data=payload,
+            message="Cash confirmation token created successfully.",
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class CashConfirmationResendView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = CashConfirmationResendSerializer
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            token = CashOrderService.resend_token(
+                serializer.validated_data["order_id"],
+            )
+        except ValidationError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(
+            data={"confirmation_token": token},
+            message="Cash confirmation token resent successfully.",
+        )
+
+
+class CashConfirmationConfirmView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = CashConfirmationConfirmSerializer
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            payload = CashOrderService.confirm_cod_delivery(
+                order_id=serializer.validated_data["order_id"],
+                vendor_user=request.user,
+                client_token=serializer.validated_data["client_token"],
+            )
+        except ValidationError as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(
+            data=payload,
+            message="Cash confirmation completed successfully.",
         )

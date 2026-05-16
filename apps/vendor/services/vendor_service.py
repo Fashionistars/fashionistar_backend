@@ -76,13 +76,20 @@ class VendorService:
     @classmethod
     @transaction.atomic
     def update_profile(
-        cls, user, data: dict[str, Any]
+        cls, user, data: dict[str, Any], request=None
     ) -> "VendorProfile":  # noqa: F821
-        """
-        Partial update of VendorProfile fields.
+        """Partial update of VendorProfile fields.
 
         Handles both scalar fields and the M2M `collections` field.
         Emits: vendor.profile.updated (after commit)
+
+        Args:
+            user: The user owning the profile.
+            data: Dict of fields to update.
+            request: Optional Django HttpRequest for forensic audit logging.
+
+        Returns:
+            The updated VendorProfile instance.
         """
         from apps.vendor.models import VendorProfile
 
@@ -90,10 +97,14 @@ class VendorService:
 
         # ── Scalar field updates ───────────────────────────────────
         update_fields = ["updated_at"]
+        audit_changes = {}
         for field, value in data.items():
             if field in VENDOR_PROFILE_ALLOWED_FIELDS:
-                setattr(profile, field, value)
-                update_fields.append(field)
+                old_val = getattr(profile, field, None)
+                if old_val != value:
+                    setattr(profile, field, value)
+                    update_fields.append(field)
+                    audit_changes[field] = value
 
         profile.save(update_fields=update_fields)
 
@@ -115,6 +126,7 @@ class VendorService:
                 profile.collections.set(qs)
             else:
                 profile.collections.clear()
+            audit_changes["collections"] = ids
 
         # ── Auto-advance onboarding step ───────────────────────────
         has_basics = bool(profile.store_name and profile.description)
@@ -123,6 +135,21 @@ class VendorService:
                 profile.setup_state.mark_profile_complete()
             except Exception:
                 pass  # VendorSetupState may not exist yet — provisioner handles creation
+
+        # ── Forensic Audit Trail (Atomic Dispatch) ────────────────
+        def _dispatch_audit():
+            try:
+                from apps.audit_logs.services.vendor import vendor_audit
+                vendor_audit.log_vendor_profile_updated(
+                    actor=user,
+                    vendor_profile=profile,
+                    new_values=audit_changes,
+                    request=request,
+                )
+            except Exception as audit_exc:
+                logger.error("VendorService.update_profile: Audit failed: %s", audit_exc)
+
+        transaction.on_commit(_dispatch_audit)
 
         event_bus.emit_on_commit(
             "vendor.profile.updated",
@@ -143,14 +170,21 @@ class VendorService:
     @classmethod
     @transaction.atomic
     def save_payout_details(
-        cls, user, data: dict[str, Any]
+        cls, user, data: dict[str, Any], request=None
     ) -> "VendorPayoutProfile":  # noqa: F821
-        """
-        Create or update the vendor's payout (bank account) profile.
+        """Create or update the vendor's payout (bank account) profile.
+
         Encrypts account_number before storage using Fernet (FERNET_ENCRYPTION_KEY).
         Marks bank_details onboarding step complete.
-
         Emits: vendor.payout.updated (after commit)
+
+        Args:
+            user: The vendor user.
+            data: Dict containing bank_name, bank_code, account_name, account_number.
+            request: Optional Django HttpRequest for forensic audit logging.
+
+        Returns:
+            The created or updated VendorPayoutProfile instance.
         """
         from apps.vendor.models import VendorProfile, VendorPayoutProfile
 
@@ -196,6 +230,21 @@ class VendorService:
         except Exception:
             pass
 
+        # ── Forensic Audit Trail (Atomic Dispatch) ────────────────
+        def _dispatch_audit():
+            try:
+                from apps.audit_logs.services.vendor import vendor_audit
+                vendor_audit.log_vendor_payout_updated(
+                    actor=user,
+                    vendor_profile=profile,
+                    created=created,
+                    request=request,
+                )
+            except Exception as audit_exc:
+                logger.error("VendorService.save_payout_details: Audit failed: %s", audit_exc)
+
+        transaction.on_commit(_dispatch_audit)
+
         event_bus.emit_on_commit(
             "vendor.payout.updated",
             user_id=str(user.pk),
@@ -214,17 +263,41 @@ class VendorService:
 
     @classmethod
     @transaction.atomic
-    def set_transaction_pin(cls, user, raw_pin: str) -> None:
-        """
-        Hash and store a 4-digit payout confirmation PIN.
+    def set_transaction_pin(cls, user, raw_pin: str, request=None) -> None:
+        """Hash and store a 4-digit payout confirmation PIN.
+
         Validates PIN is exactly 4 digits.
+
+        Args:
+            user: The vendor user.
+            raw_pin: The 4-digit numeric string.
+            request: Optional Django HttpRequest for forensic audit logging.
+
+        Raises:
+            ValueError: If PIN is not exactly 4 digits.
         """
         from apps.vendor.models import VendorProfile
 
         if not raw_pin.isdigit() or len(raw_pin) != 4:
             raise ValueError("Transaction PIN must be exactly 4 digits.")
+
         profile = VendorProfile.objects.select_for_update().get(user=user)
         profile.set_transaction_password(raw_pin)
+
+        # ── Forensic Audit Trail (Atomic Dispatch) ────────────────
+        def _dispatch_audit():
+            try:
+                from apps.audit_logs.services.vendor import vendor_audit
+                vendor_audit.log_vendor_pin_updated(
+                    actor=user,
+                    vendor_profile=profile,
+                    request=request,
+                )
+            except Exception as audit_exc:
+                logger.error("VendorService.set_transaction_pin: Audit failed: %s", audit_exc)
+
+        transaction.on_commit(_dispatch_audit)
+
         logger.info(
             "VendorService.set_transaction_pin: PIN updated for vendor=%s", profile.pk
         )

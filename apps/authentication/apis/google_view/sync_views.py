@@ -74,8 +74,7 @@ class GoogleAuthView(generics.CreateAPIView):
             result = SyncGoogleAuthService.verify_and_login(
                 token=data["id_token"],
                 role=data.get("role", "client"),
-                ip_address=request.META.get("REMOTE_ADDR"),
-                user_agent=request.META.get("HTTP_USER_AGENT", ""),
+                request=request,
             )
         except ValueError as exc:
             logger.warning("⚠️ GoogleAuthView: invalid token — %s", exc)
@@ -276,8 +275,7 @@ class GoogleAuthView(generics.CreateAPIView):
             result = SyncGoogleAuthService.verify_and_login(
                 token=data["id_token"],
                 role=data.get("role", "client"),
-                ip_address=request.META.get("REMOTE_ADDR"),
-                user_agent=request.META.get("HTTP_USER_AGENT", ""),
+                request=request,
             )
         except ValueError as exc:
             logger.warning("⚠️ GoogleAuthView: invalid token — %s", exc)

@@ -54,13 +54,13 @@ class VendorProvisioningService:
     """
 
     @staticmethod
-    def provision(user, *, data: dict[str, Any]) -> "VendorProfile":  # noqa: F821
-        """
-        Create or update the initial vendor setup records for ``user``.
+    def provision(user, *, data: dict[str, Any], request=None) -> "VendorProfile":  # noqa: F821
+        """Create or update the initial vendor setup records for ``user``.
 
         Args:
             user: UnifiedUser instance with role='vendor'.
             data: Validated vendor setup payload (from VendorSetupSerializer).
+            request: Optional Django HttpRequest for forensic audit logging.
 
         Returns:
             VendorProfile instance (new or existing).
@@ -77,7 +77,8 @@ class VendorProvisioningService:
             raise ValueError("Vendor setup currently accepts zero collections because none exist in the catalog yet.")
 
         with transaction.atomic():
-            profile, profile_created = VendorProfile.objects.get_or_create(user=user)
+            # Use select_for_update for consistency during the setup transaction
+            profile, profile_created = VendorProfile.objects.select_for_update().get_or_create(user=user)
 
             # ── Scalar fields ──────────────────────────────────────
             update_fields = ["updated_at"]
@@ -107,6 +108,39 @@ class VendorProvisioningService:
             if profile.store_name and profile.description:
                 setup_state.mark_profile_complete()
 
+            # ── Forensic Audit Trail (Atomic Dispatch) ────────────────
+            def _dispatch_audit():
+                try:
+                    from apps.audit_logs.services.vendor import vendor_audit
+                    if profile_created:
+                        vendor_audit.log_vendor_provisioned(
+                            actor=user,
+                            vendor_profile=profile,
+                            store_name=data.get("store_name", ""),
+                            collections_count=len(collection_ids),
+                            request=request,
+                        )
+                    else:
+                        vendor_audit.log_vendor_profile_updated(
+                            actor=user,
+                            vendor_profile=profile,
+                            new_values={
+                                "store_name": data.get("store_name"),
+                                "city": data.get("city"),
+                                "state": data.get("state"),
+                                "country": data.get("country"),
+                                "collections_count": len(collection_ids),
+                            },
+                            request=request,
+                        )
+                except Exception as audit_exc:
+                    logger.error(
+                        "VendorProvisioningService.provision: Audit dispatch failed: %s",
+                        audit_exc,
+                    )
+
+            transaction.on_commit(_dispatch_audit)
+
             if profile_created:
                 logger.info(
                     "VendorProvisioningService.provision: created VendorProfile for user=%s",
@@ -118,31 +152,4 @@ class VendorProvisioningService:
                     profile.pk,
                 )
 
-        # Audit trail — vendor onboarding (compliance-grade).
-        # Uses domain-specific vendor_audit helper (not the generic AuditService directly)
-        # so event_type, event_category, and is_compliance are pre-filled correctly.
-        try:
-            from apps.audit_logs.services.vendor import vendor_audit
-            if profile_created:
-                vendor_audit.log_vendor_provisioned(
-                    actor=user,
-                    vendor_profile=profile,
-                    store_name=data.get("store_name", ""),
-                    collections_count=len(collection_ids),
-                )
-            else:
-                vendor_audit.log_vendor_profile_updated(
-                    actor=user,
-                    vendor_profile=profile,
-                    new_values={
-                        "store_name": data.get("store_name"),
-                        "city": data.get("city"),
-                        "state": data.get("state"),
-                        "country": data.get("country"),
-                        "collections_count": len(collection_ids),
-                    },
-                )
-        except Exception:
-            pass
         return profile
-

@@ -142,32 +142,40 @@ def log_register_failed(*, email: str, request=None, reason: str = "") -> None:
     )
 
 
-def log_password_changed(*, actor, request=None) -> None:
+def log_password_changed(*, actor, request=None, success: bool = True, reason: str | None = None) -> None:
     """Record a password change event.
 
     Args:
         actor: The ``UnifiedUser`` who changed their password.
         request: Django HttpRequest.
+        success: Whether the change was successful.
+        reason: Optional failure reason for audit context.
     """
     from apps.audit_logs.services.audit import AuditService
     from apps.audit_logs.models import EventType, EventCategory
 
+    action = f"Password changed: {getattr(actor, 'email', str(actor))}"
+    if not success:
+        action = f"Password change failed for {getattr(actor, 'email', str(actor))}: {reason or 'Unknown'}"
+
     AuditService.log(
         event_type=EventType.PASSWORD_CHANGED,
         event_category=EventCategory.SECURITY,
-        action=f"Password changed: {getattr(actor, 'email', str(actor))}",
+        action=action,
         actor=actor,
         request=request,
-        severity="warning",
+        severity="info" if success else "warning",
         is_compliance=True,
+        metadata={"success": success, "reason": reason} if reason else {"success": success},
     )
 
 
-def log_password_reset_requested(*, email: str, request=None) -> None:
+def log_password_reset_requested(*, email: str, user_exists: bool, request=None) -> None:
     """Record a password reset request.
 
     Args:
         email: The email requesting the reset.
+        user_exists: Whether a user with this email was found (security signal).
         request: Django HttpRequest.
     """
     from apps.audit_logs.services.audit import AuditService
@@ -176,9 +184,60 @@ def log_password_reset_requested(*, email: str, request=None) -> None:
     AuditService.log(
         event_type=EventType.PASSWORD_RESET_REQUEST,
         event_category=EventCategory.AUTHENTICATION,
-        action=f"Password reset requested for: {email}",
+        action=f"Password reset requested for: {email} (User Exists: {user_exists})",
         actor_email=email,
         request=request,
+        metadata={"user_exists": user_exists},
+    )
+
+
+def log_password_reset_completed(*, actor, request=None, metadata: dict | None = None) -> None:
+    """Record a successful password reset completion.
+
+    Args:
+        actor: The user who successfully reset their password.
+        request: Django HttpRequest.
+        metadata: Optional additional context (e.g. flow: 'email' vs 'phone').
+    """
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    AuditService.log(
+        event_type=EventType.PASSWORD_RESET_DONE,
+        event_category=EventCategory.SECURITY,
+        action=f"Password reset completed successfully: {getattr(actor, 'email', str(actor))}",
+        actor=actor,
+        request=request,
+        severity="info",
+        is_compliance=True,
+        metadata=metadata,
+    )
+
+
+def log_password_reset_failed(*, request=None, reason: str, actor=None, actor_email: str | None = None, metadata: dict | None = None) -> None:
+    """Record a failed password reset attempt.
+
+    Args:
+        request: Django HttpRequest.
+        reason: Human-readable failure reason.
+        actor: The user if identified.
+        actor_email: Email if user not found.
+        metadata: Optional context.
+    """
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    AuditService.log(
+        event_type=EventType.PASSWORD_RESET_DONE,
+        event_category=EventCategory.SECURITY,
+        action=f"Password reset failed: {reason}",
+        actor=actor,
+        actor_email=actor_email,
+        request=request,
+        severity="warning",
+        error_message=reason,
+        is_compliance=True,
+        metadata=metadata,
     )
 
 
@@ -248,4 +307,148 @@ def log_suspicious_activity(
         severity="critical",
         is_compliance=True,
         retention_days=2555,  # 7 years
+    )
+
+def log_otp_generated(*, user_id: Any, purpose: str, request: Any = None) -> None:
+    """Record the generation of a new OTP.
+
+    Args:
+        user_id: The primary key of the user for whom the OTP was generated.
+        purpose: The context of the OTP (e.g., 'verify', 'reset', 'login').
+        request: Optional Django HttpRequest for context.
+    """
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    AuditService.log(
+        event_type=EventType.OTP_GENERATED,
+        event_category=EventCategory.AUTHENTICATION,
+        action=f"OTP generated for User: {user_id} (Purpose: {purpose})",
+        actor_id=str(user_id),
+        request=request,
+        metadata={"purpose": purpose},
+    )
+
+
+def log_otp_verified(*, user_id: Any, purpose: str, request: Any = None) -> None:
+    """Record a successful OTP verification.
+
+    Args:
+        user_id: The primary key of the user who verified the OTP.
+        purpose: The context of the OTP.
+        request: Optional Django HttpRequest for context.
+    """
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    AuditService.log(
+        event_type=EventType.OTP_VERIFIED,
+        event_category=EventCategory.AUTHENTICATION,
+        action=f"OTP verified successfully for User: {user_id} (Purpose: {purpose})",
+        actor_id=str(user_id),
+        request=request,
+        metadata={"purpose": purpose},
+    )
+
+
+def log_otp_failed(*, identifier: str, purpose: str, reason: str, request: Any = None) -> None:
+    """Record a failed OTP verification attempt.
+
+    Args:
+        identifier: The identifier used (e.g., user_id or search identifier).
+        purpose: The context of the OTP.
+        reason: Why the verification failed (e.g., 'expired', 'invalid').
+        request: Optional Django HttpRequest for context.
+    """
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    AuditService.log(
+        event_type=EventType.OTP_FAILED,
+        event_category=EventCategory.SECURITY,
+        action=f"OTP verification failed for: {identifier} (Purpose: {purpose}, Reason: {reason})",
+        actor_id=identifier if "-" in identifier else None,  # Attempt to extract UUID if possible
+        request=request,
+        metadata={"purpose": purpose, "reason": reason},
+        severity="warning",
+    )
+
+
+def log_account_updated(*, actor, request=None, fields_changed: list[str] | None = None, metadata: dict | None = None) -> None:
+    """Record an account or profile update event.
+
+    Args:
+        actor: The user whose account was updated.
+        request: Optional Django HttpRequest for context.
+        fields_changed: List of field names that were modified.
+        metadata: Additional context for the update.
+    """
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    action = f"Account updated for: {getattr(actor, 'email', str(actor))}"
+    if fields_changed:
+        action += f" (Fields: {', '.join(fields_changed)})"
+
+    AuditService.log(
+        event_type=EventType.ACCOUNT_UPDATED,
+        event_category=EventCategory.AUTHENTICATION,
+        action=action,
+        actor=actor,
+        request=request,
+        metadata={
+            "fields_changed": fields_changed,
+            **(metadata or {})
+        },
+    )
+
+
+def log_biometric_registered(*, actor, device_name: str, request=None) -> None:
+    """Record a biometric device registration.
+
+    Args:
+        actor: The user registering the device.
+        device_name: Name or description of the biometric device.
+        request: Optional Django HttpRequest.
+    """
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    AuditService.log(
+        event_type=EventType.BIOMETRIC_REGISTERED,
+        event_category=EventCategory.SECURITY,
+        action=f"Biometric device registered: {device_name} for {getattr(actor, 'email', str(actor))}",
+        actor=actor,
+        request=request,
+        metadata={"device_name": device_name},
+        severity="warning",  # Security-sensitive action
+        is_compliance=True,
+    )
+
+
+def log_biometric_auth(*, actor, success: bool, request=None, reason: str | None = None) -> None:
+    """Record a biometric authentication attempt.
+
+    Args:
+        actor: The user attempting authentication.
+        success: Whether the authentication succeeded.
+        request: Optional Django HttpRequest.
+        reason: Optional failure reason.
+    """
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    event_type = EventType.BIOMETRIC_AUTH_SUCCESS if success else EventType.BIOMETRIC_AUTH_FAILED
+    action = f"Biometric authentication {'succeeded' if success else 'failed'} for {getattr(actor, 'email', str(actor))}"
+    if not success and reason:
+        action += f": {reason}"
+
+    AuditService.log(
+        event_type=event_type,
+        event_category=EventCategory.SECURITY,
+        action=action,
+        actor=actor,
+        request=request,
+        severity="info" if success else "warning",
+        metadata={"success": success, "reason": reason} if reason else {"success": success},
     )

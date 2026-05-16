@@ -95,6 +95,8 @@ def get_user_orders(user_id, status: str | None = None):
                 ),
             ),
             "order_status_history",
+            "payment_records",
+            "commercial_transition_logs",
         )
         .select_related("vendor", "delivery_courier")
         .order_by("-created_at")
@@ -123,6 +125,8 @@ def get_vendor_orders(vendor_id, status: str | None = None):
                 queryset=OrderItem.objects.select_related("product", "variant"),
             ),
             "order_status_history",
+            "payment_records",
+            "commercial_transition_logs",
         )
         .select_related("user", "delivery_courier")
         .order_by("-created_at")
@@ -154,6 +158,8 @@ def get_order_by_id_for_user(order_id, user_id) -> Optional[Order]:
                     ),
                 ),
                 "order_status_history",
+                "payment_records",
+                "commercial_transition_logs",
             )
             .select_related("vendor", "delivery_courier")
             .get(id=order_id, user_id=user_id)
@@ -182,6 +188,8 @@ def get_order_by_id_for_vendor(order_id, vendor_id) -> Optional[Order]:
                     queryset=OrderItem.objects.select_related("product", "variant"),
                 ),
                 "order_status_history",
+                "payment_records",
+                "commercial_transition_logs",
             )
             .select_related("user", "delivery_courier")
             .get(id=order_id, vendor_id=vendor_id)
@@ -357,6 +365,8 @@ async def aget_order_detail_for_user(
                 ),
             ),
             "order_status_history",
+            "payment_records",
+            "commercial_transition_logs",
         )
         return order
     except Order.DoesNotExist:
@@ -396,6 +406,8 @@ async def aget_order_detail_for_vendor(
                 queryset=OrderItem.objects.select_related("product", "variant"),
             ),
             "order_status_history",
+            "payment_records",
+            "commercial_transition_logs",
         )
         return order
     except Order.DoesNotExist:
@@ -431,6 +443,8 @@ async def aget_order_detail_for_admin(order_id) -> Optional[Order]:
                 queryset=OrderItem.objects.select_related("product", "variant", "vendor"),
             ),
             "order_status_history",
+            "payment_records",
+            "commercial_transition_logs",
         )
         return order
     except Order.DoesNotExist:

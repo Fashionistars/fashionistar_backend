@@ -26,6 +26,7 @@ from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 
 from apps.common.models import TimeStampedModel, SoftDeleteModel
+from apps.order.models import CashPaymentMode
 
 try:
     from cloudinary.models import CloudinaryField
@@ -381,6 +382,12 @@ class Product(TimeStampedModel, SoftDeleteModel):
     is_customisable = models.BooleanField(
         default=False,
         help_text="Custom orders — triggers ChatOffer flow.",
+    )
+    cash_payment_mode = models.CharField(
+        max_length=20,
+        choices=CashPaymentMode.choices,
+        default=CashPaymentMode.DISABLED,
+        help_text="Checkout gate for COD / Pay At Shop availability on this product.",
     )
 
     # ── Media ─────────────────────────────────────────────────────────────

@@ -38,6 +38,7 @@ from django.db.models.functions import ExtractHour, ExtractMonth
 from django.utils import timezone
 
 from apps.common.models import SoftDeleteModel, TimeStampedModel
+from apps.order.models import CashPaymentMode
 from cloudinary.models import CloudinaryField
 
 logger = logging.getLogger(__name__)
@@ -131,6 +132,12 @@ class VendorProfile(TimeStampedModel, SoftDeleteModel):
     twitter_url = models.URLField(blank=True, default="")
     website_url = models.URLField(blank=True, default="")
     whatsapp = models.CharField(max_length=20, blank=True, default="")
+    cash_payment_mode = models.CharField(
+        max_length=20,
+        choices=CashPaymentMode.choices,
+        default=CashPaymentMode.DISABLED,
+        help_text="Storefront display preference for COD / Pay At Shop availability.",
+    )
 
     # ── Analytics (denormalized counters — updated by EVENTS SIGNALS / TASKS AND NOT THE NORMAL DJANGO SIGNALS) ──
     total_products = models.PositiveIntegerField(default=0)

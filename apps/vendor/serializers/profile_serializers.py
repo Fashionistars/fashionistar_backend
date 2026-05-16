@@ -69,6 +69,7 @@ class VendorProfileOutputSerializer(serializers.ModelSerializer):
             "tiktok_url",
             "twitter_url",
             "website_url",
+            "cash_payment_mode",
             "collections",
             "total_products",
             "total_sales",
@@ -113,6 +114,10 @@ class VendorProfileUpdateSerializer(serializers.Serializer):
     tiktok_url = serializers.URLField(required=False, allow_blank=True)
     twitter_url = serializers.URLField(required=False, allow_blank=True)
     website_url = serializers.URLField(required=False, allow_blank=True)
+    cash_payment_mode = serializers.ChoiceField(
+        choices=VendorProfile._meta.get_field("cash_payment_mode").choices,
+        required=False,
+    )
     # List of Collections PKs — VendorService.update_profile() handles M2M .set()
     collection_ids = serializers.ListField(
         child=serializers.CharField(),
@@ -153,6 +158,11 @@ class VendorSetupSerializer(serializers.Serializer):
     tiktok_url = serializers.URLField(required=False, allow_blank=True)
     twitter_url = serializers.URLField(required=False, allow_blank=True)
     website_url = serializers.URLField(required=False, allow_blank=True)
+    cash_payment_mode = serializers.ChoiceField(
+        choices=VendorProfile._meta.get_field("cash_payment_mode").choices,
+        required=False,
+        default=VendorProfile._meta.get_field("cash_payment_mode").default,
+    )
     collection_ids = serializers.ListField(
         child=serializers.CharField(),
         required=False,

@@ -124,6 +124,7 @@ RATING = (
 class OrderStatus(models.TextChoices):
     PENDING_PAYMENT = "pending_payment", _("Pending Payment")
     PAYMENT_CONFIRMED = "payment_confirmed", _("Payment Confirmed")
+    AWAITING_CASH_CONFIRMATION = "awaiting_cash_confirmation", _("Awaiting Cash Confirmation")
     PROCESSING = "processing", _("Processing")
     SHIPPED = "shipped", _("Shipped")
     OUT_FOR_DELIVERY = "out_for_delivery", _("Out for Delivery")
@@ -137,8 +138,18 @@ class OrderStatus(models.TextChoices):
 
 # Valid transitions — enforced in service layer
 ORDER_STATUS_TRANSITIONS = {
-    OrderStatus.PENDING_PAYMENT: [OrderStatus.PAYMENT_CONFIRMED, OrderStatus.CANCELLED],
+    OrderStatus.PENDING_PAYMENT: [
+        OrderStatus.PAYMENT_CONFIRMED,
+        OrderStatus.AWAITING_CASH_CONFIRMATION,
+        OrderStatus.CANCELLED,
+    ],
     OrderStatus.PAYMENT_CONFIRMED: [OrderStatus.PROCESSING, OrderStatus.CANCELLED],
+    OrderStatus.AWAITING_CASH_CONFIRMATION: [
+        OrderStatus.PROCESSING,
+        OrderStatus.COMPLETED,
+        OrderStatus.CANCELLED,
+        OrderStatus.DISPUTED,
+    ],
     OrderStatus.PROCESSING: [OrderStatus.SHIPPED, OrderStatus.CANCELLED],
     OrderStatus.SHIPPED: [OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED],
     OrderStatus.OUT_FOR_DELIVERY: [OrderStatus.DELIVERED],
@@ -160,6 +171,56 @@ class FulfillmentType(models.TextChoices):
     PICKUP = "pickup", _("Pickup")
     DIGITAL = "digital", _("Digital Download")
     CUSTOM = "custom", _("Custom (Tailor-made)")
+
+
+class CashPaymentMode(models.TextChoices):
+    DISABLED = "disabled", _("Disabled")
+    COD = "cod", _("Cash On Delivery")
+    PAY_AT_SHOP = "pay_at_shop", _("Pay At Shop")
+    BOTH = "both", _("Both")
+
+
+class OrderDeliveryMode(models.TextChoices):
+    PLATFORM_COURIER = "platform_courier", _("Platform Courier")
+    VENDOR_SHOP_PICKUP = "vendor_shop_pickup", _("Vendor Shop Pickup")
+    COD = "cod", _("Cash On Delivery")
+
+
+class OrderPaymentPath(models.TextChoices):
+    WALLET = "wallet", _("Wallet")
+    GATEWAY = "gateway", _("Gateway")
+    COD = "cod", _("Cash On Delivery")
+    PAY_AT_SHOP = "pay_at_shop", _("Pay At Shop")
+
+
+class OrderPaymentSource(models.TextChoices):
+    WALLET = "wallet", _("Wallet")
+    GATEWAY = "gateway", _("Gateway")
+    COD_COMMITMENT = "cod_commitment", _("COD Commitment")
+    PAY_AT_SHOP_COMMITMENT = "pay_at_shop_commitment", _("Pay At Shop Commitment")
+    MANUAL_ADJUSTMENT = "manual_adjustment", _("Manual Adjustment")
+    REFUND = "refund", _("Refund")
+
+
+class OrderCommercialTransitionType(models.TextChoices):
+    PAYMENT_INITIALIZED = "payment_initialized", _("Payment Initialized")
+    PAYMENT_SUCCEEDED = "payment_succeeded", _("Payment Succeeded")
+    PAYMENT_FAILED = "payment_failed", _("Payment Failed")
+    COMMITMENT_CREATED = "commitment_created", _("Commitment Created")
+    COMMITMENT_CONFIRMED = "commitment_confirmed", _("Commitment Confirmed")
+    WALLET_CREDITED = "wallet_credited", _("Wallet Credited")
+    ESCROW_HELD = "escrow_held", _("Escrow Held")
+    ESCROW_RELEASED = "escrow_released", _("Escrow Released")
+    REFUND_ISSUED = "refund_issued", _("Refund Issued")
+    DELIVERY_MODE_SELECTED = "delivery_mode_selected", _("Delivery Mode Selected")
+    COURIER_ASSIGNED = "courier_assigned", _("Courier Assigned")
+    SHIPPED = "shipped", _("Shipped")
+    OUT_FOR_DELIVERY = "out_for_delivery", _("Out For Delivery")
+    DELIVERED = "delivered", _("Delivered")
+    VENDOR_SHOP_COLLECTED = "vendor_shop_collected", _("Vendor Shop Collected")
+    COD_CONFIRMED = "cod_confirmed", _("COD Confirmed")
+    ORDER_COMPLETED = "order_completed", _("Order Completed")
+    DISPUTE_OPENED = "dispute_opened", _("Dispute Opened")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -273,6 +334,23 @@ class Order(TimeStampedModel):
     )
     payment_gateway = models.CharField(max_length=50, default="paystack")
     paid_at = models.DateTimeField(null=True, blank=True)
+    amount_paid_total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    percent_paid_total = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    amount_outstanding = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    is_fully_paid = models.BooleanField(default=False)
+    first_paid_at = models.DateTimeField(null=True, blank=True)
+    final_paid_at = models.DateTimeField(null=True, blank=True)
+    active_payment_path = models.CharField(
+        max_length=20,
+        choices=OrderPaymentPath.choices,
+        blank=True,
+        default="",
+    )
+    cash_payment_mode_snapshot = models.CharField(
+        max_length=20,
+        choices=CashPaymentMode.choices,
+        default=CashPaymentMode.DISABLED,
+    )
 
     # ── Coupon snapshot ───────────────────────────────────────────────────
     coupon_code = models.CharField(max_length=50, blank=True)
@@ -289,6 +367,11 @@ class Order(TimeStampedModel):
     )
     tracking_number = models.CharField(max_length=200, blank=True)
     estimated_delivery = models.DateField(null=True, blank=True)
+    delivery_mode = models.CharField(
+        max_length=30,
+        choices=OrderDeliveryMode.choices,
+        default=OrderDeliveryMode.PLATFORM_COURIER,
+    )
 
     # ── Measurement reference ─────────────────────────────────────────────
     measurement_profile_id = models.UUIDField(
@@ -336,6 +419,8 @@ class Order(TimeStampedModel):
             import uuid6
 
             self.order_number = f"FSN-ORD-{str(uuid6.uuid7()).upper()[:12]}"
+        if self.amount_outstanding in (None, ""):
+            self.amount_outstanding = self.total_amount
         super().save(*args, **kwargs)
 
     def can_transition_to(self, new_status: str) -> bool:
@@ -699,3 +784,124 @@ class OrderStatusHistory(TimeStampedModel):
 
     def __str__(self):
         return f"{self.order} {self.from_status}→{self.to_status}"
+
+
+class OrderPaymentRecord(TimeStampedModel):
+    """Append-only record of each order payment tranche."""
+
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.CASCADE,
+        related_name="payment_records",
+    )
+    sequence_number = models.PositiveIntegerField()
+    payment_intent = models.ForeignKey(
+        "payment.PaymentIntent",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="order_payment_records",
+    )
+    payment_source = models.CharField(
+        max_length=30,
+        choices=OrderPaymentSource.choices,
+    )
+    provider = models.CharField(max_length=40, blank=True, default="")
+    selected_percent = models.PositiveSmallIntegerField()
+    applied_percent = models.DecimalField(max_digits=5, decimal_places=2)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    currency = models.CharField(max_length=10, default="NGN")
+    cumulative_amount_paid = models.DecimalField(max_digits=14, decimal_places=2)
+    cumulative_percent_paid = models.DecimalField(max_digits=5, decimal_places=2)
+    remaining_amount = models.DecimalField(max_digits=14, decimal_places=2)
+    remaining_percent = models.DecimalField(max_digits=5, decimal_places=2)
+    is_final_payment = models.BooleanField(default=False)
+    paid_at = models.DateTimeField()
+    actor = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="order_payment_record_actor",
+    )
+    correlation_id = models.CharField(max_length=120, db_index=True, blank=True, default="")
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        verbose_name = _("Order Payment Record")
+        verbose_name_plural = _("Order Payment Records")
+        ordering = ["sequence_number", "created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["order", "sequence_number"],
+                name="uq_order_payment_record_sequence",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.order.order_number} tranche #{self.sequence_number}"
+
+
+class OrderCommercialTransitionLog(TimeStampedModel):
+    """Immutable business ledger for payment and delivery transitions."""
+
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.CASCADE,
+        related_name="commercial_transition_logs",
+    )
+    transition_type = models.CharField(
+        max_length=40,
+        choices=OrderCommercialTransitionType.choices,
+    )
+    from_status = models.CharField(max_length=30, blank=True, default="")
+    to_status = models.CharField(max_length=30, blank=True, default="")
+    payment_record = models.ForeignKey(
+        OrderPaymentRecord,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="commercial_transitions",
+    )
+    payment_intent = models.ForeignKey(
+        "payment.PaymentIntent",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="commercial_transition_logs",
+    )
+    delivery_mode = models.CharField(
+        max_length=30,
+        choices=OrderDeliveryMode.choices,
+        blank=True,
+        default="",
+    )
+    cash_payment_mode_snapshot = models.CharField(
+        max_length=20,
+        choices=CashPaymentMode.choices,
+        default=CashPaymentMode.DISABLED,
+    )
+    selected_percent = models.PositiveSmallIntegerField(default=0)
+    cumulative_percent_paid = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    amount_delta = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    balance_after = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    actor = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="order_commercial_transition_actor",
+    )
+    actor_role = models.CharField(max_length=40, blank=True, default="")
+    occurred_at = models.DateTimeField()
+    correlation_id = models.CharField(max_length=120, db_index=True, blank=True, default="")
+    note = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        verbose_name = _("Order Commercial Transition Log")
+        verbose_name_plural = _("Order Commercial Transition Logs")
+        ordering = ["occurred_at", "created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.order.order_number} {self.transition_type}"

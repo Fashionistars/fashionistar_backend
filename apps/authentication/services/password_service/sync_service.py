@@ -2,9 +2,15 @@
 """
 Synchronous Password Reset & Change Service — Enterprise Edition.
 
-All critical security operations (reset request, confirm, change) are
-fully audit-logged to AuditEventLog with event_type, actor, IP, UA,
-compliance flag, and error details.
+Provides robust, production-grade logic for password lifecycle management.
+Integrates with specialized authentication audit helpers to ensure
+compliance-grade event tracking (7-year retention).
+
+Security Architecture:
+    - Anti-Enumeration: Generic responses for password reset requests.
+    - Consistency: Atomic transactions paired with on_commit tasks for notifications.
+    - Compliance: Specialized helpers from auth_audit for immutable event logging.
+    - Safety: Failsafe audit logging that never interrupts business logic.
 """
 
 import logging
@@ -14,82 +20,48 @@ from django.db import transaction
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.conf import settings
+
 from apps.authentication.models import UnifiedUser
 from apps.authentication.services.otp import OTPService
-from apps.common.managers.email import EmailManager
-from apps.common.managers.sms import SMSManager
 from apps.authentication.tasks import send_email_task, send_sms_task
-from apps.authentication.exceptions import GoogleUserCannotResetPasswordError, AccountDeactivatedError
+from apps.authentication.exceptions import (
+    GoogleUserCannotResetPasswordError,
+    AccountDeactivatedError
+)
+from apps.audit_logs.services.authentication import auth_audit
 
 logger = logging.getLogger('application')
 
 
-# ══════════════════════════════════════════════════════════════════════════
-# Audit helpers — never raise, never block the HTTP path
-# ══════════════════════════════════════════════════════════════════════════
-
-def _audit_password(
-    *,
-    event_type: str,
-    action: str,
-    request=None,
-    actor=None,
-    actor_email: str | None = None,
-    severity: str = "info",
-    error_message: str | None = None,
-    metadata: dict | None = None,
-    is_compliance: bool = True,
-) -> None:
-    """Write a structured audit event for a password-related operation."""
-    try:
-        from apps.audit_logs.services.audit import AuditService
-        from apps.audit_logs.models import EventCategory
-
-        ip = None
-        ua = None
-        if request:
-            xff = getattr(request, 'META', {}).get('HTTP_X_FORWARDED_FOR', '')
-            ip = xff.split(',')[0].strip() if xff else getattr(
-                request, 'META', {}
-            ).get('REMOTE_ADDR')
-            ua = getattr(request, 'META', {}).get('HTTP_USER_AGENT', '')
-
-        resource_id = str(actor.pk) if actor and hasattr(actor, 'pk') else None
-
-        AuditService.log(
-            event_type=event_type,
-            event_category=EventCategory.SECURITY,
-            severity=severity,
-            action=action,
-            request=request,
-            actor=actor,
-            actor_email=actor_email or (getattr(actor, 'email', None) if actor else None),
-            ip_address=ip,
-            user_agent=ua,
-            resource_type="UnifiedUser",
-            resource_id=resource_id,
-            metadata=metadata,
-            error_message=error_message,
-            is_compliance=is_compliance,
-        )
-    except Exception:
-        pass  # Audit failure must NEVER fail the password operation
-
-
 class SyncPasswordService:
     """
-    Synchronous Service for Password Reset and Change.
+    Synchronous Service for Password Reset and Change operations.
 
-    All critical operations produce AuditEventLog entries for compliance.
+    Handles the core logic for password management while ensuring all
+    actions are recorded via compliance-grade audit helpers.
     """
 
     @staticmethod
-    def request_reset(email_or_phone: str, request=None):
+    def request_reset(email_or_phone: str, request=None) -> str:
         """
-        Initiates the reset flow (Sync).
+        Initiates the password reset flow (Synchronous).
 
-        Always returns the same generic string for security (no user enumeration).
-        Writes PASSWORD_RESET_REQUEST to AuditEventLog whether or not the user exists.
+        Security Features:
+            - Normalizes email identifiers to prevent duplicate account logic.
+            - Uses a single database query with Q objects for performance.
+            - Implements anti-enumeration by returning a generic success message
+              regardless of whether the user exists in the system.
+            - Records a PASSWORD_RESET_REQUEST audit event for all attempts.
+
+        Args:
+            email_or_phone: The user's email or phone number identifier.
+            request: Optional Django HttpRequest for audit context (IP/UA).
+
+        Returns:
+            str: A generic success message to prevent user enumeration.
+
+        Raises:
+            Exception: If the service is temporarily unavailable.
         """
         try:
             is_email = "@" in email_or_phone
@@ -112,29 +84,15 @@ class SyncPasswordService:
                     raise AccountDeactivatedError
                 user = user_qs.first()
             except Exception as e:
-                logger.error(f"Error querying UnifiedUser for password reset request: {str(e)}")
+                logger.error("Error querying UnifiedUser for password reset request: %s", str(e))
                 user = None
 
-           
-
-            # ── Audit: always log that a reset was requested ─────────────
-            from apps.audit_logs.models import EventType
-            _audit_password(
-                event_type=EventType.PASSWORD_RESET_REQUEST,
-                action=(
-                    f"Password reset requested for {'known' if user else 'unknown'} "
-                    f"identifier (email={is_email})"
-                ),
-                request=request,
-                actor=user,
-                actor_email=getattr(user, 'email', None) if user else None,
-                severity="info",
-                metadata={
-                    "identifier_type": "email" if is_email else "phone",
-                    "user_exists": user is not None,
-                    # Note: DO NOT log the actual identifier — prevents log-based enumeration
-                },
-                is_compliance=True,
+            # ── Audit: Specialized helper for reset requests ─────────────
+            # Records the attempt with security signals (user_exists)
+            auth_audit.log_password_reset_requested(
+                email=email_or_phone,
+                user_exists=user is not None,
+                request=request
             )
 
             if not user:
@@ -146,7 +104,7 @@ class SyncPasswordService:
                 raise GoogleUserCannotResetPasswordError
 
             if is_email:
-                # EMAIL FLOW
+                # EMAIL FLOW: Generate secure one-time token
                 token = default_token_generator.make_token(user)
                 uid = urlsafe_base64_encode(force_bytes(user.pk))
                 reset_link = (
@@ -156,9 +114,7 @@ class SyncPasswordService:
 
                 _site_url = getattr(settings, 'FRONTEND_URL', 'https://fashionistar.net').rstrip('/')
 
-                # ✅ Wrap in on_commit so the Celery task fires AFTER the DB transaction
-                # commits. Without this, Celery runs before the reset token is stored,
-                # causing the email to be dispatched but the template/link to be stale.
+                # ✅ Consistency: Wrap in on_commit to ensure task fires AFTER DB commit
                 _email_ctx = {
                     "user": {
                         "first_name": getattr(user, "first_name", "") or "",
@@ -178,7 +134,7 @@ class SyncPasswordService:
                 logger.info("📧 Reset Email Celery task scheduled on_commit for %s", user.email)
 
             else:
-                # PHONE FLOW
+                # PHONE FLOW: Generate numeric OTP
                 otp = OTPService.generate_otp_sync(user.id, purpose='password_reset')
                 _otp_msg = f"Your Password Reset Code is: {otp}. Valid for 5 minutes."
                 _user_phone = str(user.phone)
@@ -191,86 +147,84 @@ class SyncPasswordService:
             return "If an account exists, a reset code has been sent."
 
         except Exception as e:
+            if isinstance(e, (AccountDeactivatedError, GoogleUserCannotResetPasswordError)):
+                raise
             logger.error("❌ Password Request Error (Sync): %s", e)
             raise Exception("Service unavailable.")
 
     @staticmethod
-    def confirm_reset(data: dict, request=None):
+    def confirm_reset(data: dict, request=None) -> str:
         """
-        Verifies token/OTP and resets password (Sync).
+        Verifies the reset token/OTP and sets a new password.
 
-        Writes PASSWORD_RESET_DONE (success) or WARNING (failure) to AuditEventLog.
+        Implements strict validation for both email (token) and phone (OTP)
+        reset flows. Records successful completions or detailed failures
+        to the audit log.
+
+        Args:
+            data: Dictionary containing 'new_password' and either 'uidb64'/'token'
+                  or 'token' (for OTP).
+            request: Optional Django HttpRequest for audit context.
+
+        Returns:
+            str: Success message.
+
+        Raises:
+            Exception: If validation fails or the user cannot be identified.
         """
-        from apps.audit_logs.models import EventType
-
         try:
             user = None
 
             if 'uidb64' in data and data['uidb64']:
-                # Email Flow
+                # EMAIL FLOW: UID + Token validation
                 try:
                     uid = force_str(urlsafe_base64_decode(data['uidb64']))
                     user = UnifiedUser.objects.get(pk=uid)
                 except (TypeError, ValueError, OverflowError, UnifiedUser.DoesNotExist):
-                    _audit_password(
-                        event_type=EventType.PASSWORD_RESET_DONE,
-                        action="Password reset failed — invalid uidb64 link",
+                    auth_audit.log_password_reset_failed(
+                        reason="Invalid reset link (uidb64 decode failed)",
                         request=request,
-                        severity="warning",
-                        error_message="Invalid reset link (uidb64 decode failed)",
-                        metadata={"flow": "email"},
-                        is_compliance=True,
+                        metadata={"flow": "email"}
                     )
                     raise Exception("Invalid reset link.")
 
                 if not default_token_generator.check_token(user, data['token']):
-                    _audit_password(
-                        event_type=EventType.PASSWORD_RESET_DONE,
-                        action="Password reset failed — invalid or expired token",
+                    auth_audit.log_password_reset_failed(
+                        reason="Token invalid or expired",
                         request=request,
                         actor=user,
-                        severity="warning",
-                        error_message="Token invalid or expired",
-                        metadata={"flow": "email"},
-                        is_compliance=True,
+                        metadata={"flow": "email"}
                     )
                     raise Exception("Invalid or expired token.")
 
             elif 'token' in data and data['token'] and 'phone' not in data:
-                # Phone OTP-only flow
+                # PHONE FLOW: OTP validation
                 otp_result = OTPService.verify_by_otp_sync(
                     data['token'], purpose='password_reset'
                 )
                 if not otp_result:
-                    _audit_password(
-                        event_type=EventType.PASSWORD_RESET_DONE,
-                        action="Password reset failed — invalid or expired OTP",
+                    auth_audit.log_password_reset_failed(
+                        reason="OTP invalid or expired",
                         request=request,
-                        severity="warning",
-                        error_message="OTP invalid or expired",
-                        metadata={"flow": "phone"},
-                        is_compliance=True,
+                        metadata={"flow": "phone"}
                     )
                     raise Exception("Invalid or expired OTP.")
 
                 try:
                     user = UnifiedUser.objects.get(pk=otp_result['user_id'])
                 except UnifiedUser.DoesNotExist:
-                    _audit_password(
-                        event_type=EventType.PASSWORD_RESET_DONE,
-                        action="Password reset failed — user not found from OTP",
+                    auth_audit.log_password_reset_failed(
+                        reason="User not found for OTP user_id",
                         request=request,
-                        severity="warning",
-                        error_message="User not found for OTP user_id",
-                        metadata={"flow": "phone"},
-                        is_compliance=True,
+                        metadata={"flow": "phone"}
                     )
                     raise Exception("User not found.")
 
             else:
                 raise Exception("Invalid request data.")
 
-            # ── Atomic: save password + fire on_commit email ──────────────
+            # ── Atomic Update: Save password and notify ───────────────────
+            # Password hashing is handled automatically by set_password
             with transaction.atomic():
                 user.set_password(data['new_password'])
                 user.save(update_fields=['password', 'updated_at'])
@@ -288,17 +242,13 @@ class SyncPasswordService:
                         context={"user": _user_context}
                     ))
 
-            # ── Audit: success ─────────────────────────────────────────────
-            _audit_password(
-                event_type=EventType.PASSWORD_RESET_DONE,
-                action="Password reset completed successfully",
-                request=request,
+            # ── Audit: Success completion via specialized helper ──────────
+            auth_audit.log_password_reset_completed(
                 actor=user,
-                severity="info",
+                request=request,
                 metadata={
                     "flow": "email" if ('uidb64' in data and data['uidb64']) else "phone",
-                },
-                is_compliance=True,
+                }
             )
 
             logger.info("✅ Password reset successful for User %s", user.id)
@@ -316,36 +266,31 @@ class SyncPasswordService:
         request=None,
     ) -> str:
         """
-        Change password for an authenticated user.
+        Changes the password for an already authenticated user.
 
-        Verifies old password first (security guard). Writes PASSWORD_CHANGED
-        to AuditEventLog on success, WARNING on failure.
+        Verifies the current password before applying changes as a security
+        guard against session hijacking.
 
         Args:
-            user:         The authenticated UnifiedUser.
-            old_password: Current (plaintext) password for verification.
-            new_password: New password to set.
-            request:      Django/DRF request for IP/UA audit context.
+            user: The authenticated UnifiedUser instance.
+            old_password: The current plaintext password for verification.
+            new_password: The new password to be set.
+            request: Optional Django HttpRequest for audit context.
 
         Returns:
             str: Success message.
 
         Raises:
-            Exception: If old password is wrong or DB write fails.
+            Exception: If the current password is incorrect or DB save fails.
         """
-        from apps.audit_logs.models import EventType
-
         try:
+            # 🔐 SECURITY GUARD: Must verify old password before change
             if not user.check_password(old_password):
-                _audit_password(
-                    event_type=EventType.PASSWORD_CHANGED,
-                    action="Password change failed — incorrect current password",
-                    request=request,
+                auth_audit.log_password_changed(
                     actor=user,
-                    severity="warning",
-                    error_message="Incorrect current password provided",
-                    metadata={"reason": "wrong_current_password"},
-                    is_compliance=True,
+                    success=False,
+                    reason="Incorrect current password provided",
+                    request=request
                 )
                 raise Exception("Current password is incorrect.")
 
@@ -355,7 +300,10 @@ class SyncPasswordService:
 
                 if user.email:
                     _user_email = user.email
-                    _ctx = {"first_name": getattr(user, "first_name", ""), "email": _user_email}
+                    _ctx = {
+                        "first_name": getattr(user, "first_name", ""),
+                        "email": _user_email
+                    }
                     transaction.on_commit(lambda: send_email_task.delay(
                         subject="Your Password Has Been Changed",
                         recipients=[_user_email],
@@ -363,14 +311,11 @@ class SyncPasswordService:
                         context={"user": _ctx},
                     ))
 
-            _audit_password(
-                event_type=EventType.PASSWORD_CHANGED,
-                action="Password changed successfully",
-                request=request,
+            # ── Audit: Specialized helper for password change ──────────────
+            auth_audit.log_password_changed(
                 actor=user,
-                severity="info",
-                metadata={"method": "authenticated_change"},
-                is_compliance=True,
+                success=True,
+                request=request
             )
 
             logger.info("✅ Password changed for User %s", user.pk)

@@ -44,6 +44,7 @@ release_escrow()
 import hashlib
 import logging
 from decimal import Decimal
+from uuid import uuid4
 
 # pyrefly: ignore [missing-import]
 from django.db import IntegrityError, transaction
@@ -58,6 +59,13 @@ from apps.order.models import (
     OrderStatusHistory,
     OrderIdempotencyRecord,
     ORDER_STATUS_TRANSITIONS,
+    CashPaymentMode,
+    OrderPaymentPath,
+    OrderPaymentSource,
+    OrderCommercialTransitionType,
+    OrderPaymentRecord,
+    OrderCommercialTransitionLog,
+    OrderDeliveryMode,
 )
 
 OrderItem = CartOrderItem  # alias: both names used in this service for clarity
@@ -76,6 +84,7 @@ except (ImportError, AttributeError):
     EscrowService = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
+_HUNDRED_PERCENT = Decimal("100.00")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -88,34 +97,48 @@ def _make_order_idempotency_key(user_id, cart_snapshot: str) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
-def _emit_order_audit(action: str, order: Order, actor=None, **metadata):
+def _emit_order_audit(action: str, order: Order, actor=None, request=None, **metadata):
+    """
+    Standardized hook for order domain audits with forensic context.
+    Wraps legacy audit helpers and ensures transaction integrity.
+    """
     try:
         from apps.audit_logs.services.order import order_audit
 
         audit_metadata = {"order_number": order.order_number, **metadata}
-        if action == "order.placed":
-            order_audit.log_order_created(
-                actor=actor,
-                order_id=str(order.id),
-                metadata=audit_metadata,
-            )
-        elif action == "order.cancelled":
-            order_audit.log_order_cancelled(
-                actor=actor,
-                order_id=str(order.id),
-                reason=str(metadata.get("reason", "")),
-            )
-        elif action in {"order.fulfilled", "order.completed"}:
-            order_audit.log_order_fulfilled(
-                actor=actor,
-                order_id=str(order.id),
-            )
-        else:
-            order_audit.log_order_updated(
-                actor=actor,
-                order_id=str(order.id),
-                new_values=audit_metadata,
-            )
+
+        def _dispatch():
+            if action == "order.placed":
+                order_audit.log_order_created(
+                    actor=actor,
+                    order_id=str(order.id),
+                    request=request,
+                    metadata=audit_metadata,
+                )
+            elif action == "order.cancelled":
+                order_audit.log_order_cancelled(
+                    actor=actor,
+                    order_id=str(order.id),
+                    request=request,
+                    reason=str(metadata.get("reason", "")),
+                )
+            elif action in {"order.fulfilled", "order.completed"}:
+                order_audit.log_order_fulfilled(
+                    actor=actor,
+                    order_id=str(order.id),
+                    request=request,
+                )
+            else:
+                order_audit.log_order_updated(
+                    actor=actor,
+                    order_id=str(order.id),
+                    request=request,
+                    new_values=audit_metadata,
+                )
+
+        # Ensure audit only fires on successful commit
+        transaction.on_commit(_dispatch)
+
     except Exception:
         logger.warning("AuditService order event failed: action=%s order=%s", action, getattr(order, "id", "?"))
 
@@ -128,6 +151,316 @@ def _record_status_history(order: Order, from_status: str, to_status: str, actor
         actor=actor,
         note=note,
     )
+
+
+def _actor_role(actor) -> str:
+    if actor is None:
+        return "system"
+    if getattr(actor, "is_superuser", False):
+        return "admin"
+    if getattr(actor, "is_staff", False):
+        return "staff"
+    role = getattr(actor, "role", "")
+    return str(role or "user")
+
+
+def _emit_order_financial_audit(
+    *,
+    order: Order,
+    actor=None,
+    request=None,
+    event_type: str,
+    correlation_id: str,
+    old_values: dict | None = None,
+    new_values: dict | None = None,
+    metadata: dict | None = None,
+) -> None:
+    """
+    Records high-integrity financial audit events for the order domain.
+    Captures IP and User-Agent for forensic traceability.
+    """
+    from apps.audit_logs.utils import get_client_ip
+
+    ip_address = get_client_ip(request) if request else None
+    user_agent = request.META.get("HTTP_USER_AGENT") if request else None
+
+    def _dispatch():
+        try:
+            from apps.audit_logs.models import AuditEventLog
+
+            AuditEventLog.objects.create(
+                actor=actor,
+                actor_role=_actor_role(actor),
+                event_type=event_type,
+                entity_type="order",
+                entity_id=str(order.pk),
+                route_hint=f"/orders/{order.pk}/",
+                old_values=old_values or {},
+                new_values=new_values or {},
+                metadata=metadata or {},
+                correlation_id=correlation_id,
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+        except Exception:
+            logger.warning(
+                "Order financial audit write failed: order=%s event=%s",
+                getattr(order, "order_number", order.pk),
+                event_type,
+            )
+
+    transaction.on_commit(_dispatch)
+
+
+
+def _mode_to_options(mode: str) -> set[str]:
+    if mode == CashPaymentMode.COD:
+        return {CashPaymentMode.COD}
+    if mode == CashPaymentMode.PAY_AT_SHOP:
+        return {CashPaymentMode.PAY_AT_SHOP}
+    if mode == CashPaymentMode.BOTH:
+        return {CashPaymentMode.COD, CashPaymentMode.PAY_AT_SHOP}
+    return set()
+
+
+def _options_to_mode(options: set[str]) -> str:
+    if options == {CashPaymentMode.COD, CashPaymentMode.PAY_AT_SHOP}:
+        return CashPaymentMode.BOTH
+    if options == {CashPaymentMode.COD}:
+        return CashPaymentMode.COD
+    if options == {CashPaymentMode.PAY_AT_SHOP}:
+        return CashPaymentMode.PAY_AT_SHOP
+    return CashPaymentMode.DISABLED
+
+
+def _resolve_cash_payment_mode_snapshot(*, active_items: list, vendor) -> str:
+    intersected: set[str] | None = None
+    for item in active_items:
+        product_mode = getattr(item.product, "cash_payment_mode", CashPaymentMode.DISABLED)
+        current = _mode_to_options(product_mode)
+        intersected = current if intersected is None else intersected & current
+    product_mode = _options_to_mode(intersected or set())
+    if product_mode != CashPaymentMode.DISABLED:
+        return product_mode
+    return getattr(vendor, "cash_payment_mode", CashPaymentMode.DISABLED) or CashPaymentMode.DISABLED
+
+
+def _log_commercial_transition(
+    *,
+    order: Order,
+    transition_type: str,
+    actor=None,
+    request=None,
+    payment_record: OrderPaymentRecord | None = None,
+    payment_intent=None,
+    from_status: str = "",
+    to_status: str = "",
+    delivery_mode: str = "",
+    selected_percent: int = 0,
+    cumulative_percent_paid: Decimal = Decimal("0.00"),
+    amount_delta: Decimal = Decimal("0.00"),
+    balance_after: Decimal = Decimal("0.00"),
+    correlation_id: str = "",
+    note: str = "",
+    metadata: dict | None = None,
+) -> OrderCommercialTransitionLog:
+    log = OrderCommercialTransitionLog.objects.create(
+        order=order,
+        transition_type=transition_type,
+        from_status=from_status,
+        to_status=to_status,
+        payment_record=payment_record,
+        payment_intent=payment_intent,
+        delivery_mode=delivery_mode or order.delivery_mode,
+        cash_payment_mode_snapshot=order.cash_payment_mode_snapshot,
+        selected_percent=selected_percent,
+        cumulative_percent_paid=cumulative_percent_paid,
+        amount_delta=amount_delta,
+        balance_after=balance_after,
+        actor=actor,
+        actor_role=_actor_role(actor),
+        occurred_at=timezone.now(),
+        correlation_id=correlation_id,
+        note=note,
+        request=request,
+        metadata=metadata or {},
+    )
+    _emit_order_financial_audit(
+        order=order,
+        actor=actor,
+        request=request,
+        event_type=f"order.{transition_type}",
+        correlation_id=correlation_id,
+        new_values={
+            "transition_type": transition_type,
+            "delivery_mode": log.delivery_mode,
+            "selected_percent": selected_percent,
+            "cumulative_percent_paid": str(cumulative_percent_paid),
+            "amount_delta": str(amount_delta),
+            "balance_after": str(balance_after),
+        },
+        metadata=metadata or {},
+    )
+    return log
+
+
+def _calculate_applied_percent(amount: Decimal, total_amount: Decimal) -> Decimal:
+    if total_amount <= 0:
+        return Decimal("0.00")
+    return ((amount / total_amount) * _HUNDRED_PERCENT).quantize(Decimal("0.01"))
+
+
+def _update_order_payment_snapshot(
+    *,
+    order: Order,
+    amount: Decimal,
+    payment_path: str,
+    provider: str,
+    payment_reference: str,
+    paid_at,
+) -> tuple[Decimal, Decimal, Decimal, Decimal]:
+    cumulative_amount = (order.amount_paid_total + amount).quantize(Decimal("0.01"))
+    cumulative_amount = min(cumulative_amount, order.total_amount)
+    applied_percent = _calculate_applied_percent(amount, order.total_amount)
+    cumulative_percent = _calculate_applied_percent(cumulative_amount, order.total_amount)
+    remaining_amount = max(Decimal("0.00"), (order.total_amount - cumulative_amount).quantize(Decimal("0.01")))
+    remaining_percent = max(Decimal("0.00"), (_HUNDRED_PERCENT - cumulative_percent).quantize(Decimal("0.01")))
+
+    order.amount_paid_total = cumulative_amount
+    order.percent_paid_total = cumulative_percent
+    order.amount_outstanding = remaining_amount
+    order.is_fully_paid = remaining_amount == Decimal("0.00")
+    order.active_payment_path = payment_path
+    order.payment_gateway = provider or order.payment_gateway
+    order.payment_reference = payment_reference or order.payment_reference
+    order.paid_at = paid_at
+    if order.first_paid_at is None:
+        order.first_paid_at = paid_at
+    if order.is_fully_paid:
+        order.final_paid_at = paid_at
+    order.save(
+        update_fields=[
+            "amount_paid_total",
+            "percent_paid_total",
+            "amount_outstanding",
+            "is_fully_paid",
+            "active_payment_path",
+            "payment_gateway",
+            "payment_reference",
+            "paid_at",
+            "first_paid_at",
+            "final_paid_at",
+            "updated_at",
+        ]
+    )
+    return cumulative_amount, applied_percent, cumulative_percent, remaining_percent
+
+
+@transaction.atomic
+def register_payment_tranche(
+    *,
+    order: Order,
+    amount: Decimal,
+    selected_percent: int,
+    payment_source: str,
+    payment_path: str,
+    provider: str,
+    actor=None,
+    request=None,
+    payment_intent=None,
+    correlation_id: str = "",
+    metadata: dict | None = None,
+) -> OrderPaymentRecord:
+    order = Order.objects.select_for_update().get(pk=order.pk)
+    correlation_id = correlation_id or str(uuid4())
+    paid_at = timezone.now()
+    prior_status = order.status
+    cumulative_amount, applied_percent, cumulative_percent, remaining_percent = _update_order_payment_snapshot(
+        order=order,
+        amount=amount,
+        payment_path=payment_path,
+        provider=provider,
+        payment_reference=getattr(payment_intent, "reference", ""),
+        paid_at=paid_at,
+    )
+    sequence_number = (order.payment_records.count() or 0) + 1
+    record = OrderPaymentRecord.objects.create(
+        order=order,
+        sequence_number=sequence_number,
+        payment_intent=payment_intent,
+        payment_source=payment_source,
+        provider=provider,
+        selected_percent=selected_percent,
+        applied_percent=applied_percent,
+        amount=amount,
+        currency=order.currency,
+        cumulative_amount_paid=cumulative_amount,
+        cumulative_percent_paid=cumulative_percent,
+        remaining_amount=order.amount_outstanding,
+        remaining_percent=remaining_percent,
+        is_final_payment=order.is_fully_paid,
+        paid_at=paid_at,
+        actor=actor,
+        correlation_id=correlation_id,
+        metadata=metadata or {},
+    )
+    if payment_path in {OrderPaymentPath.COD, OrderPaymentPath.PAY_AT_SHOP}:
+        next_status = OrderStatus.AWAITING_CASH_CONFIRMATION
+    elif order.is_fully_paid:
+        next_status = OrderStatus.PAYMENT_CONFIRMED
+    else:
+        next_status = prior_status
+
+    if next_status != order.status:
+        order.status = next_status
+        order.save(update_fields=["status", "updated_at"])
+        _record_status_history(
+            order,
+            prior_status,
+            next_status,
+            actor=actor,
+            note="Payment tranche updated order payment progress.",
+        )
+
+    _emit_order_financial_audit(
+        order=order,
+        actor=actor,
+        request=request,
+        event_type="order.payment_record.created",
+        correlation_id=correlation_id,
+        new_values={
+            "sequence_number": sequence_number,
+            "payment_source": payment_source,
+            "provider": provider,
+            "selected_percent": selected_percent,
+            "applied_percent": str(applied_percent),
+            "amount": str(amount),
+            "cumulative_amount_paid": str(cumulative_amount),
+            "cumulative_percent_paid": str(cumulative_percent),
+            "remaining_amount": str(order.amount_outstanding),
+            "remaining_percent": str(remaining_percent),
+            "is_final_payment": order.is_fully_paid,
+        },
+        metadata=metadata or {},
+    )
+    _log_commercial_transition(
+        order=order,
+        transition_type=OrderCommercialTransitionType.PAYMENT_SUCCEEDED,
+        actor=actor,
+        request=request,
+        payment_record=record,
+        payment_intent=payment_intent,
+        from_status=prior_status,
+        to_status=next_status,
+        selected_percent=selected_percent,
+        cumulative_percent_paid=cumulative_percent,
+        amount_delta=amount,
+        balance_after=order.amount_outstanding,
+        correlation_id=correlation_id,
+        request=request,
+        metadata=metadata,
+    )
+    return record
 
 
 def _get_succeeded_payment_intent(*, order: Order, payment_reference: str = ""):
@@ -163,7 +496,7 @@ def _get_active_order_hold(*, order: Order):
 # ─────────────────────────────────────────────────────────────────────────────
 
 @transaction.atomic
-def place_order(
+def place_order(*, user, delivery_address, fulfillment_type, measurement_profile_id=None, notes="", idempotency_key=None, adjust_inventory=None, request=None) -> Order:
     *,
     user,
     delivery_address: dict,
@@ -193,7 +526,7 @@ def place_order(
     if idempotency_key:
         existing_record = OrderIdempotencyRecord.objects.filter(
             key=idempotency_key
-        ).select_related("order").first()
+        .select_related("order").first()
         if existing_record:
             logger.info("Idempotent order replay: key=%s order=%s", idempotency_key, existing_record.order.order_number)
             return existing_record.order
@@ -214,8 +547,8 @@ def place_order(
             "variant",
             "variant__size",
             "variant__color",
-        )
-    )
+        
+    
 
     # ── Step 3: Lock all product rows ────────────────────────────────────
     product_ids = [item.product_id for item in active_items]
@@ -239,14 +572,14 @@ def place_order(
             raise ValueError(
                 f"'{product.title}': only {available} unit(s) available, "
                 f"but {item.quantity} requested."
-            )
+            
 
     # ── Step 5: Calculate order totals ───────────────────────────────────
     subtotal = cart.subtotal
     shipping = sum(
         (products_map[i.product_id].shipping_amount for i in active_items),
         Decimal("0")
-    )
+    
     discount = cart.coupon_discount
     total = max(Decimal("0"), subtotal + shipping - discount)
 
@@ -261,11 +594,15 @@ def place_order(
 
     # Resolve vendor (from first item)
     vendor = active_items[0].product.vendor if active_items else None
+    cash_payment_mode_snapshot = _resolve_cash_payment_mode_snapshot(
+        active_items=active_items,
+        vendor=vendor,
+    
 
     # ── Step 6: Create Order ─────────────────────────────────────────────
     idem_key = idempotency_key or _make_order_idempotency_key(
         user.id, f"{cart.id}:{subtotal}"
-    )
+    
 
     try:
         order = Order.objects.create(
@@ -279,13 +616,20 @@ def place_order(
             total_amount=total,
             commission_amount=commission_total,
             vendor_payout=vendor_payout,
+            amount_outstanding=total,
             currency="NGN",
             coupon_code=cart.coupon.code if cart.coupon else "",
             delivery_address=delivery_address,
             measurement_profile_id=measurement_profile_id,
             idempotency_key=idem_key,
             notes=notes,
-        )
+            cash_payment_mode_snapshot=cash_payment_mode_snapshot,
+            delivery_mode=(
+                OrderDeliveryMode.VENDOR_SHOP_PICKUP
+                if fulfillment_type == FulfillmentType.PICKUP
+                else OrderDeliveryMode.PLATFORM_COURIER
+            ,
+        
     except IntegrityError:
         existing_order = Order.objects.filter(idempotency_key=idem_key).first()
         if existing_order:
@@ -293,7 +637,7 @@ def place_order(
                 "Concurrent idempotent order replay recovered: key=%s order=%s",
                 idem_key,
                 existing_order.order_number,
-            )
+            
             return existing_order
         raise
 
@@ -327,8 +671,8 @@ def place_order(
                 commission_amount=comm_amount,
                 line_total=line_total,
                 is_custom_order=product.is_customisable,
-            )
-        )
+            
+        
         cart_order_snapshot_payload.append(
             {
                 "product_id": str(product.pk),
@@ -345,7 +689,7 @@ def place_order(
                 "color_snapshot": getattr(color, "name", "") if color else "",
                 "cart_item_idempotency_key": str(item.idempotency_key),
             }
-        )
+        
     CartOrderItem.objects.bulk_create(order_items)
 
     # ── Step 8: Deduct stock ─────────────────────────────────────
@@ -359,7 +703,7 @@ def place_order(
                 reference_id=order.order_number,
                 actor=user,
                 variant=item.variant,
-            )
+            
         # Update product.orders_count
         type(product).objects.filter(pk=product.pk).update(orders_count=product.orders_count + 1)
 
@@ -367,14 +711,14 @@ def place_order(
     if cart.coupon:
         type(cart.coupon).objects.filter(pk=cart.coupon.pk).update(
             usage_count=cart.coupon.usage_count + 1
-        )
+        
 
     # ── Step 10: Store idempotency record ────────────────────────────────
     OrderIdempotencyRecord.objects.create(
         key=idem_key,
         order=order,
         expires_at=timezone.now() + timezone.timedelta(hours=24),
-    )
+    
 
     # ── Step 11: Clear cart ──────────────────────────────────────────────
     clear_cart(user=user)
@@ -384,7 +728,7 @@ def place_order(
 
     # ── Step 13: Emit audit event ────────────────────────────────────────
     transaction.on_commit(
-        lambda: _emit_order_audit("order.placed", order, actor=user, total=str(total))
+        lambda: _emit_order_audit("order.placed", order, actor=user,request=request, total=str(total))
     )
     from apps.common.events import event_bus
     event_bus.emit_on_commit(
@@ -392,7 +736,7 @@ def place_order(
         order_id=str(order.pk),
         order_number=order.order_number,
         cart_items=cart_order_snapshot_payload,
-    )
+    
 
     logger.info("Order placed: %s total=%s user=%s", order.order_number, total, user)
     return order
@@ -403,7 +747,7 @@ def place_order(
 # ─────────────────────────────────────────────────────────────────────────────
 
 @transaction.atomic
-def confirm_payment(*, order: Order, payment_reference: str, actor=None) -> Order:
+def confirm_payment(*, order: Order, payment_reference: str, actor=None, request=None) -> Order:
     """Transition PENDING_PAYMENT → PAYMENT_CONFIRMED."""
     order = Order.objects.select_for_update().get(pk=order.pk)
     if not order.can_transition_to(OrderStatus.PAYMENT_CONFIRMED):
@@ -430,11 +774,27 @@ def confirm_payment(*, order: Order, payment_reference: str, actor=None) -> Orde
     order.paid_at = timezone.now()
     order.save(update_fields=["status", "payment_reference", "paid_at", "updated_at"])
     _record_status_history(order, from_status, OrderStatus.PAYMENT_CONFIRMED, actor=actor, note="Payment confirmed via webhook.")
+    _log_commercial_transition(
+        order=order,
+        transition_type=OrderCommercialTransitionType.PAYMENT_SUCCEEDED,
+        actor=actor,
+        payment_intent=intent,
+        from_status=from_status,
+        to_status=OrderStatus.PAYMENT_CONFIRMED,
+        selected_percent=int(order.percent_paid_total or 0),
+        cumulative_percent_paid=order.percent_paid_total,
+        amount_delta=Decimal("0.00"),
+        balance_after=order.amount_outstanding,
+        correlation_id=intent.idempotency_key or payment_reference,
+        note="Payment confirmation finalized order state.",
+        request=request,
+        metadata={"payment_reference": payment_reference or intent.reference},
+    )
     transaction.on_commit(
         lambda: _emit_order_audit(
             "order.payment_confirmed",
             order,
-            actor=actor,
+            actor=actor, request=request,
             ref=payment_reference,
         )
     )
@@ -446,7 +806,7 @@ def confirm_payment(*, order: Order, payment_reference: str, actor=None) -> Orde
 # ─────────────────────────────────────────────────────────────────────────────
 
 @transaction.atomic
-def transition_status(*, order: Order, new_status: str, actor=None, note: str = "") -> Order:
+def transition_status(*, order: Order, new_status: str, actor=None, note: str = "", request=None) -> Order:
     """Generic status transition with machine validation."""
     order = Order.objects.select_for_update().get(pk=order.pk)
     if not order.can_transition_to(new_status):
@@ -458,11 +818,35 @@ def transition_status(*, order: Order, new_status: str, actor=None, note: str = 
     order.status = new_status
     order.save(update_fields=["status", "updated_at"])
     _record_status_history(order, from_status, new_status, actor=actor, note=note)
+    transition_map = {
+        OrderStatus.SHIPPED: OrderCommercialTransitionType.SHIPPED,
+        OrderStatus.OUT_FOR_DELIVERY: OrderCommercialTransitionType.OUT_FOR_DELIVERY,
+        OrderStatus.DELIVERED: OrderCommercialTransitionType.DELIVERED,
+        OrderStatus.COMPLETED: OrderCommercialTransitionType.ORDER_COMPLETED,
+        OrderStatus.DISPUTED: OrderCommercialTransitionType.DISPUTE_OPENED,
+    }
+    if new_status in transition_map:
+        _log_commercial_transition(
+            order=order,
+            transition_type=transition_map[new_status],
+            actor=actor,
+            from_status=from_status,
+            to_status=new_status,
+            delivery_mode=order.delivery_mode,
+            selected_percent=int(order.percent_paid_total or 0),
+            cumulative_percent_paid=order.percent_paid_total,
+            amount_delta=Decimal("0.00"),
+            balance_after=order.amount_outstanding,
+            correlation_id=str(uuid4()),
+            note=note,
+            request=request,
+            metadata={"status": new_status},
+        )
     transaction.on_commit(
         lambda: _emit_order_audit(
             f"order.status.{new_status}",
             order,
-            actor=actor,
+            actor=actor, request=request,
             from_status=from_status,
         )
     )
@@ -477,6 +861,7 @@ def update_delivery_status(
     actor=None,
     note: str = "",
     tracking_number: str = "",
+    request=None,
 ) -> Order:
     """Update an order delivery/production state from the admin surface.
 
@@ -507,6 +892,7 @@ def update_delivery_status(
         new_status=new_status,
         actor=actor,
         note=note or "Delivery status updated by admin.",
+        request=request,
     )
 
 
@@ -515,7 +901,7 @@ def update_delivery_status(
 # ─────────────────────────────────────────────────────────────────────────────
 
 @transaction.atomic
-def release_escrow(*, order: Order, actor=None) -> Order:
+def release_escrow(*, order: Order, actor=None, request=None) -> Order:
     """
     Mark order COMPLETED and release escrow to vendor wallet.
     Called by client on delivery confirmation.
@@ -553,8 +939,24 @@ def release_escrow(*, order: Order, actor=None) -> Order:
     order.escrow_released = True
     order.save(update_fields=["status", "escrow_released", "updated_at"])
     _record_status_history(order, from_status, OrderStatus.COMPLETED, actor=actor, note="Escrow released by client.")
+    _log_commercial_transition(
+        order=order,
+        transition_type=OrderCommercialTransitionType.ESCROW_RELEASED,
+        actor=actor,
+        from_status=from_status,
+        to_status=OrderStatus.COMPLETED,
+        delivery_mode=order.delivery_mode,
+        selected_percent=int(order.percent_paid_total or 0),
+        cumulative_percent_paid=order.percent_paid_total,
+        amount_delta=Decimal("0.00"),
+        balance_after=order.amount_outstanding,
+        correlation_id=f"order-release:{order.pk}",
+        note="Escrow released by client confirmation.",
+        request=request,
+        metadata={"hold_reference": hold.reference},
+    )
     transaction.on_commit(
-        lambda: _emit_order_audit("order.completed", order, actor=actor)
+        lambda: _emit_order_audit("order.completed", order, actor=actor, request=request)
     )
     return order
 
@@ -564,7 +966,7 @@ def release_escrow(*, order: Order, actor=None) -> Order:
 # ─────────────────────────────────────────────────────────────────────────────
 
 @transaction.atomic
-def cancel_order(*, order: Order, actor=None, reason: str = "") -> Order:
+def cancel_order(*, order: Order, actor=None, reason: str = "", request=None) -> Order:
     """Cancel order and release stock reservation."""
     order = Order.objects.select_for_update().get(pk=order.pk)
     if not order.can_transition_to(OrderStatus.CANCELLED):
@@ -593,6 +995,6 @@ def cancel_order(*, order: Order, actor=None, reason: str = "") -> Order:
     order.save(update_fields=["status", "updated_at"])
     _record_status_history(order, from_status, OrderStatus.CANCELLED, actor=actor, note=reason or "Order cancelled.")
     transaction.on_commit(
-        lambda: _emit_order_audit("order.cancelled", order, actor=actor, reason=reason)
+        lambda: _emit_order_audit("order.cancelled", order, actor=actor, request=request, reason=reason)
     )
     return order
