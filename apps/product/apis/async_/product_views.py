@@ -237,6 +237,20 @@ def _product_card_out(product) -> dict:
     else:
         card_url = raw_url
 
+    prefetched_cache = getattr(product, "_prefetched_objects_cache", {}) or {}
+    prefetched_sizes = getattr(product, "_prefetched_sizes", None)
+    prefetched_colors = getattr(product, "_prefetched_colors", None)
+    sizes = (
+        prefetched_sizes
+        if prefetched_sizes is not None
+        else list(prefetched_cache.get("sizes", []))
+    )
+    colors = (
+        prefetched_colors
+        if prefetched_colors is not None
+        else list(prefetched_cache.get("colors", []))
+    )
+
     return {
         "id": str(product.pk),
         "title": product.title,
@@ -264,8 +278,8 @@ def _product_card_out(product) -> dict:
         "vendor_slug": _vendor_out(product.vendor)["slug"],
         "requires_measurement": product.requires_measurement,
         "is_customisable": product.is_customisable,
-        "sizes": [_size_out(s) for s in getattr(product, "_prefetched_sizes", []) or product.sizes.all()],
-        "colors": [_color_out(c) for c in getattr(product, "_prefetched_colors", []) or product.colors.all()],
+        "sizes": [_size_out(s) for s in sizes],
+        "colors": [_color_out(c) for c in colors],
         "created_at": product.created_at,
     }
 
