@@ -375,6 +375,13 @@ class TestProductDRFAPI:
         except Exception:
             pytest.skip("product-detail URL not configured")
 
+    def test_ninja_product_detail_returns_200(self, api_client, product):
+        """Published product detail via Ninja must not crash on selector prefetches."""
+        response = api_client.get(f"/api/v1/ninja/products/{product.slug}/")
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data.get("slug") == product.slug
+
     def test_draft_product_hidden_from_public(self, api_client, draft_product):
         """Draft products must not be visible in the public listing."""
         try:

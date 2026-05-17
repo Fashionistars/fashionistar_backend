@@ -201,7 +201,9 @@ def _variant_out(v) -> dict:
 
 def _review_out(review) -> dict:
     user = getattr(review, "user", None)
-    profile = getattr(user, "profile", None) if user else None
+    profile = None
+    if user:
+        profile = getattr(user, "client_profile", None) or getattr(user, "vendor_profile", None)
     avatar = getattr(profile, "avatar", None) if profile else None
     reviewer_name = review.reviewer_name or (
         getattr(user, "get_full_name", lambda: "")() if user else None
@@ -287,6 +289,8 @@ def _product_card_out(product) -> dict:
 def _product_detail_out(product) -> dict:
     """Full product detail including gallery, variants, specs, FAQs."""
     card = _product_card_out(product)
+    prefetched_cache = getattr(product, "_prefetched_objects_cache", {}) or {}
+    prefetched_variants = list(prefetched_cache.get("product_variants", []))
     card.update(
         {
             "description": product.description or "",
@@ -321,7 +325,8 @@ def _product_detail_out(product) -> dict:
             ],
             "variants": [
                 _variant_out(v)
-                for v in product.product_variants.filter(is_active=True)
+                for v in prefetched_variants
+                if getattr(v, "is_active", False)
             ],
             "status": product.status,
             "vendor": _vendor_out(product.vendor),

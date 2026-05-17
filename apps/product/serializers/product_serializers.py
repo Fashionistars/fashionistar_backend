@@ -462,8 +462,12 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         source="product_variants",
     )
     # Phase 1 reverse FK embeds
-    fabrics = ProductFabricSerializer(many=True, read_only=True, source="product_fabrics")
-    measurement_guide = ProductMeasurementGuideSerializer(many=True, read_only=True, source="measurement_guides")
+    fabrics = ProductFabricSerializer(read_only=True, source="product_fabric")
+    measurement_guide = ProductMeasurementGuideSerializer(
+        many=True,
+        read_only=True,
+        source="product_measurement_guide",
+    )
     certifications = ProductCertificationSerializer(many=True, read_only=True, source="product_certifications")
     category_name = serializers.SerializerMethodField()
     category_slug = serializers.SerializerMethodField()
