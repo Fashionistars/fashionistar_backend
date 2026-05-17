@@ -570,11 +570,11 @@ async def aget_product_detail(slug: str) -> Product | None:
                 "product_faqs",
                 # Phase 1 reverse FK prefetches
                 Prefetch(
-                    "product_fabrics",
+                    "product_fabric",
                     queryset=ProductFabric.objects.all(),
                 ),
                 Prefetch(
-                    "measurement_guides",
+                    "product_measurement_guide",
                     queryset=ProductMeasurementGuide.objects.order_by("sort_order"),
                 ),
                 Prefetch(
@@ -660,7 +660,7 @@ async def alist_reviews_for_product_slug(slug: str, limit: int = 20) -> list[Pro
             product__is_deleted=False,
             active=True,
         )
-        .select_related("user__profile")
+        .select_related("user", "user__client_profile", "user__vendor_profile")
         .order_by("-created_at")[:limit]
     ]
 
