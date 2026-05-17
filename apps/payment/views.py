@@ -269,13 +269,20 @@ class WalletFundPaymentView(generics.GenericAPIView):
                     payment_path=payload["payment_path"],
                     selected_percent=payload["selected_percent"],
                 )
+                # Ensure idempotency key is always set — if the client omits the
+                # header, generate a deterministic fallback keyed to the exact
+                # payment parameters so double-submit cannot create duplicate intents.
+                idempotency_key = request.headers.get("Idempotency-Key") or (
+                    f"view-order-payment:{request.user.pk}:{payload.get('order_id', '')}:"
+                    f"{payload['provider']}:{payload['payment_path']}:{payload['selected_percent']}"
+                )
                 if payload["provider"] == "wallet":
                     intent, record = PaymentIntentService.pay_order_from_wallet(
                         user=request.user,
                         order=order,
                         selected_percent=payload["selected_percent"],
                         payment_path=payload["payment_path"],
-                        idempotency_key=request.headers.get("Idempotency-Key", ""),
+                        idempotency_key=idempotency_key,
                         metadata=payload.get("metadata", {}),
                     )
                     return success_response(
@@ -296,7 +303,7 @@ class WalletFundPaymentView(generics.GenericAPIView):
                     selected_percent=payload["selected_percent"],
                     payment_path=payload["payment_path"],
                     currency=payload.get("currency", "NGN"),
-                    idempotency_key=request.headers.get("Idempotency-Key", ""),
+                    idempotency_key=idempotency_key,
                     cash_payment_mode=payload.get("cash_payment_mode", order.cash_payment_mode_snapshot),
                     metadata=payload.get("metadata", {}),
                 )

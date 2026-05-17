@@ -30,7 +30,7 @@ Endpoints:
 import logging
 from datetime import timedelta
 
-from django.db.models import Avg, Count, Q, Sum
+from django.db.models import Avg, Count, F, Q, Sum
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.generics import GenericAPIView, ListAPIView, RetrieveAPIView
@@ -1041,8 +1041,9 @@ class VendorProductListView(ListAPIView):
             "price",
             "stock_qty",
             "status",
-            "categories__name",
-            "created_at",
+            pid=F("sku"),
+            category__name=F("categories__name"),
+            date=F("created_at"),
         ).order_by("-created_at")
 
 
@@ -1071,8 +1072,9 @@ class VendorLowStockView(ListAPIView):
                 "price",
                 "stock_qty",
                 "status",
-                "categories__name",
-                "created_at",
+                pid=F("sku"),
+                category__name=F("categories__name"),
+                date=F("created_at"),
             )
             .order_by("stock_qty")
         )
@@ -1101,8 +1103,9 @@ class VendorTopSellingProductsView(ListAPIView):
             "price",
             "stock_qty",
             "status",
-            "categories__name",
-            "created_at",
+            pid=F("sku"),
+            category__name=F("categories__name"),
+            date=F("created_at"),
         )
 
 
