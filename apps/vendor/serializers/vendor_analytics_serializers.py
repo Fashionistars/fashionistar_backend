@@ -56,19 +56,20 @@ class VendorPaymentDistributionSerializer(serializers.Serializer):
     percentage = serializers.FloatField()
 
 class VendorProductListSerializer(serializers.Serializer):
-    id = serializers.IntegerField()
+    id = serializers.CharField()
+    pid = serializers.CharField()
     title = serializers.CharField()
     price = serializers.DecimalField(max_digits=12, decimal_places=2)
     stock_qty = serializers.IntegerField()
     status = serializers.CharField()
-    categories__name = serializers.CharField()
+    category__name = serializers.CharField(allow_blank=True, allow_null=True)
     date = serializers.DateTimeField()
 
     class Meta:
         ref_name = "AnalyticsVendorProductList"
 
 class VendorOrderListSerializer(serializers.Serializer):
-    id = serializers.IntegerField()
+    id = serializers.CharField()
     total = serializers.DecimalField(max_digits=12, decimal_places=2)
     payment_status = serializers.CharField()
     order_status = serializers.CharField()
@@ -76,7 +77,7 @@ class VendorOrderListSerializer(serializers.Serializer):
     buyer__email = serializers.EmailField()
 
 class VendorOrderDetailSerializer(serializers.Serializer):
-    id = serializers.IntegerField()
+    id = serializers.CharField()
     total = serializers.CharField()
     payment_status = serializers.CharField()
     order_status = serializers.CharField()
@@ -84,14 +85,14 @@ class VendorOrderDetailSerializer(serializers.Serializer):
     buyer_email = serializers.EmailField()
 
 class VendorReviewListSerializer(serializers.Serializer):
-    review_product__id = serializers.IntegerField()
+    review_product__id = serializers.CharField()
     review_product__rating = serializers.IntegerField()
     review_product__review = serializers.CharField()
     review_product__date = serializers.DateTimeField()
     title = serializers.CharField()
 
 class VendorCouponListSerializer(serializers.Serializer):
-    id = serializers.IntegerField()
+    id = serializers.CharField()
     code = serializers.CharField()
     discount = serializers.IntegerField()
     date = serializers.DateTimeField()

@@ -1,4 +1,4 @@
-# apps/order/services/order_service.py
+﻿# apps/order/services/order_service.py
 """
 Order service — the most critical service in Fashionistar.
 
@@ -114,27 +114,23 @@ def _emit_order_audit(action: str, order: Order, actor=None, request=None, **met
                 order_audit.log_order_created(
                     actor=actor,
                     order_id=str(order.id),
-                    request=request,
                     metadata=audit_metadata,
                 )
             elif action == "order.cancelled":
                 order_audit.log_order_cancelled(
                     actor=actor,
                     order_id=str(order.id),
-                    request=request,
                     reason=str(metadata.get("reason", "")),
                 )
             elif action in {"order.fulfilled", "order.completed"}:
                 order_audit.log_order_fulfilled(
                     actor=actor,
                     order_id=str(order.id),
-                    request=request,
                 )
             else:
                 order_audit.log_order_updated(
                     actor=actor,
                     order_id=str(order.id),
-                    request=request,
                     new_values=audit_metadata,
                 )
 
@@ -449,7 +445,6 @@ def register_payment_tranche(
         order=order,
         transition_type=OrderCommercialTransitionType.PAYMENT_SUCCEEDED,
         actor=actor,
-        request=request,
         payment_record=record,
         payment_intent=payment_intent,
         from_status=prior_status,

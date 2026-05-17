@@ -7,7 +7,6 @@ from decimal import Decimal
 from django.core.exceptions import ObjectDoesNotExist
 from ninja import Router
 from ninja.errors import HttpError
-
 from apps.cart.schemas import CartOut
 from apps.cart.selectors import CartSelector
 from apps.common.roles import is_client_role
@@ -51,6 +50,25 @@ def _require_client_profile(request):
     if profile is None:
         raise HttpError(403, "Client profile setup is required for this endpoint.")
     return profile
+
+
+async def _resolve_optional_bearer_user(request):
+    """Hydrate a user from an optional Authorization header for public-friendly reads."""
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.lower().startswith("bearer "):
+        return None
+
+    token = auth_header.split(" ", 1)[1].strip()
+    if not token:
+        return None
+
+    try:
+        from backend.ninja_api import AsyncJWTAuth
+
+        return await AsyncJWTAuth().authenticate(request, token)
+    except Exception:
+        return None
 
 
 def _product_out(product) -> dict:
@@ -105,8 +123,9 @@ def _empty_cart_out() -> dict:
 async def get_current_cart(request, session_key: str | None = None):
     """Return the current cart for an authenticated client or anonymous session."""
 
-    user = getattr(request, "auth", None)
+    user = await _resolve_optional_bearer_user(request)
     if user is not None:
+        request.auth = user
         _require_client_profile(request)
     session_key = (
         session_key

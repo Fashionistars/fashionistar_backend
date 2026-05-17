@@ -91,6 +91,41 @@ class CartAddItemView(APIView):
         )
 
 
+class CartRetrieveView(APIView):
+    """GET /api/v1/cart/ — return the current cart for an auth user or session."""
+
+    renderer_classes = _RENDERERS
+    parser_classes = _PARSERS
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        try:
+            identity = _cart_identity(request)
+        except ValueError:
+            identity = {}
+
+        from apps.cart.selectors import CartSelector
+
+        cart = CartSelector.for_identity(**identity).first()
+        if cart is None:
+            data = {
+                "id": None,
+                "items": [],
+                "item_count": 0,
+                "subtotal": "0.00",
+                "currency": "NGN",
+                "expires_at": None,
+            }
+        else:
+            data = CartSerializer(cart, context={"request": request}).data
+
+        return success_response(
+            data=data,
+            message="Cart retrieved.",
+            status=status.HTTP_200_OK,
+        )
+
+
 class CartRemoveItemView(APIView):
     """DELETE /api/v1/cart/items/<item_id>/"""
     renderer_classes = _RENDERERS
