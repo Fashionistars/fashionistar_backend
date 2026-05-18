@@ -444,6 +444,13 @@ def get_wishlist_for_identity(
             "product__vendor__user",
         )
         .prefetch_related(
+            # ── Critical async-safety fix ─────────────────────────────────────
+            # Prefetch product categories so _product_card_out reads from the
+            # Django prefetch cache (_prefetched_objects_cache) at serialisation
+            # time — zero live DB queries — instead of calling the `primary_category`
+            # @property which fires a sync ORM query (SynchronousOnlyOperation in
+            # async Ninja context).
+            "product__categories",
             Prefetch(
                 "product__product_gallery_media",
                 queryset=ProductGalleryMedia.objects.filter(
