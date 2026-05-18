@@ -519,8 +519,16 @@ class PaymentIntentService:
         currency: str = "NGN",
         idempotency_key: str = "",
         cash_payment_mode: str = CashPaymentMode.DISABLED,
-        metadata: dict | None = None,
+        metadata: dict | str | None = None,
     ) -> PaymentIntent:
+        # Guard: coerce JSON string → dict if caller serialized the field as a string
+        if isinstance(metadata, str):
+            try:
+                metadata = json.loads(metadata)
+            except (json.JSONDecodeError, ValueError):
+                metadata = {}
+        if not isinstance(metadata, dict):
+            metadata = {}
         amount = cls.calculate_order_payment_amount(order=order, selected_percent=selected_percent)
         idempotency_key = idempotency_key or (
             f"order-payment:{user.pk}:{order.pk}:{payment_path}:{provider}:{selected_percent}"
@@ -574,7 +582,15 @@ class PaymentIntentService:
         return intent
 
     @classmethod
-    def initialize_paystack(cls, *, user, amount: Decimal, purpose: str, currency: str = "NGN", order_id: str = "", measurement_request_id: str = "", idempotency_key: str = "", metadata: dict | None = None) -> PaymentIntent:
+    def initialize_paystack(cls, *, user, amount: Decimal, purpose: str, currency: str = "NGN", order_id: str = "", measurement_request_id: str = "", idempotency_key: str = "", metadata: dict | str | None = None) -> PaymentIntent:
+        # Guard: coerce JSON string → dict if the caller serialized metadata as a string
+        if isinstance(metadata, str):
+            try:
+                metadata = json.loads(metadata)
+            except (json.JSONDecodeError, ValueError):
+                metadata = {}
+        if not isinstance(metadata, dict):
+            metadata = {}
         if purpose == PaymentPurpose.ORDER_PAYMENT and order_id:
             order = cls._get_order_for_payment(user=user, order_id=order_id)
             selected_percent = int((metadata or {}).get("selected_percent") or 100)
