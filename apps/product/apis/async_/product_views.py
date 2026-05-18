@@ -479,7 +479,7 @@ async def list_wishlist(
     )
     user = getattr(request, "auth", None)
     if user:
-        qs = awishlist_for_identity(user=user)
+        qs = awishlist_for_identity(user_id=user.pk)
     else:
         qs = awishlist_for_identity(session_key=session_key)
     return await _paginated(
