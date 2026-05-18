@@ -429,7 +429,7 @@ class CloudinaryPresignView(generics.GenericAPIView):
             request.user.pk,
             asset_type,
             context_id,
-            result.upload_params.get("folder"),
+            result.folder,
         )
 
         return success_response(
