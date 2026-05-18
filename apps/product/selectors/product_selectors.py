@@ -327,7 +327,20 @@ def filter_products(
             brand_id,
         )
     if vendor_id:
-        qs = qs.filter(vendor_id=vendor_id)
+        # Polymorphic UUID / store_slug filter — safe for both sync DRF and
+        # async Ninja: no live DB query is executed here (queryset is lazy).
+        # Django resolves the JOIN at evaluation time in the caller's context.
+        import uuid as _uuid  # noqa: PLC0415
+        try:
+            # If vendor_id is a valid UUID, filter by PK directly (fastest path).
+            vendor_uuid = _uuid.UUID(str(vendor_id))
+            qs = qs.filter(vendor_id=vendor_uuid)
+        except (ValueError, AttributeError):
+            # vendor_id is a slug — traverse the FK relationship via JOIN.
+            # This never fires a separate DB query; Django builds it as:
+            #   INNER JOIN vendor_profile ON product.vendor_id = vendor_profile.id
+            #   WHERE vendor_profile.store_slug = %s
+            qs = qs.filter(vendor__store_slug=vendor_id, vendor__is_deleted=False)
     if min_price is not None:
         qs = qs.filter(price__gte=min_price)
     if max_price is not None:
@@ -367,7 +380,7 @@ def get_product_reviews(product_id: Any):
     return (
         ProductReview.objects
         .filter(product_id=product_id, active=True)
-        .select_related("user", "user__profile")
+        .select_related("user", "user__client_profile", "user__vendor_profile")
         .order_by("-created_at")
     )
 
@@ -618,7 +631,7 @@ async def aget_product_detail_bundle(
             r async for r in (
                 ProductReview.objects
                 .filter(product_id=product_id, active=True)
-                .select_related("user", "user__profile")
+                .select_related("user", "user__client_profile", "user__vendor_profile")
                 .order_by("-created_at")
             )
         ]

@@ -29,6 +29,8 @@ from typing import Any
 
 from decimal import Decimal
 
+from django.core.exceptions import MultipleObjectsReturned
+
 from django.db.models import Prefetch
 from django.db.models import aprefetch_related_objects
 
@@ -147,6 +149,10 @@ class CartSelector(BaseSelector):
         Uses aget() for the single-row ownership lookup.
         Returns None if the cart does not exist.
 
+        Guards against MultipleObjectsReturned (duplicate rows possible from
+        race conditions during migration) by falling back to the most recently
+        created cart — prevents 500 errors without masking the data anomaly.
+
         Args:
             user: Optional authenticated user.
             session_key: Optional anonymous session key.
@@ -165,6 +171,15 @@ class CartSelector(BaseSelector):
             )
         except Cart.DoesNotExist:
             return None
+        except MultipleObjectsReturned:
+            # Duplicate rows: return the most recently created cart.
+            logger.warning(
+                "Multiple Cart rows found for user=%s session=%s — using newest.",
+                user,
+                session_key,
+            )
+            qs = CartSelector.for_identity(user=user, session_key=session_key)
+            return await qs.select_related("coupon").alatest("created_at")
 
     @staticmethod
     async def aget_for_user_or_none(user) -> Cart | None:

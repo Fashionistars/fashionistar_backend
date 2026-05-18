@@ -71,25 +71,21 @@ CORS_ALLOWED_ORIGINS = env.list(  # noqa: F405
 CORS_ALLOW_CREDENTIALS = True
 
 CORS_ALLOW_HEADERS = [
-    "x-requested-with",
-    "content-type",
     "accept",
-    "origin",
-    "authorization",
     "accept-encoding",
-    "access-control-allow-origin",
+    "authorization",
+    "content-type",
     "content-disposition",
-
-    'accept',
-    'accept-encoding',
-    'authorization',
-    'content-type',
-    'dnt',
-    'origin',
-    'user-agent',
-    'x-csrftoken',
-    'x-requested-with',
-    'x-idempotency-key',
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+    "access-control-allow-origin",
+    # ── Exactly-once write semantics ──
+    "x-idempotency-key",
+    # ── Anonymous session identity — guest cart & wishlist ──
+    "x-fashionistar-session-key",
 ]
 
 CORS_ALLOW_METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")

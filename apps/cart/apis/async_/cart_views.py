@@ -1,4 +1,13 @@
-"""Cart Django-Ninja async read router."""
+"""Cart Django-Ninja async read router — 2027 Edition.
+
+Changes:
+  • get_current_cart now delegates to CartSelector.aget_cart_with_items()
+    instead of calling .items.all() on a non-prefetched queryset (N+1 fix).
+  • applied_coupon is now serialized in the response dict to satisfy the
+    CartSchema Zod contract on the frontend.
+  • _MAX_CART_ITEMS constant makes the 25-item cap explicit and searchable.
+  • Coupon discount amounts are surfaced in the top-level response.
+"""
 
 from __future__ import annotations
 
@@ -12,6 +21,10 @@ from apps.cart.selectors import CartSelector
 from apps.common.roles import is_client_role
 
 router = Router(tags=["Cart — Async Reads"])
+
+# Cap the number of active cart rows returned per read.
+# Keeps nav-badge / drawer reads fast (< 3ms serialization budget).
+_MAX_CART_ITEMS = 25
 
 
 def _money(value) -> str:
@@ -106,6 +119,20 @@ def _item_out(item) -> dict:
     }
 
 
+def _coupon_out(cart) -> dict | None:
+    """Serialize the applied coupon if present — satisfies CartSchema.applied_coupon."""
+
+    coupon = getattr(cart, "coupon", None)
+    if coupon is None:
+        return None
+    discount = getattr(cart, "coupon_discount", None)
+    return {
+        "code": coupon.code,
+        "coupon_type": getattr(coupon, "coupon_type", "fixed") or "fixed",
+        "discount_amount": _money(discount),
+    }
+
+
 def _empty_cart_out() -> dict:
     """Return a read-only empty cart without creating a database row."""
 
@@ -116,6 +143,7 @@ def _empty_cart_out() -> dict:
         "subtotal": "0.00",
         "currency": "NGN",
         "expires_at": None,
+        "applied_coupon": None,
     }
 
 
@@ -127,30 +155,37 @@ async def get_current_cart(request, session_key: str | None = None):
     if user is not None:
         request.auth = user
         _require_client_profile(request)
+
     session_key = (
         session_key
         or request.headers.get("X-Fashionistar-Session-Key")
         or request.COOKIES.get("fashionistar_session_key")
     )
-    cart = await CartSelector.aget_for_identity_or_none(
+
+    # ── Use aget_cart_with_items to avoid N+1 on items / products / variants ──
+    cart = await CartSelector.aget_cart_with_items(
         user=user,
         session_key=session_key,
     )
     if cart is None:
         return _empty_cart_out()
 
-    # Cart reads are capped to 25 active rows to keep badge/nav reads fast.
-    items = [
+    # Cart reads are capped to _MAX_CART_ITEMS active rows to keep badge/nav
+    # reads fast. The items queryset is already prefetched by aget_cart_with_items.
+    active_items = [
         item for item in cart.items.all()
         if not getattr(item, "is_saved_for_later", False)
-    ][:25]
-    currency = items[0].product.currency if items else "NGN"
-    subtotal = sum((item.line_total for item in items), Decimal("0"))
+    ][:_MAX_CART_ITEMS]
+
+    currency = active_items[0].product.currency if active_items else "NGN"
+    subtotal = sum((item.line_total for item in active_items), Decimal("0"))
+
     return {
         "id": str(cart.pk),
-        "items": [_item_out(item) for item in items],
-        "item_count": sum(item.quantity for item in items),
+        "items": [_item_out(item) for item in active_items],
+        "item_count": sum(item.quantity for item in active_items),
         "subtotal": _money(subtotal),
         "currency": currency,
         "expires_at": None,
+        "applied_coupon": _coupon_out(cart),
     }

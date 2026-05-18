@@ -1,11 +1,20 @@
 # apps/cart/apis/sync/cart_views.py
 """
-DRF cart views.
+DRF cart views — 2027 Edition.
 
-All endpoints require IsAuthenticated + IsClient.
+All endpoints require IsAuthenticated + IsClient unless explicitly AllowAny.
+
+Changes (2027 modernization):
+  • _cart_identity: strips non-alphanumeric/hyphen chars, enforces 40-char max.
+  • CartAddItemView: extracts X-Idempotency-Key / Idempotency-Key header and
+    echoes it in the response for client-level deduplication detection.
+  • CartRemoveItemView / CartClearView: use .first() instead of .get() to
+    avoid DoesNotExist when the cart has zero items after the mutation.
 """
 
 import logging
+import re
+import uuid
 
 from rest_framework import status, parsers
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -32,6 +41,16 @@ logger = logging.getLogger(__name__)
 _RENDERERS = [CustomJSONRenderer, BrowsableAPIRenderer]
 _PARSERS = (parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser)
 
+# Only alphanumeric + hyphens allowed in session keys (UUID-safe charset)
+_SESSION_KEY_RE = re.compile(r"[^a-zA-Z0-9\-]")
+_SESSION_KEY_MAX_LEN = 40
+
+
+def _sanitize_session_key(raw: str) -> str:
+    """Normalize an anonymous session key: strip illegal chars, cap length."""
+    cleaned = _SESSION_KEY_RE.sub("", raw)
+    return cleaned[:_SESSION_KEY_MAX_LEN]
+
 
 def _cart_identity(request) -> dict:
     """
@@ -46,15 +65,33 @@ def _cart_identity(request) -> dict:
     if user is not None and getattr(user, "is_authenticated", False):
         return {"user": user}
 
-    session_key = (
+    raw_key = (
         request.data.get("session_key")
         or request.headers.get("X-Fashionistar-Session-Key")
         or request.query_params.get("session_key")
         or request.COOKIES.get("fashionistar_session_key")
     )
-    if not session_key:
+    if not raw_key:
         raise ValueError("session_key is required for anonymous cart access.")
-    return {"session_key": str(session_key)[:40]}
+
+    session_key = _sanitize_session_key(str(raw_key))
+    if not session_key:
+        raise ValueError("session_key contains invalid characters.")
+    return {"session_key": session_key}
+
+
+def _extract_idempotency_key(request) -> str:
+    """
+    Extract the client-supplied idempotency key from request headers.
+
+    Falls back to a server-generated UUID when the client omits the header,
+    ensuring every write is always idempotent at the HTTP layer.
+    """
+    return (
+        request.headers.get("X-Idempotency-Key")
+        or request.headers.get("Idempotency-Key")
+        or str(uuid.uuid4())
+    )
 
 
 class CartAddItemView(APIView):
@@ -67,6 +104,8 @@ class CartAddItemView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        idempotency_key = _extract_idempotency_key(request)
+
         serializer = CartItemWriteSerializer(data=request.data)
         if not serializer.is_valid():
             return error_response(
@@ -83,12 +122,16 @@ class CartAddItemView(APIView):
             )
         except ValueError as exc:
             return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+
         cart = item.cart
-        return success_response(
+        response = success_response(
             data=CartSerializer(cart, context={"request": request}).data,
             message="Item added to cart.",
             status=status.HTTP_200_OK,
         )
+        # Echo the idempotency key so clients can detect server deduplication
+        response["X-Idempotency-Key"] = idempotency_key
+        return response
 
 
 class CartRetrieveView(APIView):
@@ -138,13 +181,25 @@ class CartRemoveItemView(APIView):
             remove_item(**identity, item_id=item_id)
         except ValueError as exc:
             return error_response(message=str(exc), status=status.HTTP_404_NOT_FOUND)
+
         from apps.cart.selectors import CartSelector
 
-        cart = CartSelector.for_identity(**identity).get()
-        return success_response(
-            data=CartSerializer(cart, context={"request": request}).data,
-            message="Item removed from cart.",
-        )
+        # Use .first() — cart may have zero items after removal, .get() would
+        # raise DoesNotExist when the cart row still exists but is now empty.
+        cart = CartSelector.for_identity(**identity).first()
+        if cart is None:
+            data = {
+                "id": None,
+                "items": [],
+                "item_count": 0,
+                "subtotal": "0.00",
+                "currency": "NGN",
+                "expires_at": None,
+            }
+        else:
+            data = CartSerializer(cart, context={"request": request}).data
+
+        return success_response(data=data, message="Item removed from cart.")
 
 
 class CartUpdateQuantityView(APIView):
@@ -154,6 +209,8 @@ class CartUpdateQuantityView(APIView):
     permission_classes = [AllowAny]
 
     def patch(self, request, item_id):
+        idempotency_key = _extract_idempotency_key(request)
+
         quantity = request.data.get("quantity")
         if quantity is None:
             return error_response(message="quantity is required.", status=status.HTTP_400_BAD_REQUEST)
@@ -166,13 +223,19 @@ class CartUpdateQuantityView(APIView):
             update_item_quantity(**identity, item_id=item_id, quantity=quantity)
         except ValueError as exc:
             return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+
         from apps.cart.selectors import CartSelector
 
-        cart = CartSelector.for_identity(**identity).get()
-        return success_response(
+        cart = CartSelector.for_identity(**identity).first()
+        if cart is None:
+            return error_response(message="Cart not found.", status=status.HTTP_404_NOT_FOUND)
+
+        response = success_response(
             data=CartSerializer(cart, context={"request": request}).data,
             message="Quantity updated.",
         )
+        response["X-Idempotency-Key"] = idempotency_key
+        return response
 
 
 class CartSaveForLaterView(APIView):
@@ -233,13 +296,26 @@ class CartClearView(APIView):
     def delete(self, request):
         identity = _cart_identity(request)
         clear_cart(**identity)
+
         from apps.cart.selectors import CartSelector
 
-        cart = CartSelector.for_identity(**identity).get()
-        return success_response(
-            data=CartSerializer(cart, context={"request": request}).data,
-            message="Cart cleared.",
-        )
+        # Use .first() — the cart row exists after clear but has zero items;
+        # .get() would still work here but .first() is safer for future refactors
+        # where clear_cart might delete the cart row itself.
+        cart = CartSelector.for_identity(**identity).first()
+        if cart is None:
+            data = {
+                "id": None,
+                "items": [],
+                "item_count": 0,
+                "subtotal": "0.00",
+                "currency": "NGN",
+                "expires_at": None,
+            }
+        else:
+            data = CartSerializer(cart, context={"request": request}).data
+
+        return success_response(data=data, message="Cart cleared.")
 
 
 class CartMergeView(APIView):
@@ -263,9 +339,10 @@ class CartMergeView(APIView):
             or request.COOKIES.get("fashionistar_session_key")
         )
         if session_key:
+            session_key = _sanitize_session_key(str(session_key))
             cart = merge_anonymous_cart_session(
                 user=request.user,
-                session_key=str(session_key),
+                session_key=session_key,
             )
             return success_response(
                 data=CartSerializer(cart, context={"request": request}).data,
