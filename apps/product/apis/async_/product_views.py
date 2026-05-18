@@ -229,7 +229,21 @@ def _product_card_out(product) -> dict:
     .only() projection and prefetched M2M relations — zero extra queries.
     """
     raw_url = _url(product.image)
-    category = getattr(product, "primary_category", None) or _first_related(product.categories)
+    # ── Async-safe category read ──────────────────────────────────────────────
+    # Do NOT call product.primary_category (@property) — it fires a sync ORM
+    # query (list(self.categories.all()[:1])) which raises SynchronousOnlyOperation
+    # in Django Ninja async context.
+    # Instead, read from the prefetch cache populated by the selector's
+    # prefetch_related("product__categories"). This is zero-query and async-safe.
+    prefetch_cache = getattr(product, "_prefetched_objects_cache", {}) or {}
+    prefetched_cats = prefetch_cache.get("categories", None)
+    if prefetched_cats is not None:
+        category = prefetched_cats[0] if prefetched_cats else None
+    else:
+        # Fallback: _first_related reads from the M2M manager — only safe in
+        # sync DRF context. For async Ninja the prefetch_related above ensures
+        # this branch is never reached.
+        category = _first_related(product.categories)
     # Inject Cloudinary card-size transform
     card_url = None
     if raw_url and "res.cloudinary.com" in raw_url:
