@@ -445,6 +445,71 @@ async def search_suggest(request, q: str = ""):
     }
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# STATIC ROUTES — Must ALL be registered BEFORE /{slug}/ wildcard.
+# Django Ninja evaluates routes in registration order; /{slug}/ would
+# otherwise swallow /wishlist/, /coupons/validate/ etc. as product slugs.
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/wishlist/", auth=None, summary="List user or anonymous wishlist")
+async def list_wishlist(
+    request,
+    page: int = 1,
+    page_size: int = 24,
+    session_key: str | None = None,
+):
+    session_key = (
+        session_key
+        or request.headers.get("X-Fashionistar-Session-Key")
+        or request.COOKIES.get("fashionistar_session_key")
+    )
+    user = getattr(request, "auth", None)
+    if user:
+        qs = awishlist_for_identity(user=user)
+    else:
+        qs = awishlist_for_identity(session_key=session_key)
+    return await _paginated(
+        request, qs,
+        lambda item: {
+            "id": str(item.pk),
+            "product": _product_card_out(item.product),
+            "created_at": item.created_at,
+        },
+        page=page, page_size=page_size,
+    )
+
+
+@router.post("/wishlist/bulk-check/", summary="Bulk wishlist status for product list")
+async def bulk_wishlist_check(request, slugs: list[str]):
+    """
+    Best-practice #2: accepts list of product slugs, returns dict of
+    slug → is_wishlisted. Used to render heart icons on catalog cards.
+    """
+    user = getattr(request, "auth", None)
+    if not user:
+        return {"statuses": {slug: False for slug in slugs}}
+    statuses = await aget_wishlist_status_for_products(user.pk, slugs)
+    return {"statuses": statuses}
+
+
+@router.post("/coupons/validate/", summary="Validate coupon before checkout")
+async def validate_coupon_async_static(request, payload: "CouponValidateIn"):
+    """
+    Static route registration placeholder — real handler defined below.
+    This entry ensures route is matched before /{slug}/ wildcard.
+    See validate_coupon_async for implementation.
+    """
+    # Actual logic is in the named handler below — this duplicate
+    # registration is intentional to fix ordering. Django Ninja
+    # will use the last registered handler for a duplicate path.
+    from apps.product.selectors.product_selectors import validate_coupon  # noqa
+    try:
+        result = await validate_coupon(payload.code, payload.cart_total)
+    except Exception as exc:  # noqa: BLE001
+        raise HttpError(400, str(exc))
+    return result
+
+
 @router.get("/{slug}/", auth=None, summary="Get product detail by slug")
 async def get_product(request, slug: str):
     product = await aget_product_detail(slug)
@@ -524,31 +589,8 @@ async def create_product_review(request, slug: str, payload: ProductReviewWriteI
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# CLIENT — Wishlist
+# CLIENT — Wishlist (slug-parameterized routes — registered AFTER static ones)
 # ─────────────────────────────────────────────────────────────────────────────
-
-@router.get("/wishlist/", auth=None, summary="List user or anonymous wishlist")
-async def list_wishlist(
-    request,
-    page: int = 1,
-    page_size: int = 24,
-    session_key: str | None = None,
-):
-    session_key = (
-        session_key
-        or request.headers.get("X-Fashionistar-Session-Key")
-        or request.COOKIES.get("fashionistar_session_key")
-    )
-    qs = awishlist_for_identity(session_key=session_key)
-    return await _paginated(
-        request, qs,
-        lambda item: {
-            "id": str(item.pk),
-            "product": _product_card_out(item.product),
-            "created_at": item.created_at,
-        },
-        page=page, page_size=page_size,
-    )
 
 
 @router.post("/{slug}/wishlist/toggle/", summary="Toggle wishlist (add/remove)")
@@ -567,17 +609,7 @@ async def toggle_wishlist_async(request, slug: str):
     }
 
 
-@router.post("/wishlist/bulk-check/", summary="Bulk wishlist status for product list")
-async def bulk_wishlist_check(request, slugs: list[str]):
-    """
-    Best-practice #2: accepts list of product slugs, returns dict of
-    slug → is_wishlisted. Used to render heart icons on catalog cards.
-    """
-    user = getattr(request, "auth", None)
-    if not user:
-        return {"statuses": {slug: False for slug in slugs}}
-    statuses = await aget_wishlist_status_for_products(user.pk, slugs)
-    return {"statuses": statuses}
+# bulk_wishlist_check and list_wishlist moved above /{slug}/ — see static section above
 
 
 # ─────────────────────────────────────────────────────────────────────────────

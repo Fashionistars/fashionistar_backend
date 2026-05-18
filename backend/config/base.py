@@ -644,6 +644,10 @@ CORS_ALLOW_HEADERS = [
     "content-disposition",
     # ── Idempotency key — required for exactly-once POST semantics ──
     "x-idempotency-key",
+    # ── Anonymous session identity — required for guest cart & wishlist reads ──
+    # Without this header the CORS preflight (OPTIONS) returns 403 and the
+    # Ninja async endpoints cannot identify anonymous shoppers.
+    "x-fashionistar-session-key",
     "dnt",
     "origin",
     "user-agent",
