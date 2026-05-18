@@ -34,7 +34,9 @@ class ClientProvisioningService:
             ClientProfile — either newly created or existing.
         """
 
-        profile, created = user.client_profile.get_or_create(user=user)
+        # Use the model Manager directly — user.client_profile on a OneToOne
+        # returns the *instance* (or raises DoesNotExist), not a Manager.
+        profile, created = ClientProfile.objects.get_or_create(user=user)
 
         if created:
             logger.info(
@@ -57,7 +59,9 @@ class ClientProvisioningService:
         This avoids `sync_to_async` while keeping provisioning idempotent.
         """
 
-        profile, created = await user.client_profile.aget_or_create(user=user)
+        # Use the model Manager directly — user.client_profile on a OneToOne
+        # returns the *instance* (or raises DoesNotExist), not a Manager.
+        profile, created = await ClientProfile.objects.aget_or_create(user=user)
 
         if created:
             logger.info(
