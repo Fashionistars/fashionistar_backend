@@ -322,7 +322,7 @@ class WalletFundPaymentView(generics.GenericAPIView):
                 amount=payload["amount"],
                 purpose=payload["purpose"],
                 currency=payload.get("currency", "NGN"),
-                idempotency_key=request.headers.get("Idempotency-Key", ""),
+                idempotency_key=idempotency_key,
                 metadata=payload.get("metadata", {}),
             )
         except ValidationError as exc:

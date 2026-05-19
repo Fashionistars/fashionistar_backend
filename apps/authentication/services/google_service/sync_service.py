@@ -73,6 +73,7 @@ class SyncGoogleAuthService:
 
         # ── 1. Token Verification ──────────────────────────────────────────
         try:
+            # ── 1. Verify token with Google ────────────────────────────────
             id_info = google_id_token.verify_oauth2_token(
                 token,
                 google_requests.Request(),
@@ -86,25 +87,27 @@ class SyncGoogleAuthService:
             if not id_info.get('email_verified', False):
                 raise ValueError("Google email is not verified.")
 
-            # Normalise email domain
+            # Normalise email domain to lowercase only for email (phone remains unchanged)
             from django.contrib.auth.base_user import BaseUserManager as _BUM
             if email and "@" in email:
                 email = _BUM.normalize_email(email)
 
-            # ── 2. Data Extraction ─────────────────────────────────────────
+            # ── 2. Extract rich profile data ───────────────────────────────
             first_name        = id_info.get('given_name', '')   or ''
             last_name         = id_info.get('family_name', '')  or ''
             google_avatar_url = id_info.get('picture', '')      or ''
             google_sub        = id_info.get('sub', '')           or ''
 
-            logger.info("🔍 Google token verified: email=%s", email)
+            logger.info(
+                "🔍 Google token verified — email=%s sub=%s", email, google_sub
+            )
 
         except ValueError as exc:
             logger.error("❌ Google token verification failed: %s", exc)
             raise ValueError("Invalid or expired Google Token.") from exc
         except Exception as exc:
-            logger.error("❌ Google Auth Failure: %s", exc, exc_info=True)
-            raise Exception("Google authentication failed.") from exc
+            logger.error("❌ Unexpected error during Google token verification: %s", exc, exc_info=True)
+            raise Exception("Google authentication failed. Please try again.") from exc
 
         # ── 3. Find or Create User ─────────────────────────────────────────
         try:
@@ -115,6 +118,9 @@ class SyncGoogleAuthService:
                 user = UnifiedUser.objects.get(email=email)
                 logger.info("✅ Google Login: existing user %s", email)
             except UnifiedUser.DoesNotExist:
+                # New user — create via create_user() to go through the full
+                # manager pipeline: member_id generation, unusable password,
+                # full_clean() validation.
                 with transaction.atomic():
                     # Resolve geo-data for the new account
                     ip_address = None
@@ -134,20 +140,28 @@ class SyncGoogleAuthService:
                     # Create user via manager pipeline
                     user = UnifiedUser.objects.create_user(
                         email=email,
-                        password=None,
+                        password=None,          # Sets unusable password hash
                         first_name=first_name,
                         last_name=last_name,
                         auth_provider=UnifiedUser.PROVIDER_GOOGLE,
-                        is_verified=True,
-                        is_active=True,
+                        is_verified=True,       # Google guarantees email ownership
+                        is_active=True,         # Google users skip OTP activation
                         role=role,
                         country=geo_data.get('country', ''),
                         city=geo_data.get('city', ''),
                         state=geo_data.get('region', ''),
                     )
-                    is_new = True
 
-                    # ── 4. Avatar & Events ──────────────────────────────────
+                    is_new = True
+                    logger.info(
+                        "🆕 Google Register: new user %s (member_id=%s, role=%s, country=%s)",
+                        email, user.member_id, role, geo_data.get('country', 'Unknown')
+                    )
+
+                    # ── 4. Google Avatar → Cloudinary (fire-and-forget Celery) ──
+                    # We download the Google CDN avatar and re-upload it to our
+                    # Cloudinary account so we own the CDN path.
+                    # The avatar field is updated after the Celery task finishes.
                     if google_avatar_url:
                         from apps.authentication.tasks import upload_google_avatar_to_cloudinary
                         transaction.on_commit(
@@ -162,7 +176,8 @@ class SyncGoogleAuthService:
                             user_uuid=str(user.pk),
                             email=user.email,
                             role=user.role,
-                            auth_provider='google'
+                            auth_provider='google',
+                            member_id=user.member_id
                         )
                     )
 
@@ -171,7 +186,8 @@ class SyncGoogleAuthService:
                         lambda: auth_audit.log_register_success(actor=user, request=request)
                     )
 
-            # ── 5. Profile Sync (Existing Users) ───────────────────────────
+            # ── 6. Update profile fields on returning Google users ─────────
+            # We silently update name + avatar URL if Google changes them.
             if not is_new:
                 update_fields = []
                 if first_name and user.first_name != first_name:
@@ -211,10 +227,12 @@ class SyncGoogleAuthService:
                 'is_new': is_new,
             }
 
+        except (ValueError, Exception):
+            raise
         except Exception as exc:
             # Audit failed login attempt if possible
             if email:
                 auth_audit.log_login_failed(email=email, request=request, reason=str(exc))
             
             logger.error("❌ Google Auth processing error: %s", exc, exc_info=True)
-            raise
+            raise Exception("Google authentication failed.") from exc
