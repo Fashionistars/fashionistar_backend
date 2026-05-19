@@ -1,4 +1,4 @@
-﻿# apps/order/services/order_service.py
+# apps/order/services/order_service.py
 """
 Order service — the most critical service in Fashionistar.
 
@@ -114,23 +114,27 @@ def _emit_order_audit(action: str, order: Order, actor=None, request=None, **met
                 order_audit.log_order_created(
                     actor=actor,
                     order_id=str(order.id),
+                    request=request,
                     metadata=audit_metadata,
                 )
             elif action == "order.cancelled":
                 order_audit.log_order_cancelled(
                     actor=actor,
                     order_id=str(order.id),
+                    request=request,
                     reason=str(metadata.get("reason", "")),
                 )
             elif action in {"order.fulfilled", "order.completed"}:
                 order_audit.log_order_fulfilled(
                     actor=actor,
                     order_id=str(order.id),
+                    request=request,
                 )
             else:
                 order_audit.log_order_updated(
                     actor=actor,
                     order_id=str(order.id),
+                    request=request,
                     new_values=audit_metadata,
                 )
 
@@ -409,6 +413,38 @@ def register_payment_tranche(
     else:
         next_status = prior_status
 
+    _log_commercial_transition(
+        order=order,
+        transition_type=OrderCommercialTransitionType.ESCROW_HELD,
+        actor=actor,
+        payment_record=record,
+        payment_intent=payment_intent,
+        from_status=prior_status,
+        to_status=next_status,
+        selected_percent=selected_percent,
+        cumulative_percent_paid=cumulative_percent,
+        amount_delta=amount,
+        balance_after=order.amount_outstanding,
+        correlation_id=correlation_id,
+        note="Escrow hold recorded for payment tranche.",
+        metadata=metadata or {},
+    )
+    if payment_path == OrderPaymentPath.GATEWAY:
+        _log_commercial_transition(
+            order=order,
+            transition_type=OrderCommercialTransitionType.WALLET_CREDITED,
+            actor=actor,
+            payment_record=record,
+            payment_intent=payment_intent,
+            selected_percent=selected_percent,
+            cumulative_percent_paid=cumulative_percent,
+            amount_delta=amount,
+            balance_after=order.amount_outstanding,
+            correlation_id=correlation_id,
+            note="Gateway payment credited to wallet before escrow hold.",
+            metadata=metadata or {},
+        )
+
     if next_status != order.status:
         order.status = next_status
         order.save(update_fields=["status", "updated_at"])
@@ -445,6 +481,7 @@ def register_payment_tranche(
         order=order,
         transition_type=OrderCommercialTransitionType.PAYMENT_SUCCEEDED,
         actor=actor,
+        request=request,
         payment_record=record,
         payment_intent=payment_intent,
         from_status=prior_status,
@@ -536,10 +573,12 @@ def place_order(
             )
             return existing_record.order
 
+    # ── Step 2: Fetch and lock cart ──────────────────────────────────────
     cart = get_or_create_cart(user)
     if cart.items.filter(is_saved_for_later=False).count() == 0:
         raise ValueError("Cart is empty. Cannot place an order.")
 
+    # Re-acquire cart with lock inside the transaction
     cart = type(cart).objects.select_for_update().get(pk=cart.pk)
     active_items = list(
         cart.items.filter(is_saved_for_later=False).select_related(
@@ -553,13 +592,19 @@ def place_order(
     if not active_items:
         raise ValueError("Cart is empty. Cannot place an order.")
 
+    # ── Step 3: Lock all product rows ────────────────────────────────────
     product_ids = [item.product_id for item in active_items]
     product_model = type(active_items[0].product)
+    # Product rows are reached through the cart item relationship already
+    # prefetched above, then the concrete model class is reused for the lock.
+    # This avoids importing the product domain model directly inside order
+    # services while preserving the same SELECT ... FOR UPDATE protection.
     products_map = {
         product.id: product
         for product in product_model.objects.select_for_update().filter(id__in=product_ids)
     }
 
+    # ── Step 4: Stock validation ─────────────────────────────────────────
     for item in active_items:
         product = products_map.get(item.product_id)
         if not product or getattr(product, "is_deleted", False):
@@ -571,6 +616,7 @@ def place_order(
                 f"but {item.quantity} requested."
             )
 
+    # ── Step 5: Calculate order totals ───────────────────────────────────
     subtotal = cart.subtotal
     shipping = sum(
         (products_map[item.product_id].shipping_amount for item in active_items),
@@ -579,6 +625,7 @@ def place_order(
     discount = cart.coupon_discount
     total = max(Decimal("0"), subtotal + shipping - discount)
 
+    # Commission calculation
     commission_total = Decimal("0")
     for item in active_items:
         product = products_map[item.product_id]
@@ -591,6 +638,8 @@ def place_order(
         active_items=active_items,
         vendor=vendor,
     )
+
+    # ── Step 6: Create Order ─────────────────────────────────────────────
     idem_key = idempotency_key or _make_order_idempotency_key(
         user.id,
         f"{cart.id}:{subtotal}",
@@ -633,6 +682,7 @@ def place_order(
             return existing_order
         raise
 
+    # ── Step 7: Create OrderItems with snapshots ─────────────────────────
     order_items = []
     cart_order_snapshot_payload = []
     for item in active_items:
@@ -689,6 +739,7 @@ def place_order(
         )
     CartOrderItem.objects.bulk_create(order_items)
 
+    # ── Step 8: Deduct stock ─────────────────────────────────────
     for item in active_items:
         product = products_map[item.product_id]
         if inventory_adjuster is not None:
@@ -704,26 +755,26 @@ def place_order(
             orders_count=product.orders_count + 1
         )
 
+    # ── Step 9: Increment coupon usage ───────────────────────────────────
     if cart.coupon:
         type(cart.coupon).objects.filter(pk=cart.coupon.pk).update(
             usage_count=cart.coupon.usage_count + 1
         )
 
+    # ── Step 10: Store idempotency record ────────────────────────────────
     OrderIdempotencyRecord.objects.create(
         key=idem_key,
         order=order,
-        expires_at=timezone.now() + timedelta(hours=24),
+        expires_at=timezone.now() + timezone.timedelta(hours=24),
     )
 
+    # ── Step 11: Clear cart ──────────────────────────────────────────────
     clear_cart(user=user)
-    _record_status_history(
-        order,
-        "",
-        OrderStatus.PENDING_PAYMENT,
-        actor=user,
-        note="Order placed.",
-    )
 
+    # ── Step 12: Log initial status history ──────────────────────────────
+    _record_status_history(order, "", OrderStatus.PENDING_PAYMENT, actor=user, note="Order placed.")
+
+    # ── Step 13: Emit audit event ────────────────────────────────────────
     transaction.on_commit(
         lambda: _emit_order_audit(
             "order.placed",

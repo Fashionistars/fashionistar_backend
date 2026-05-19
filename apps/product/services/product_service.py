@@ -501,11 +501,25 @@ def create_review(
     Best-practice #3 (N+1 elimination):
     The rating + count aggregate is computed in a SINGLE annotated query
     instead of two separate .aggregate() + .count() calls.
+    Product.objects.filter(...).update() fires one UPDATE statement —
+    zero additional SELECT round-trips.
     """
     # ── Idempotency guard ──────────────────────────────────────────────────────
-    existing_review = get_user_review_for_product(user.id, product.id)
-    if existing_review:
-        raise ValueError("You have already reviewed this product.")
+    if idempotency_key:
+        try:
+            ProductReview.objects.get(
+                idempotency_key=idempotency_key,
+                user=user,
+                product=product,
+            )
+            ProductReview.objects.get(
+                user=user,
+                product=product,
+            )
+            # Already exists — do not create a duplicate
+            return ProductReview.objects.get(idempotency_key=idempotency_key)
+        except ProductReview.DoesNotExist:
+            pass
 
     obj = ProductReview.objects.create(
         product=product,
