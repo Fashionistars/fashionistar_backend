@@ -18,6 +18,7 @@ from ninja import Router
 from ninja.errors import HttpError
 from apps.cart.schemas import CartOut
 from apps.cart.selectors import CartSelector
+from apps.client.services.client_provisioning_service import ClientProvisioningService
 from apps.common.roles import is_client_role
 
 router = Router(tags=["Cart — Async Reads"])
@@ -49,7 +50,13 @@ def _media_url(value) -> str | None:
 
 
 def _require_client_profile(request):
-    """Return the hydrated client profile from request.auth."""
+    """Return the hydrated client profile from request.auth.
+
+    The cart read surface should not hard-fail when a seeded or migrated
+    client account is missing its 1:1 profile row. We provision the blank
+    profile lazily here so authenticated cart reads keep working while the
+    rest of the client dashboard can hydrate normally.
+    """
 
     user = request.auth
     if user is None or not is_client_role(getattr(user, "role", None)):
@@ -61,7 +68,7 @@ def _require_client_profile(request):
         profile = None
 
     if profile is None:
-        raise HttpError(403, "Client profile setup is required for this endpoint.")
+        raise HttpError(503, "Client profile provisioning is required before cart access.")
     return profile
 
 
@@ -154,7 +161,13 @@ async def get_current_cart(request, session_key: str | None = None):
     user = await _resolve_optional_bearer_user(request)
     if user is not None:
         request.auth = user
-        _require_client_profile(request)
+        try:
+            _require_client_profile(request)
+        except HttpError as exc:
+            if exc.status_code != 503:
+                raise
+            await ClientProvisioningService.aprovision(user)
+            _require_client_profile(request)
 
     session_key = (
         session_key

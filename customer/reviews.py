@@ -60,7 +60,7 @@ class ReviewListView(generics.ListAPIView):
         try:
             product_id = self.kwargs['product_id']
             product = Product.objects.get(id=product_id)
-            reviews = Review.objects.filter(product=product, active=True).select_related('product', 'user__profile')
+            reviews = Review.objects.filter(product=product, active=True).select_related('product', 'user__client_profile')
             return reviews
         except Product.DoesNotExist:
             application_logger.error(f"Product with id {product_id} not found.")
