@@ -85,12 +85,15 @@ def update_user_profile(
     data: dict[str, Any],
     request: Any = None,
 ) -> "UnifiedUser":
-    """Update a user's core profile information.
+    """
+    Partially update a user profile. Only PROFILE_EDITABLE_FIELDS are applied.
+    Raises ValueError if no valid fields provided.
 
-    This service handles partial updates to the UnifiedUser model, specifically
-    filtering for PROFILE_EDITABLE_FIELDS to ensure security-sensitive or 
-    immutable fields (like email, role, or password) are not modified through 
-    this non-privileged path.
+    attempting to update immutable fields (email, role, etc.) is silently
+    ignored here; the serializer layer should catch them first.
+
+    Runs inside ``transaction.atomic()`` to ensure partial updates don't
+    leave inconsistent state in the DB.
 
     Args:
         user: The UnifiedUser instance to be updated.
@@ -98,7 +101,7 @@ def update_user_profile(
         request: Optional Django HttpRequest for audit logging context (IP, User-Agent).
 
     Returns:
-        UnifiedUser: The updated and refreshed user instance.
+        The updated UnifiedUser instance (refreshed from DB).
 
     Raises:
         ValueError: If no valid editable fields are provided in the data.
