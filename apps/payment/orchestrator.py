@@ -221,6 +221,7 @@ class PaymentOrchestrator:
                 amount=amount,
                 reference=reference,
                 currency=currency,
+                callback_url=callback_url,
                 metadata={
                     "callback_url": callback_url,
                     "customer_name": customer_name,
@@ -287,6 +288,7 @@ class PaymentOrchestrator:
                 amount=amount,
                 reference=reference,
                 currency=currency,
+                callback_url=callback_url,
                 metadata={
                     "callback_url": callback_url,
                     "customer_name": customer_name,

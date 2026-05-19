@@ -36,7 +36,7 @@ from decimal import Decimal
 from typing import Any
 
 from django.core.exceptions import ObjectDoesNotExist
-from ninja import Router
+from ninja import Router, Schema
 from ninja.errors import HttpError
 
 from apps.common.pagination import async_ninja_paginate
@@ -79,6 +79,10 @@ from apps.product.services import (
 
 logger = logging.getLogger(__name__)
 router = Router(tags=["Product — Async"])
+
+
+class WishlistBulkCheckIn(Schema):
+    slugs: list[str]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -386,6 +390,25 @@ async def _require_vendor(request) -> Any:
     return profile
 
 
+async def _resolve_optional_bearer_user(request) -> Any | None:
+    """Hydrate an optional JWT bearer user for public-friendly reads."""
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.lower().startswith("bearer "):
+        return None
+
+    token = auth_header.split(" ", 1)[1].strip()
+    if not token:
+        return None
+
+    try:
+        from backend.ninja_api import AsyncJWTAuth
+
+        return await AsyncJWTAuth().authenticate(request, token)
+    except Exception:
+        return None
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # PAGINATION HELPER
 # ─────────────────────────────────────────────────────────────────────────────
@@ -477,7 +500,9 @@ async def list_wishlist(
         or request.headers.get("X-Fashionistar-Session-Key")
         or request.COOKIES.get("fashionistar_session_key")
     )
-    user = getattr(request, "auth", None)
+    user = await _resolve_optional_bearer_user(request)
+    if user is not None:
+        request.auth = user
     if user:
         qs = awishlist_for_identity(user_id=user.pk)
     else:
@@ -494,12 +519,15 @@ async def list_wishlist(
 
 
 @router.post("/wishlist/bulk-check/", summary="Bulk wishlist status for product list")
-async def bulk_wishlist_check(request, slugs: list[str]):
+async def bulk_wishlist_check(request, payload: WishlistBulkCheckIn):
     """
     Best-practice #2: accepts list of product slugs, returns dict of
     slug → is_wishlisted. Used to render heart icons on catalog cards.
     """
-    user = getattr(request, "auth", None)
+    slugs = payload.slugs
+    user = await _resolve_optional_bearer_user(request)
+    if user is not None:
+        request.auth = user
     if not user:
         return {"statuses": {slug: False for slug in slugs}}
     statuses = await aget_wishlist_status_for_products(user.pk, slugs)
@@ -544,7 +572,9 @@ async def get_product_bundle(request, slug: str):
     wishlist status in one asyncio.gather() call.
     The frontend makes one HTTP request and gets everything for the PDP.
     """
-    user = getattr(request, "auth", None)
+    user = await _resolve_optional_bearer_user(request)
+    if user is not None:
+        request.auth = user
 
     product, reviews, in_wishlist = await asyncio.gather(
         aget_product_detail(slug),

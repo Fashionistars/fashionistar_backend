@@ -217,7 +217,17 @@ class PaystackClient:
         raise ValidationError(str(exc)) from exc
 
     @classmethod
-    def initialize_transaction(cls, *, email: str, amount: Decimal, reference: str, currency: str = "NGN", metadata: dict | None = None, idempotency_key: str = "") -> dict:
+    def initialize_transaction(
+        cls,
+        *,
+        email: str,
+        amount: Decimal,
+        reference: str,
+        currency: str = "NGN",
+        metadata: dict | None = None,
+        idempotency_key: str = "",
+        callback_url: str = "",
+    ) -> dict:
         """Initialize a Paystack payment transaction.
 
         Creates a new transaction on Paystack and returns the authorization URL
@@ -246,6 +256,8 @@ class PaystackClient:
             "channels": ["bank", "card", "ussd", "mobile_money", "bank_transfer", "qr"],
             "metadata": metadata or {},
         }
+        if callback_url:
+            payload["callback_url"] = callback_url
         action = "transaction.initialize"
         try:
             res = cls._sync_client().request(
@@ -316,7 +328,17 @@ class PaystackClient:
         return data
 
     @classmethod
-    async def ainitialize_transaction(cls, *, email: str, amount: Decimal, reference: str, currency: str = "NGN", metadata: dict | None = None, idempotency_key: str = "") -> dict:
+    async def ainitialize_transaction(
+        cls,
+        *,
+        email: str,
+        amount: Decimal,
+        reference: str,
+        currency: str = "NGN",
+        metadata: dict | None = None,
+        idempotency_key: str = "",
+        callback_url: str = "",
+    ) -> dict:
         payload = {
             "email": email,
             "amount": cls._kobo(amount),
@@ -325,6 +347,8 @@ class PaystackClient:
             "channels": ["bank", "card", "ussd", "mobile_money", "bank_transfer", "qr"],
             "metadata": metadata or {},
         }
+        if callback_url:
+            payload["callback_url"] = callback_url
         action = "transaction.initialize"
         try:
             res = await cls._async_client().request(
@@ -434,6 +458,11 @@ class PaymentIntentService:
             or data.get("checkout_url")
             or ""
         )
+
+    @staticmethod
+    def _build_order_confirmation_url(order_id: str) -> str:
+        frontend_base = getattr(settings, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
+        return f"{frontend_base}/client/dashboard/orders/{order_id}/confirmation"
 
     @staticmethod
     def _get_allowed_percentages() -> list[int]:
@@ -559,6 +588,8 @@ class PaymentIntentService:
             amount=amount,
             reference=reference,
             currency=currency,
+            callback_url=cls._build_order_confirmation_url(str(order.pk)),
+            redirect_url=cls._build_order_confirmation_url(str(order.pk)),
             metadata=payload_metadata,
         )
         checkout_url = cls._extract_checkout_url(response)
