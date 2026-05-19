@@ -30,6 +30,26 @@ class TimeoutPaystackTransport:
         )
 
 
+class CapturePaystackTransport:
+    def __init__(self):
+        self.last_json = None
+
+    def request(self, *args, **kwargs):
+        self.last_json = kwargs.get("json")
+
+        class Response:
+            data = {
+                "status": True,
+                "data": {
+                    "reference": "PAYSTACK-CAPTURE-REF",
+                    "authorization_url": "https://paystack.test/checkout",
+                    "access_code": "ACCESS123",
+                },
+            }
+
+        return Response()
+
+
 class PaystackWebhookServiceTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(email="paystack-client@example.com", password="StrongPass123!", role="client")
@@ -80,3 +100,23 @@ class PaystackWebhookServiceTests(TestCase):
             success=False,
         ).latest("created_at")
         self.assertIn("provider timed out", failure_log.error_message)
+
+    def test_initialize_transaction_sends_top_level_callback_url(self):
+        transport = CapturePaystackTransport()
+
+        with patch.object(PaystackClient, "_sync_client", return_value=transport):
+            PaymentIntentService.initialize_paystack(
+                user=self.user,
+                amount=Decimal("1500.00"),
+                purpose=PaymentPurpose.ORDER_PAYMENT,
+                order_id="ORDER-123",
+                metadata={
+                    "selected_percent": 100,
+                    "payment_path": "gateway",
+                },
+                idempotency_key="idem-callback-001",
+            )
+
+        self.assertIsNotNone(transport.last_json)
+        self.assertIn("callback_url", transport.last_json)
+        self.assertTrue(str(transport.last_json["callback_url"]).endswith("/client/dashboard/orders/ORDER-123/confirmation"))
