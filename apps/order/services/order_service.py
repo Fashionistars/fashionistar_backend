@@ -284,7 +284,6 @@ def _log_commercial_transition(
         occurred_at=timezone.now(),
         correlation_id=correlation_id,
         note=note,
-        request=request,
         metadata=metadata or {},
     )
     _emit_order_financial_audit(

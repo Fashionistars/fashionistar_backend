@@ -77,7 +77,17 @@ class PaystackClient:
     # ── Initialize Transaction ────────────────────────────────────────────────
 
     @classmethod
-    def initialize_transaction(cls, *, email: str, amount: Decimal, reference: str, currency: str = "NGN", metadata: dict | None = None, idempotency_key: str = "") -> dict:
+    def initialize_transaction(
+        cls,
+        *,
+        email: str,
+        amount: Decimal,
+        reference: str,
+        currency: str = "NGN",
+        metadata: dict | None = None,
+        idempotency_key: str = "",
+        callback_url: str = "",
+    ) -> dict:
         payload = {
             "email": email,
             "amount": cls._kobo(amount),
@@ -86,6 +96,8 @@ class PaystackClient:
             "channels": ["bank", "card", "ussd", "mobile_money", "bank_transfer", "qr"],
             "metadata": metadata or {},
         }
+        if callback_url:
+            payload["callback_url"] = callback_url
         def _call():
             return cls._sync().request("POST", "/transaction/initialize", action="transaction.initialize", reference=reference, idempotency_key=idempotency_key, headers=cls._headers(idempotency_key=idempotency_key), json=payload)
         try:
@@ -96,7 +108,17 @@ class PaystackClient:
         return res.data
 
     @classmethod
-    async def ainitialize_transaction(cls, *, email: str, amount: Decimal, reference: str, currency: str = "NGN", metadata: dict | None = None, idempotency_key: str = "") -> dict:
+    async def ainitialize_transaction(
+        cls,
+        *,
+        email: str,
+        amount: Decimal,
+        reference: str,
+        currency: str = "NGN",
+        metadata: dict | None = None,
+        idempotency_key: str = "",
+        callback_url: str = "",
+    ) -> dict:
         payload = {
             "email": email,
             "amount": cls._kobo(amount),
@@ -105,6 +127,8 @@ class PaystackClient:
             "channels": ["bank", "card", "ussd", "mobile_money", "bank_transfer", "qr"],
             "metadata": metadata or {},
         }
+        if callback_url:
+            payload["callback_url"] = callback_url
         try:
             res = await cls._async().request("POST", "/transaction/initialize", action="transaction.initialize", reference=reference, idempotency_key=idempotency_key, headers=cls._headers(idempotency_key=idempotency_key), json=payload)
         except ProviderHTTPError as exc:

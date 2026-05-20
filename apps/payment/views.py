@@ -256,6 +256,7 @@ class WalletFundPaymentView(generics.GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         payload = serializer.validated_data
+        idempotency_key = request.headers.get("Idempotency-Key", "")
 
         try:
             if payload["purpose"] == "order_payment":
@@ -272,7 +273,7 @@ class WalletFundPaymentView(generics.GenericAPIView):
                 # Ensure idempotency key is always set — if the client omits the
                 # header, generate a deterministic fallback keyed to the exact
                 # payment parameters so double-submit cannot create duplicate intents.
-                idempotency_key = request.headers.get("Idempotency-Key") or (
+                idempotency_key = idempotency_key or (
                     f"view-order-payment:{request.user.pk}:{payload.get('order_id', '')}:"
                     f"{payload['provider']}:{payload['payment_path']}:{payload['selected_percent']}"
                 )
