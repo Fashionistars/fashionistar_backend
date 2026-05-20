@@ -216,18 +216,22 @@ class PaymentOrchestrator:
             NotImplementedError: If an unsupported provider code is configured.
         """
         if self._is_paystack:
+            metadata_payload = {
+                "customer_name": customer_name,
+                "customer_phone": customer_phone,
+                **(metadata or {}),
+            }
+            if callback_url:
+                # Keep the backend-owned callback authoritative even if upstream
+                # metadata contains a stale redirect from an older environment.
+                metadata_payload["callback_url"] = callback_url
             return PaystackClient.initialize_transaction(
                 email=email,
                 amount=amount,
                 reference=reference,
                 currency=currency,
                 callback_url=callback_url,
-                metadata={
-                    "callback_url": callback_url,
-                    "customer_name": customer_name,
-                    "customer_phone": customer_phone,
-                    **(metadata or {}),
-                },
+                metadata=metadata_payload,
             )
         elif self._is_flutterwave:
             return FlutterwaveClient.initialize_payment(
@@ -283,18 +287,22 @@ class PaymentOrchestrator:
             NotImplementedError: If an unsupported provider code is configured.
         """
         if self._is_paystack:
+            metadata_payload = {
+                "customer_name": customer_name,
+                "customer_phone": customer_phone,
+                **(metadata or {}),
+            }
+            if callback_url:
+                # Mirror sync behavior so async callers cannot reintroduce a
+                # stale callback through user-supplied metadata.
+                metadata_payload["callback_url"] = callback_url
             return await PaystackClient.ainitialize_transaction(
                 email=email,
                 amount=amount,
                 reference=reference,
                 currency=currency,
                 callback_url=callback_url,
-                metadata={
-                    "callback_url": callback_url,
-                    "customer_name": customer_name,
-                    "customer_phone": customer_phone,
-                    **(metadata or {}),
-                },
+                metadata=metadata_payload,
             )
         elif self._is_flutterwave:
             return await FlutterwaveClient.ainitialize_payment(

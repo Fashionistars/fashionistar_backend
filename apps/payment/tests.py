@@ -8,6 +8,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
+from rest_framework.test import APIClient
 
 from apps.common.http import ProviderTimeoutError
 from apps.payment.models import (
@@ -17,7 +18,9 @@ from apps.payment.models import (
     PaymentPurpose,
     PaymentWebhookEvent,
 )
+from apps.payment.orchestrator import PaymentOrchestrator
 from apps.payment.services import PaystackClient, PaystackWebhookService, PaymentIntentService
+from apps.providers.Payment.paystack import PaystackClient as RegistryPaystackClient
 
 
 class TimeoutPaystackTransport:
@@ -120,3 +123,73 @@ class PaystackWebhookServiceTests(TestCase):
         self.assertIsNotNone(transport.last_json)
         self.assertIn("callback_url", transport.last_json)
         self.assertTrue(str(transport.last_json["callback_url"]).endswith("/client/dashboard/orders/ORDER-123/confirmation"))
+
+    def test_wallet_fund_view_initializes_topup_without_missing_idempotency_key(self):
+        transport = CapturePaystackTransport()
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+
+        with patch.object(PaystackClient, "_sync_client", return_value=transport):
+            response = client.post(
+                "/api/v1/payment/wallet/fund/",
+                {
+                    "amount": "1500.00",
+                    "purpose": PaymentPurpose.WALLET_TOPUP,
+                    "provider": "paystack",
+                    "currency": "NGN",
+                    "metadata": {"source": "test-wallet-topup"},
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 201)
+        payload = response.json().get("data", {})
+        self.assertEqual(payload.get("authorization_url"), "https://paystack.test/checkout")
+        self.assertEqual(PaymentIntent.objects.filter(user=self.user, purpose=PaymentPurpose.WALLET_TOPUP).count(), 2)
+
+    def test_orchestrator_paystack_initialize_accepts_callback_url(self):
+        transport = CapturePaystackTransport()
+
+        with patch.object(RegistryPaystackClient, "_sync", return_value=transport):
+            response = PaymentOrchestrator.for_provider("paystack").initialize_payment(
+                email="client@example.com",
+                amount=Decimal("1500.00"),
+                reference="ORCH-CALLBACK-001",
+                currency="NGN",
+                callback_url="http://localhost:3000/client/dashboard/orders/ORDER-123/confirmation",
+                metadata={"purpose": "order_payment"},
+            )
+
+        self.assertTrue(response["status"])
+        self.assertIsNotNone(transport.last_json)
+        self.assertIn("callback_url", transport.last_json)
+        self.assertEqual(
+            transport.last_json["metadata"]["callback_url"],
+            "http://localhost:3000/client/dashboard/orders/ORDER-123/confirmation",
+        )
+
+    def test_orchestrator_paystack_callback_url_overrides_stale_metadata(self):
+        transport = CapturePaystackTransport()
+
+        with patch.object(RegistryPaystackClient, "_sync", return_value=transport):
+            PaymentOrchestrator.for_provider("paystack").initialize_payment(
+                email="client@example.com",
+                amount=Decimal("1500.00"),
+                reference="ORCH-CALLBACK-OVERRIDE-001",
+                currency="NGN",
+                callback_url="http://localhost:3000/client/dashboard/orders/ORDER-456/confirmation",
+                metadata={
+                    "purpose": "order_payment",
+                    "callback_url": "https://aeration-scabby-navy.ngrok-free.dev/client/dashboard/orders/ORDER-456/confirmation",
+                },
+            )
+
+        self.assertIsNotNone(transport.last_json)
+        self.assertEqual(
+            transport.last_json["callback_url"],
+            "http://localhost:3000/client/dashboard/orders/ORDER-456/confirmation",
+        )
+        self.assertEqual(
+            transport.last_json["metadata"]["callback_url"],
+            "http://localhost:3000/client/dashboard/orders/ORDER-456/confirmation",
+        )
