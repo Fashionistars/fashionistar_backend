@@ -14,6 +14,7 @@ must re-export the auth audit helpers instead of leaving the package empty.
 from . import auth_audit
 from .auth_audit import (
     log_account_updated,
+    log_account_verified,
     log_biometric_auth,
     log_biometric_registered,
     log_login_blocked,
@@ -37,6 +38,7 @@ from .auth_audit import (
 __all__ = [
     "auth_audit",
     "log_account_updated",
+    "log_account_verified",
     "log_biometric_auth",
     "log_biometric_registered",
     "log_login_blocked",

@@ -327,12 +327,35 @@ class CartMergeView(APIView):
 
     Called after login and before checkout submit. Database-backed anonymous
     carts are preferred; the legacy item-array path remains for older clients.
+
+    RBAC: Restricted to role='client' ONLY.
+    Vendors, admins, support, editors, sales, moderators have no shopping
+    cart — they manage the platform. Attempting to merge a cart as a non-client
+    returns 403 Forbidden to enforce role separation.
     """
     renderer_classes = _RENDERERS
     parser_classes = _PARSERS
     permission_classes = [IsAuthenticated, IsAuthenticatedAndActive]
 
     def post(self, request):
+        # ── RBAC Guard: Cart merge is CLIENT-only ───────────────────────
+        # Vendors, admins and other staff roles must NOT have shopping carts.
+        # Allowing them to merge would:
+        #   1. Create orphaned cart rows for non-purchaser accounts.
+        #   2. Let a vendor place orders as a buyer, violating role separation.
+        #   3. Pollute cart analytics with non-client traffic.
+        user_role = getattr(request.user, "role", None)
+        if user_role != "client":
+            logger.warning(
+                "⚠️ CartMergeView: role=%s user_id=%s attempted cart merge — blocked.",
+                user_role,
+                getattr(request.user, "id", "unknown"),
+            )
+            return error_response(
+                message="Cart operations are only available for client accounts.",
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         session_key = (
             request.data.get("session_key")
             or request.headers.get("X-Fashionistar-Session-Key")

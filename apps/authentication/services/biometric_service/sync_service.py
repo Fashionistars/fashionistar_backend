@@ -194,11 +194,16 @@ class SyncBiometricService:
             # The library returns the credential that matched?
             # authenticate_complete returns the `AuthenticatorData`
             
-            # For simplicity/robustness without complex logic, we assume success if no exception raised.
-            logger.info("✅ Biometric Login Success: user=%s", user.email)            return True
+            # For simplicity/robustness without complex logic, we assume
+            # success if no exception was raised by authenticate_complete.
 
             # ── Audit Dispatch ───────────────────────────────────────────
-            # Record successful biometric authentication.
+            # Record successful biometric authentication BEFORE returning.
+            # BUG FIX: Previously, logger.info() and return True were
+            # concatenated on the same physical line (no semicolon/newline),
+            # causing this entire audit block to be dead code that was never
+            # reached. The function returned immediately after logger.info()
+            # and the audit event was NEVER emitted for successful logins.
             transaction.on_commit(
                 lambda: auth_audit.log_biometric_auth(
                     actor=user,
