@@ -354,11 +354,15 @@ class SyncAuthService:
                 log_login_success(
                     actor=user,
                     request=request,
-                    session_id=str(refresh.access_token.get("jti", "")),
+                    # Use refresh token jti (stable session identifier).
+                    # Access token jti rotates on every refresh — the refresh jti
+                    # is the stable handle to correlate all events in one session.
+                    session_id=str(refresh.payload.get("jti", "")),
                 )
             except Exception as audit_exc:
                 # Audit service swallows mostly, but safety wrap to prevent 500s
                 logger.warning("⚠️ Audit log success event failed: %s", audit_exc)
+
 
             # ── 7. Create UserSession on_commit (Telegram-style active devices) ─
             try:

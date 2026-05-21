@@ -485,3 +485,45 @@ def log_biometric_auth(*, actor, success: bool, request=None, reason: str | None
         severity="info" if success else "warning",
         metadata={"success": success, "reason": reason} if reason else {"success": success},
     )
+
+
+def log_account_verified(
+    *, actor, request=None, method: str = "otp"
+) -> None:
+    """Record successful account email/phone verification with auto-login.
+
+    This is distinct from log_login_success in that it marks the FIRST-EVER
+    successful identity verification of a newly registered account. Called
+    immediately after VerifyOTPView activates the user (is_active=True,
+    is_verified=True) and issues JWT tokens.
+
+    Why separate from log_login_success?
+    - log_login_success → recurring password-based logins
+    - log_account_verified → one-time first-activation event (compliance-critical)
+
+    CBN/NDPR compliance: account activation events must be retained for ≥365 days
+    and tagged as compliance events for regulatory audits.
+
+    Args:
+        actor: The newly verified UnifiedUser instance.
+        request: Django HttpRequest for IP/UA auto-extraction.
+        method: Verification method used ('otp', 'email_link').
+    """
+    from apps.audit_logs.services.audit import AuditService
+    from apps.audit_logs.models import EventType, EventCategory
+
+    AuditService.log(
+        event_type=EventType.ACCOUNT_VERIFIED,
+        event_category=EventCategory.AUTHENTICATION,
+        action=(
+            f"Account verified and auto-logged in via {method}: "
+            f"{getattr(actor, 'email', str(actor))}"
+        ),
+        actor=actor,
+        actor_role=getattr(actor, "user_type", None),
+        request=request,
+        is_compliance=True,
+        retention_days=365,
+        metadata={"verification_method": method},
+    )
+

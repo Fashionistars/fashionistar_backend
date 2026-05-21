@@ -76,6 +76,9 @@ class EventType(models.TextChoices):
     # ── Aliases used by Wave H audit hooks ──
     USER_REGISTERED        = "user_registered",      _("User Registered")
     REGISTRATION_FAILED    = "registration_failed",  _("Registration Failed (Hook)")
+    # First-ever OTP verification + JWT auto-issuance (distinct from EMAIL_VERIFIED
+    # which is a profile event). Required for CBN/NDPR auth compliance trail.
+    ACCOUNT_VERIFIED       = "account_verified",     _("Account Verified (OTP + Auto-Login)")
 
     # ── Account / Profile ─────────────────────────────────────────────
     ACCOUNT_CREATED        = "account_created",      _("Account Created")

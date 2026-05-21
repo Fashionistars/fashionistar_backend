@@ -49,6 +49,8 @@ from apps.authentication.services.registration import RegistrationService
 from apps.authentication.throttles import BurstRateThrottle, SustainedRateThrottle
 from apps.common.renderers import CustomJSONRenderer
 from apps.common.responses import error_response, success_response
+# ── Compliance Audit Logging ─────────────────────────────────────────────────
+from apps.audit_logs.services.authentication import auth_audit
 
 logger = logging.getLogger("application")
 
@@ -372,6 +374,17 @@ class VerifyOTPView(generics.GenericAPIView):
             update_last_login(None, user)
             auth_state = _build_auth_response_state(user)
 
+            # ── Compliance Audit: Account Verified + Auto-Login ─────────────
+            # Fired on_commit to ensure the DB activation (is_active, is_verified)
+            # has been flushed before the audit record is written. This is the
+            # first-ever identity verification of the account — distinct from
+            # a regular login and must be tracked separately for compliance.
+            transaction.on_commit(
+                lambda: auth_audit.log_account_verified(
+                    actor=user, request=request, method="otp"
+                )
+            )
+
             response = success_response(
                 data={
                     "user_id": str(user.id),
@@ -490,6 +503,17 @@ class RefreshTokenView(generics.GenericAPIView):
         try:
             refresh_response = TokenRefreshView.as_view()(request._request)
             if refresh_response.status_code == 200:
+                # ── Audit: Token Refreshed ─────────────────────────────────
+                try:
+                    transaction.on_commit(
+                        lambda: auth_audit.log_token_refreshed(
+                            actor=request.user if request.user.is_authenticated else None,
+                            request=request,
+                        )
+                    )
+                except Exception:
+                    pass  # Audit never blocks the response
+
                 return success_response(
                     data=refresh_response.data, message="Token refreshed."
                 )
@@ -519,6 +543,7 @@ class LogoutView(generics.GenericAPIView):
       1. Accept current refresh token.
       2. Blacklist the token in the database to prevent reuse.
       3. Clear the HttpOnly session cookie.
+      4. Dispatch log_logout() audit event on commit (compliance).
 
     Status Codes:
       - 200 OK: Logout successful.
@@ -545,6 +570,20 @@ class LogoutView(generics.GenericAPIView):
             with transaction.atomic():
                 token = RefreshToken(refresh_token)
                 token.blacklist()
+
+                # ── Audit: Logout ──────────────────────────────────────────
+                # Dispatched on_commit so it only fires if blacklist succeeds.
+                # session_id = the refresh token's jti (stable session handle).
+                _jti = str(token.payload.get("jti", ""))
+                _user = request.user
+                _req = request
+                transaction.on_commit(
+                    lambda: auth_audit.log_logout(
+                        actor=_user,
+                        request=_req,
+                        session_id=_jti,
+                    )
+                )
 
             logger.info(
                 "Logout: refresh token blacklisted — user_id=%s",

@@ -108,7 +108,54 @@ class RegistrationService:
                     user.id, purpose="verify", request=request
                 )
 
-            # ── 3. Lifecycle & Audit Dispatch ──────────────────────────────
+                # ── 3. Wallet Provisioning (get_or_create) ─────────────────
+                # ARCHITECTURAL REQUIREMENT: Every user on the Fashionistar
+                # platform — whether CLIENT, VENDOR, ADMIN, SUPPORT, EDITOR,
+                # SALES, or MODERATOR — MUST have their own wallet created at
+                # registration time. This is a HARD platform invariant.
+                #
+                # PLATFORM VISION: Fashionistar is the central hub for all
+                # financial transactions and payments. Staff members (support,
+                # sales, editors, moderators) will be compensated directly from
+                # their wallet dashboards via commission profits earned on the
+                # platform. At the end of every month or on task/assignment
+                # completion, their wallet balance will be credited or debited
+                # and they will be notified accordingly.
+                # (Full staff salary/commission payment system ships in V2 when
+                # we build the Support and Admin fullstack micro-service apps.)
+                #
+                # INTEGRITY GUARANTEE: This provisioning is INSIDE the atomic
+                # block so that if user creation OR wallet provisioning fails,
+                # EVERYTHING rolls back cleanly via ACID transaction semantics.
+                # This prevents orphaned users without wallets and orphaned
+                # wallets without users — a critical financial data-integrity
+                # requirement for CBN/PCI-DSS compliance.
+                try:
+                    from apps.wallet.services import WalletProvisioningService  # noqa: PLC0415
+                    WalletProvisioningService.ensure_wallet(
+                        user, currency_code="NGN", request=request
+                    )
+                    logger.info(
+                        "✅ Registration: NGN wallet provisioned "
+                        "[user_id=%s, role=%s]",
+                        user.id,
+                        user.role,
+                    )
+                except Exception as wallet_exc:
+                    # Re-raise so the atomic transaction rolls back completely.
+                    # A user without a wallet violates the financial architecture
+                    # contract and MUST be treated as a registration failure.
+                    logger.error(
+                        "❌ Registration: wallet provisioning failed "
+                        "[user_id=%s]: %s",
+                        user.id,
+                        str(wallet_exc),
+                        exc_info=True,
+                    )
+                    raise
+
+
+            # ── 4. Lifecycle & Audit Dispatch ──────────────────────────────
             # We use transaction.on_commit to ensure actions only fire if DB save succeeds.
 
             # Dispatch 'user.registered' event for downstream listeners
