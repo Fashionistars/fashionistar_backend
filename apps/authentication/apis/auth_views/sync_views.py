@@ -444,6 +444,12 @@ class ResendOTPView(generics.GenericAPIView):
             )
             return success_response(message=msg, status=status.HTTP_200_OK)
 
+        except drf_serializers.ValidationError as exc:
+            return error_response(
+                message="Validation failed",
+                errors=exc.detail,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except Exception as exc:
             logger.error("❌ ResendOTPView error: %s", str(exc), exc_info=True)
             return error_response(

@@ -68,7 +68,7 @@ def write_audit_event(self, payload: dict) -> None:
         from apps.audit_logs.models import AuditEventLog
 
         # Extract actor_id separately (set via obj.actor_id, not __init__)
-        actor_id = payload.pop("actor_id", None)
+        actor_id = payload.get("actor_id")
 
         # ⚡ Strip any keys the ORM doesn't know about (geo extras, future fields)
         safe_payload = {k: v for k, v in payload.items() if k in _KNOWN_FIELDS}
@@ -80,21 +80,9 @@ def write_audit_event(self, payload: dict) -> None:
                 "write_audit_event: stripped unknown payload keys: %s", stripped
             )
 
-        correlation_id = safe_payload.get("correlation_id")
-        if correlation_id:
-            obj, created = AuditEventLog.objects.get_or_create(
-                correlation_id=correlation_id,
-                defaults=safe_payload,
-            )
-            if not created:
-                logger.debug(
-                    "write_audit_event: skipped duplicate correlation_id=%s event_type=%s",
-                    correlation_id,
-                    safe_payload.get("event_type"),
-                )
-                return
-        else:
-            obj = AuditEventLog(**safe_payload)
+        # AuditEventLog rows are append-only by design, so every audit event
+        # must be persisted as a fresh row even when a correlation_id repeats.
+        obj = AuditEventLog(**safe_payload)
 
         if actor_id:
             obj.actor_id = actor_id
