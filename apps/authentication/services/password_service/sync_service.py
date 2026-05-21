@@ -139,7 +139,11 @@ class SyncPasswordService:
 
             else:
                 # PHONE FLOW: Generate numeric OTP
-                otp = OTPService.generate_otp_sync(user.id, purpose='password_reset')
+                otp = OTPService.generate_otp_sync(
+                    user.id,
+                    purpose='password_reset',
+                    request=request,
+                )
                 _otp_msg = f"Your Password Reset Code is: {otp}. Valid for 5 minutes."
                 _user_phone = str(user.phone)
 
@@ -210,7 +214,9 @@ class SyncPasswordService:
             elif 'token' in data and data['token'] and 'phone' not in data:
                 # PHONE FLOW: OTP validation
                 otp_result = OTPService.verify_by_otp_sync(
-                    data['token'], purpose='password_reset'
+                    data['token'],
+                    purpose='password_reset',
+                    request=request,
                 )
                 if not otp_result:
                     try:
@@ -360,4 +366,3 @@ class SyncPasswordService:
                 raise
             logger.error("❌ Password Change Error (Sync): %s", e)
             raise Exception(str(e))
-

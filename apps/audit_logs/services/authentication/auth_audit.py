@@ -6,6 +6,24 @@ Every call delegates to ``AuditService.log`` — guaranteed never to raise.
 """
 from __future__ import annotations
 
+from typing import Any
+from uuid import UUID
+
+
+def _otp_resource_metadata(identifier: object, purpose: str, extra: dict | None = None) -> dict:
+    metadata = {"purpose": purpose, **(extra or {})}
+
+    try:
+        uuid_value = str(UUID(str(identifier)))
+    except (ValueError, TypeError, AttributeError):
+        uuid_value = None
+
+    return {
+        "resource_type": "UnifiedUser" if uuid_value else None,
+        "resource_id": uuid_value,
+        "metadata": metadata,
+    }
+
 
 def log_login_success(*, actor, request=None, session_id: str | None = None) -> None:
     """Record a successful login event.
@@ -322,13 +340,16 @@ def log_otp_generated(*, user_id: Any, purpose: str, request: Any = None) -> Non
     from apps.audit_logs.services.audit import AuditService
     from apps.audit_logs.models import EventType, EventCategory
 
+    resource_context = _otp_resource_metadata(user_id, purpose)
+
     AuditService.log(
         event_type=EventType.OTP_GENERATED,
         event_category=EventCategory.AUTHENTICATION,
         action=f"OTP generated for User: {user_id} (Purpose: {purpose})",
-        actor_id=str(user_id),
         request=request,
-        metadata={"purpose": purpose},
+        resource_type=resource_context["resource_type"],
+        resource_id=resource_context["resource_id"],
+        metadata=resource_context["metadata"],
     )
 
 
@@ -343,13 +364,16 @@ def log_otp_verified(*, user_id: Any, purpose: str, request: Any = None) -> None
     from apps.audit_logs.services.audit import AuditService
     from apps.audit_logs.models import EventType, EventCategory
 
+    resource_context = _otp_resource_metadata(user_id, purpose)
+
     AuditService.log(
         event_type=EventType.OTP_VERIFIED,
         event_category=EventCategory.AUTHENTICATION,
         action=f"OTP verified successfully for User: {user_id} (Purpose: {purpose})",
-        actor_id=str(user_id),
         request=request,
-        metadata={"purpose": purpose},
+        resource_type=resource_context["resource_type"],
+        resource_id=resource_context["resource_id"],
+        metadata=resource_context["metadata"],
     )
 
 
@@ -365,13 +389,20 @@ def log_otp_failed(*, identifier: str, purpose: str, reason: str, request: Any =
     from apps.audit_logs.services.audit import AuditService
     from apps.audit_logs.models import EventType, EventCategory
 
+    resource_context = _otp_resource_metadata(
+        identifier,
+        purpose,
+        extra={"reason": reason, "identifier": identifier},
+    )
+
     AuditService.log(
         event_type=EventType.OTP_FAILED,
         event_category=EventCategory.SECURITY,
         action=f"OTP verification failed for: {identifier} (Purpose: {purpose}, Reason: {reason})",
-        actor_id=identifier if "-" in identifier else None,  # Attempt to extract UUID if possible
         request=request,
-        metadata={"purpose": purpose, "reason": reason},
+        resource_type=resource_context["resource_type"],
+        resource_id=resource_context["resource_id"],
+        metadata=resource_context["metadata"],
         severity="warning",
     )
 
