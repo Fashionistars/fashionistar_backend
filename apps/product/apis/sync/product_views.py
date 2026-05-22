@@ -666,7 +666,11 @@ class WishlistToggleView(APIView):
                 message="Product not found.", status=status.HTTP_404_NOT_FOUND
             )
         try:
-            result = toggle_wishlist(**_wishlist_identity(request), product=product)
+            result = toggle_wishlist(
+                **_wishlist_identity(request),
+                product=product,
+                request=request,
+            )
         except ValueError as exc:
             return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
         msg = "Added to wishlist." if result["added"] else "Removed from wishlist."
@@ -683,7 +687,7 @@ class WishlistMergeView(APIView):
     """
     renderer_classes = _RENDERERS
     parser_classes = _PARSERS
-    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive]
+    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsClient]
 
     def post(self, request):
         session_key = (

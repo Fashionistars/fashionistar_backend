@@ -80,6 +80,10 @@ urlpatterns = [
     path("v1/health/", HealthCheckView.as_view(), name="health-check"),
     # Admin URL
     path("admin/", admin.site.urls),
+
+    # ── Canonical ADMIN_BACKEND Domain:  discovery metadata ─
+    path("api/v1/admin_backend/", include("apps.admin_backend.urls", namespace="admin_backend")),
+
     # ── New Modular Monolith (v1) ──────────────────────────────────────────
     path("api/", include("apps.authentication.urls", namespace="authentication")),
     # ── Common Utilities (health check, Cloudinary presign, Cloudinary webhook, metrics, etc.) ────────────────────────
@@ -112,7 +116,6 @@ urlpatterns = [
     path("api/v1/kyc/", include("apps.kyc.urls", namespace="kyc")),
     # ── Phase 2: Central Async Ninja API (/api/v1/ninja/*) ───────────────────
     path("api/v1/ninja/", ninja_api.urls),
-    path("admin_backend/", include("apps.admin_backend.urls")),
 
 ]
 

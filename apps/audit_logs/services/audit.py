@@ -367,6 +367,8 @@ class AuditService:
                 except Exception:
                     pass
 
+            safe_retention_days = retention_days if retention_days >= 0 else 0
+
             # ── Build payload ─────────────────────────────────────────
             payload = dict(
                 event_type=event_type,
@@ -397,7 +399,7 @@ class AuditService:
                 metadata=metadata,
                 error_message=error_message,
                 is_compliance=is_compliance,
-                retention_days=retention_days,
+                retention_days=safe_retention_days,
             )
 
             cls._dispatch(payload)

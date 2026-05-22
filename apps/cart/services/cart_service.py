@@ -391,3 +391,15 @@ def merge_anonymous_cart_session(*, user, session_key: str) -> Cart:
     if not session_key:
         return get_or_create_cart(user=user)
     return Cart.merge_from(session_key=str(session_key)[:40], user=user)
+
+
+@transaction.atomic
+def discard_anonymous_cart_session(*, session_key: str | None) -> bool:
+    """Delete a persisted anonymous cart when the current role cannot own it."""
+    if not session_key:
+        return False
+    deleted, _ = Cart.objects.select_for_update().filter(
+        session_key=str(session_key)[:40],
+        user__isnull=True,
+    ).delete()
+    return deleted > 0

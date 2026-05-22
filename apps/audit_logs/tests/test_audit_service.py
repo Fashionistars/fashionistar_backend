@@ -212,6 +212,7 @@ class TestAuditContextMiddleware:
         response = middleware(request)
         assert b"test-correlation-123" in response.content
         assert response["X-Correlation-ID"] == "test-correlation-123"
+        assert request.request_id == "test-correlation-123"
 
     def test_context_cleared_after_request(self, rf):
         """Thread-local context MUST be empty after request completes (no leaking)."""
@@ -317,6 +318,46 @@ class TestAuditServiceContextEnrichment:
         if obj and obj.ip_address:
             # Should pick the first IP in XFF chain
             assert obj.ip_address == "203.0.113.1"
+
+
+class TestAuthenticationAuditHelpers:
+    """Authentication audit helpers keep role and correlation context intact."""
+
+    def test_register_success_uses_actor_role_and_request_correlation(self, rf, django_user_model):
+        from django.http import HttpResponse
+
+        from apps.audit_logs.middleware import AuditContextMiddleware
+        from apps.audit_logs.models import AuditEventLog, EventType
+        from apps.audit_logs.services.authentication import auth_audit
+
+        user = django_user_model.objects.create_user(
+            email="audit-role@test.io",
+            password="Pass123!Strong",
+            role="vendor",
+            is_active=False,
+            is_verified=False,
+        )
+
+        def view(request):
+            request.user = user
+            auth_audit.log_register_success(actor=user, request=request)
+            return HttpResponse("ok")
+
+        with patch(
+            "apps.audit_logs.tasks.write_audit_event.apply_async",
+            side_effect=Exception("broker down"),
+        ):
+            middleware = AuditContextMiddleware(view)
+            request = rf.post("/api/v1/auth/register/")
+            request.META["HTTP_X_REQUEST_ID"] = "auth-audit-corr-1"
+            middleware(request)
+
+        event = AuditEventLog.objects.get(
+            event_type=EventType.REGISTER_SUCCESS,
+            actor_email="audit-role@test.io",
+        )
+        assert event.actor_role == "vendor"
+        assert event.correlation_id == "auth-audit-corr-1"
 
 
 # ═══════════════════════════════════════════════════════════════════════════

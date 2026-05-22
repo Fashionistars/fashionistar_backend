@@ -53,7 +53,7 @@ def mock_otp_generation(mocker):
     """
     _OTP_STORE.clear()
 
-    def _fake_generate(user_id, purpose='verify'):
+    def _fake_generate(user_id, purpose='verify', request=None, **kwargs):
         otp_hash = hashlib.sha256(FIXED_OTP.encode()).hexdigest()
         primary_key = f"otp:{user_id}:{purpose}:FAKESNPT"
         _OTP_STORE[otp_hash] = {
