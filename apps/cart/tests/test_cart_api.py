@@ -260,3 +260,23 @@ class TestCartAPI:
         response = api_client.delete("/api/v1/cart/clear/")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["data"]["item_count"] == 0
+
+    def test_cart_merge_rejects_vendor_and_discards_anonymous_session_cart(
+        self,
+        api_client,
+        vendor_profile,
+        product,
+    ):
+        session_key = "vendor-merge-block-123"
+        add_item(session_key=session_key, product_slug=product.slug, quantity=1)
+        assert Cart.objects.filter(session_key=session_key, user__isnull=True).exists()
+
+        api_client.force_authenticate(vendor_profile.user)
+        response = api_client.post(
+            "/api/v1/cart/merge/",
+            {"session_key": session_key},
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert not Cart.objects.filter(session_key=session_key, user__isnull=True).exists()

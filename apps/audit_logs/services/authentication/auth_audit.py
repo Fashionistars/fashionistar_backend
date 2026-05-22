@@ -10,6 +10,15 @@ from typing import Any
 from uuid import UUID
 
 
+def _actor_role(actor: Any) -> str | None:
+    """Resolve the canonical actor role field for auth-domain audit events."""
+    return (
+        getattr(actor, "role", None)
+        or getattr(actor, "user_type", None)
+        or getattr(actor, "user_role", None)
+    )
+
+
 def _otp_resource_metadata(identifier: object, purpose: str, extra: dict | None = None) -> dict:
     metadata = {"purpose": purpose, **(extra or {})}
 
@@ -41,7 +50,7 @@ def log_login_success(*, actor, request=None, session_id: str | None = None) -> 
         event_category=EventCategory.AUTHENTICATION,
         action=f"User logged in: {getattr(actor, 'email', str(actor))}",
         actor=actor,
-        actor_role=getattr(actor, "user_type", None),
+        actor_role=_actor_role(actor),
         session_id=session_id,
         request=request,
         is_compliance=False,
@@ -132,7 +141,7 @@ def log_register_success(*, actor, request=None) -> None:
         event_category=EventCategory.AUTHENTICATION,
         action=f"New user registered: {getattr(actor, 'email', str(actor))}",
         actor=actor,
-        actor_role=getattr(actor, "user_type", None),
+        actor_role=_actor_role(actor),
         request=request,
         is_compliance=True,
         retention_days=365,
@@ -520,10 +529,9 @@ def log_account_verified(
             f"{getattr(actor, 'email', str(actor))}"
         ),
         actor=actor,
-        actor_role=getattr(actor, "user_type", None),
+        actor_role=_actor_role(actor),
         request=request,
         is_compliance=True,
         retention_days=365,
         metadata={"verification_method": method},
     )
-

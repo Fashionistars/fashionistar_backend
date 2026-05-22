@@ -10,4 +10,5 @@ from apps.cart.services.cart_service import (
     clear_cart,
     merge_guest_cart,
     merge_anonymous_cart_session,
+    discard_anonymous_cart_session,
 )

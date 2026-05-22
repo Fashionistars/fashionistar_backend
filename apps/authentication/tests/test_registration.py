@@ -154,6 +154,38 @@ class TestHappyPath:
         u = UnifiedUser.objects.get(email='vendor_role@test.io')
         assert u.role == 'vendor'
 
+    @pytest.mark.parametrize(
+        ("identifier_field", "identifier_value", "role"),
+        [
+            ("email", "wallet_client@test.io", "client"),
+            ("email", "wallet_vendor@test.io", "vendor"),
+        ],
+    )
+    def test_registration_provisions_default_wallet(
+        self,
+        api_client,
+        mock_email_task,
+        identifier_field,
+        identifier_value,
+        role,
+    ):
+        from apps.authentication.models import UnifiedUser
+
+        payload = {
+            identifier_field: identifier_value,
+            "password": "SecurePass123!",
+            "password2": "SecurePass123!",
+            "role": role,
+        }
+
+        response = api_client.post(REGISTER_URL, payload, format="json")
+
+        assert response.status_code == status.HTTP_201_CREATED, response.json()
+        user = UnifiedUser.objects.get(**{identifier_field: identifier_value})
+        wallet = user.financial_wallets.get(is_default=True)
+        assert wallet.owner_type == role
+        assert wallet.currency.code == "NGN"
+
     def test_multipart_form_201(self, api_client, mock_email_task):
         r = api_client.post(REGISTER_URL, {
             'email': 'multipart@test.io',
@@ -249,6 +281,31 @@ class TestValidationErrors:
             'role': 'client',
         }, format='json')
         assert r.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_wallet_provisioning_failure_rolls_back_registration(
+        self,
+        api_client,
+        mock_email_task,
+    ):
+        from apps.authentication.models import UnifiedUser
+
+        with patch(
+            "apps.wallet.services.WalletProvisioningService.ensure_wallet",
+            side_effect=RuntimeError("wallet provision failed"),
+        ):
+            response = api_client.post(
+                REGISTER_URL,
+                {
+                    "email": "wallet_fail@test.io",
+                    "password": "SecurePass123!",
+                    "password2": "SecurePass123!",
+                    "role": "client",
+                },
+                format="json",
+            )
+
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert not UnifiedUser.objects.filter(email="wallet_fail@test.io").exists()
 
 
 # =============================================================================

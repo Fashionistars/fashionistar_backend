@@ -613,6 +613,9 @@ def merge_anonymous_wishlist_session(*, user: Any, session_key: str) -> dict:
     The merge is idempotent: duplicate user/product rows are deleted from the
     anonymous side instead of raising unique-constraint errors on retry.
     """
+    if getattr(user, "role", None) != "client":
+        raise ValueError("Wishlist operations are only available for client accounts.")
+
     if not session_key:
         return {"moved": 0, "deduplicated": 0}
 

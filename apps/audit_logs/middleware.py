@@ -104,10 +104,12 @@ class AuditContextMiddleware:
             "actor":           actor,
             "actor_email":     actor_email,
             "correlation_id":  correlation_id,
+            "request_id":      correlation_id,
         }
 
         # ── 5. Inject correlation ID into request for downstream use ───────
         request.correlation_id = correlation_id
+        request.request_id = correlation_id
 
         try:
             response = self.get_response(request)

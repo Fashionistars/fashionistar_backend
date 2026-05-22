@@ -3,12 +3,12 @@
 
 import logging
 
-from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.renderers import BrowsableAPIRenderer
 
-from apps.product.models import ProductWishlist
+from apps.product.models import Product, ProductWishlist
+from apps.product.services import toggle_wishlist
 from apps.client.serializers.wishlist_serializers import (
     ClientWishlistSerializer,
     WishlistToggleSerializer,
@@ -49,25 +49,22 @@ class ClientWishlistToggleView(generics.GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         product_id = serializer.validated_data["product_id"]
-
-        existing = ProductWishlist.objects.filter(product=product_id, user=request.user)
-        if existing.exists():
-            existing.delete()
-            logger.info(
-                "Wishlist: removed product=%s for user=%s", product_id, request.user.pk
-            )
-            return success_response(
-                data={"action": "removed"},
-                message="Removed from wishlist.",
-                status=status.HTTP_200_OK,
+        product = Product.objects.filter(pk=product_id, is_deleted=False).first()
+        if not product:
+            return error_response(
+                message="Product not found.",
+                status=status.HTTP_404_NOT_FOUND,
             )
 
-        ProductWishlist.objects.create(product=product_id, user=request.user)
+        result = toggle_wishlist(user=request.user, product=product, request=request)
         logger.info(
-            "Wishlist: added product=%s for user=%s", product_id, request.user.pk
+            "Wishlist: %s product=%s for user=%s",
+            "added" if result["added"] else "removed",
+            product_id,
+            request.user.pk,
         )
         return success_response(
-            data={"action": "added"},
-            message="Added to wishlist.",
-            status=status.HTTP_201_CREATED,
+            data={"action": "added" if result["added"] else "removed"},
+            message="Added to wishlist." if result["added"] else "Removed from wishlist.",
+            status=status.HTTP_201_CREATED if result["added"] else status.HTTP_200_OK,
         )

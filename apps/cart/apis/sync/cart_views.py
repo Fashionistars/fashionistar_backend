@@ -34,6 +34,7 @@ from apps.cart.services import (
     clear_cart,
     merge_guest_cart,
     merge_anonymous_cart_session,
+    discard_anonymous_cart_session,
 )
 
 logger = logging.getLogger(__name__)
@@ -338,6 +339,15 @@ class CartMergeView(APIView):
     permission_classes = [IsAuthenticated, IsAuthenticatedAndActive]
 
     def post(self, request):
+        raw_session_key = (
+            request.data.get("session_key")
+            or request.headers.get("X-Fashionistar-Session-Key")
+            or request.COOKIES.get("fashionistar_session_key")
+        )
+        sanitized_session_key = (
+            _sanitize_session_key(str(raw_session_key)) if raw_session_key else None
+        )
+
         # ── RBAC Guard: Cart merge is CLIENT-only ───────────────────────
         # Vendors, admins and other staff roles must NOT have shopping carts.
         # Allowing them to merge would:
@@ -351,21 +361,16 @@ class CartMergeView(APIView):
                 user_role,
                 getattr(request.user, "id", "unknown"),
             )
+            discard_anonymous_cart_session(session_key=sanitized_session_key)
             return error_response(
                 message="Cart operations are only available for client accounts.",
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        session_key = (
-            request.data.get("session_key")
-            or request.headers.get("X-Fashionistar-Session-Key")
-            or request.COOKIES.get("fashionistar_session_key")
-        )
-        if session_key:
-            session_key = _sanitize_session_key(str(session_key))
+        if sanitized_session_key:
             cart = merge_anonymous_cart_session(
                 user=request.user,
-                session_key=session_key,
+                session_key=sanitized_session_key,
             )
             return success_response(
                 data=CartSerializer(cart, context={"request": request}).data,
