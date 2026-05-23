@@ -200,13 +200,19 @@ class UserSession(TimeStampedModel):
         return self.revoked_at is not None
 
     @staticmethod
-    def _extract_client_details(request) -> tuple[str | None, str]:
-        """Extract best-effort IP and User-Agent details from a request."""
+    def _extract_client_details(request) -> dict[str, str | None]:
+        """Extract best-effort device, network, and frontend header context."""
 
-        ip_address = None
-        user_agent = ""
+        details: dict[str, str | None] = {
+            "ip_address": None,
+            "user_agent": "",
+            "client_platform": None,
+            "country": None,
+            "country_code": None,
+            "city": None,
+        }
         if request is None:
-            return ip_address, user_agent
+            return details
 
         forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
         ip_address = (
@@ -215,7 +221,21 @@ class UserSession(TimeStampedModel):
             else request.META.get("REMOTE_ADDR")
         )
         user_agent = request.META.get("HTTP_USER_AGENT", "")
-        return ip_address, user_agent
+        details["ip_address"] = ip_address
+        details["user_agent"] = user_agent
+        details["client_platform"] = request.META.get("HTTP_X_CLIENT_PLATFORM")
+
+        if ip_address:
+            try:
+                from apps.audit_logs.services.audit import _resolve_geo
+
+                geo = _resolve_geo(ip_address) or {}
+                details["country"] = geo.get("country") or None
+                details["country_code"] = geo.get("country_code") or None
+                details["city"] = geo.get("city") or None
+            except Exception:
+                pass
+        return details
 
     @staticmethod
     def _build_fingerprint(user_agent: str, ip_address: str | None) -> str:
@@ -266,7 +286,9 @@ class UserSession(TimeStampedModel):
         security review.
         """
 
-        ip_address, user_agent = cls._extract_client_details(request)
+        client_details = cls._extract_client_details(request)
+        ip_address = client_details["ip_address"]
+        user_agent = client_details["user_agent"] or ""
 
         jti = str(refresh_token.payload.get("jti", ""))
         refresh_token_family = str(
@@ -295,6 +317,17 @@ class UserSession(TimeStampedModel):
         except Exception:
             pass
 
+        client_platform = client_details.get("client_platform")
+        if client_platform and (
+            not os_family or os_family in {"Other", "Unknown"}
+        ):
+            os_family = str(client_platform)
+            device_name = (
+                f"{browser_family} on {os_family}"
+                if browser_family and browser_family != "Other"
+                else os_family
+            )
+
         return cls.objects.create(
             user=user,
             jti=jti,
@@ -307,5 +340,8 @@ class UserSession(TimeStampedModel):
             os_family=os_family,
             ip_address=ip_address,
             last_seen_ip=ip_address,
+            country=client_details.get("country") or "",
+            country_code=client_details.get("country_code") or "",
+            city=client_details.get("city") or "",
             expires_at=expires_at,
         )

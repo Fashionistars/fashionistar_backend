@@ -595,6 +595,21 @@ def toggle_wishlist(
         added=added,
         session_key=identity.get("session_key"),
     )
+    if identity.get("user") is not None:
+        try:
+            from apps.audit_logs.services.client import client_audit
+
+            client_audit.log_wishlist_updated(
+                actor=identity["user"],
+                product_id=str(product.id),
+                action="added" if added else "removed",
+                request=request,
+            )
+        except Exception:
+            logger.warning(
+                "client_audit.log_wishlist_updated failed silently",
+                exc_info=True,
+            )
     return {"added": added}
 
 

@@ -248,18 +248,20 @@ class SessionRevokeOthersView(generics.GenericAPIView):
         try:
             from apps.audit_logs.services.audit import AuditService
             from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
-            AuditService.log(
-                event_type=EventType.SESSION_REVOKE_ALL,
-                event_category=EventCategory.SECURITY,
-                severity=SeverityLevel.WARNING,
-                action=(
-                    f"All other sessions revoked by user — {revoked_count} session(s) terminated."
-                ),
-                actor=request.user,
-                request=request,
-                resource_type="UserSession",
-                is_compliance=True,
-                metadata={"terminated_count": revoked_count},
+            transaction.on_commit(
+                lambda: AuditService.log(
+                    event_type=EventType.SESSION_REVOKE_ALL,
+                    event_category=EventCategory.SECURITY,
+                    severity=SeverityLevel.WARNING,
+                    action=(
+                        f"All other sessions revoked by user — {revoked_count} session(s) terminated."
+                    ),
+                    actor=request.user,
+                    request=request,
+                    resource_type="UserSession",
+                    is_compliance=True,
+                    metadata={"terminated_count": revoked_count},
+                )
             )
         except Exception:
             pass  # Never let audit logging block the response
