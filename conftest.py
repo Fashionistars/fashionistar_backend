@@ -21,6 +21,48 @@ from rest_framework.test import APIClient
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+#  REDIS AVAILABILITY CHECK (session-scoped — probed once per test run)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _probe_redis() -> bool:
+    """
+    Returns True if a live Redis instance is reachable on 127.0.0.1:6379.
+
+    Used by pytest_collection_modifyitems to auto-skip @pytest.mark.redis tests
+    when Redis is unavailable (CI without Redis, local dev without Docker, etc.)
+    """
+    try:
+        import redis as _redis
+        client = _redis.Redis(host="127.0.0.1", port=6379, socket_connect_timeout=1)
+        client.ping()
+        return True
+    except Exception:
+        return False
+
+
+# Probe once at import time so the skip decision is consistent for all tests.
+_REDIS_AVAILABLE = _probe_redis()
+
+
+def pytest_collection_modifyitems(config, items):
+    """
+    Auto-skip tests marked with @pytest.mark.redis when Redis is unavailable.
+
+    This hook runs after collection so every test module has already been
+    imported — no circular-import risk.
+    """
+    if _REDIS_AVAILABLE:
+        return  # Redis is up — let all tests run normally
+
+    skip_redis = pytest.mark.skip(
+        reason="Redis unavailable (127.0.0.1:6379 unreachable) — skipping @pytest.mark.redis tests"
+    )
+    for item in items:
+        if "redis" in item.keywords:
+            item.add_marker(skip_redis)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 #  CORE FIXTURES
 # ─────────────────────────────────────────────────────────────────────────────
 

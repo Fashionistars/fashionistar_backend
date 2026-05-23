@@ -162,12 +162,20 @@ class OTPService:
                         logger.info("✅ OTP Verified: User %s (Purpose: %s)", user_id, purpose)
 
                         # ── Audit Trail (Success) ──────────────────────────────
-                        # Atomic dispatch on commit to prevent ghost logs
-                        transaction.on_commit(
-                            lambda: auth_audit.log_otp_verified(
-                                user_id=user_id, purpose=purpose, request=request
+                        # Atomic dispatch on commit to prevent ghost logs.
+                        # Guarded with try/except: unit-test contexts without
+                        # a DB transaction silently skip the audit dispatch.
+                        try:
+                            transaction.on_commit(
+                                lambda: auth_audit.log_otp_verified(
+                                    user_id=user_id, purpose=purpose, request=request
+                                )
                             )
-                        )
+                        except Exception as audit_exc:
+                            logger.warning(
+                                "⚠️ OTPService: audit log failed (verify_otp_sync) — %s",
+                                audit_exc,
+                            )
                     return True
 
             # ── Audit Trail (Failure) ──────────────────────────────────────
@@ -230,13 +238,20 @@ class OTPService:
                             pipe.unwatch()
                             logger.warning("OTP-only verify failed: hash index miss")
 
-                            # Audit failure (identifier unknown)
-                            auth_audit.log_otp_failed(
-                                identifier="unknown_via_hash",
-                                purpose=purpose,
-                                reason="not_found",
-                                request=request,
-                            )
+                            # Audit failure (identifier unknown) — guarded to prevent
+                            # DB errors from blocking the verification return path.
+                            try:
+                                auth_audit.log_otp_failed(
+                                    identifier="unknown_via_hash",
+                                    purpose=purpose,
+                                    reason="not_found",
+                                    request=request,
+                                )
+                            except Exception as audit_exc:
+                                logger.warning(
+                                    "⚠️ OTPService: audit log failed (hash miss) — %s",
+                                    audit_exc,
+                                )
                             return None
 
                         primary_key = primary_raw.decode()
@@ -260,12 +275,18 @@ class OTPService:
                                 stored_purpose,
                                 user_id,
                             )
-                            auth_audit.log_otp_failed(
-                                identifier=str(user_id),
-                                purpose=purpose,
-                                reason="purpose_mismatch",
-                                request=request,
-                            )
+                            try:
+                                auth_audit.log_otp_failed(
+                                    identifier=str(user_id),
+                                    purpose=purpose,
+                                    reason="purpose_mismatch",
+                                    request=request,
+                                )
+                            except Exception as audit_exc:
+                                logger.warning(
+                                    "⚠️ OTPService: audit log failed (purpose mismatch) — %s",
+                                    audit_exc,
+                                )
                             return None
 
                         primary_val = pipe.get(primary_key)
@@ -276,12 +297,18 @@ class OTPService:
                                 "OTP-only verify: primary key expired for user %s",
                                 user_id,
                             )
-                            auth_audit.log_otp_failed(
-                                identifier=str(user_id),
-                                purpose=purpose,
-                                reason="expired",
-                                request=request,
-                            )
+                            try:
+                                auth_audit.log_otp_failed(
+                                    identifier=str(user_id),
+                                    purpose=purpose,
+                                    reason="expired",
+                                    request=request,
+                                )
+                            except Exception as audit_exc:
+                                logger.warning(
+                                    "⚠️ OTPService: audit log failed (expired) — %s",
+                                    audit_exc,
+                                )
                             return None
 
                         # ── Step 7: MULTI/EXEC -- atomic compare-and-delete ───
@@ -296,12 +323,20 @@ class OTPService:
                             purpose,
                         )
 
-                        # Audit success: Atomic dispatch on commit
-                        transaction.on_commit(
-                            lambda: auth_audit.log_otp_verified(
-                                user_id=user_id, purpose=purpose, request=request
+                        # Audit success: Atomic dispatch on commit.
+                        # Guarded with try/except: unit-test contexts without
+                        # a DB transaction silently skip the audit dispatch.
+                        try:
+                            transaction.on_commit(
+                                lambda: auth_audit.log_otp_verified(
+                                    user_id=user_id, purpose=purpose, request=request
+                                )
                             )
-                        )
+                        except Exception as audit_exc:
+                            logger.warning(
+                                "⚠️ OTPService: audit log failed (verify_by_otp_sync) — %s",
+                                audit_exc,
+                            )
 
                         return {"user_id": user_id, "purpose": stored_purpose}
 

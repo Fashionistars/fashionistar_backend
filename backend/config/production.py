@@ -86,6 +86,14 @@ CORS_ALLOW_HEADERS = [
     "x-idempotency-key",
     # ── Anonymous session identity — guest cart & wishlist ──
     "x-fashionistar-session-key",
+    # ── Wave B3 Audit Context Headers — client device/geo enrichment ───────
+    "x-device-id",
+    "x-client-timezone",
+    "x-client-locale",
+    "x-client-platform",
+    "x-client-geo-lat",
+    "x-client-geo-lng",
+    "x-client-geo-accuracy",
 ]
 
 CORS_ALLOW_METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")

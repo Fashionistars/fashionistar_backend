@@ -648,6 +648,17 @@ CORS_ALLOW_HEADERS = [
     # Without this header the CORS preflight (OPTIONS) returns 403 and the
     # Ninja async endpoints cannot identify anonymous shoppers.
     "x-fashionistar-session-key",
+    # ── Wave B3 Audit Context Headers — client device/geo enrichment ───────
+    # These headers are injected by fashionista_frontend/src/lib/api/axiosInstance.ts
+    # (buildAuditHeadersSync) on every authenticated and anonymous request.
+    # Without explicit CORS whitelist, the browser preflight BLOCKS the request.
+    "x-device-id",           # UUID v4 — cross-session device correlation
+    "x-client-timezone",     # IANA timezone — more accurate than IP-based geo
+    "x-client-locale",       # navigator.language — fraud locale detection
+    "x-client-platform",     # navigator.userAgentData.platform — UA enrichment
+    "x-client-geo-lat",      # GPS latitude (optional — geolocation permission)
+    "x-client-geo-lng",      # GPS longitude (optional)
+    "x-client-geo-accuracy", # GPS accuracy in metres (optional)
     "dnt",
     "origin",
     "user-agent",

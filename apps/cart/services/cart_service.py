@@ -374,9 +374,33 @@ def merge_guest_cart(*, user, guest_items: list[dict]) -> Cart:
     return cart
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# ANONYMOUS SESSION CART MERGE  (called on login — DB-backed session cart)
+# ─────────────────────────────────────────────────────────────────────────────
+
 def merge_anonymous_cart_session(*, user, session_key: str) -> Cart:
     """
     Promote a database-backed anonymous cart into the authenticated user cart.
+
+    ── SERVICE-LAYER RBAC GUARD (Wave B3 — Fix 5) ──────────────────────────────
+    CART MERGE — CLIENT-ONLY SERVICE GUARD
+
+    Non-client users must NEVER have anonymous cart state merged into their
+    account. This guard mirrors the wishlist service pattern and protects
+    against callers that bypass the view-layer RBAC (Celery tasks, management
+    commands, direct Django shell calls, webhook handlers).
+
+    The guard is SILENT — it discards the session cart for non-client users
+    without raising an exception. This prevents cart state pollution on
+    vendor/admin accounts while remaining invisible to the caller.
+
+    Role enforcement layers:
+    1. Edge layer:    proxy.ts COMMERCE_ONLY_PREFIXES
+    2. Route layer:   CommerceRouteGuard
+    3. Mutation layer: ensureCommerceAccess()
+    4. View layer:    DRF permission class
+    5. Service layer: THIS GUARD ← symmetric with wishlist service
+    ─────────────────────────────────────────────────────────────────────────────
 
     Args:
         user: Authenticated user receiving the cart rows.
@@ -388,6 +412,20 @@ def merge_anonymous_cart_session(*, user, session_key: str) -> Cart:
     This service delegates the row-locking work to Cart.merge_from(), keeping
     DRF views thin and making login/checkout reconciliation idempotent.
     """
+    # ── Service-layer RBAC guard — client-only operation ─────────────────────
+    # Silently discard session cart for non-client users.
+    # DO NOT raise — caller gets the user's existing (empty) cart instead.
+    user_role = str(getattr(user, "role", "") or getattr(user, "user_type", "") or "").lower()
+    if user_role and user_role not in ("client", ""):
+        logger.info(
+            "[CartService] merge_anonymous_cart_session blocked: user_id=%s role=%s "
+            "(RBAC guard — client-only operation; discarding anonymous session cart)",
+            getattr(user, "pk", "?"),
+            user_role,
+        )
+        return get_or_create_cart(user=user)
+    # ─────────────────────────────────────────────────────────────────────────
+
     if not session_key:
         return get_or_create_cart(user=user)
     return Cart.merge_from(session_key=str(session_key)[:40], user=user)

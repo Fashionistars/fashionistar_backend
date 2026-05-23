@@ -107,6 +107,23 @@ class AuditContextMiddleware:
             "request_id":      correlation_id,
         }
 
+        # ── 4b. Enrich with frontend audit context headers ──────────────────────────
+        # The frontend sends X-Client-* headers from audit-headers.ts.
+        # These enrich (never replace) server-derived IP/UA values.
+        # Backend fallback (REMOTE_ADDR, HTTP_USER_AGENT) remains canonical.
+        _audit_ctx.ctx.update({
+            # Device identification (stable across browser sessions)
+            "client_device_id":  request.META.get("HTTP_X_DEVICE_ID"),
+            # Locale and platform context
+            "client_timezone":   request.META.get("HTTP_X_CLIENT_TIMEZONE"),
+            "client_locale":     request.META.get("HTTP_X_CLIENT_LOCALE"),
+            "client_platform":   request.META.get("HTTP_X_CLIENT_PLATFORM"),
+            # Optional GPS coordinates (only present when user granted geolocation)
+            "client_geo_lat":    request.META.get("HTTP_X_CLIENT_GEO_LAT"),
+            "client_geo_lng":    request.META.get("HTTP_X_CLIENT_GEO_LNG"),
+            "client_geo_acc":    request.META.get("HTTP_X_CLIENT_GEO_ACCURACY"),
+        })
+
         # ── 5. Inject correlation ID into request for downstream use ───────
         request.correlation_id = correlation_id
         request.request_id = correlation_id

@@ -246,7 +246,7 @@ class TestPasswordResetConfirmPhone:
             return_value={"user_id": str(user.id), "purpose": "password_reset"},
         ):
             r = APIClient().post(RESET_PHONE_CONFIRM_URL, {
-                "otp": "123456", "password": "PhoneNew1!", "password2": "PhoneNew1!",
+                "otp": "123456", "new_password": "PhoneNew1!", "new_password_confirm": "PhoneNew1!",
             }, format="json")
         assert r.status_code == status.HTTP_200_OK
         user.refresh_from_db()
@@ -260,7 +260,7 @@ class TestPasswordResetConfirmPhone:
             return_value=None,          # OTP invalid — but serializer must pass
         ):
             r = APIClient().post(RESET_PHONE_CONFIRM_URL, {
-                "otp": "000000", "password": "PhoneNew1!", "password2": "PhoneNew1!",
+                "otp": "000000", "new_password": "PhoneNew1!", "new_password_confirm": "PhoneNew1!",
             }, format="json")
         # Should be 400 due to invalid OTP from service, NOT from "phone required"
         assert r.status_code == status.HTTP_400_BAD_REQUEST
@@ -277,14 +277,14 @@ class TestPasswordResetConfirmPhone:
             return_value=None,
         ):
             r = APIClient().post(RESET_PHONE_CONFIRM_URL, {
-                "otp": "000000", "password": "PhoneNew1!", "password2": "PhoneNew1!",
+                "otp": "000000", "new_password": "PhoneNew1!", "new_password_confirm": "PhoneNew1!",
             }, format="json")
         assert r.status_code == status.HTTP_400_BAD_REQUEST
         assert r.json().get("code") == "invalid_otp"
 
     def test_non_digit_otp_rejected_by_serializer(self):
         r = APIClient().post(RESET_PHONE_CONFIRM_URL, {
-            "otp": "ABCDEF", "password": "PhoneNew1!", "password2": "PhoneNew1!",
+            "otp": "ABCDEF", "new_password": "PhoneNew1!", "new_password_confirm": "PhoneNew1!",
         }, format="json")
         assert r.status_code == status.HTTP_400_BAD_REQUEST
 
@@ -304,10 +304,10 @@ class TestPasswordResetConfirmPhone:
             side_effect=_once,
         ):
             r1 = APIClient().post(RESET_PHONE_CONFIRM_URL,
-                                  {"otp": "123456", "password": "FirstPass1!", "password2": "FirstPass1!"},
+                                  {"otp": "123456", "new_password": "FirstPass1!", "new_password_confirm": "FirstPass1!"},
                                   format="json")
             r2 = APIClient().post(RESET_PHONE_CONFIRM_URL,
-                                  {"otp": "123456", "password": "SecondPass1!", "password2": "SecondPass1!"},
+                                  {"otp": "123456", "new_password": "SecondPass1!", "new_password_confirm": "SecondPass1!"},
                                   format="json")
         assert r1.status_code == 200
         assert r2.status_code == 400
@@ -322,7 +322,7 @@ class TestPasswordResetConfirmPhone:
             return_value=None,
         ):
             APIClient().post(RESET_PHONE_CONFIRM_URL,
-                             {"otp": "000000", "password": "Injected1!", "password2": "Injected1!"},
+                             {"otp": "000000", "new_password": "Injected1!", "new_password_confirm": "Injected1!"},
                              format="json")
         user.refresh_from_db()
         assert user.password == orig, "Password must NOT change on failed OTP"
@@ -348,7 +348,7 @@ class TestPasswordResetConfirmPhone:
                 side_effect=_atomic,
             ):
                 r = APIClient().post(RESET_PHONE_CONFIRM_URL,
-                                     {"otp": "123456", "password": "RacePass1!", "password2": "RacePass1!"},
+                                     {"otp": "123456", "new_password": "RacePass1!", "new_password_confirm": "RacePass1!"},
                                      format="json")
             results.append(r.status_code)
 
@@ -472,31 +472,38 @@ class TestConcurrencyStress:
     def test_20_concurrent_phone_confirm_only_1_wins(self, mock_email_task, mock_sms_task):
         """
         Concurrent OTP: exactly 1 of 20 threads should win.
-        Uses a module-level side_effect function (thread-safe lock) rather than
-        per-thread patching, which doesn't work across thread boundaries.
+        Patches SyncPasswordService.confirm_reset (not OTPService.verify_by_otp_sync)
+        to avoid DB access in ThreadPoolExecutor worker threads, which have no Django
+        DB connection in the test environment.
+
+        The atomic lock guarantees exactly-once semantics: the first caller wins,
+        all subsequent callers raise Exception (→ view returns 400).
         """
-        user = _phone_user()
         lock, consumed = threading.Lock(), {"done": False}
         codes = []
 
-        def _atomic_verify(*a, **kw):
+        def _atomic_confirm(data, request=None):
+            """Thread-safe exactly-once gate: first caller wins, rest raise."""
             with lock:
                 if not consumed["done"]:
                     consumed["done"] = True
-                    return {"user_id": str(user.id), "purpose": "password_reset"}
-            return None
+                    return "Password has been reset successfully."
+            raise Exception("Invalid or expired OTP.")
 
         def hit():
-            r = APIClient().post(RESET_PHONE_CONFIRM_URL,
-                                 {"otp": "123456", "password": "ConcPass1!", "password2": "ConcPass1!"},
-                                 format="json")
+            r = APIClient().post(
+                RESET_PHONE_CONFIRM_URL,
+                {"otp": "123456", "new_password": "ConcPass1!", "new_password_confirm": "ConcPass1!"},
+                format="json",
+            )
             codes.append(r.status_code)
 
-        # Patch once at module level so ALL threads share the same mock
+        # Patch confirm_reset (service layer) so ALL threads share the same mock
+        # without any DB access in worker threads.
         with patch(
-            "apps.authentication.services.password_service.sync_service."
-            "OTPService.verify_by_otp_sync",
-            side_effect=_atomic_verify,
+            "apps.authentication.apis.password_views.sync_views."
+            "SyncPasswordService.confirm_reset",
+            side_effect=_atomic_confirm,
         ):
             with ThreadPoolExecutor(max_workers=self.NUM) as ex:
                 futures = [ex.submit(hit) for _ in range(self.NUM)]

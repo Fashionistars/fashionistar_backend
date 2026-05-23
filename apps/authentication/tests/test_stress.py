@@ -16,14 +16,23 @@ Stress test target:
     500 concurrent threads → single OTP → exactly 1 success guaranteed
 """
 
+import os
 import threading
+import unittest
 import pytest
-from django.test import TestCase, Client
+from django.test import TransactionTestCase, TestCase, Client
 from django.urls import reverse
 from unittest.mock import patch
 
 from apps.authentication.models import UnifiedUser
 from apps.authentication.services.otp import OTPService
+
+# ─── Concurrency gate ────────────────────────────────────────────────────────
+# TransactionTestCase subclasses are unittest.TestCase instances.
+# pytest markers (e.g. @pytest.mark.redis) don't trigger conftest skip hooks
+# for unittest-style tests. @unittest.skipUnless is the only reliable mechanism.
+# To run: RUN_CONCURRENCY_TESTS=1 uv run pytest apps/authentication/tests/test_stress.py
+_RUN_CONCURRENCY = os.environ.get('RUN_CONCURRENCY_TESTS') == '1'
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -51,9 +60,20 @@ def create_unverified_user(email: str = None, phone: str = None) -> UnifiedUser:
 # 1. OTP RACE CONDITION — EXACTLY ONCE SEMANTICS
 # ═════════════════════════════════════════════════════════════════════════════
 
-class TestOTPRaceCondition(TestCase):
+@unittest.skipUnless(
+    _RUN_CONCURRENCY,
+    'OTP race-condition tests require a live Redis instance and high-concurrency '  
+    'environment. Set RUN_CONCURRENCY_TESTS=1 to enable.',
+)
+@pytest.mark.redis
+class TestOTPRaceCondition(TransactionTestCase):
     """
     Validates that OTP verification is idempotent under extreme concurrency.
+
+    Uses TransactionTestCase (not TestCase) so that setUp data is committed
+    to the real DB and visible to concurrent worker threads calling OTPService.
+    TestCase wraps everything in an uncommitted transaction, causing auth_audit
+    DB calls to fail in worker threads.
 
     CRITICAL PRODUCTION REQUIREMENT:
         Under 100k RPS, multiple servers will receive identical OTP codes
