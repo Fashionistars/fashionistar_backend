@@ -180,6 +180,22 @@ class BackendConfig(AppConfig):
                 flush=True,
             )
 
+        # ── Step 6: Monkey-patch URLResolver to have a 'name' property ────────
+        # Django's template engine, particularly during technical 404 views,
+        # loops through `tried` patterns (which contain both URLPatterns and
+        # URLResolvers). It looks up pattern.name, which causes AttributeError
+        # and floods logs with VariableDoesNotExist exceptions on URLResolver.
+        try:
+            from django.urls.resolvers import URLResolver
+            if not hasattr(URLResolver, 'name'):
+                @property
+                def resolver_name(self):
+                    return None
+                URLResolver.name = resolver_name
+        except Exception as e:
+            sys.stderr.write(f"[BackendConfig] Could not patch URLResolver: {e}\n")
+            sys.stderr.flush()
+
 
 def argv_str() -> str:
     """Return joined sys.argv as a single lowercase string for easy checks."""
