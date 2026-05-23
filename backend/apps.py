@@ -141,9 +141,12 @@ class BackendConfig(AppConfig):
                 lg.removeHandler(h)
 
             # File handler — always active (dev server, Uvicorn, Daphne, Celery)
+            from backend.config.logging_config import SafeRotatingFileHandler, get_log_suffix
+            suffix = get_log_suffix()
             log_path = _BASE / rel_path
+            if suffix:
+                log_path = log_path.with_name(f"{log_path.stem}{suffix}{log_path.suffix}")
             log_path.parent.mkdir(parents=True, exist_ok=True)
-            from backend.config.logging_config import SafeRotatingFileHandler
             try:
                 fh = SafeRotatingFileHandler(
                     filename=str(log_path),
@@ -174,8 +177,10 @@ class BackendConfig(AppConfig):
                 flush=True,
             )
         elif not already_ran and in_celery_worker:
+            from backend.config.logging_config import get_log_suffix
+            suffix = get_log_suffix()
             print(
-                '[BackendConfig] Celery worker logging ready: '
+                f'[BackendConfig] Celery worker logging ready (suffix="{suffix}"): '
                 'per-app file handlers only (Celery owns root console).',
                 flush=True,
             )

@@ -146,8 +146,29 @@ _CONSOLE_FMT = '\033[1m[{levelname:8}]\033[0m {asctime} {name} — {message}'
 
 
 # =============================================================================
+# LOG SUFFIX DETECTION (PROCESS-SPECIFIC ISOLATION FOR WINDOWS)
+# =============================================================================
+
+def get_log_suffix() -> str:
+    """
+    Detect if the current process is Celery, Celery Beat, or a Django management
+    command (excluding runserver), and return a suffix to isolate log files.
+    This avoids Windows WinError 32 file-lock issues during rotation.
+    """
+    argv = ' '.join(sys.argv).lower()
+    if 'celery' in argv:
+        if 'beat' in argv:
+            return '-beat'
+        return '-celery'
+    if 'manage.py' in argv and 'runserver' not in argv:
+        return '-cmd'
+    return ''
+
+
+# =============================================================================
 # SAFE ROTATING FILE HANDLER (WINDOWS COMPATIBILITY)
 # =============================================================================
+
 
 class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
     """
@@ -155,6 +176,8 @@ class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
     during file rollover on Windows. This is common when multiple processes
     (Django, Uvicorn, Celery) are writing to the same log files.
     """
+    _reported_rollover_failures: set[str] = set()
+
     def doRollover(self) -> None:
         try:
             if os.path.exists(self.baseFilename):
@@ -171,13 +194,18 @@ class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
             except Exception:
                 pass
 
+            failure_key = str(self.baseFilename)
+
             if show_warning:
                 sys.stderr.write(
                     f"[SafeRotatingFileHandler] Rollover failed (file locked on Windows): {e}\n"
                 )
                 sys.stderr.flush()
-            else:
-                # Log as debug to reduce console noise in development hotswaps
+            elif failure_key not in self._reported_rollover_failures:
+                # In development we suppress repeated rollover spam and only
+                # surface the first occurrence per process, so hot reloads and
+                # Celery task bursts do not flood the terminal.
+                self._reported_rollover_failures.add(failure_key)
                 logging.getLogger("application").debug(
                     "[SafeRotatingFileHandler] Rollover failed (file locked on Windows): %s", e
                 )
@@ -202,7 +230,10 @@ def _make_file_handler(
     - Uses JSON or verbose formatter based on use_json flag.
     """
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    handler = logging.handlers.RotatingFileHandler(
+    # Use the Windows-safe rotating handler everywhere so the same rollover
+    # behavior applies whether handlers are built directly here or instantiated
+    # later via Django's LOGGING dict.
+    handler = SafeRotatingFileHandler(
         filename=str(log_path),
         maxBytes=max_bytes,
         backupCount=backup_count,
@@ -775,9 +806,13 @@ def build_logging_config(
     }
 
     # Dynamic swap for SafeRotatingFileHandler to prevent WinError 32 on Windows in development/production
+    suffix = get_log_suffix()
     for h_name, h_conf in handlers.items():
         if h_conf.get('class') == 'logging.handlers.RotatingFileHandler':
             h_conf['class'] = 'backend.config.logging_config.SafeRotatingFileHandler'
+            if suffix and 'filename' in h_conf:
+                path = Path(h_conf['filename'])
+                h_conf['filename'] = str(path.with_name(f"{path.stem}{suffix}{path.suffix}"))
 
     return {
         'version': 1,
