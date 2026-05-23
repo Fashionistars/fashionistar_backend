@@ -106,6 +106,7 @@ def add_item(
     product_slug: str,
     quantity: int = 1,
     variant_id=None,
+    request=None,
 ) -> CartItem:
     """
     Add a product to the user's cart.
@@ -189,6 +190,7 @@ def add_item(
             cart_id=str(cart.id),
             product_id=str(product.id),
             quantity=quantity,
+            request=request,
         )
     except Exception:
         logger.warning("cart_audit.log_cart_item_added failed silently", exc_info=True)
@@ -200,7 +202,7 @@ def add_item(
 # ─────────────────────────────────────────────────────────────────────────────
 
 @transaction.atomic
-def remove_item(*, user=None, session_key: str | None = None, item_id) -> None:
+def remove_item(*, user=None, session_key: str | None = None, item_id, request=None) -> None:
     """Remove a CartItem. Validates ownership."""
     cart = _locked_cart(user=user, session_key=session_key)
     try:
@@ -217,6 +219,7 @@ def remove_item(*, user=None, session_key: str | None = None, item_id) -> None:
             actor=user,
             cart_id=str(cart.id),
             product_id=str(product.id),
+            request=request,
         )
     except Exception:
         logger.warning("cart_audit.log_cart_item_removed failed silently", exc_info=True)
@@ -233,10 +236,11 @@ def update_item_quantity(
     session_key: str | None = None,
     item_id,
     quantity: int,
+    request=None,
 ) -> CartItem:
     """Set quantity for a CartItem. quantity=0 removes the item."""
     if quantity == 0:
-        remove_item(user=user, session_key=session_key, item_id=item_id)
+        remove_item(user=user, session_key=session_key, item_id=item_id, request=request)
         return None
     if quantity < 0:
         raise ValueError("Quantity cannot be negative.")
@@ -278,7 +282,7 @@ def toggle_save_for_later(*, user=None, session_key: str | None = None, item_id)
 # ─────────────────────────────────────────────────────────────────────────────
 
 @transaction.atomic
-def apply_coupon(*, user=None, session_key: str | None = None, code: str) -> Cart:
+def apply_coupon(*, user=None, session_key: str | None = None, code: str, request=None) -> Cart:
     """
     Validate and apply a coupon to the cart.
     Uses validate_and_apply_coupon from product service — does NOT increment usage_count.
@@ -286,7 +290,7 @@ def apply_coupon(*, user=None, session_key: str | None = None, code: str) -> Car
     from apps.product.services import validate_and_apply_coupon
     cart = _locked_cart(user=user, session_key=session_key)
     result = validate_and_apply_coupon(
-        code=code, user=user, order_subtotal=cart.subtotal
+        code=code, user=user, order_subtotal=cart.subtotal, request=request
     )
     from apps.product.models import Coupon
     coupon = Coupon.objects.get(id=result["coupon_id"])
@@ -302,6 +306,7 @@ def apply_coupon(*, user=None, session_key: str | None = None, code: str) -> Car
             cart_id=str(cart.id),
             coupon_code=code,
             discount=str(result["discount_amount"]),
+            request=request,
         )
     except Exception:
         logger.warning("cart_audit.log_coupon_applied failed silently", exc_info=True)
@@ -323,7 +328,7 @@ def remove_coupon(*, user=None, session_key: str | None = None) -> Cart:
 # ─────────────────────────────────────────────────────────────────────────────
 
 @transaction.atomic
-def clear_cart(*, user=None, session_key: str | None = None) -> None:
+def clear_cart(*, user=None, session_key: str | None = None, request=None) -> None:
     """Remove all items. Called after successful order placement."""
     cart = _locked_cart(user=user, session_key=session_key)
     cart.items.all().delete()
@@ -338,6 +343,7 @@ def clear_cart(*, user=None, session_key: str | None = None) -> None:
             lambda: cart_audit.log_cart_cleared(
                 actor=user,
                 cart_id=str(cart.id),
+                request=request,
             )
         )
     except Exception:

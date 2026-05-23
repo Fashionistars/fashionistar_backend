@@ -120,6 +120,7 @@ class CartAddItemView(APIView):
                 product_slug=serializer.validated_data["product_slug"],
                 quantity=serializer.validated_data["quantity"],
                 variant_id=serializer.validated_data.get("variant_id"),
+                request=request,
             )
         except ValueError as exc:
             return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
@@ -179,7 +180,7 @@ class CartRemoveItemView(APIView):
     def delete(self, request, item_id):
         try:
             identity = _cart_identity(request)
-            remove_item(**identity, item_id=item_id)
+            remove_item(**identity, item_id=item_id, request=request)
         except ValueError as exc:
             return error_response(message=str(exc), status=status.HTTP_404_NOT_FOUND)
 
@@ -221,7 +222,12 @@ class CartUpdateQuantityView(APIView):
             return error_response(message="quantity must be an integer.", status=status.HTTP_400_BAD_REQUEST)
         try:
             identity = _cart_identity(request)
-            update_item_quantity(**identity, item_id=item_id, quantity=quantity)
+            update_item_quantity(
+                **identity,
+                item_id=item_id,
+                quantity=quantity,
+                request=request,
+            )
         except ValueError as exc:
             return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
 
@@ -272,7 +278,7 @@ class CartCouponView(APIView):
         if not code:
             return error_response(message="Coupon code is required.", status=status.HTTP_400_BAD_REQUEST)
         try:
-            cart = apply_coupon(**_cart_identity(request), code=code)
+            cart = apply_coupon(**_cart_identity(request), code=code, request=request)
         except ValueError as exc:
             return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
         return success_response(
@@ -296,7 +302,7 @@ class CartClearView(APIView):
 
     def delete(self, request):
         identity = _cart_identity(request)
-        clear_cart(**identity)
+        clear_cart(**identity, request=request)
 
         from apps.cart.selectors import CartSelector
 
