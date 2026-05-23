@@ -38,6 +38,7 @@ from typing import Any
 
 from django.conf import settings
 from django.db import transaction
+from apps.common.request import get_client_ip
 
 logger = logging.getLogger('application')
 
@@ -142,13 +143,7 @@ class SyncGoogleAuthService:
                     # Resolve geo-data for the new account
                     ip_address = None
                     if request:
-                        # FIX (Wave B3): was `from apps.common.middleware import _get_client_ip`
-                        # which was importing a non-existent private function causing an ImportError.
-                        # The audit service has its own _get_ip() XFF-aware helper in this file
-                        # (apps/authentication/services/auth_service/sync_service.py, line ~48).
-                        # Google auth sync_service.py has its own local XFF-aware helper here:
-                        from apps.authentication.services.auth_service.sync_service import _get_ip as _auth_get_ip  # noqa: PLC0415
-                        ip_address = _auth_get_ip(request)
+                        ip_address = get_client_ip(request)
 
 
                     geo_data: dict = {}

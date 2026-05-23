@@ -181,6 +181,9 @@ class RegistrationService:
             _user_id = str(user.id)
             _otp = otp
 
+            from apps.audit_logs.middleware import extract_client_context
+            _audit_ctx_dict = extract_client_context(request)
+
             if email:
                 from django.conf import settings as _settings
 
@@ -194,11 +197,14 @@ class RegistrationService:
                     "SITE_URL": getattr(_settings, "SITE_URL", "https://fashionistar.io"),
                 }
                 transaction.on_commit(
-                    lambda: send_email_task.delay(
-                        subject="🔐 Verify Your Fashionistar Account",
-                        recipients=[email],
-                        template_name="authentication/email/registration_email.html",
-                        context=_email_context,
+                    lambda: send_email_task.apply_async(
+                        kwargs={
+                            "subject": "🔐 Verify Your Fashionistar Account",
+                            "recipients": [email],
+                            "template_name": "authentication/email/registration_email.html",
+                            "context": _email_context,
+                            "audit_client_context": _audit_ctx_dict,
+                        }
                     )
                 )
 
@@ -209,7 +215,13 @@ class RegistrationService:
                     "Valid for 10 minutes. Do not share this code."
                 )
                 transaction.on_commit(
-                    lambda: send_sms_task.delay(to=phone, body=_phone_body)
+                    lambda: send_sms_task.apply_async(
+                        kwargs={
+                            "to": phone,
+                            "body": _phone_body,
+                            "audit_client_context": _audit_ctx_dict,
+                        }
+                    )
                 )
 
             return {

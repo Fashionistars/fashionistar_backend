@@ -41,35 +41,6 @@ REGISTER_URL = '/api/v1/auth/register/'
 
 
 # =============================================================================
-# LOCAL FIXTURES
-# =============================================================================
-
-@pytest.fixture
-def mock_email_task():
-    """
-    Patch send_email_task.delay at the tasks module level.
-    Works with transaction.on_commit() when used with transaction=True DB.
-    """
-    with patch('apps.authentication.tasks.send_email_task.delay',
-               return_value=None) as m:
-        yield m
-
-
-@pytest.fixture
-def mock_sms_task():
-    """Patch send_sms_task.delay at the tasks module level."""
-    with patch('apps.authentication.tasks.send_sms_task.delay',
-               return_value=None) as m:
-        yield m
-
-
-@pytest.fixture
-def mock_both_tasks(mock_email_task, mock_sms_task):
-    """Convenience fixture: patch both email + SMS tasks."""
-    return mock_email_task, mock_sms_task
-
-
-# =============================================================================
 # HAPPY PATH TESTS
 # =============================================================================
 
@@ -424,60 +395,51 @@ class TestDuplicates:
 @pytest.mark.api
 class TestCeleryDispatch:
 
-    def test_email_task_dispatched_for_email_registration(self, api_client):
-        """send_email_task.delay() must be called after email registration."""
-        with patch('apps.authentication.tasks.send_email_task.delay',
-                   return_value=None) as m:
-            api_client.post(REGISTER_URL, {
-                'email': 'celery_email@test.io',
-                'password': 'SecurePass123!',
-                'password2': 'SecurePass123!',
-                'role': 'client',
-            }, format='json')
-            m.assert_called_once()
+    def test_email_task_dispatched_for_email_registration(self, api_client, mock_email_task):
+        """send_email_task.apply_async() must be called after email registration."""
+        api_client.post(REGISTER_URL, {
+            'email': 'celery_email@test.io',
+            'password': 'SecurePass123!',
+            'password2': 'SecurePass123!',
+            'role': 'client',
+        }, format='json')
+        mock_email_task.assert_called_once()
 
-    def test_sms_task_dispatched_for_phone_registration(self, api_client):
-        """send_sms_task.delay() (NOT email) must be called for phone registration."""
-        with patch('apps.authentication.tasks.send_email_task.delay',
-                   return_value=None) as email_m, \
-             patch('apps.authentication.tasks.send_sms_task.delay',
-                   return_value=None) as sms_m:
-            api_client.post(REGISTER_URL, {
-                'phone': '+2348031115555',
-                'password': 'SecurePass123!',
-                'password2': 'SecurePass123!',
-                'role': 'client',
-            }, format='json')
-            email_m.assert_not_called()
-            sms_m.assert_called_once()
+    def test_sms_task_dispatched_for_phone_registration(self, api_client, mock_both_tasks):
+        """send_sms_task.apply_async() (NOT email) must be called for phone registration."""
+        email_m, sms_m = mock_both_tasks
+        api_client.post(REGISTER_URL, {
+            'phone': '+2348031115555',
+            'password': 'SecurePass123!',
+            'password2': 'SecurePass123!',
+            'role': 'client',
+        }, format='json')
+        email_m.assert_not_called()
+        sms_m.assert_called_once()
 
-    def test_email_task_context_has_site_url(self, api_client):
+    def test_email_task_context_has_site_url(self, api_client, mock_email_task):
         """SITE_URL must be in email task context (template CTA fix)."""
-        with patch('apps.authentication.tasks.send_email_task.delay',
-                   return_value=None) as m:
-            api_client.post(REGISTER_URL, {
-                'email': 'siteurl@test.io',
-                'password': 'SecurePass123!',
-                'password2': 'SecurePass123!',
-                'role': 'client',
-            }, format='json')
-        m.assert_called_once()
-        _, kwargs = m.call_args
+        api_client.post(REGISTER_URL, {
+            'email': 'siteurl@test.io',
+            'password': 'SecurePass123!',
+            'password2': 'SecurePass123!',
+            'role': 'client',
+        }, format='json')
+        mock_email_task.assert_called_once()
+        _, kwargs = mock_email_task.call_args
         assert 'SITE_URL' in kwargs.get('context', {}), (
             "SITE_URL missing from Celery email context"
         )
 
-    def test_no_task_dispatched_on_failed_registration(self, api_client):
+    def test_no_task_dispatched_on_failed_registration(self, api_client, mock_both_tasks):
         """On 400 validation failure, NO Celery task must be queued."""
-        with patch('apps.authentication.tasks.send_email_task.delay',
-                   return_value=None) as email_m, \
-             patch('apps.authentication.tasks.send_sms_task.delay',
-                   return_value=None) as sms_m:
-            api_client.post(REGISTER_URL, {
-                'email': 'invalid-email',   # invalid — will fail
-                'password': 'SecurePass123!',
-                'password2': 'SecurePass123!',
-                'role': 'client',
-            }, format='json')
+        email_m, sms_m = mock_both_tasks
+        api_client.post(REGISTER_URL, {
+            'email': 'invalid-email',   # invalid — will fail
+            'password': 'SecurePass123!',
+            'password2': 'SecurePass123!',
+            'role': 'client',
+        }, format='json')
         email_m.assert_not_called()
         sms_m.assert_not_called()
+

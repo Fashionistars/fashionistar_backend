@@ -411,12 +411,15 @@ class OTPService:
                         pipe.delete(key)
                     pipe.execute()
 
-            # ── Generate New OTP ───────────────────────────────────────────
+            # ── Generate New OTP ────────────────----------------───────────
             otp = OTPService.generate_otp_sync(user.id, purpose, request=request)
 
             # ── Dispatch Notification ──────────────────────────────────────
             _user_id = str(user.id)
             _otp = otp
+
+            from apps.audit_logs.middleware import extract_client_context
+            _audit_ctx_dict = extract_client_context(request)
 
             if user.email:
                 from django.conf import settings as _settings
@@ -433,11 +436,14 @@ class OTPService:
                     "time": _dt.utcnow().strftime("%H:%M UTC"),
                 }
                 transaction.on_commit(
-                    lambda: send_email_task.delay(
-                        subject="🔐 Your New Fashionistar Verification OTP",
-                        recipients=[user.email],
-                        template_name="authentication/email/resend_otp.html",
-                        context=_email_context,
+                    lambda: send_email_task.apply_async(
+                        kwargs={
+                            "subject": "🔐 Your New Fashionistar Verification OTP",
+                            "recipients": [user.email],
+                            "template_name": "authentication/email/resend_otp.html",
+                            "context": _email_context,
+                            "audit_client_context": _audit_ctx_dict,
+                        }
                     )
                 )
 
@@ -447,7 +453,13 @@ class OTPService:
                     "Valid for 5 minutes. Do not share this code."
                 )
                 transaction.on_commit(
-                    lambda: send_sms_task.delay(to=str(user.phone), body=_phone_body)
+                    lambda: send_sms_task.apply_async(
+                        kwargs={
+                            "to": str(user.phone),
+                            "body": _phone_body,
+                            "audit_client_context": _audit_ctx_dict,
+                        }
+                    )
                 )
 
             return "If an account exists, a new OTP has been sent."
@@ -507,6 +519,9 @@ class OTPService:
             from apps.authentication.tasks import send_email_task, send_sms_task
             from django.conf import settings as _settings
             from datetime import datetime as _dt
+            from apps.audit_logs.middleware import extract_client_context
+
+            _audit_ctx_dict = extract_client_context(request)
 
             if user.email:
                 _email_context = {
@@ -519,18 +534,27 @@ class OTPService:
                     "SITE_URL": getattr(_settings, "SITE_URL", "https://fashionistar.io"),
                     "time": _dt.utcnow().strftime("%H:%M UTC"),
                 }
-                send_email_task.delay(
-                    subject="🔐 Your New Fashionistar Verification OTP",
-                    recipients=[user.email],
-                    template_name="authentication/email/resend_otp.html",
-                    context=_email_context,
+                send_email_task.apply_async(
+                    kwargs={
+                        "subject": "🔐 Your New Fashionistar Verification OTP",
+                        "recipients": [user.email],
+                        "template_name": "authentication/email/resend_otp.html",
+                        "context": _email_context,
+                        "audit_client_context": _audit_ctx_dict,
+                    }
                 )
             elif user.phone:
                 _phone_body = (
                     f"Your new Fashionistar verification OTP: {otp}\n"
                     "Valid for 5 minutes. Do not share this code."
                 )
-                send_sms_task.delay(to=str(user.phone), body=_phone_body)
+                send_sms_task.apply_async(
+                    kwargs={
+                        "to": str(user.phone),
+                        "body": _phone_body,
+                        "audit_client_context": _audit_ctx_dict,
+                    }
+                )
 
             return "If an account exists, a new OTP has been sent."
 

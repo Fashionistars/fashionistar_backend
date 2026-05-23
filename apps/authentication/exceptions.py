@@ -72,6 +72,7 @@ from rest_framework.exceptions import (
 )
 from rest_framework.response import Response
 from rest_framework.views import exception_handler as drf_exception_handler
+from apps.common.request import get_client_ip
 
 # Separate logger for the auth domain (maps to 'authentication' log file)
 logger = logging.getLogger('application')
@@ -345,32 +346,13 @@ class RateLimitExceededException(APIException):
 
 def _get_client_ip(request) -> str:
     """
-    Extract the client's real IP address from a Django request object,
-    accounting for reverse proxies (nginx, CloudFlare, AWS ELB).
-
-    Priority order:
-        1. ``HTTP_X_FORWARDED_FOR`` header (first IP in chain)
-        2. ``HTTP_X_REAL_IP`` header
-        3. ``REMOTE_ADDR`` (direct connection)
+    Backward-compatible wrapper around the shared request IP resolver.
     """
     try:
-        if request is None:
-            return 'UNKNOWN'
-
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            return x_forwarded_for.split(',')[0].strip()
-
-        x_real_ip = request.META.get('HTTP_X_REAL_IP')
-        if x_real_ip:
-            return x_real_ip
-
-        remote_addr = request.META.get('REMOTE_ADDR')
-        return remote_addr if remote_addr else 'UNKNOWN'
-
+        return get_client_ip(request)
     except Exception as exc:
         logger.warning("Error extracting client IP: %s", exc)
-        return 'UNKNOWN'
+        return "UNKNOWN"
 
 
 def _log_error(message: str, level: int = logging.ERROR,

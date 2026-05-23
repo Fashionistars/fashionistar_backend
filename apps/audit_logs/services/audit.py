@@ -378,13 +378,14 @@ class AuditService:
             safe_retention_days = retention_days if retention_days >= 0 else 0
 
             # ── Resolve client-side context from thread-local if not explicitly passed ──
-            resolved_client_device_id = client_device_id  or ctx.get("client_device_id")
-            resolved_client_timezone  = client_timezone   or ctx.get("client_timezone")
-            resolved_client_locale    = client_locale     or ctx.get("client_locale")
-            resolved_client_platform  = client_platform   or ctx.get("client_platform")
-            resolved_client_geo_lat   = client_geo_lat    or ctx.get("client_geo_lat")
-            resolved_client_geo_lng   = client_geo_lng    or ctx.get("client_geo_lng")
-            resolved_client_geo_acc   = client_geo_accuracy_m or ctx.get("client_geo_acc")
+            # Falling back to request.META directly if thread-local ctx is cleared (e.g. inside transaction on_commit)
+            resolved_client_device_id = client_device_id or ctx.get("client_device_id") or (request.META.get("HTTP_X_DEVICE_ID") if request else None)
+            resolved_client_timezone  = client_timezone  or ctx.get("client_timezone")  or (request.META.get("HTTP_X_CLIENT_TIMEZONE") if request else None)
+            resolved_client_locale    = client_locale    or ctx.get("client_locale")    or (request.META.get("HTTP_X_CLIENT_LOCALE") if request else None)
+            resolved_client_platform  = client_platform  or ctx.get("client_platform")  or (request.META.get("HTTP_X_CLIENT_PLATFORM") if request else None)
+            resolved_client_geo_lat   = client_geo_lat   or ctx.get("client_geo_lat")   or (request.META.get("HTTP_X_CLIENT_GEO_LAT") if request else None)
+            resolved_client_geo_lng   = client_geo_lng   or ctx.get("client_geo_lng")   or (request.META.get("HTTP_X_CLIENT_GEO_LNG") if request else None)
+            resolved_client_geo_acc   = client_geo_accuracy_m or ctx.get("client_geo_acc") or (request.META.get("HTTP_X_CLIENT_GEO_ACCURACY") if request else None)
 
             # ── Build payload ─────────────────────────────────────────
             payload = dict(

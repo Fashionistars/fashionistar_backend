@@ -94,11 +94,11 @@ class TestResendOTPCelery:
 
     def test_email_task_dispatched_after_commit(self, api_client, registered_user):
         """
-        Celery send_email_task.delay() must be called after resend-otp
+        Celery send_email_task.apply_async() must be called after resend-otp
         for an email-based user.
         """
         with patch(
-            'apps.authentication.tasks.send_email_task.delay',
+            'apps.authentication.tasks.send_email_task.apply_async',
             return_value=None
         ) as email_m, patch(
             'apps.authentication.services.otp.sync_service.OTPService.generate_otp_sync',
@@ -119,10 +119,11 @@ class TestResendOTPCelery:
         captured = {}
 
         def _capture(*args, **kwargs):
-            captured.update(kwargs)
+            inner_kwargs = kwargs.get('kwargs', {})
+            captured.update(inner_kwargs or kwargs)
 
         with patch(
-            'apps.authentication.tasks.send_email_task.delay',
+            'apps.authentication.tasks.send_email_task.apply_async',
             side_effect=_capture,
         ), patch(
             'apps.authentication.services.otp.sync_service.OTPService.generate_otp_sync',
@@ -152,9 +153,9 @@ class TestResendOTPCelery:
             is_verified=False,
         )
         with patch(
-            'apps.authentication.tasks.send_sms_task.delay', return_value=None
+            'apps.authentication.tasks.send_sms_task.apply_async', return_value=None
         ) as sms_m, patch(
-            'apps.authentication.tasks.send_email_task.delay', return_value=None
+            'apps.authentication.tasks.send_email_task.apply_async', return_value=None
         ) as email_m, patch(
             'apps.authentication.services.otp.sync_service.OTPService.generate_otp_sync',
             return_value='654321',

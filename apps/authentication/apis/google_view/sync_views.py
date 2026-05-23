@@ -109,10 +109,17 @@ class GoogleAuthView(generics.CreateAPIView):
 
         try:
             refresh_obj = _RefTok(tokens["refresh"])
+            from apps.audit_logs.middleware import extract_client_context
+            _audit_ctx_dict = extract_client_context(request)
             with transaction.atomic():
                 if is_new and user.role == "client":
                     transaction.on_commit(
-                        lambda: provision_client_defaults.delay(str(user.pk))
+                        lambda: provision_client_defaults.apply_async(
+                            kwargs={
+                                "user_id": str(user.pk),
+                                "audit_client_context": _audit_ctx_dict,
+                            }
+                        )
                     )
                 transaction.on_commit(
                     lambda: UserSession.create_from_token(
@@ -302,10 +309,17 @@ class GoogleAuthView(generics.CreateAPIView):
 
         try:
             refresh_obj = _RefTok(tokens["refresh"])
+            from apps.audit_logs.middleware import extract_client_context
+            _audit_ctx_dict = extract_client_context(request)
             with transaction.atomic():
                 if is_new and user.role == "client":
                     transaction.on_commit(
-                        lambda: provision_client_defaults.delay(str(user.pk))
+                        lambda: provision_client_defaults.apply_async(
+                            kwargs={
+                                "user_id": str(user.pk),
+                                "audit_client_context": _audit_ctx_dict,
+                            }
+                        )
                     )
                 transaction.on_commit(
                     lambda: UserSession.create_from_token(

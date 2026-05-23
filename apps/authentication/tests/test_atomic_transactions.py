@@ -124,11 +124,11 @@ class TestOnCommitEmailDispatch(TransactionTestCase):
     in a transaction that never commits — on_commit() hooks would never fire.
     """
 
-    @patch('apps.authentication.tasks.send_email_task.delay')
-    def test_email_dispatched_after_successful_commit(self, mock_delay):
+    @patch('apps.authentication.tasks.send_email_task.apply_async')
+    def test_email_dispatched_after_successful_commit(self, mock_async):
         """
         On successful registration (no exceptions),
-        send_email_task.delay() must be called exactly once.
+        send_email_task.apply_async() must be called exactly once.
         """
         email = unique_email("on_commit_success")
 
@@ -143,18 +143,18 @@ class TestOnCommitEmailDispatch(TransactionTestCase):
 
         # on_commit() fires after outermost transaction commits.
         # TransactionTestCase does NOT wrap in transaction → on_commit fires.
-        mock_delay.assert_called_once()
-        call_kwargs = mock_delay.call_args
-        self.assertIn(email, str(call_kwargs))  # email is in recipients
+        mock_async.assert_called_once()
+        call_kwargs = mock_async.call_args[1].get('kwargs', {})
+        self.assertIn(email, call_kwargs.get('recipients', []))
 
         # Cleanup
         UnifiedUser.objects.filter(email=email).delete()
 
-    @patch('apps.authentication.tasks.send_email_task.delay')
-    def test_email_NOT_dispatched_on_rollback(self, mock_delay):
+    @patch('apps.authentication.tasks.send_email_task.apply_async')
+    def test_email_NOT_dispatched_on_rollback(self, mock_async):
         """
         If the transaction is aborted (OTP failure),
-        send_email_task.delay() must NEVER be called.
+        send_email_task.apply_async() must NEVER be called.
         """
         email = unique_email("on_commit_rollback")
 
@@ -175,7 +175,7 @@ class TestOnCommitEmailDispatch(TransactionTestCase):
                 pass  # Expected
 
         # CRITICAL: on_commit never fires if the transaction rolled back
-        mock_delay.assert_not_called()
+        mock_async.assert_not_called()
         self.assertFalse(UnifiedUser.objects.filter(email=email).exists())
 
 

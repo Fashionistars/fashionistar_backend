@@ -80,28 +80,42 @@ def mock_otp_generation(mocker):
 
 # ─── Optional: mock Celery tasks (used in tests with transaction=True) ─────────
 
+class UnifiedTaskMock(MagicMock):
+    """
+    Unified mock that supports both `.delay()` and `.apply_async()` Celery task dispatches.
+    If called via `.apply_async(kwargs={...})`, it normalizes the call kwargs to the
+    top-level so standard test assertions (e.g. `kwargs.get('context')`) match.
+    """
+    def __call__(self, *args, **kwargs):
+        normalized_kwargs = dict(kwargs)
+        if 'kwargs' in normalized_kwargs:
+            normalized_kwargs.update(normalized_kwargs.pop('kwargs'))
+        return super().__call__(*args, **normalized_kwargs)
+
+
 @pytest.fixture
 def mock_email_task():
-    """Patch send_email_task.delay at the tasks module level."""
-    with patch(
-        'apps.authentication.tasks.send_email_task.delay', return_value=None
-    ) as m:
-        yield m
+    """Patch send_email_task.delay and apply_async to a UnifiedTaskMock."""
+    unified_mock = UnifiedTaskMock()
+    with patch('apps.authentication.tasks.send_email_task.delay', unified_mock), \
+         patch('apps.authentication.tasks.send_email_task.apply_async', unified_mock):
+        yield unified_mock
 
 
 @pytest.fixture
 def mock_sms_task():
-    """Patch send_sms_task.delay at the tasks module level."""
-    with patch(
-        'apps.authentication.tasks.send_sms_task.delay', return_value=None
-    ) as m:
-        yield m
+    """Patch send_sms_task.delay and apply_async to a UnifiedTaskMock."""
+    unified_mock = UnifiedTaskMock()
+    with patch('apps.authentication.tasks.send_sms_task.delay', unified_mock), \
+         patch('apps.authentication.tasks.send_sms_task.apply_async', unified_mock):
+        yield unified_mock
 
 
 @pytest.fixture
 def mock_both_tasks(mock_email_task, mock_sms_task):
     """Convenience: both email + SMS tasks patched."""
     return mock_email_task, mock_sms_task
+
 
 
 # ─── OTP store helper — inject a known OTP into the fake store ─────────────────

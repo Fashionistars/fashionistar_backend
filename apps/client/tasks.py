@@ -8,6 +8,7 @@ They NEVER block the main request thread.
 import logging
 
 from celery import shared_task
+from apps.audit_logs.middleware import propagate_audit_context
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
     soft_time_limit=30,
     time_limit=60,
 )
+@propagate_audit_context
 def provision_client_defaults(self, user_id: str) -> None:
     """
     Idempotently create the default client-domain records for a new user.
@@ -61,6 +63,7 @@ def provision_client_defaults(self, user_id: str) -> None:
     soft_time_limit=30,
     time_limit=60,
 )
+@propagate_audit_context
 def send_client_welcome_email(self, user_id: str) -> None:
     """
     Send a welcome email to a newly verified client.
@@ -109,6 +112,7 @@ def send_client_welcome_email(self, user_id: str) -> None:
     soft_time_limit=30,
     time_limit=60,
 )
+@propagate_audit_context
 def recalculate_client_profile_completeness(self, profile_id: str) -> None:
     """
     Recalculate and persist is_profile_complete for a ClientProfile.

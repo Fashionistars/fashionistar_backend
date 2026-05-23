@@ -46,6 +46,7 @@ import uuid
 
 from asgiref.sync import iscoroutinefunction, markcoroutinefunction
 
+from apps.common.request import get_client_ip
 from apps.common.roles import normalize_role
 
 logger = logging.getLogger(__name__)
@@ -161,20 +162,6 @@ class RequestTimingMiddleware:
 # 3. SECURITY AUDIT — pure helper functions (no I/O)
 # ================================================================
 
-def _get_client_ip(request) -> str:
-    """
-    Extract the real client IP address.
-
-    Checks ``X-Forwarded-For`` first (Nginx / Cloudflare / load balancer),
-    then falls back to ``REMOTE_ADDR``. Only leftmost XFF IP is used.
-    Pure header read — zero I/O, safe in both sync and async contexts.
-    """
-    xff = request.META.get('HTTP_X_FORWARDED_FOR', '')
-    if xff:
-        return xff.split(',')[0].strip()
-    return request.META.get('REMOTE_ADDR', 'unknown')
-
-
 def _get_device_id(request) -> str:
     """
     Extract or derive a stable device identifier.
@@ -197,7 +184,7 @@ def _get_device_id(request) -> str:
         return request.device_id
 
     ua = request.META.get('HTTP_USER_AGENT', '')
-    ip = _get_client_ip(request)
+    ip = get_client_ip(request)
     fingerprint = hashlib.sha256(
         f"{ua}|{ip}".encode()
     ).hexdigest()[:20]
@@ -315,7 +302,7 @@ class SecurityAuditMiddleware:
         duration_ms = (time.monotonic() - start) * 1000
         status_code = response.status_code
 
-        client_ip = _get_client_ip(request)
+        client_ip = get_client_ip(request)
         user_id, role = _get_user_context(request)
         request_id = getattr(request, 'request_id', '-')
         session = _get_session_cookie(request)

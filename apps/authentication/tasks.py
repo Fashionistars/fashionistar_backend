@@ -15,6 +15,7 @@ Both tasks use exponential backoff with max 3 retries.
 from celery import shared_task
 import logging
 from django.template.exceptions import TemplateDoesNotExist
+from apps.audit_logs.middleware import propagate_audit_context
 
 # ── Corrected import paths (apps.common, not utilities) ─────────────
 from apps.common.managers.email import EmailManager, EmailManagerError
@@ -25,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, retry_backoff=True, max_retries=3)
+@propagate_audit_context
 def send_email_task(
     self,
     subject: str,
@@ -133,6 +135,7 @@ def send_email_task(
 
 
 @shared_task(bind=True, retry_backoff=True, max_retries=3)
+@propagate_audit_context
 def send_sms_task(self, to: str, body: str) -> str:
     """
     Sends an SMS asynchronously using Celery, leveraging the SMSManager.
@@ -170,6 +173,7 @@ def send_sms_task(self, to: str, body: str) -> str:
     max_retries=5,
     name="authentication.upload_google_avatar_to_cloudinary",
 )
+@propagate_audit_context
 def upload_google_avatar_to_cloudinary(
     self, user_pk: str, google_avatar_url: str
 ) -> str:

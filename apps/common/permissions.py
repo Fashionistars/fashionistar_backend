@@ -14,6 +14,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth.models import AnonymousUser
 from rest_framework.permissions import BasePermission
 
+from apps.common.request import get_client_ip
 from apps.common.roles import (
     CLIENT_ROLES,
     EDITOR_ROLES,
@@ -519,10 +520,7 @@ class RateLimitPermission(BasePermission):
     def _get_client_ip(request) -> str:
         """Extract the real client IP, respecting proxy headers."""
 
-        x_forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded:
-            return x_forwarded.split(",")[0].strip()
-        return request.META.get("REMOTE_ADDR", "0.0.0.0")
+        return get_client_ip(request)
 
     def _get_cache_key(self, request) -> str:
         user = getattr(request, "user", None)

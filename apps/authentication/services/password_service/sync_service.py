@@ -129,11 +129,17 @@ class SyncPasswordService:
                 }
                 _email_to = user.email
 
-                transaction.on_commit(lambda: send_email_task.delay(
-                    subject="Password Reset Request",
-                    recipients=[_email_to],
-                    template_name="authentication/email/password_reset.html",
-                    context=_email_ctx,
+                from apps.audit_logs.middleware import extract_client_context
+                _audit_ctx_dict = extract_client_context(request)
+
+                transaction.on_commit(lambda: send_email_task.apply_async(
+                    kwargs={
+                        "subject": "Password Reset Request",
+                        "recipients": [_email_to],
+                        "template_name": "authentication/email/password_reset.html",
+                        "context": _email_ctx,
+                        "audit_client_context": _audit_ctx_dict,
+                    }
                 ))
                 logger.info("📧 Reset Email Celery task scheduled on_commit for %s", user.email)
 
@@ -147,8 +153,15 @@ class SyncPasswordService:
                 _otp_msg = f"Your Password Reset Code is: {otp}. Valid for 5 minutes."
                 _user_phone = str(user.phone)
 
-                transaction.on_commit(lambda: send_sms_task.delay(
-                    to=_user_phone, body=_otp_msg
+                from apps.audit_logs.middleware import extract_client_context
+                _audit_ctx_dict = extract_client_context(request)
+
+                transaction.on_commit(lambda: send_sms_task.apply_async(
+                    kwargs={
+                        "to": _user_phone,
+                        "body": _otp_msg,
+                        "audit_client_context": _audit_ctx_dict,
+                    }
                 ))
                 logger.info("📱 Reset SMS Celery task scheduled on_commit for %s", user.phone)
 
@@ -257,11 +270,17 @@ class SyncPasswordService:
                         "first_name": getattr(user, "first_name", ""),
                         "email": _user_email,
                     }
-                    transaction.on_commit(lambda: send_email_task.delay(
-                        subject="Password Changed",
-                        recipients=[_user_email],
-                        template_name="authentication/email/password_changed.html",
-                        context={"user": _user_context}
+                    from apps.audit_logs.middleware import extract_client_context
+                    _audit_ctx_dict = extract_client_context(request)
+
+                    transaction.on_commit(lambda: send_email_task.apply_async(
+                        kwargs={
+                            "subject": "Password Changed",
+                            "recipients": [_user_email],
+                            "template_name": "authentication/email/password_changed.html",
+                            "context": {"user": _user_context},
+                            "audit_client_context": _audit_ctx_dict,
+                        }
                     ))
 
             # ── Audit: Success completion via specialized helper ──────────
@@ -337,11 +356,17 @@ class SyncPasswordService:
                         "first_name": getattr(user, "first_name", ""),
                         "email": _user_email
                     }
-                    transaction.on_commit(lambda: send_email_task.delay(
-                        subject="Your Password Has Been Changed",
-                        recipients=[_user_email],
-                        template_name="authentication/email/password_changed.html",
-                        context={"user": _ctx},
+                    from apps.audit_logs.middleware import extract_client_context
+                    _audit_ctx_dict = extract_client_context(request)
+
+                    transaction.on_commit(lambda: send_email_task.apply_async(
+                        kwargs={
+                            "subject": "Your Password Has Been Changed",
+                            "recipients": [_user_email],
+                            "template_name": "authentication/email/password_changed.html",
+                            "context": {"user": _ctx},
+                            "audit_client_context": _audit_ctx_dict,
+                        }
                     ))
 
             # ── Audit: Specialized helper for password change ──────────────

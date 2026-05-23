@@ -39,28 +39,10 @@ from django.contrib.auth.models import update_last_login
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from rest_framework_simplejwt.tokens import RefreshToken
+from apps.common.request import get_client_ip
 from utilities.django_redis import get_redis_connection_safe
 
 logger = logging.getLogger('application')
-
-
-# ── helper: safe IP extraction ────────────────────────────────────────────────
-def _get_ip(request) -> str:
-    """Extract the real client IP address safely from the request.
-
-    Evaluates the `X-Forwarded-For` header chain first to bypass load balancers,
-    falling back to `REMOTE_ADDR`.
-
-    Args:
-        request (HttpRequest, optional): The Django request object.
-
-    Returns:
-        str: The extracted IP address, or '0.0.0.0' if not found/no request.
-    """
-    if not request:
-        return '0.0.0.0'
-    xff = request.META.get('HTTP_X_FORWARDED_FOR')
-    return xff.split(',')[0].strip() if xff else request.META.get('REMOTE_ADDR', '0.0.0.0')
 
 
 def _get_ua(request) -> str:
@@ -179,7 +161,7 @@ class SyncAuthService:
             log_login_blocked,
         )
 
-        ip  = _get_ip(request)
+        ip  = get_client_ip(request)
         ua  = _get_ua(request)
 
         # Detect auth method for the audit log
