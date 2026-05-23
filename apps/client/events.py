@@ -41,9 +41,15 @@ def _on_user_registered(
             logger.warning("client.events: user.registered missing user_uuid, skipping.")
             return
 
+        from apps.audit_logs.middleware import extract_client_context
+        _audit_ctx_dict = extract_client_context(request=None)
+
         from apps.client.tasks import provision_client_defaults
         provision_client_defaults.apply_async(
-            kwargs={"user_id": str(user_uuid)},
+            kwargs={
+                "user_id": str(user_uuid),
+                "audit_client_context": _audit_ctx_dict,
+            },
             retry=False,
             ignore_result=True,
         )
@@ -72,9 +78,15 @@ def _on_user_verified(
         if not user_uuid:
             return
 
+        from apps.audit_logs.middleware import extract_client_context
+        _audit_ctx_dict = extract_client_context(request=None)
+
         from apps.client.tasks import send_client_welcome_email
         send_client_welcome_email.apply_async(
-            kwargs={"user_id": str(user_uuid)},
+            kwargs={
+                "user_id": str(user_uuid),
+                "audit_client_context": _audit_ctx_dict,
+            },
             retry=False,
             ignore_result=True,
         )

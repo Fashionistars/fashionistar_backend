@@ -408,3 +408,92 @@ class TestThrottleAuditIntegration:
 
         throttle.throttle_failure()
         mock_audit.assert_called_once()
+
+
+class TestCeleryContextPropagation:
+    """Wave B4: Tests explicit Celery client context propagation and overrides."""
+
+    def test_extract_client_context_from_request(self, rf):
+        from apps.audit_logs.middleware import extract_client_context
+
+        request = rf.get("/api/v1/test/")
+        request.META["REMOTE_ADDR"] = "192.0.2.1"
+        request.META["HTTP_X_DEVICE_ID"] = "device-uuid-123"
+        request.META["HTTP_X_CLIENT_TIMEZONE"] = "Africa/Lagos"
+        request.correlation_id = "corr-uuid-456"
+
+        ctx = extract_client_context(request)
+        assert ctx["ip_address"] == "192.0.2.1"
+        assert ctx["client_device_id"] == "device-uuid-123"
+        assert ctx["client_timezone"] == "Africa/Lagos"
+        assert ctx["correlation_id"] == "corr-uuid-456"
+
+    def test_audit_context_override_propagates_to_audit_log(self):
+        from apps.audit_logs.middleware import audit_context_override, get_audit_context
+        from apps.audit_logs.services.audit import AuditService
+        from apps.audit_logs.models import AuditEventLog, EventType, EventCategory
+
+        # Custom propagation context dictionary
+        custom_ctx = {
+            "client_device_id": "celery-device-999",
+            "client_timezone": "Europe/London",
+            "client_locale": "en-GB",
+            "client_platform": "iOS",
+            "ip_address": "8.8.8.8",
+            "correlation_id": "celery-corr-777",
+        }
+
+        # Redirect dispatch to write synchronously for test verification
+        original_dispatch = AuditService._dispatch
+        AuditService._dispatch = staticmethod(
+            lambda payload: __import__(
+                "apps.audit_logs.services.audit", fromlist=["_write_sync"]
+            )._write_sync(payload)
+        )
+
+        try:
+            with audit_context_override(custom_ctx):
+                # Assert thread local context is overridden
+                assert get_audit_context()["client_device_id"] == "celery-device-999"
+
+                # Log an event inside the context override block (simulating Celery worker execution)
+                AuditService.log(
+                    event_type=EventType.API_CALL,
+                    event_category=EventCategory.SYSTEM,
+                    action="celery worker task logging test",
+                )
+
+            # Ensure context was restored
+            assert get_audit_context() == {}
+
+            # Verify the logged row contains the propagated context fields
+            log_row = AuditEventLog.objects.get(action="celery worker task logging test")
+            assert log_row.client_device_id == "celery-device-999"
+            assert log_row.client_timezone == "Europe/London"
+            assert log_row.client_locale == "en-GB"
+            assert log_row.client_platform == "iOS"
+            assert log_row.ip_address == "8.8.8.8"
+            assert log_row.correlation_id == "celery-corr-777"
+        finally:
+            AuditService._dispatch = original_dispatch
+
+    def test_propagate_audit_context_decorator(self):
+        from apps.audit_logs.middleware import propagate_audit_context, get_audit_context
+
+        @propagate_audit_context
+        def dummy_task(arg1, keyword_arg=None):
+            return get_audit_context()
+
+        # Without audit_client_context
+        res = dummy_task("value", keyword_arg="val")
+        assert res == {}
+
+        # With audit_client_context
+        custom_ctx = {
+            "client_device_id": "decorator-device-123",
+            "client_timezone": "America/New_York",
+        }
+        res2 = dummy_task("value", keyword_arg="val", audit_client_context=custom_ctx)
+        assert res2["client_device_id"] == "decorator-device-123"
+        assert res2["client_timezone"] == "America/New_York"
+

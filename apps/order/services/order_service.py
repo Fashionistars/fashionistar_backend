@@ -53,6 +53,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from apps.common.request import get_client_ip
 from apps.order.models import (
     Order,
     CartOrderItem,
@@ -181,9 +182,7 @@ def _emit_order_financial_audit(
     Records high-integrity financial audit events for the order domain.
     Captures IP and User-Agent for forensic traceability.
     """
-    from apps.common.middleware import _get_client_ip
-
-    ip_address = _get_client_ip(request) if request else None
+    ip_address = get_client_ip(request) if request else None
     user_agent = request.META.get("HTTP_USER_AGENT") if request else None
 
     def _dispatch():

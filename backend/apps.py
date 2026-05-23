@@ -108,19 +108,29 @@ class BackendConfig(AppConfig):
         log_map = {
             'apps.authentication': 'logs/apps/authentication/auth.log',
             'apps.common':         'logs/apps/common/common.log',
+            'apps.audit_logs':     'logs/apps/audit_logs/audit_logs.log',
             'apps.store':          'logs/apps/store/store.log',
             'apps.customer':       'logs/apps/customer/customer.log',
+            'apps.client':         'logs/apps/client/client.log',
             'apps.vendor':         'logs/apps/vendor/vendor.log',
             'apps.payments':       'logs/apps/payments/payments.log',
+            'apps.transactions':   'logs/apps/transactions/transactions.log',
+            'apps.wallet':         'logs/apps/wallet/wallet.log',
             'apps.product':        'logs/apps/product/product.log',
+            'apps.catalog':        'logs/apps/catalog/catalog.log',
             'apps.cart':           'logs/apps/cart/cart.log',
             'apps.order':          'logs/apps/order/order.log',
             'apps.chat':           'logs/apps/chat/chat.log',
             'apps.support':        'logs/apps/support/support.log',
             'apps.notification':   'logs/apps/notification/notification.log',
+            'apps.measurements':   'logs/apps/measurements/measurements.log',
+            'apps.kyc':            'logs/apps/kyc/kyc.log',
+            'apps.providers':      'logs/apps/providers/providers.log',
             'celery':              'logs/system/celery.log',
             'celery.task':         'logs/system/celery.log',
             'django':              'logs/system/django.log',
+            'apps.global_platform_settings':            'logs/apps/global_platform_settings/global_platform_settings.log',
+
         }
 
         for name, rel_path in log_map.items():
@@ -133,12 +143,18 @@ class BackendConfig(AppConfig):
             # File handler — always active (dev server, Uvicorn, Daphne, Celery)
             log_path = _BASE / rel_path
             log_path.parent.mkdir(parents=True, exist_ok=True)
-            fh = logging.handlers.RotatingFileHandler(
-                filename=str(log_path),
-                maxBytes=10 * 1024 * 1024,
-                backupCount=10,
-                encoding='utf-8',
-            )
+            from backend.config.logging_config import SafeRotatingFileHandler
+            try:
+                fh = SafeRotatingFileHandler(
+                    filename=str(log_path),
+                    maxBytes=10 * 1024 * 1024,
+                    backupCount=10,
+                    encoding='utf-8',
+                )
+            except Exception as e:
+                sys.stderr.write(f"[BackendConfig] Could not create file handler for {name} on Windows: {e}\n")
+                sys.stderr.flush()
+                continue
             fh.setFormatter(file_fmt)
             fh.setLevel(logging.DEBUG)
             lg.addHandler(fh)

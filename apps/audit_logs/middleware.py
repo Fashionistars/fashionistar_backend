@@ -25,8 +25,11 @@ from __future__ import annotations
 import threading
 import uuid
 import logging
+from functools import wraps
 
 logger = logging.getLogger(__name__)
+
+from contextlib import contextmanager
 
 _audit_ctx = threading.local()
 
@@ -37,6 +40,75 @@ def get_audit_context() -> dict:
     Returns an empty dict outside of a request (e.g. Celery tasks).
     """
     return getattr(_audit_ctx, "ctx", {})
+
+
+def extract_client_context(request=None) -> dict:
+    """
+    Extracts all request-specific and frontend-enriched audit fields.
+    Can be passed directly as kwargs or metadata to Celery tasks.
+    """
+    ctx = get_audit_context()
+    if request:
+        xff = request.META.get("HTTP_X_FORWARDED_FOR")
+        ip = xff.split(",")[0].strip() if xff else request.META.get("REMOTE_ADDR")
+        return {
+            "client_device_id": request.META.get("HTTP_X_DEVICE_ID") or ctx.get("client_device_id"),
+            "client_timezone": request.META.get("HTTP_X_CLIENT_TIMEZONE") or ctx.get("client_timezone"),
+            "client_locale": request.META.get("HTTP_X_CLIENT_LOCALE") or ctx.get("client_locale"),
+            "client_platform": request.META.get("HTTP_X_CLIENT_PLATFORM") or ctx.get("client_platform"),
+            "client_geo_lat": request.META.get("HTTP_X_CLIENT_GEO_LAT") or ctx.get("client_geo_lat"),
+            "client_geo_lng": request.META.get("HTTP_X_CLIENT_GEO_LNG") or ctx.get("client_geo_lng"),
+            "client_geo_acc": request.META.get("HTTP_X_CLIENT_GEO_ACCURACY") or ctx.get("client_geo_acc"),
+            "ip_address": ip or ctx.get("ip_address"),
+            "user_agent": request.META.get("HTTP_USER_AGENT", "") or ctx.get("user_agent"),
+            "correlation_id": getattr(request, "correlation_id", None) or ctx.get("correlation_id"),
+        }
+    else:
+        return {
+            "client_device_id": ctx.get("client_device_id"),
+            "client_timezone": ctx.get("client_timezone"),
+            "client_locale": ctx.get("client_locale"),
+            "client_platform": ctx.get("client_platform"),
+            "client_geo_lat": ctx.get("client_geo_lat"),
+            "client_geo_lng": ctx.get("client_geo_lng"),
+            "client_geo_acc": ctx.get("client_geo_acc"),
+            "ip_address": ctx.get("ip_address"),
+            "user_agent": ctx.get("user_agent"),
+            "correlation_id": ctx.get("correlation_id"),
+        }
+
+
+@contextmanager
+def audit_context_override(context_dict: dict):
+    """
+    Context manager to override/populate the thread-local audit context.
+    Extremely useful inside Celery tasks to propagate client context metadata.
+    """
+    global _audit_ctx
+    old_ctx = getattr(_audit_ctx, "ctx", {})
+    if context_dict and "client_geo_accuracy_m" in context_dict:
+        context_dict = dict(context_dict)
+        context_dict["client_geo_acc"] = context_dict.pop("client_geo_accuracy_m")
+    _audit_ctx.ctx = context_dict or {}
+    try:
+        yield
+    finally:
+        _audit_ctx.ctx = old_ctx
+
+
+def propagate_audit_context(func):
+    """
+    Decorator to wrap a Celery task function. If 'audit_client_context' is passed
+    in kwargs, it extracts it and runs the task inside audit_context_override.
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        audit_client_context = kwargs.pop("audit_client_context", None)
+        if audit_client_context:
+            with audit_context_override(audit_client_context):
+                return func(*args, **kwargs)
+        return func(*args, **kwargs)
+    return wrapper
 
 
 # Paths that should NOT generate automatic 4xx/5xx audit events

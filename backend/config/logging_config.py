@@ -146,6 +146,45 @@ _CONSOLE_FMT = '\033[1m[{levelname:8}]\033[0m {asctime} {name} — {message}'
 
 
 # =============================================================================
+# SAFE ROTATING FILE HANDLER (WINDOWS COMPATIBILITY)
+# =============================================================================
+
+class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
+    """
+    A rotating file handler that catches and ignores PermissionError [WinError 32]
+    during file rollover on Windows. This is common when multiple processes
+    (Django, Uvicorn, Celery) are writing to the same log files.
+    """
+    def doRollover(self) -> None:
+        try:
+            if os.path.exists(self.baseFilename):
+                super().doRollover()
+        except (PermissionError, OSError) as e:
+            # Under Windows, if another process has the log file open,
+            # renaming/rotating the file will raise PermissionError [WinError 32].
+            # We catch this so it doesn't crash the request or server.
+            show_warning = True
+            try:
+                from django.conf import settings
+                if settings.configured and settings.DEBUG:
+                    show_warning = False
+            except Exception:
+                pass
+
+            if show_warning:
+                sys.stderr.write(
+                    f"[SafeRotatingFileHandler] Rollover failed (file locked on Windows): {e}\n"
+                )
+                sys.stderr.flush()
+            else:
+                # Log as debug to reduce console noise in development hotswaps
+                logging.getLogger("application").debug(
+                    "[SafeRotatingFileHandler] Rollover failed (file locked on Windows): %s", e
+                )
+
+
+
+# =============================================================================
 # HELPER — create a RotatingFileHandler cleanly
 # =============================================================================
 
@@ -734,6 +773,11 @@ def build_logging_config(
             'propagate': False,
         },
     }
+
+    # Dynamic swap for SafeRotatingFileHandler to prevent WinError 32 on Windows in development/production
+    for h_name, h_conf in handlers.items():
+        if h_conf.get('class') == 'logging.handlers.RotatingFileHandler':
+            h_conf['class'] = 'backend.config.logging_config.SafeRotatingFileHandler'
 
     return {
         'version': 1,
