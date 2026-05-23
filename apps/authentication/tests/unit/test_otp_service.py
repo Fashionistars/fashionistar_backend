@@ -156,6 +156,7 @@ class TestGenerateOTPSync:
 # =============================================================================
 
 @pytest.mark.unit
+@pytest.mark.django_db
 class TestVerifyByOTPSync:
     """Unit tests for OTPService.verify_by_otp_sync() — O(1) hash-index lookup."""
 
@@ -302,6 +303,7 @@ class TestVerifyByOTPSync:
 # =============================================================================
 
 @pytest.mark.unit
+@pytest.mark.django_db   # verify_otp_sync uses transaction.atomic() internally
 class TestVerifyOTPSyncByUserID:
     """Unit tests for the user_id-based OTPService.verify_otp_sync()."""
 

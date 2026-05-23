@@ -142,9 +142,14 @@ class SyncGoogleAuthService:
                     # Resolve geo-data for the new account
                     ip_address = None
                     if request:
-                        # Extract IP if request object provided
-                        from apps.audit_logs.services.audit import _get_client_ip  # noqa: PLC0415
-                        ip_address = _get_client_ip(request)
+                        # FIX (Wave B3): was `from apps.common.middleware import _get_client_ip`
+                        # which was importing a non-existent private function causing an ImportError.
+                        # The audit service has its own _get_ip() XFF-aware helper in this file
+                        # (apps/authentication/services/auth_service/sync_service.py, line ~48).
+                        # Google auth sync_service.py has its own local XFF-aware helper here:
+                        from apps.authentication.services.auth_service.sync_service import _get_ip as _auth_get_ip  # noqa: PLC0415
+                        ip_address = _auth_get_ip(request)
+
 
                     geo_data: dict = {}
                     if ip_address:

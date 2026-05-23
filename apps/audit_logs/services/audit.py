@@ -207,6 +207,14 @@ class AuditService:
         # Compliance
         is_compliance: bool = False,
         retention_days: int = 2555,
+        # Frontend-enriched client context (X-Client-* headers)
+        client_device_id: str | None = None,
+        client_timezone: str | None = None,
+        client_locale: str | None = None,
+        client_platform: str | None = None,
+        client_geo_lat=None,
+        client_geo_lng=None,
+        client_geo_accuracy_m: float | None = None,
     ) -> None:
         """Record a structured audit event.
 
@@ -369,6 +377,15 @@ class AuditService:
 
             safe_retention_days = retention_days if retention_days >= 0 else 0
 
+            # ── Resolve client-side context from thread-local if not explicitly passed ──
+            resolved_client_device_id = client_device_id  or ctx.get("client_device_id")
+            resolved_client_timezone  = client_timezone   or ctx.get("client_timezone")
+            resolved_client_locale    = client_locale     or ctx.get("client_locale")
+            resolved_client_platform  = client_platform   or ctx.get("client_platform")
+            resolved_client_geo_lat   = client_geo_lat    or ctx.get("client_geo_lat")
+            resolved_client_geo_lng   = client_geo_lng    or ctx.get("client_geo_lng")
+            resolved_client_geo_acc   = client_geo_accuracy_m or ctx.get("client_geo_acc")
+
             # ── Build payload ─────────────────────────────────────────
             payload = dict(
                 event_type=event_type,
@@ -400,6 +417,13 @@ class AuditService:
                 error_message=error_message,
                 is_compliance=is_compliance,
                 retention_days=safe_retention_days,
+                client_device_id=resolved_client_device_id,
+                client_timezone=resolved_client_timezone,
+                client_locale=resolved_client_locale,
+                client_platform=resolved_client_platform,
+                client_geo_lat=resolved_client_geo_lat,
+                client_geo_lng=resolved_client_geo_lng,
+                client_geo_accuracy_m=resolved_client_geo_acc,
             )
 
             cls._dispatch(payload)

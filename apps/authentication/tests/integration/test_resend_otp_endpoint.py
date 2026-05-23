@@ -44,8 +44,10 @@ class TestResendOTPHappyPath:
         r = api_client.post(
             RESEND_URL, {'email_or_phone': registered_user.email}, format='json'
         )
-        d = r.json().get('data', r.json())
-        assert 'message' in d
+        # ResendOTPView returns success_response(message=msg) — message is at root level
+        # Response envelope: {"success": true, "message": "...", "data": null}
+        body = r.json()
+        assert 'message' in body, f"Top-level 'message' key missing from response: {body}"
 
     def test_response_is_generic_non_enumerable(
         self, api_client, registered_user, mock_email_task
@@ -57,8 +59,10 @@ class TestResendOTPHappyPath:
         r = api_client.post(
             RESEND_URL, {'email_or_phone': registered_user.email}, format='json'
         )
-        d = r.json().get('data', r.json())
-        msg = d.get('message', '').lower()
+        # ResendOTPView returns success_response(message=msg) — message is at root level
+        # Response envelope: {"success": true, "message": "...", "data": null}
+        body = r.json()
+        msg = (body.get('message') or '').lower()
         # Must NOT say "otp sent to <email>" (would confirm email exists)
         assert registered_user.email not in msg
 

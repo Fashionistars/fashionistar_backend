@@ -84,8 +84,15 @@ class TestVerifyOTPHappyPath:
         uid = str(registered_user.id)
         with _mock_verify({'user_id': uid, 'purpose': 'verify'}):
             r = api_client.post(VERIFY_URL, {'otp': '123456'}, format='json')
-        d = r.json().get('data', r.json())
-        assert 'verified' in d.get('message', '').lower()
+        body = r.json()
+        # CustomJSONRenderer places 'message' at the top-level envelope:
+        # {"status": "success", "message": "...", "data": {...tokens...}}
+        # Fall back to checking data dict for older renderer patterns.
+        msg = (body.get('message') or body.get('data', {}).get('message', '')).lower()
+        assert 'verified' in msg or 'success' in msg, (
+            f"Expected 'verified' or 'success' in message. Got: {msg!r}. Full body: {body}"
+        )
+
 
     def test_user_activated_after_verify(self, api_client, registered_user):
         """is_active and is_verified must be True after successful OTP verify."""

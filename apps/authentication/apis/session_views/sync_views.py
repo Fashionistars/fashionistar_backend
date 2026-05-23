@@ -165,6 +165,30 @@ class SessionRevokeView(generics.DestroyAPIView):
             )
 
         logger.info("Session %s revoked for user=%s", session_id, request.user.pk)
+
+        # ── Compliance audit event (Fix 4 — Wave B3) ─────────────────────────
+        # Fire after transaction commit so the row is permanent in the DB.
+        # SESSION_REVOKED is compliance-critical (SOC2/NDPR/GDPR) → 7-year retention.
+        try:
+            from apps.audit_logs.services.audit import AuditService
+            from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
+            transaction.on_commit(
+                lambda: AuditService.log(
+                    event_type=EventType.SESSION_REVOKED,
+                    event_category=EventCategory.SECURITY,
+                    severity=SeverityLevel.WARNING,
+                    action=f"Single session revoked by user (session_id={session_id})",
+                    actor=request.user,
+                    request=request,
+                    resource_type="UserSession",
+                    resource_id=str(session_id),
+                    is_compliance=True,
+                    metadata={"revoked_jti": getattr(session, "jti", None)},
+                )
+            )
+        except Exception:
+            pass  # Never let audit logging block the response
+
         return success_response(message="Session revoked successfully.")
 
 
@@ -218,6 +242,28 @@ class SessionRevokeOthersView(generics.GenericAPIView):
             request.user.pk,
             revoked_count,
         )
+
+        # ── Compliance audit event (Fix 4 — Wave B3) ─────────────────────────
+        # SESSION_REVOKE_ALL is compliance-critical → 7-year retention.
+        try:
+            from apps.audit_logs.services.audit import AuditService
+            from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
+            AuditService.log(
+                event_type=EventType.SESSION_REVOKE_ALL,
+                event_category=EventCategory.SECURITY,
+                severity=SeverityLevel.WARNING,
+                action=(
+                    f"All other sessions revoked by user — {revoked_count} session(s) terminated."
+                ),
+                actor=request.user,
+                request=request,
+                resource_type="UserSession",
+                is_compliance=True,
+                metadata={"terminated_count": revoked_count},
+            )
+        except Exception:
+            pass  # Never let audit logging block the response
+
         return success_response(
             data={"terminated_count": revoked_count},
             message=f"{revoked_count} other session(s) terminated successfully.",

@@ -115,7 +115,7 @@ class RequestTimingMiddleware:
 
     Output format::
 
-        [GET] /api/v2/products/ → 200 in 12.3ms [req=<uuid>]
+        [GET] /api/v1/products/ → 200 in 12.3ms [req=<uuid>]
 
     Uses ``time.monotonic()`` which is event-loop-safe and thread-safe.
     """

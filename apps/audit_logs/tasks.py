@@ -62,7 +62,13 @@ def write_audit_event(self, payload: dict) -> None:
         "request_method", "request_path", "response_status", "duration_ms",
         "old_values", "new_values", "metadata", "error_message",
         "is_compliance", "retention_days",
+        # ── Wave B3: Frontend client context fields (migration 0005) ──────────
+        # Added for device-level audit trails per GDPR/NDPR/PCI-DSS requirements.
+        # These are populated from X-Client-* request headers via AuditMiddleware.
+        "client_device_id", "client_timezone", "client_locale", "client_platform",
+        "client_geo_lat", "client_geo_lng", "client_geo_accuracy_m",
     }
+
 
     try:
         from apps.audit_logs.models import AuditEventLog
