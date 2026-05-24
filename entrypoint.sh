@@ -52,7 +52,7 @@ fi
 
 echo -e "${YELLOW}📦 Running database migrations...${NC}"
 
-if python manage.py migrate --noinput 2>/dev/null; then
+if uv run python manage.py migrate --noinput 2>/dev/null; then
     echo -e "${GREEN}✓ Migrations completed successfully${NC}"
 else
     echo -e "${YELLOW}⚠ Migrations already up to date or not applicable${NC}"
@@ -65,7 +65,7 @@ fi
 if [ "$DEBUG" = "False" ] || [ "$DEBUG" = "false" ]; then
     echo -e "${YELLOW}📂 Collecting static files...${NC}"
     
-    if python manage.py collectstatic --noinput 2>/dev/null; then
+    if uv run python manage.py collectstatic --noinput 2>/dev/null; then
         echo -e "${GREEN}✓ Static files collected${NC}"
     else
         echo -e "${YELLOW}⚠ Static files already collected or path issues${NC}"
@@ -78,7 +78,7 @@ fi
 
 echo -e "${YELLOW}🏥 Verifying health check endpoint...${NC}"
 
-if python -c "from django.urls import path; from django.http import JsonResponse; print('Django loaded successfully')" 2>/dev/null; then
+if uv run python -c "from django.urls import path; from django.http import JsonResponse; print('Django loaded successfully')" 2>/dev/null; then
     echo -e "${GREEN}✓ Django configuration verified${NC}"
 else
     echo -e "${RED}✗ Django configuration error${NC}"

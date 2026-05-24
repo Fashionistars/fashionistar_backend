@@ -1,13 +1,13 @@
-# Development Dockerfile with hot-reload and debugging support
+# Development Dockerfile with hot-reload and debugging support using Astral uv
 ARG PYTHON_VERSION=3.12-slim
 
 FROM python:${PYTHON_VERSION}
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    DJANGO_SETTINGS_MODULE=config.settings.development
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    DJANGO_SETTINGS_MODULE=backend.config.development
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -19,32 +19,37 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     vim \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Astral uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
 WORKDIR /app
 
-# Copy requirements
-COPY requirements.txt /tmp/requirements.txt
-COPY requirements-dev.txt /tmp/requirements-dev.txt
+# Copy dependency definition files
+COPY pyproject.toml uv.lock ./
 
-# Install Python dependencies (including dev tools)
-RUN pip install --upgrade pip setuptools wheel && \
-    pip install -r /tmp/requirements.txt && \
-    pip install -r /tmp/requirements-dev.txt && \
-    pip install ipdb ipython django-extensions
+# Install python dependencies including the dev dependencies group
+RUN uv venv /opt/venv && \
+    VIRTUAL_ENV=/opt/venv uv sync --frozen --group dev --no-editable --no-install-project
 
-# Create non-root user
+# Add virtual environment bin to PATH
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Create non-root application user
 RUN useradd -m -u 1000 appuser && \
     mkdir -p /app && \
-    chown -R appuser:appuser /app
+    chown -R appuser:appuser /app /opt/venv
 
-# Copy application code
+# Copy application code with proper permissions
 COPY --chown=appuser:appuser . .
 
-# Copy entrypoint
+# Copy entrypoint script
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh && chown appuser:appuser /entrypoint.sh
 
+# Switch to non-root user
 USER appuser
 
+# Expose port
 EXPOSE 8000
 
 # Health check
@@ -53,5 +58,10 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
 
 ENTRYPOINT ["/entrypoint.sh"]
 
-# Development: Use Django development server with auto-reload
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+# Development: Use uvicorn with reload support running in uv
+CMD ["uv", "run", "uvicorn", "backend.asgi:application", \
+     "--host", "0.0.0.0", \
+     "--port", "8000", \
+     "--reload", \
+     "--ws", "auto", \
+     "--log-config", "uvicorn_log_config.json"]
