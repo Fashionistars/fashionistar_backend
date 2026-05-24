@@ -1,5 +1,5 @@
-# Development Dockerfile with hot-reload and debugging support using Astral uv
 ARG PYTHON_VERSION=3.12-slim
+ARG UV_IMAGE_TAG=0.8.22
 
 FROM python:${PYTHON_VERSION}
 
@@ -7,61 +7,41 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
-    DJANGO_SETTINGS_MODULE=backend.config.development
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    PATH="/opt/venv/bin:$PATH" \
+    DJANGO_SETTINGS_MODULE=backend.config.development \
+    PORT=8001
 
-# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     postgresql-client \
     curl \
     git \
-    vim \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Astral uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:${UV_IMAGE_TAG} /uv /uvx /bin/
 
 WORKDIR /app
 
-# Copy dependency definition files
 COPY pyproject.toml uv.lock ./
 
-# Install python dependencies including the dev dependencies group
-RUN uv venv /opt/venv && \
-    VIRTUAL_ENV=/opt/venv uv sync --frozen --group dev --no-editable --no-install-project
+RUN uv sync --frozen --group dev --no-editable --no-install-project
 
-# Add virtual environment bin to PATH
-ENV PATH="/opt/venv/bin:$PATH"
-
-# Create non-root application user
-RUN useradd -m -u 1000 appuser && \
-    mkdir -p /app && \
+RUN useradd --create-home --uid 1000 --shell /bin/sh appuser && \
     chown -R appuser:appuser /app /opt/venv
 
-# Copy application code with proper permissions
 COPY --chown=appuser:appuser . .
+COPY --chown=appuser:appuser entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-# Copy entrypoint script
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh && chown appuser:appuser /entrypoint.sh
-
-# Switch to non-root user
 USER appuser
 
-# Expose port
 EXPOSE 8001
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8000/health/ || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD curl -fsS "http://127.0.0.1:${PORT}/health/" || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]
 
-# Development: Use uvicorn with reload support running in uv
-CMD ["uv", "run", "uvicorn", "backend.asgi:application", \
-     "--host", "0.0.0.0", \
-     "--port", "8001", \
-     "--reload", \
-     "--ws", "auto", \
-     "--log-config", "uvicorn_log_config.json"]
+CMD ["sh", "-c", "exec uv run uvicorn backend.asgi:application --host 0.0.0.0 --port ${PORT:-8001} --reload --ws auto --log-config uvicorn_log_config.json"]

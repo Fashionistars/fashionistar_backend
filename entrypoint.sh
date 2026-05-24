@@ -1,108 +1,58 @@
-#!/bin/bash
-# FASHIONISTAR Backend Entrypoint Script
-# Responsibilities:
-#   1. Wait for database to be ready
-#   2. Run database migrations
-#   3. Collect static files
-#   4. Start application server
+#!/bin/sh
 
-set -e
+set -eu
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+log() {
+  printf '%s\n' "$1"
+}
 
-echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${YELLOW}  FASHIONISTAR Backend Entrypoint${NC}"
-echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+run_manage() {
+  uv run python manage.py "$@"
+}
 
-# ═══════════════════════════════════════════════════════════
-# 1. Wait for Database to be Ready
-# ═══════════════════════════════════════════════════════════
+DB_HOST="${DB_HOST:-}"
+DB_PORT="${DB_PORT:-5432}"
+DB_USER="${DB_USER:-postgres}"
+DB_NAME="${DB_NAME:-fashionistar}"
+DEBUG_VALUE="${DEBUG:-False}"
+PORT_VALUE="${PORT:-8001}"
 
+log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+log "FASHIONISTAR backend container bootstrap"
+log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━═════════════════════════════════════════════════════════════════════"
 if [ -n "$DB_HOST" ]; then
-    echo -e "${YELLOW}⏳ Waiting for PostgreSQL database...${NC}"
-    
-    DB_HOST=${DB_HOST:-localhost}
-    DB_PORT=${DB_PORT:-5432}
-    DB_USER=${DB_USER:-postgres}
-    TIMEOUT=30
-    COUNTER=0
-    
-    while ! pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" 2>/dev/null; do
-        COUNTER=$((COUNTER + 1))
-        if [ $COUNTER -gt $TIMEOUT ]; then
-            echo -e "${RED}✗ Database failed to start within ${TIMEOUT} seconds${NC}"
-            exit 1
-        fi
-        echo -e "${YELLOW}  Attempt $COUNTER/$TIMEOUT...${NC}"
-        sleep 1
-    done
-    
-    echo -e "${GREEN}✓ Database is ready${NC}"
-else
-    echo -e "${YELLOW}⚠ DB_HOST not set, skipping database check${NC}"
-fi
-
-# ═══════════════════════════════════════════════════════════
-# 2. Run Database Migrations
-# ═══════════════════════════════════════════════════════════
-
-echo -e "${YELLOW}📦 Running database migrations...${NC}"
-
-if uv run python manage.py migrate --noinput 2>/dev/null; then
-    echo -e "${GREEN}✓ Migrations completed successfully${NC}"
-else
-    echo -e "${YELLOW}⚠ Migrations already up to date or not applicable${NC}"
-fi
-
-# ═══════════════════════════════════════════════════════════
-# 3. Collect Static Files (Production)
-# ═══════════════════════════════════════════════════════════
-
-if [ "$DEBUG" = "False" ] || [ "$DEBUG" = "false" ]; then
-    echo -e "${YELLOW}📂 Collecting static files...${NC}"
-    
-    if uv run python manage.py collectstatic --noinput 2>/dev/null; then
-        echo -e "${GREEN}✓ Static files collected${NC}"
-    else
-        echo -e "${YELLOW}⚠ Static files already collected or path issues${NC}"
+  log "Waiting for PostgreSQL at ${DB_HOST}:${DB_PORT}..."
+  ATTEMPT=0
+  until pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" >/dev/null 2>&1; do
+    ATTEMPT=$((ATTEMPT + 1))
+    if [ "$ATTEMPT" -ge "${DB_WAIT_TIMEOUT:-45}" ]; then
+      log "Database was not reachable within ${DB_WAIT_TIMEOUT:-45} seconds."
+      exit 1
     fi
+    sleep 1
+  done
+  log "PostgreSQL is reachable."
 fi
 
-# ═══════════════════════════════════════════════════════════
-# 4. Create Health Check Endpoint (if not exists)
-# ═══════════════════════════════════════════════════════════
-
-echo -e "${YELLOW}🏥 Verifying health check endpoint...${NC}"
-
-if uv run python -c "from django.urls import path; from django.http import JsonResponse; print('Django loaded successfully')" 2>/dev/null; then
-    echo -e "${GREEN}✓ Django configuration verified${NC}"
-else
-    echo -e "${RED}✗ Django configuration error${NC}"
-    exit 1
+if [ "${RUN_MIGRATIONS:-1}" = "1" ]; then
+  log "Running Django migrations..."
+  run_manage migrate --noinput
 fi
 
-# ═══════════════════════════════════════════════════════════
-# 5. Show Configuration Summary
-# ═══════════════════════════════════════════════════════════
+if [ "${RUN_COLLECTSTATIC:-auto}" = "1" ] || {
+  [ "${RUN_COLLECTSTATIC:-auto}" = "auto" ] && [ "$DEBUG_VALUE" != "True" ] && [ "$DEBUG_VALUE" != "true" ];
+}; then
+  log "Collecting static files..."
+  run_manage collectstatic --noinput
+fi
 
-echo -e "${YELLOW}📋 Configuration Summary:${NC}"
-echo -e "  ${GREEN}Database:${NC} ${DB_HOST}:${DB_PORT}/${DB_NAME}"
-echo -e "  ${GREEN}Redis:${NC} ${REDIS_HOST}:${REDIS_PORT}"
-echo -e "  ${GREEN}Debug:${NC} ${DEBUG}"
-echo -e "  ${GREEN}Settings:${NC} ${DJANGO_SETTINGS_MODULE}"
+log "Verifying Django configuration..."
+run_manage check --deploy --fail-level WARNING >/dev/null 2>&1 || run_manage check >/dev/null
 
-# ═══════════════════════════════════════════════════════════
-# 6. Start Application Server
-# ═══════════════════════════════════════════════════════════
+log "Bootstrap complete."
+log "Settings: ${DJANGO_SETTINGS_MODULE:-backend.config.production}"
+log "Database: ${DB_HOST:-local}:${DB_PORT}/${DB_NAME}"
+log "Redis: ${REDIS_URL:-${REDIS_HOST:-unset}}"
+log "Port: ${PORT_VALUE}"
 
-echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${GREEN}✅ Entrypoint initialization complete!${NC}"
-echo -e "${GREEN}   Starting application server...${NC}"
-echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-
-# Execute the main process
 exec "$@"
