@@ -216,50 +216,50 @@ start-workers: ## Display instructions to start all workers
 
 docker-build: ## Build Docker image (no cache)
 	@echo "$(CYAN)Building Docker image...$(NC)"
-	docker-compose build --no-cache
+	docker-compose -f ../docker-compose.yml build --no-cache
 	@echo "$(GREEN)✓ Docker image built$(NC)"
 
 docker-up: ## Start development containers (detached)
 	@echo "$(CYAN)Starting Docker containers...$(NC)"
-	docker-compose up -d
+	docker-compose -f ../docker-compose.yml up -d
 	@echo "$(GREEN)✓ Containers started$(NC)"
 
 docker-down: ## Stop and remove containers
 	@echo "$(YELLOW)Stopping containers...$(NC)"
-	docker-compose down
+	docker-compose -f ../docker-compose.yml down
 	@echo "$(GREEN)✓ Containers stopped$(NC)"
 
 docker-down-v: ## Stop containers and remove volumes (⚠️  data loss)
 	@echo "$(RED)⚠  Stopping containers and removing volumes...$(NC)"
-	docker-compose down -v
+	docker-compose -f ../docker-compose.yml down -v
 
 docker-restart: docker-down docker-up ## Restart all containers
 
 docker-logs: ## Tail container logs (all services)
-	docker-compose logs -f
+	docker-compose -f ../docker-compose.yml logs -f
 
 docker-logs-web: ## Tail logs for web service only
-	docker-compose logs -f web
+	docker-compose -f ../docker-compose.yml logs -f web
 
 docker-logs-celery: ## Tail logs for Celery workers
-	docker-compose logs -f celery-general celery-emails celery-critical
+	docker-compose -f ../docker-compose.yml logs -f celery-worker celery-beat
 
 docker-ps: ## Show running containers
-	docker-compose ps
+	docker-compose -f ../docker-compose.yml ps
 
 docker-exec: ## Open shell in web container
-	docker-compose exec web /bin/sh
+	docker-compose -f ../docker-compose.yml exec web /bin/sh
 
 docker-exec-db: ## Open PostgreSQL shell in db container
-	docker-compose exec db psql -U $${DB_USER:-postgres} -d $${DB_NAME:-fashionistar}
+	docker-compose -f ../docker-compose.yml exec db psql -U $${DB_USER:-postgres} -d $${DB_NAME:-fashionistar}
 
 docker-rebuild: ## Full rebuild (stop → clean → build → start)
 	@echo "$(CYAN)Full Docker rebuild...$(NC)"
-	docker-compose down -v
-	docker-compose build --no-cache
-	docker-compose up -d
+	docker-compose -f ../docker-compose.yml down -v
+	docker-compose -f ../docker-compose.yml build --no-cache
+	docker-compose -f ../docker-compose.yml up -d
 	@echo "$(GREEN)✓ Full rebuild complete$(NC)"
-	docker-compose logs -f
+	docker-compose -f ../docker-compose.yml logs -f
 
 # ═══════════════════════════════════════════════════════════════
 ##@ Docker — Production
@@ -267,14 +267,14 @@ docker-rebuild: ## Full rebuild (stop → clean → build → start)
 
 prod-up: ## Start production environment
 	@echo "$(CYAN)Starting production environment...$(NC)"
-	docker-compose -f docker-compose.production.yml up -d --build
+	docker-compose -f ../docker-compose.prod.yml up -d --build
 	@echo "$(GREEN)✓ Production environment started$(NC)"
 
 prod-down: ## Stop production environment
-	docker-compose -f docker-compose.production.yml down
+	docker-compose -f ../docker-compose.prod.yml down
 
 prod-logs: ## Tail production logs
-	docker-compose -f docker-compose.production.yml logs -f
+	docker-compose -f ../docker-compose.prod.yml logs -f
 
 prod-restart: prod-down prod-up ## Restart production environment
 
