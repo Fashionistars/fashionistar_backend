@@ -72,7 +72,7 @@ RUN chmod +x /entrypoint.sh && chown appuser:appuser /entrypoint.sh
 USER appuser
 
 # Expose port
-EXPOSE 8000
+EXPOSE 8001
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
@@ -84,7 +84,7 @@ ENTRYPOINT ["/entrypoint.sh"]
 # Default command: Start Uvicorn ASGI server directly inside the uv environment
 CMD ["uv", "run", "uvicorn", "backend.asgi:application", \
      "--host", "0.0.0.0", \
-     "--port", "8000", \
+     "--port", "8001", \
      "--workers", "4", \
      "--ws", "auto", \
      "--timeout-keep-alive", "120", \

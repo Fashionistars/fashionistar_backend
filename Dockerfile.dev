@@ -50,7 +50,7 @@ RUN chmod +x /entrypoint.sh && chown appuser:appuser /entrypoint.sh
 USER appuser
 
 # Expose port
-EXPOSE 8000
+EXPOSE 8001
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
@@ -61,7 +61,7 @@ ENTRYPOINT ["/entrypoint.sh"]
 # Development: Use uvicorn with reload support running in uv
 CMD ["uv", "run", "uvicorn", "backend.asgi:application", \
      "--host", "0.0.0.0", \
-     "--port", "8000", \
+     "--port", "8001", \
      "--reload", \
      "--ws", "auto", \
      "--log-config", "uvicorn_log_config.json"]
