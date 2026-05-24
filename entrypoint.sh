@@ -7,7 +7,7 @@ log() {
 }
 
 run_manage() {
-  uv run python manage.py "$@"
+  uv run --no-sync python manage.py "$@"
 }
 
 DB_HOST="${DB_HOST:-}"

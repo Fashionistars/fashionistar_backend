@@ -38,7 +38,7 @@ DJANGO_SECRET_ADMIN_URL = env("DJANGO_SECRET_ADMIN_URL", default="admin/")  # no
 
 
 # =============================================================================
-# HOSTS — Accept ALL hostnames in dev (WSGI :8000 + Uvicorn ASGI :8001)
+# HOSTS — Accept ALL hostnames in dev with canonical ASGI port :8001
 # =============================================================================
 # In development, Django may be accessed via localhost, 127.0.0.1, your machine
 # hostname (e.g. FASHIONISTAR), or 0.0.0.0. Using ['*'] avoids DisallowedHost
@@ -51,11 +51,8 @@ _frontend_tunnel = env("FRONTEND_TUNNEL_URL", default=None)  # noqa: F405
 _backend_tunnel  = env("BACKEND_TUNNEL_URL", default=None)   # noqa: F405
 
 _csrf_origins = build_origin_list(  # noqa: F405
-    'http://localhost:8000',
-    'http://127.0.0.1:8000',
     'http://localhost:8001',       # Uvicorn ASGI
     'http://127.0.0.1:8001',      # Uvicorn ASGI
-    'http://0.0.0.0:8000',
     'http://0.0.0.0:8001',
     'http://localhost:3000',       # Next.js frontend
     'http://localhost:3001',       # Next.js frontend alt port

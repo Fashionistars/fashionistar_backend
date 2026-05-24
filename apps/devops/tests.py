@@ -266,7 +266,7 @@ class DockerServiceTestCase(TestCase):
         mock_container.status = 'running'
         mock_container.image.tags = ['test:latest']
         mock_container.attrs = {'Created': '2023-01-01T00:00:00Z'}
-        mock_container.ports = {'8000/tcp': [{'HostPort': '8000'}]}
+        mock_container.ports = {'8001/tcp': [{'HostPort': '8001'}]}
         
         mock_client.containers.get.return_value = mock_container
         
@@ -434,7 +434,7 @@ class IntegrationTestCase(TransactionTestCase):
             environment=self.environment,
             service_name='test_service',
             service_type='web',
-            health_check_url='http://localhost:8000/health/',
+            health_check_url='http://localhost:8001/health/',
             check_interval=300,
             timeout=30
         )
@@ -454,7 +454,7 @@ class IntegrationTestCase(TransactionTestCase):
         health_check = HealthCheck.objects.create(
             environment=self.environment,
             service_name='test_service',
-            endpoint_url='http://localhost:8000/health/',
+            endpoint_url='http://localhost:8001/health/',
             status='healthy',
             response_time=150.5,
             status_code=200

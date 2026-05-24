@@ -1,5 +1,7 @@
-ARG PYTHON_VERSION=3.12-slim
+ARG PYTHON_VERSION=3.14-slim
 ARG UV_IMAGE_TAG=0.8.22
+
+FROM ghcr.io/astral-sh/uv:${UV_IMAGE_TAG} AS uvbin
 
 FROM python:${PYTHON_VERSION} AS builder
 
@@ -14,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=ghcr.io/astral-sh/uv:${UV_IMAGE_TAG} /uv /uvx /bin/
+COPY --from=uvbin /uv /uvx /bin/
 
 WORKDIR /app
 
@@ -41,7 +43,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=ghcr.io/astral-sh/uv:${UV_IMAGE_TAG} /uv /uvx /bin/
+COPY --from=uvbin /uv /uvx /bin/
 COPY --from=builder /opt/venv /opt/venv
 
 RUN useradd --create-home --uid 1000 --shell /bin/sh appuser && \
@@ -64,4 +66,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 
 ENTRYPOINT ["/entrypoint.sh"]
 
-CMD ["sh", "-c", "exec uv run uvicorn backend.asgi:application --host 0.0.0.0 --port ${PORT:-8001} --workers ${UVICORN_WORKERS:-1} --ws ${UVICORN_WS:-auto} --timeout-keep-alive ${UVICORN_KEEP_ALIVE:-120} --log-config uvicorn_log_config.json"]
+CMD ["sh", "-c", "exec uv run --no-sync uvicorn backend.asgi:application --host 0.0.0.0 --port ${PORT:-8001} --workers ${UVICORN_WORKERS:-1} --ws ${UVICORN_WS:-auto} --timeout-keep-alive ${UVICORN_KEEP_ALIVE:-120} --log-config uvicorn_log_config.json"]

@@ -4,7 +4,7 @@ import uuid
 from pprint import pprint
 import time
 
-BASE_URL = "http://localhost:8000/api/v1"
+BASE_URL = "http://localhost:8001/api/v1"
 DB_PATH = "../db.sqlite3"  # Relative to where we run it (fashionistar_backend)
 session = requests.Session()
 

@@ -1,6 +1,6 @@
 # FASHIONISTAR AI — Backend
 
-> Enterprise-Grade eCommerce Backend · Django 6.0 · Python 3.12+ · Dual-Engine API (DRF + Ninja)
+> Enterprise-Grade eCommerce Backend · Django 6.0 · Python 3.14+ · Dual-Engine API (DRF + Ninja)
 
 ## Getting Started
 
@@ -10,7 +10,7 @@ Follow these instructions to get a copy of the project up and running on your lo
 
 Ensure you have the following installed on your machine:
 
-- Python 3.12+
+- Python 3.14+
 - pip (Python package installer)
 - Git
 - Redis (for caching and background tasks)
@@ -83,7 +83,7 @@ Start the development server:
 python manage.py runserver
 ```
 
-The project will be accessible at `http://127.0.0.1:8000/` by default.
+The project will be accessible at `http://127.0.0.1:8001/` by default.
 
 ## Architecture
 
