@@ -218,6 +218,27 @@ django-cryptography                     # Required for encryption and decryption
 django-model-utils                      # Required for time-based field tracking
 
 
+# PDF & Fonts
+weasyprint
+pillow
+fonttools
+Brotli
+tinycss2
+cssselect2
+html5lib
+pyphen
+pydyf
+webencodings
+zopfli
+
+# QR Codes
+qrcode
+
+# OpenAI
+openai
+
+
+
 # ============================================================================================
 # IN ORDER TO MAKE SURE DJANGO==6.0.2 INSTALLS AND PINNED AFTER BULK REQUIREMENTS.TXT INSTALLATION 
 # ============================================================================================

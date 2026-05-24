@@ -1,0 +1,57 @@
+# Development Dockerfile with hot-reload and debugging support
+ARG PYTHON_VERSION=3.12-slim
+
+FROM python:${PYTHON_VERSION}
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    DJANGO_SETTINGS_MODULE=config.settings.development
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    postgresql-client \
+    curl \
+    git \
+    vim \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy requirements
+COPY requirements.txt /tmp/requirements.txt
+COPY requirements-dev.txt /tmp/requirements-dev.txt
+
+# Install Python dependencies (including dev tools)
+RUN pip install --upgrade pip setuptools wheel && \
+    pip install -r /tmp/requirements.txt && \
+    pip install -r /tmp/requirements-dev.txt && \
+    pip install ipdb ipython django-extensions
+
+# Create non-root user
+RUN useradd -m -u 1000 appuser && \
+    mkdir -p /app && \
+    chown -R appuser:appuser /app
+
+# Copy application code
+COPY --chown=appuser:appuser . .
+
+# Copy entrypoint
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh && chown appuser:appuser /entrypoint.sh
+
+USER appuser
+
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8000/health/ || exit 1
+
+ENTRYPOINT ["/entrypoint.sh"]
+
+# Development: Use Django development server with auto-reload
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
