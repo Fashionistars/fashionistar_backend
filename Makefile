@@ -30,7 +30,7 @@ NC      := \033[0m
 help: ## Display this help message
 	@echo "$(BOLD)$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"
 	@echo "$(BOLD)$(CYAN)  FASHIONISTAR AI — Backend Developer Commands$(NC)"
-	@echo "$(CYAN)  Django 6.0 · Python 3.12+ · Dual-Engine (DRF + Ninja)$(NC)"
+	@echo "$(CYAN)  Django 6.0 · Python 3.14+ · Dual-Engine (DRF + Ninja)$(NC)"
 	@echo "$(BOLD)$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"
 	@echo ""
 	@awk 'BEGIN {FS = ":.*##"; printf "Usage:\n  make $(CYAN)<target>$(NC)\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  $(CYAN)%-26s$(NC) %s\n", $$1, $$2 } /^##@/ { printf "\n$(YELLOW)%s$(NC)\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
@@ -315,7 +315,7 @@ stop-redis: ## Stop local portable Redis server
 
 health: ## Check API health endpoint
 	@echo "$(CYAN)Checking system health...$(NC)"
-	@curl -sf http://localhost:8000/health/ | uv run python -m json.tool 2>/dev/null || echo "$(RED)✗ API not running on port 8000$(NC)"
+	@curl -sf http://localhost:8001/health/ | uv run python -m json.tool 2>/dev/null || echo "$(RED)✗ API not running on port 8001$(NC)"
 
 health-redis: ## Check Redis connectivity
 	@echo "$(CYAN)Checking Redis...$(NC)"
@@ -323,7 +323,7 @@ health-redis: ## Check Redis connectivity
 
 test-metrics: ## Check Prometheus metrics endpoint
 	@echo "$(CYAN)Testing metrics...$(NC)"
-	@curl -sf http://localhost:8000/metrics/ | head -10 || echo "$(RED)✗ Metrics endpoint not available$(NC)"
+	@curl -sf http://localhost:8001/metrics/ | head -10 || echo "$(RED)✗ Metrics endpoint not available$(NC)"
 
 # ═══════════════════════════════════════════════════════════════
 ##@ CI/CD Pipeline
@@ -394,16 +394,16 @@ info: ## Display project information
 	@echo "  Database:     PostgreSQL 17 / SQLite (dev)"
 	@echo "  Cache:        Redis"
 	@echo "  Task Engine:  Celery → Django 6.0 Native Tasks"
-	@echo "  API Docs:     http://localhost:8000/swagger/"
+	@echo "  API Docs:     http://localhost:8001/swagger/"
 	@echo "$(CYAN)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"
 
 urls: ## Display key API endpoints
 	@echo "$(BOLD)$(CYAN)Key Endpoints:$(NC)"
-	@echo "  $(CYAN)API Root:$(NC)     http://localhost:8000/api/"
-	@echo "  $(CYAN)Swagger:$(NC)      http://localhost:8000/swagger/"
-	@echo "  $(CYAN)ReDoc:$(NC)        http://localhost:8000/redoc/"
-	@echo "  $(CYAN)Admin:$(NC)        http://localhost:8000/$${DJANGO_SECRET_ADMIN_URL:-admin/}"
-	@echo "  $(CYAN)Ninja Async:$(NC)  http://localhost:8000/api/v1/ninja/"
+	@echo "  $(CYAN)API Root:$(NC)     http://localhost:8001/api/"
+	@echo "  $(CYAN)Swagger:$(NC)      http://localhost:8001/swagger/"
+	@echo "  $(CYAN)ReDoc:$(NC)        http://localhost:8001/redoc/"
+	@echo "  $(CYAN)Admin:$(NC)        http://localhost:8001/$${DJANGO_SECRET_ADMIN_URL:-admin/}"
+	@echo "  $(CYAN)Ninja Async:$(NC)  http://localhost:8001/api/v1/ninja/"
 
 deps: ## List installed Python packages
 	uv pip list --format=columns
@@ -431,9 +431,9 @@ full-reset: clean db-reset install migrate static ## 🔄 Nuclear reset → fres
 
 dashboards: ## 📊 Show all service URLs
 	@echo "$(BOLD)$(CYAN)━━━ Service Dashboards ━━━$(NC)"
-	@echo "  $(CYAN)Django API:$(NC)   http://localhost:8000"
-	@echo "  $(CYAN)Swagger UI:$(NC)   http://localhost:8000/swagger/"
-	@echo "  $(CYAN)Admin:$(NC)        http://localhost:8000/$${DJANGO_SECRET_ADMIN_URL:-admin/}"
+	@echo "  $(CYAN)Django API:$(NC)   http://localhost:8001"
+	@echo "  $(CYAN)Swagger UI:$(NC)   http://localhost:8001/swagger/"
+	@echo "  $(CYAN)Admin:$(NC)        http://localhost:8001/$${DJANGO_SECRET_ADMIN_URL:-admin/}"
 	@echo "  $(CYAN)Flower:$(NC)       http://localhost:5555"
 	@echo "  $(CYAN)Prometheus:$(NC)   http://localhost:9090"
 	@echo "  $(CYAN)Grafana:$(NC)      http://localhost:3000"
@@ -446,23 +446,23 @@ dashboards: ## 📊 Show all service URLs
 ## Bypasses outdated pnpm wrappers to ensure flawless Windows/Agent compatibility.
 NGROK ?= ngrok
 NGROK_WEB_ADDR ?= 127.0.0.1:4040
-NGROK_URL ?= 127.0.0.1:8000
+NGROK_URL ?= 127.0.0.1:8001
 
-ngrok-backend: ## 🌐 🔗 Start ngrok tunnel for backend port 8000 → localhost:8000 (Django WSGI/dev)
-	@echo "$(CYAN)Starting ngrok tunnel for backend port 8000 → http://$(NGROK_URL) ...$(NC)"
+ngrok-backend: ## 🌐 🔗 Start ngrok tunnel for backend port 8001 → localhost:8001 (Django ASGI/dev)
+	@echo "$(CYAN)Starting ngrok tunnel for backend port 8001 → http://$(NGROK_URL) ...$(NC)"
 	@echo "$(YELLOW)  Webhook URL: https://<tunnel>.ngrok-free.app/api/v1/upload/webhook/cloudinary/$(NC)"
 	@echo "$(YELLOW)  ngrok Web UI: http://$(NGROK_WEB_ADDR)$(NC)"
 	@echo "$(YELLOW)  Authtoken: global (stored locally)$(NC)"
-	@echo "$(YELLOW)  Dev server must be running: make dev (port 8000)$(NC)"
-	$(NGROK) http 8000
+	@echo "$(YELLOW)  Dev server must be running: make uvicorn (port 8001)$(NC)"
+	$(NGROK) http 8001
 
-ngrok-dev: ## 🌐 🔗 Start ngrok tunnel for backend port 8000 → localhost:8000 (Alias for ngrok-backend)
-	@echo "$(CYAN)Starting ngrok tunnel for backend port 8000 → http://$(NGROK_URL) ...$(NC)"
+ngrok-dev: ## 🌐 🔗 Start ngrok tunnel for backend port 8001 → localhost:8001 (Alias for ngrok-backend)
+	@echo "$(CYAN)Starting ngrok tunnel for backend port 8001 → http://$(NGROK_URL) ...$(NC)"
 	@echo "$(YELLOW)  Webhook URL: https://<tunnel>.ngrok-free.app/api/v1/upload/webhook/cloudinary/$(NC)"
 	@echo "$(YELLOW)  ngrok Web UI: http://$(NGROK_WEB_ADDR)$(NC)"
 	@echo "$(YELLOW)  Authtoken: global (stored locally)$(NC)"
-	@echo "$(YELLOW)  Dev server must be running: make dev (port 8000)$(NC)"
-	$(NGROK) http 8000
+	@echo "$(YELLOW)  Dev server must be running: make uvicorn (port 8001)$(NC)"
+	$(NGROK) http 8001
 
 ngrok-asgi: ## 🔗 🌐 Start ngrok tunnel for backend port 8001 → localhost:8001 (Django ASGI/dev)
 	@echo "$(CYAN)Starting ngrok tunnel → http://$(NGROK_URL) (ASGI) ...$(NC)"
@@ -475,7 +475,7 @@ ngrok-asgi: ## 🔗 🌐 Start ngrok tunnel for backend port 8001 → localhost:
 ngrok-url: ## 🔍 Print current active backend ngrok tunnel public URL (inspector API)
 	@echo "$(CYAN)Active backend ngrok tunnels:$(NC)"
 	@curl -s http://127.0.0.1:4040/api/tunnels 2>/dev/null | \
-		uv run python -c "import sys,json; d=json.load(sys.stdin); [print('  ✔ ' + t['public_url'] + ' -> port 8000:' + t['config']['addr']) for t in d.get('tunnels',[])]" \
+		uv run python -c "import sys,json; d=json.load(sys.stdin); [print('  ✔ ' + t['public_url'] + ' -> port 8001:' + t['config']['addr']) for t in d.get('tunnels',[])]" \
 		|| echo "$(RED)✗ ngrok not running — start with / Run: 'make ngrok-backend' or 'make ngrok-asgi'$(NC)"
 
 ngrok-inspect: ## 🔍 Open ngrok web inspector in browser (localhost:4040)
@@ -487,12 +487,12 @@ ngrok-inspect: ## 🔍 Open ngrok web inspector in browser (localhost:4040)
 ##@ Local Server Startup Commands
 # ═══════════════════════════════════════════════════════════════
 
-dev: ## Start Django development server (sync WSGI — port 8000, console email)
+dev: ## Start Django development server (sync WSGI — port 8001, console email)
 	@echo "$(CYAN)Starting Django dev server (WSGI, DEBUG=True, ConsoleEmail)...$(NC)"
 	@echo "$(YELLOW)  Settings: backend.config.development$(NC)"
 	@echo "$(YELLOW)  Email:    console (OTP printed to this terminal)$(NC)"
-	@echo "$(YELLOW)  URL:      http://127.0.0.1:8000/$(NC)"
-	uv run manage.py runserver --settings=$(DJANGO_SETTINGS_MODULE)
+	@echo "$(YELLOW)  URL:      http://127.0.0.1:8001/$(NC)"
+	uv run manage.py runserver 0.0.0.0:8001 --settings=$(DJANGO_SETTINGS_MODULE)
 
 uvicorn: ## Start Uvicorn ASGI (dev, port 8001, console email, access logs)
 	@echo "$(CYAN)Starting Uvicorn ASGI server (development settings)...$(NC)"
@@ -523,10 +523,10 @@ run-daphne: ## Start Daphne ASGI (WebSocket — auto-starts Redis first)
 # local environment to the internet for Webhooks or frontend testing.
 # ═══════════════════════════════════════════════════════════════
 
-dev-tunnel: ## 🚀 Start Django WSGI (:8000) dev server & display tunnel instructions
+dev-tunnel: ## 🚀 Start Django WSGI (:8001) dev server & display tunnel instructions
 	@echo "$(BOLD)$(CYAN)━━━ FASHIONISTAR WSGI + Tunnel ━━━$(NC)"
-	@echo "$(CYAN)Step 1:$(NC) Starting Django WSGI dev server → :8000 ..."
-	uv run manage.py runserver --settings=$(DJANGO_SETTINGS_MODULE) &
+	@echo "$(CYAN)Step 1:$(NC) Starting Django WSGI dev server → :8001 ..."
+	uv run manage.py runserver 0.0.0.0:8001 --settings=$(DJANGO_SETTINGS_MODULE) &
 	@echo ""
 	@echo "$(YELLOW)Step 2 (Action Required): Open a second terminal window and run:$(NC)"
 	@echo "  $(CYAN)make ngrok-dev$(NC)"
@@ -545,16 +545,16 @@ asgi-tunnel: ## 🚀 Start Uvicorn ASGI (:8001) server & display tunnel instruct
 # (Runs both processes gracefully in the exact same terminal window)
 # ─────────────────────────────────────────────────────────────────
 
-run-dev-then-ngrok: ## 🚀 Sequential: Start Django WSGI (:8000) → then start ngrok
+run-dev-then-ngrok: ## 🚀 Sequential: Start Django WSGI (:8001) → then start ngrok
 	@echo "$(CYAN)Starting Django dev server ...$(NC)"
-	uv run manage.py runserver --settings=$(DJANGO_SETTINGS_MODULE)
+	uv run manage.py runserver 0.0.0.0:8001 --settings=$(DJANGO_SETTINGS_MODULE)
 
-run-ngrok-then-dev: ## 🚀 Sequential: Start ngrok tunnel → then start Django WSGI (:8000)
-	@echo "$(CYAN)Starting ngrok tunnel → :8000 ...$(NC)"
-	$(NGROK) http 8000
+run-ngrok-then-dev: ## 🚀 Sequential: Start ngrok tunnel → then start Django WSGI (:8001)
+	@echo "$(CYAN)Starting ngrok tunnel → :8001 ...$(NC)"
+	$(NGROK) http 8001
 	@echo ""
 	@echo "$(CYAN)Starting Django dev server ...$(NC)"
-	uv run manage.py runserver --settings=$(DJANGO_SETTINGS_MODULE)
+	uv run manage.py runserver 0.0.0.0:8001 --settings=$(DJANGO_SETTINGS_MODULE)
 
 run-asgi-then-ngrok: ## 🚀 Sequential: Start Uvicorn ASGI (:8001) → then start ngrok
 	@echo "$(CYAN)Starting Uvicorn ASGI server → :8001 ...$(NC)"
@@ -582,6 +582,6 @@ asgi: run-asgi ## Alias: Start ASGI server with auto-Redis (same as make run-asg
 
 daphne: run-daphne ## Alias: Start Daphne ASGI with auto-Redis (same as make run-daphne)
 
-wsgi: ## 🚀 Start Gunicorn WSGI server (sync production — port 8000)
+wsgi: ## 🚀 Start Gunicorn WSGI server (sync production — port 8001)
 	@echo "$(CYAN)Starting Gunicorn WSGI server (Production Mode)...$(NC)"
-	uv run gunicorn backend.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 120
+	uv run gunicorn backend.wsgi:application --bind 0.0.0.0:8001 --workers 4 --timeout 120

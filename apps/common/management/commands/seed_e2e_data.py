@@ -377,7 +377,7 @@ class Command(BaseCommand):
   🔐 ADMIN (superuser)
      Email:    admin@fashionistar.test
      Password: Admin@Secure99!
-     URL:      http://localhost:8000/admin/
+     URL:      http://localhost:8001/admin/
 
   🏪 VENDOR
      Email:    vendor@fashionistar.test
@@ -394,8 +394,8 @@ class Command(BaseCommand):
      3. Kaftan Co-Ord Set  — ₦18,500  (slug: kaftan-coord-set)
 
   🌐 FRONTEND:  http://localhost:3000
-  ⚙  BACKEND:   http://localhost:8000
-  📊 ADMIN:     http://localhost:8000/admin/
-  📚 API DOCS:  http://localhost:8000/api/v1/docs/
+  ⚙  BACKEND:   http://localhost:8001
+  📊 ADMIN:     http://localhost:8001/admin/
+  📚 API DOCS:  http://localhost:8001/api/v1/docs/
 """)
         self.stdout.write(DIVIDER + "\n")

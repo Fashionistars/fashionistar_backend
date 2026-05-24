@@ -90,8 +90,6 @@ ALLOWED_HOSTS = env.list(
         # WSGI dev server (Django runserver)
         "127.0.0.1",
         "localhost",
-        "localhost:8000",
-        "127.0.0.1:8000",
         # ASGI / Uvicorn / Daphne (port 8001)
         "localhost:8001",
         "127.0.0.1:8001",
@@ -112,7 +110,7 @@ ALLOWED_HOSTS = env.list(
 )
 
 FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3000")
-BACKEND_URL = env("BACKEND_URL", default="http://localhost:8000")
+BACKEND_URL = env("BACKEND_URL", default="http://localhost:8001")
 FRONTEND_TUNNEL_URL = env(
     "FRONTEND_TUNNEL_URL", default="https://aeration-scabby-navy.ngrok-free.dev"
 )
@@ -147,7 +145,7 @@ DJANGO_SECRET_ADMIN_URL = env("DJANGO_SECRET_ADMIN_URL", default="admin/")
 # INSTALLED APPS
 # =============================================================================
 INSTALLED_APPS = [
-    # ── Backend core (AppConfig fixes Python 3.12 logging QueueListener) ─────
+    # ── Backend core (AppConfig fixes Python 3.12+ logging QueueListener) ────
     "backend.apps.BackendConfig",
     # ── Admin UI ─────────────────────────────────────────────────────────────
     "jazzmin",
@@ -606,7 +604,6 @@ SPECTACULAR_SETTINGS = {
     # Auto-handle operationId collisions (pluralise duplicates automatically)
     "OPERATION_ID": None,
     "SERVERS": [
-        {"url": "http://127.0.0.1:8000", "description": "Development (WSGI)"},
         {"url": "http://127.0.0.1:8001", "description": "Development (ASGI/Uvicorn)"},
     ],
     # ── Filter: Only expose /api/v1/auth/ in schema ──────────────────────
@@ -989,9 +986,9 @@ LOGGING = build_logging_config(
 # =============================================================================
 # LOGGING CONFIGURATION HOOK
 # =============================================================================
-# PROBLEM (Python 3.12 + Django 4.2+):
+# PROBLEM (Python 3.12+ + Django 4.2+):
 #   Django's default LOGGING_CONFIG = 'logging.config.dictConfig' is called
-#   by Django's setup() machinery. In Python 3.12, dictConfig() automatically
+#   by Django's setup() machinery. In Python 3.12+, dictConfig() automatically
 #   wraps ALL handlers in a QueueHandler (async) for thread safety. This means
 #   handlers are NOT directly attached to loggers — they're in a background
 #   queue listener. Under Uvicorn/ASGI, this async routing drops INFO-level
@@ -1034,7 +1031,7 @@ def _apply_logging_config(config):
 # Django reads LOGGING_CONFIG as a dotted path and calls it with LOGGING dict.
 # Using the standard 'logging.config.dictConfig' here — BackendConfig.ready()
 # (in backend/apps.py) re-applies this config AFTER all apps load to fix
-# the Python 3.12 QueueHandler/QueueListener issue under Uvicorn/Daphne.
+# the Python 3.12+ QueueHandler/QueueListener issue under Uvicorn/Daphne.
 LOGGING_CONFIG = "logging.config.dictConfig"
 
 

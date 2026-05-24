@@ -2,11 +2,11 @@
   "info": {
     "name": "Fashionistar API — Registration Stress Test",
     "_postman_id": "fashionistar-auth-stress-v1",
-    "description": "Comprehensive stress test collection for the Fashionistar sync registration endpoint.\n\nFlow:\n1. Register (email) → 201 + OTP email prints to console\n2. Verify OTP → 200 + JWT tokens\n3. Login → 200 + JWT tokens\n4. Resend OTP (new user) → 200\n5. Duplicate registration → 400\n6. Invalid payloads → 400 with validation errors\n7. Logout → 200\n\nBaseUrl: http://127.0.0.1:8000\nAuth: Bearer JWT (set from login response)\n\nStress Test (Collection Runner):\n- Set iterations: 50-500\n- Set delay: 0ms\n- Use CSV data file 'stress_data.csv' for unique emails",
+    "description": "Comprehensive stress test collection for the Fashionistar sync registration endpoint.\n\nFlow:\n1. Register (email) → 201 + OTP email prints to console\n2. Verify OTP → 200 + JWT tokens\n3. Login → 200 + JWT tokens\n4. Resend OTP (new user) → 200\n5. Duplicate registration → 400\n6. Invalid payloads → 400 with validation errors\n7. Logout → 200\n\nBaseUrl: http://127.0.0.1:8001\nAuth: Bearer JWT (set from login response)\n\nStress Test (Collection Runner):\n- Set iterations: 50-500\n- Set delay: 0ms\n- Use CSV data file 'stress_data.csv' for unique emails",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    {"key": "baseUrl", "value": "http://127.0.0.1:8000", "type": "string"},
+    {"key": "baseUrl", "value": "http://127.0.0.1:8001", "type": "string"},
     {"key": "accessToken", "value": "", "type": "string"},
     {"key": "refreshToken", "value": "", "type": "string"},
     {"key": "testEmail", "value": "postman_test@fashionistar.io", "type": "string"},

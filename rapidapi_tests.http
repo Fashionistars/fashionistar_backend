@@ -1,7 +1,7 @@
 ### Phase 4 — Cloudinary & Webhook Testing (RapidAPI Client Format)
 ### Designed for the VSCode REST Client / RapidAPI extension
 
-@baseUrl = http://127.0.0.1:8000/api/v1
+@baseUrl = http://127.0.0.1:8001/api/v1
 @authToken = <paste_jwt_token_here>
 
 ### 1. Request Cloudinary Upload Presign Signature (Avatar)

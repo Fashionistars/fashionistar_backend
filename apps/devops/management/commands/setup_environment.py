@@ -242,7 +242,7 @@ class Command(BaseCommand):
         elif environment_type == 'staging':
             base_url = f"https://{environment_name}-staging.helssa.ir"
         else:
-            base_url = "http://localhost:8000"
+            base_url = "http://localhost:8001"
         
         default_services = [
             {

@@ -40,10 +40,10 @@ CELERY_DEVOPS_QUEUE = getattr(settings, 'CELERY_DEVOPS_QUEUE', 'devops')
 
 # URL های پیش‌فرض
 DEFAULT_HEALTH_CHECK_URLS = {
-    'development': 'http://localhost:8000/health/',
+    'development': 'http://localhost:8001/health/',
     'staging': 'https://staging.helssa.ir/health/',
     'production': 'https://helssa.ir/health/',
-    'testing': 'http://localhost:8000/health/',
+    'testing': 'http://localhost:8001/health/',
 }
 
 # تنظیمات environment های پیش‌فرض
