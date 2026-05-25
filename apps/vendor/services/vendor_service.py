@@ -65,7 +65,7 @@ class VendorService:
 
         return (
             VendorProfile.objects.select_related(
-                "user", "setup_state", "payout_profile"
+                "user", "vendor_setup_state", "vendor_payout_profile"
             )
             .prefetch_related("collections")
             .get(user=user)
