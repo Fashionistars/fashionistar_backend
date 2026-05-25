@@ -11,6 +11,7 @@ Endpoints:
 """
 from django.urls import path
 from apps.common.views import CloudinaryPresignView, CloudinaryWebhookView
+from apps.global_platform_settings.views import PublicPlatformSettingsView
 from apps.common.reference_data.views import (
   ReferenceBanksView,
   ReferenceCitiesView,
@@ -66,4 +67,9 @@ urlpatterns = [
   ),
   # GET /api/v1/common/reference/banks/?country=NG
   path("v1/common/reference/banks/", ReferenceBanksView.as_view(), name="reference-banks"),
+
+  # ── Public Platform Settings ──────────────────────────────────────────────
+  # GET /api/v1/platform/settings/public/
+  # Returns public-safe limits (min/max withdrawal) for vendor payout modal.
+  path("v1/platform/settings/public/", PublicPlatformSettingsView.as_view(), name="platform-settings-public"),
 ]
