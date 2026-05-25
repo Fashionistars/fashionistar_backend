@@ -34,7 +34,7 @@ from django.db.models import Avg, Count, F, Q, Sum
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.generics import GenericAPIView, ListAPIView, RetrieveAPIView
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.renderers import BrowsableAPIRenderer
 
@@ -278,7 +278,7 @@ class VendorCustomerBehaviorView(GenericAPIView):
     Uses vendor_orders reverse FK.
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorCustomerBehaviorSerializer
 
@@ -308,7 +308,7 @@ class VendorTopCategoriesView(GenericAPIView):
     Uses vendor_products → categories__name / order_item_product__total.
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorCategoryPerformanceSerializer
 
@@ -335,7 +335,7 @@ class VendorPaymentDistributionView(GenericAPIView):
     Uses vendor_orders reverse FK.
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorPaymentDistributionSerializer
 
@@ -389,24 +389,17 @@ class VendorProductListView(ListAPIView):
         if status_filter:
             qs = qs.filter(status=status_filter)
 
-        products = list(
-            qs.values(
-                "id",
-                "title",
-                "price",
-                "stock_qty",
-                "status",
-                "categories__name",
-                "created_at",
-            ).order_by("-created_at")
-        )
-        return Response(
-            {
-                "status": "success",
-                "count": len(products),
-                "data": products,
-            }
-        )
+        # BUG FIX: get_queryset must return a queryset/list, not a Response.
+        # ListAPIView.list() wraps it in serializer and returns the Response.
+        return qs.values(
+            "id",
+            "title",
+            "price",
+            "stock_qty",
+            "status",
+            "categories__name",
+            "created_at",
+        ).order_by("-created_at")
 
 
 class VendorLowStockView(ListAPIView):
@@ -417,7 +410,7 @@ class VendorLowStockView(ListAPIView):
     Uses vendor_products reverse FK.
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorProductListSerializer  # Reusing list serializer
 
@@ -451,7 +444,7 @@ class VendorTopSellingProductsView(ListAPIView):
     Uses vendor_products → order_item_product__qty.
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorProductListSerializer
 
@@ -506,11 +499,12 @@ class VendorOrderListView(ListAPIView):
         if order_status:
             qs = qs.filter(status=order_status)
 
+        # BUG FIX: removed duplicate "status" key; added "order_status".
         return qs.values(
             "id",
             "total_amount",
             "status",
-            "status",
+            "order_status",
             "created_at",
             "user__email",
         ).order_by("-created_at")
@@ -531,24 +525,29 @@ class VendorOrderDetailView(RetrieveAPIView):
     lookup_url_kwarg = "order_id"
 
     def get_object(self):
+        # BUG FIX: original code raised status.HTTP_404_NOT_FOUND (an integer).
+        # DRF get_object() must raise an exception, not an integer.
+        from rest_framework.exceptions import NotFound
         try:
             profile = _get_profile_or_404(self.request.user)
         except (ValueError, AttributeError):
-            raise status.HTTP_404_NOT_FOUND
+            raise NotFound("Vendor profile not found.")
 
         order_id = self.kwargs.get(self.lookup_url_kwarg)
         try:
             order = profile.vendor_orders.get(pk=order_id)
         except profile.vendor_orders.model.DoesNotExist:
-            raise status.HTTP_404_NOT_FOUND
+            raise NotFound(f"Order {order_id} not found for this vendor.")
 
         return {
             "id": order.pk,
             "total": str(order.total_amount),
             "status": order.status,
-            "status_label": order.status,
+            "order_status": getattr(order, "order_status", order.status),
+            "status_label": getattr(order, "order_status", order.status),
             "date": order.created_at,
             "buyer_email": getattr(order.user, "email", ""),
+            "buyer_name": getattr(order.user, "full_name", None) or "",
         }
 
 
@@ -559,7 +558,7 @@ class VendorOrderStatusCountsView(GenericAPIView):
     Count of orders grouped by payment_status for dashboard badges.
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorPaymentDistributionSerializer  # Reusing structure
 
@@ -590,7 +589,7 @@ class VendorReviewListView(ListAPIView):
     Traversal: vendor_products → review_product.
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorReviewListSerializer
 
@@ -616,7 +615,7 @@ class VendorReviewDetailView(RetrieveAPIView):
     Single review on a vendor product.
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorReviewListSerializer
     lookup_field = "review_id"
@@ -713,7 +712,7 @@ from django.db.models import Avg, Count, Q, Sum
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.generics import GenericAPIView, ListAPIView, RetrieveAPIView
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.renderers import BrowsableAPIRenderer
 
@@ -763,7 +762,7 @@ class VendorAnalyticsSummaryView(GenericAPIView):
     Full analytics snapshot.
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorAnalyticsSummarySerializer
 
@@ -801,7 +800,7 @@ class VendorRevenueChart(GenericAPIView):
     Monthly revenue breakdown.
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorRevenueTrendSerializer
 
@@ -825,7 +824,7 @@ class VendorMonthlyOrderChart(GenericAPIView):
     Monthly count of orders grouped by order_status.
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorMonthlyOrderSerializer
 
@@ -858,7 +857,7 @@ class VendorMonthlyProductChart(GenericAPIView):
     Monthly count of products created.
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorMonthlyProductSerializer
 
@@ -891,7 +890,7 @@ class VendorEarningTrackerView(GenericAPIView):
     Comprehensive earning tracker.
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorEarningTrackerSerializer
 
@@ -936,7 +935,7 @@ class VendorCustomerBehaviorView(GenericAPIView):
     Customer behaviour analysis.
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorCustomerBehaviorSerializer
 
@@ -963,7 +962,7 @@ class VendorTopCategoriesView(GenericAPIView):
     Top performing categories.
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorCategoryPerformanceSerializer
 
@@ -987,7 +986,7 @@ class VendorPaymentDistributionView(GenericAPIView):
     Revenue distribution by payment status.
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorPaymentDistributionSerializer
 
@@ -1013,7 +1012,7 @@ class VendorProductListView(ListAPIView):
     Vendor's own product list.
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorProductListSerializer
 
@@ -1053,7 +1052,7 @@ class VendorLowStockView(ListAPIView):
     Low stock alerts.
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorProductListSerializer  # Reusing list serializer
 
@@ -1086,7 +1085,7 @@ class VendorTopSellingProductsView(ListAPIView):
     Top products by sales.
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorProductListSerializer
 
@@ -1118,7 +1117,7 @@ class VendorOrderListView(ListAPIView):
     Vendor's own order list.
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorOrderListSerializer
 
@@ -1153,7 +1152,7 @@ class VendorOrderDetailView(RetrieveAPIView):
     Single order detail.
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorOrderDetailSerializer
     lookup_field = "id"
@@ -1191,7 +1190,7 @@ class VendorOrderStatusCountsView(GenericAPIView):
     Order counts by status.
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorPaymentDistributionSerializer  # Reusing structure
 
@@ -1217,7 +1216,7 @@ class VendorReviewListView(ListAPIView):
     Reviews on all vendor products.
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorReviewListSerializer
 
@@ -1242,7 +1241,7 @@ class VendorReviewDetailView(RetrieveAPIView):
     Single review detail.
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorReviewListSerializer
     lookup_field = "review_id"
@@ -1283,7 +1282,7 @@ class VendorCouponListView(ListAPIView):
     Vendor's coupons.
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
     serializer_class = VendorCouponListSerializer
 
