@@ -75,7 +75,7 @@ class BlogPostAdmin(
     )
 
     def blog_preview(self, obj):
-        url = obj.image_url
+        url = obj.featured_image_url
         if not url:
             return "-"
         return format_html(
@@ -94,6 +94,19 @@ class BlogMediaAdmin(
     cloudinary_fields = {
         "image": ("fashionistar/catalog/blog/gallery", "blog"),
     }
-    list_display = ["post", "alt_text", "sort_order", "created_at"]
+    list_display = ["post", "media_preview", "alt_text", "sort_order", "created_at"]
     search_fields = ["post__title", "alt_text", "public_id"]
     list_filter = ["created_at", "updated_at"]
+    readonly_fields = ("media_preview", "created_at", "updated_at")
+
+    def media_preview(self, obj):
+        url = obj.image_url
+        if not url:
+            return "-"
+        return format_html(
+            '<img src="{}" width="80" height="80" '
+            'style="object-fit:cover; border-radius:6px; border:1px solid #ddd;" />',
+            url,
+        )
+
+    media_preview.short_description = "Preview"

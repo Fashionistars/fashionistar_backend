@@ -37,6 +37,45 @@ class CommonConfig(AppConfig):
         default_auto_field (str): Default auto field type.
         name (str): App name as used in Django settings.
         verbose_name (str): Human-readable name.
+
+    App configuration for the common app.
+
+    This module defines the configuration for the 'common' Django app,
+    which provides shared utilities, models, and permissions across the
+    project.
+
+    The ``ready()`` hook:
+      1. Connects analytics signal handlers from ``apps.common.signals``
+      2. Subscribes business-event handlers via the EventBus singleton.
+
+    Architecture — Event Bus vs Django Signals:
+    ``signals.py`` handles ANALYTICS ONLY (post_save/post_delete counters).
+    ``event_handlers.py`` handles BUSINESS LIFECYCLE EVENTS via the EventBus.
+    No Django signals are used for cross-app business logic — ever.
+
+  NOTE: Async logging was moved to ``backend.apps.BackendConfig.ready()``
+  which runs first and configures all logging correctly across Django dev
+  server, Uvicorn, Daphne, and Celery.
+"""
+
+import logging
+
+from django.apps import AppConfig
+
+
+class CommonConfig(AppConfig):
+    """
+    Configuration class for the common app.
+
+    ``ready()`` imports ``apps.common.signals`` so that the
+    ``post_save`` / ``post_delete`` handlers are connected as
+    soon as the Django registry is fully loaded. Without this
+    the signal receivers would never be registered.
+
+    Attributes:
+        default_auto_field (str): Default auto field type.
+        name (str): App name as used in Django settings.
+        verbose_name (str): Human-readable name.
     """
 
     default_auto_field = 'django.db.models.BigAutoField'
@@ -57,6 +96,15 @@ class CommonConfig(AppConfig):
         from apps.common.event_handlers import on_order_placed, on_user_registered
         event_bus.subscribe('user.registered', on_user_registered)
         event_bus.subscribe('order.placed', on_order_placed)
+
+        # 3. Cloudinary SDK bootstrap for HTTP worker threads / django admin panel
+        try:
+            from apps.common.tasks.cloudinary import _ensure_cloudinary_config
+            _ensure_cloudinary_config()
+        except Exception as exc:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error("Failed to initialize Cloudinary configuration on startup: %s", exc)
 
 
 logger = logging.getLogger(__name__)
