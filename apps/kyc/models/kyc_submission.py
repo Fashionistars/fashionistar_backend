@@ -81,6 +81,20 @@ class KycSubmission(TimeStampedModel):
         help_text=_("External KYC provider job/session reference ID."),
     )
 
+    # Legal name — resolved from NIN/BVN/CAC documents by admin on approval.
+    # Used to cross-validate bank account holder names at payout registration.
+    # If blank, the bank account name check is advisory only.
+    legal_name = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        help_text=_(
+            "Full legal name as it appears on the government-issued ID (NIN/BVN/CAC). "
+            "Set by admin staff on KYC approval. Used to cross-check bank account "
+            "holder names when vendors register payout accounts."
+        ),
+    )
+
     # Staff reviewer notes (shown to the user on rejection)
     review_notes = models.TextField(blank=True, default="")
 

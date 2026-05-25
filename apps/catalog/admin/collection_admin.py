@@ -41,6 +41,11 @@ class CollectionsAdmin(
         "updated_at",
     )
 
+    def save_model(self, request, obj, form, change):
+        if not obj.user:
+            obj.user = request.user
+        super().save_model(request, obj, form, change)
+
     fieldsets = (
         (
             "Basic Information",

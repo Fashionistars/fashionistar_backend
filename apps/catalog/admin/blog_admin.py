@@ -43,6 +43,11 @@ class BlogPostAdmin(
     readonly_fields = ("blog_preview", "view_count", "created_at", "updated_at")
     inlines = [BlogMediaInline]
 
+    def save_model(self, request, obj, form, change):
+        if not getattr(obj, "author_id", None):
+            obj.author = request.user
+        super().save_model(request, obj, form, change)
+
     fieldsets = (
         (
             "Editorial",
@@ -98,6 +103,11 @@ class BlogMediaAdmin(
     search_fields = ["post__title", "alt_text", "public_id"]
     list_filter = ["created_at", "updated_at"]
     readonly_fields = ("media_preview", "created_at", "updated_at")
+
+    def save_model(self, request, obj, form, change):
+        if not getattr(obj, "uploaded_by_id", None):
+            obj.uploaded_by = request.user
+        super().save_model(request, obj, form, change)
 
     def media_preview(self, obj):
         url = obj.image_url

@@ -63,6 +63,11 @@ class CategoryAdmin(
     actions = [make_active, make_inactive]
     readonly_fields = ("cloudinary_preview", "created_at", "updated_at")
 
+    def save_model(self, request, obj, form, change):
+        if not obj.user:
+            obj.user = request.user
+        super().save_model(request, obj, form, change)
+
     fieldsets = (
         ("Basic Information", {"fields": ("name", "image", "slug")}),
         (
