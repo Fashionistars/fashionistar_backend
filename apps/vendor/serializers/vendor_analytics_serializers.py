@@ -95,5 +95,6 @@ class VendorCouponListSerializer(serializers.Serializer):
     id = serializers.CharField()
     code = serializers.CharField()
     discount = serializers.IntegerField()
-    date = serializers.DateTimeField()
+    discount_type = serializers.CharField(required=False)
+    valid_until = serializers.DateTimeField(required=False, allow_null=True)
     active = serializers.BooleanField()

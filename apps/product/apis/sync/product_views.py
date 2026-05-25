@@ -28,6 +28,7 @@ Design principles (Django 6.0 / DRF):
 from __future__ import annotations
 
 import logging
+import uuid
 
 from django.db.models import F
 from rest_framework import parsers, status
@@ -826,3 +827,28 @@ class AdminVendorReviewSummaryView(APIView):
     def get(self, request, vendor_id):
         summary = get_vendor_review_summary(vendor_id)
         return success_response(data=summary)
+
+
+class VendorCouponDetailView(APIView):
+    """
+    DELETE /api/v1/products/coupons/<uuid:coupon_id>/
+    """
+    renderer_classes = _RENDERERS
+    parser_classes = _PARSERS
+    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsVendor]
+
+    def delete(self, request, coupon_id: uuid):
+        from apps.product.models import Coupon
+        vendor = request.user.vendor_profile
+        try:
+            coupon = Coupon.objects.get(pk=coupon_id, vendor=vendor)
+        except Coupon.DoesNotExist:
+            return error_response(
+                message="Coupon not found.",
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        coupon.delete()
+        return success_response(
+            message="Coupon deactivated successfully.",
+            status=status.HTTP_200_OK,
+        )

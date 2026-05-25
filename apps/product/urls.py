@@ -35,6 +35,7 @@ from apps.product.apis.sync.product_views import (
     ProductReviewListCreateView,
     ProductsByCategoryView,
     VendorCouponListCreateView,
+    VendorCouponDetailView,
     VendorInventoryLogView,
     VendorProductDetailView,
     VendorProductGalleryDeleteView,
@@ -63,6 +64,7 @@ urlpatterns = [
 
     # ── Coupons ──────────────────────────────────────────────────────────────
     path("coupons/", VendorCouponListCreateView.as_view(), name="vendor-coupon-list"),
+    path("coupons/<uuid:coupon_id>/", VendorCouponDetailView.as_view(), name="vendor-coupon-detail"),
 
     # ── Vendor ───────────────────────────────────────────────────────────────
     path("vendor/", VendorProductListCreateView.as_view(), name="vendor-product-list"),
