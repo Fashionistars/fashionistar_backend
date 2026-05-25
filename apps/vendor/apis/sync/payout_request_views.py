@@ -51,8 +51,22 @@ from apps.payment.payout_service import (
 
 logger = logging.getLogger(__name__)
 
-MIN_PAYOUT_AMOUNT = Decimal("1000.00")   # ₦1,000 minimum
-MAX_PAYOUT_AMOUNT = Decimal("10000000.00")  # ₦10,000,000 maximum
+# Fallback constants (used if PlatformSettings row has never been seeded)
+_FALLBACK_MIN_PAYOUT = Decimal("1000.00")
+_FALLBACK_MAX_PAYOUT = Decimal("10000000.00")
+
+
+def _get_payout_limits() -> tuple[Decimal, Decimal]:
+    """Return (min_payout, max_payout) from PlatformSettings (Redis-cached, 60s)."""
+    try:
+        from apps.global_platform_settings.cache import get_platform_settings
+        cfg = get_platform_settings()
+        return cfg.min_withdrawal_ngn, cfg.max_withdrawal_ngn
+    except Exception:
+        return _FALLBACK_MIN_PAYOUT, _FALLBACK_MAX_PAYOUT
+
+
+MIN_PAYOUT_AMOUNT, MAX_PAYOUT_AMOUNT = _get_payout_limits()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -66,8 +80,7 @@ class PayoutRequestSerializer(serializers.Serializer):
     amount = serializers.DecimalField(
         max_digits=20,
         decimal_places=2,
-        min_value=MIN_PAYOUT_AMOUNT,
-        help_text=f"Payout amount in NGN. Minimum: ₦{MIN_PAYOUT_AMOUNT:,.0f}.",
+        help_text="Payout amount in NGN. Minimum determined by platform settings.",
     )
     narration = serializers.CharField(
         max_length=255,
@@ -77,9 +90,15 @@ class PayoutRequestSerializer(serializers.Serializer):
     )
 
     def validate_amount(self, value: Decimal) -> Decimal:
-        if value > MAX_PAYOUT_AMOUNT:
+        # Read limits fresh from Redis on every request (60s TTL cache)
+        min_amount, max_amount = _get_payout_limits()
+        if value < min_amount:
             raise serializers.ValidationError(
-                f"Payout amount cannot exceed ₦{MAX_PAYOUT_AMOUNT:,.0f}. "
+                f"Payout amount must be at least ₦{min_amount:,.0f}."
+            )
+        if value > max_amount:
+            raise serializers.ValidationError(
+                f"Payout amount cannot exceed ₦{max_amount:,.0f}. "
                 "For larger payouts, contact Fashionistar Finance."
             )
         return value
