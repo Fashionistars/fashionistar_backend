@@ -56,6 +56,7 @@ class VendorDashboardService:
             aget_vendor_reviews_summary,
             aget_vendor_coupon_stats,
             aget_vendor_wallet_data,
+            aget_vendor_low_stock_alerts,
         )
 
         profile = await aget_vendor_profile_or_none(user)
@@ -76,6 +77,7 @@ class VendorDashboardService:
             reviews,
             coupons,
             wallet,
+            low_stock_alerts,
         ) = await asyncio.gather(
             aget_vendor_setup_state_data(profile),
             aget_vendor_payout_profile_data(profile),
@@ -84,6 +86,7 @@ class VendorDashboardService:
             aget_vendor_reviews_summary(profile, limit=5),
             aget_vendor_coupon_stats(profile),
             aget_vendor_wallet_data(profile),
+            aget_vendor_low_stock_alerts(profile, threshold=5),
         )
 
         return {
@@ -114,14 +117,15 @@ class VendorDashboardService:
                 "average_rating": float(profile.average_rating),
                 "review_count":   profile.review_count,
             },
-            "setup_state":    setup_data,
-            "payout_profile": payout_data,
-            "recent_orders":  recent_orders,
-            "products":       products,
-            "reviews":        reviews,
-            "coupons":        coupons,
-            "wallet":         wallet,
-            "recent_activity": [],  # Future: activity-stream service sprint
+            "setup_state":     setup_data,
+            "payout_profile":  payout_data,
+            "recent_orders":   recent_orders,
+            "products":        products,
+            "reviews":         reviews,
+            "coupons":         coupons,
+            "wallet":          wallet,
+            "recent_activity": [],
+            "low_stock_alerts": low_stock_alerts,
         }
 
     @classmethod

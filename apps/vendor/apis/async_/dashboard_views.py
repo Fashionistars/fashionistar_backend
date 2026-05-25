@@ -189,3 +189,87 @@ async def get_vendor_analytics(request):
     except Exception:
         logger.exception("get_vendor_analytics: unexpected error for user=%s", getattr(user, "pk", "?"))
         raise HttpError(500, "Analytics fetch failed.")
+
+
+# ── Audit Logs ─────────────────────────────────────────────────────────────
+
+
+@router.get("/audit-logs/")
+async def get_vendor_audit_logs(
+    request,
+    page: int = 1,
+    page_size: int = 20,
+    category: str = "",
+    severity: str = "",
+):
+    """
+    GET /api/v1/ninja/vendor/audit-logs/
+
+    Returns the authenticated vendor's own audit event log, newest first.
+    Scoped strictly to the requesting actor — vendors can only see their own events.
+
+    Query params:
+        page       (int, default 1)       — pagination page
+        page_size  (int, default 20, max 50) — rows per page
+        category   (str, optional)        — filter by event_category
+        severity   (str, optional)        — filter by severity level
+    """
+    from apps.audit_logs.models import AuditEventLog
+
+    user = _require_vendor_user(request)
+    page_size = min(int(page_size), 50)
+    offset = (page - 1) * page_size
+
+    try:
+        qs = AuditEventLog.objects.filter(actor=user).order_by("-created_at")
+
+        if category:
+            qs = qs.filter(event_category=category)
+        if severity:
+            qs = qs.filter(severity=severity)
+
+        total = await qs.acount()
+
+        events = []
+        async for ev in qs.select_related().values(
+            "id",
+            "event_type",
+            "event_category",
+            "severity",
+            "action",
+            "actor_email",
+            "ip_address",
+            "device_type",
+            "browser_family",
+            "os_family",
+            "country",
+            "request_method",
+            "request_path",
+            "response_status",
+            "duration_ms",
+            "resource_type",
+            "resource_id",
+            "is_compliance",
+            "error_message",
+            "created_at",
+        )[offset : offset + page_size]:
+            events.append({
+                **ev,
+                "id": str(ev["id"]),
+                "created_at": ev["created_at"].isoformat() if ev["created_at"] else None,
+            })
+
+        return {
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "has_more": (offset + page_size) < total,
+            "events": events,
+        }
+    except Exception:
+        logger.exception(
+            "get_vendor_audit_logs: unexpected error for user=%s",
+            getattr(user, "pk", "?"),
+        )
+        raise HttpError(500, "Audit log fetch failed.")
+
