@@ -621,10 +621,11 @@ class VendorReviewDetailView(RetrieveAPIView):
     lookup_field = "review_id"
 
     def get_object(self):
+        from rest_framework.exceptions import NotFound
         try:
             profile = _get_profile_or_404(self.request.user)
         except (ValueError, AttributeError):
-            raise status.HTTP_404_NOT_FOUND
+            raise NotFound("Vendor profile not found.")
 
         review_id = self.kwargs.get(self.lookup_field)
         review_data = (
@@ -639,7 +640,7 @@ class VendorReviewDetailView(RetrieveAPIView):
             .first()
         )
         if not review_data:
-            raise status.HTTP_404_NOT_FOUND
+            raise NotFound(f"Review {review_id} not found for this vendor.")
         return review_data
 
 
@@ -674,7 +675,7 @@ class VendorCouponListView(ListAPIView):
         elif active_param == "false":
             qs = qs.filter(active=False)
 
-        return qs.values("id", "code", "discount", "date", "active").order_by("-created_at")
+        return qs.values("id", "code", "discount", "valid_until", "active").order_by("-id")
 
 
 # apps/vendor/apis/sync/analytics_views.py
