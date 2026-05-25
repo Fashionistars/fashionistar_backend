@@ -26,7 +26,12 @@ import cloudinary.api
 
 # ── Environment loader ────────────────────────────────────────────────
 env = Env()
-env.read_env()
+env_file_path = os.environ.get("ENV_FILE_PATH")
+if env_file_path and os.path.exists(env_file_path):
+    env.read_env(env_file_path)
+else:
+    env.read_env()
+
 
 # ── Path resolution ───────────────────────────────────────────────────
 # BASE_DIR → fashionistar_backend/  (root of the Django project)
@@ -408,6 +413,8 @@ STORAGES = {
     },
 }
 
+WHITENOISE_MANIFEST_STRICT = False
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
@@ -632,6 +639,9 @@ CORS_ALLOWED_ORIGINS = env.list(
     "CORS_ALLOWED_ORIGINS",
     default=DEFAULT_FRONTEND_ORIGINS,
 )
+if "*" in CORS_ALLOWED_ORIGINS:
+    CORS_ALLOW_ALL_ORIGINS = True
+    CORS_ALLOWED_ORIGINS = []
 
 CORS_ALLOW_HEADERS = [
     "accept",

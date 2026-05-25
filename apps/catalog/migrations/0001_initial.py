@@ -69,7 +69,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='Brand',
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(default=uuid6.uuid7, editable=False, primary_key=True, serialize=False)),
                 ('title', models.CharField(max_length=100)),
                 ('description', models.TextField(blank=True, null=True)),
                 ('image', cloudinary.models.CloudinaryField(blank=True, help_text='Cloudinary image public_id. Set via the /api/v1/upload/presign/ → direct upload → webhook flow. Use .url in serializers to retrieve the full HTTPS secure_url.', max_length=255, null=True, verbose_name='image')),
@@ -111,7 +111,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='Collection',
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(default=uuid6.uuid7, editable=False, primary_key=True, serialize=False)),
                 ('title', models.CharField(blank=True, max_length=255, null=True)),
                 ('sub_title', models.CharField(blank=True, max_length=255, null=True)),
                 ('description', models.TextField(blank=True, null=True)),

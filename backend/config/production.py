@@ -36,6 +36,7 @@ ALLOWED_HOSTS = env.list(  # noqa: F405
 # HTTPS / HSTS — Production Security
 # =============================================================================
 SECURE_SSL_REDIRECT = True                    # Force all HTTP → HTTPS
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # Respect GCP Load Balancer SSL
 SESSION_COOKIE_SECURE = True                  # Cookies only over HTTPS
 CSRF_COOKIE_SECURE = True                     # CSRF cookie only over HTTPS
 SECURE_BROWSER_XSS_FILTER = True             # Legacy but harmless
@@ -68,6 +69,9 @@ CORS_ALLOWED_ORIGINS = env.list(  # noqa: F405
         "https://app.fashionistar.net",
     ]
 )
+if "*" in CORS_ALLOWED_ORIGINS:
+    CORS_ALLOW_ALL_ORIGINS = True
+    CORS_ALLOWED_ORIGINS = []
 CORS_ALLOW_CREDENTIALS = True
 
 CORS_ALLOW_HEADERS = [
@@ -103,14 +107,28 @@ CORS_ALLOW_METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
 # =============================================================================
 # STATIC FILES — Compressed & manifest in production
 # =============================================================================
+from whitenoise.storage import CompressedManifestStaticFilesStorage
+
+class NonStrictCompressedManifestStaticFilesStorage(CompressedManifestStaticFilesStorage):
+    manifest_strict = False
+
+    def hashed_name(self, name, content=None, filename=None):
+        try:
+            return super().hashed_name(name, content, filename)
+        except ValueError:
+            # Fallback to the original unhashed name if the file is missing from disk
+            return name
+
 STORAGES = {
     "default": {
         "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
     },
     "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        "BACKEND": "backend.config.production.NonStrictCompressedManifestStaticFilesStorage",
     },
 }
+
+WHITENOISE_MANIFEST_STRICT = False
 
 
 # =============================================================================
