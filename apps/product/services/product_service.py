@@ -506,20 +506,16 @@ def create_review(
     """
     # ── Idempotency guard ──────────────────────────────────────────────────────
     if idempotency_key:
-        try:
-            ProductReview.objects.get(
-                idempotency_key=idempotency_key,
-                user=user,
-                product=product,
-            )
-            ProductReview.objects.get(
-                user=user,
-                product=product,
-            )
-            # Already exists — do not create a duplicate
-            return ProductReview.objects.get(idempotency_key=idempotency_key)
-        except ProductReview.DoesNotExist:
-            pass
+        existing_by_key = ProductReview.objects.filter(
+            idempotency_key=idempotency_key,
+            user=user,
+            product=product,
+        ).first()
+        if existing_by_key:
+            return existing_by_key
+
+    if ProductReview.objects.filter(user=user, product=product).exists():
+        raise ValueError("already reviewed")
 
     obj = ProductReview.objects.create(
         product=product,

@@ -1288,16 +1288,30 @@ class VendorCouponListView(ListAPIView):
     serializer_class = VendorCouponListSerializer
 
     def get_queryset(self):
+        from django.db.models import F
         try:
             profile = _get_profile_or_404(self.request.user)
         except (ValueError, AttributeError):
             return []
 
         active_param = self.request.query_params.get("active", "").strip().lower()
-        qs = profile.vendor_coupons.all()
+        qs = profile.vendor_platform_wide_coupons.filter(is_deleted=False)
         if active_param == "true":
             qs = qs.filter(active=True)
         elif active_param == "false":
             qs = qs.filter(active=False)
 
-        return qs.values("id", "code", "discount", "date", "active").order_by("-created_at")
+        return qs.annotate(
+            discount=F("discount_value"),
+            valid_until=F("valid_to"),
+        ).order_by("-created_at")
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True)
+        return Response({
+            "success": True,
+            "status": "success",
+            "count": len(serializer.data),
+            "data": serializer.data
+        })
