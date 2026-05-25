@@ -78,6 +78,8 @@ from apps.vendor.apis.sync.profile_views import (
     VendorSetupStateView,
     VendorSetPinView,
     VendorVerifyPinView,
+    PublicVendorListView,
+    PublicVendorDetailView,
 )
 
 app_name = "vendor_domain"
@@ -89,6 +91,10 @@ urlpatterns = [
     path("payout/",      VendorPayoutView.as_view(),     name="payout"),
     path("pin/set/",     VendorSetPinView.as_view(),     name="pin-set"),
     path("pin/verify/",  VendorVerifyPinView.as_view(),  name="pin-verify"),
+
+    # ── Public (AllowAny) ─────────────────────────────────────────
+    path("public/",             PublicVendorListView.as_view(),         name="public-list"),
+    path("public/<slug:store_slug>/", PublicVendorDetailView.as_view(), name="public-detail"),
 
     # ── Analytics ─────────────────────────────────────────────────
     path("analytics/",               VendorAnalyticsSummaryView.as_view(),   name="analytics"),

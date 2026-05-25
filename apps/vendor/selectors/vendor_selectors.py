@@ -511,3 +511,34 @@ async def aget_vendor_top_categories(vendor_profile, limit: int = 5) -> list[dic
     except Exception as exc:
         logger.error("aget_vendor_top_categories vendor=%s: %s", vendor_profile.pk, exc)
         return []
+
+
+async def aget_vendor_low_stock_alerts(vendor_profile, threshold: int = 5) -> list[dict]:
+    """
+    Async: products with stock_qty below the given threshold.
+
+    Traversal: vendor_products reverse FK (Product model).
+
+    Args:
+        vendor_profile: VendorProfile instance.
+        threshold: Minimum stock quantity — products below this value are returned (default 5).
+
+    Returns:
+        list[dict] with title (str) and stock_qty (int), ordered by stock_qty ascending.
+    """
+    try:
+        qs = (
+            vendor_profile.vendor_products
+            .filter(stock_qty__lt=threshold)
+            .order_by("stock_qty")
+            .values("title", "stock_qty")[:20]
+        )
+        return [row async for row in qs]
+    except Exception as exc:
+        logger.error("aget_vendor_low_stock_alerts vendor=%s: %s", vendor_profile.pk, exc)
+        return []
+
+
+async def aget_vendor_setup_state_data_extended(vendor_profile) -> dict:
+    """Alias — delegates to aget_vendor_setup_state_data (backward compat)."""
+    return await aget_vendor_setup_state_data(vendor_profile)

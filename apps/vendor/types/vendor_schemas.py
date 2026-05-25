@@ -96,16 +96,17 @@ class VendorProfileOut(Schema):
 
 
 class VendorDashboardOut(Schema):
-    profile:          dict[str, Any]
-    analytics:        AnalyticsOut
-    setup_state:      SetupStateOut
-    payout_profile:   PayoutProfileOut   = Field(default_factory=PayoutProfileOut)
-    recent_orders:    list[Any]          = Field(default_factory=list)
-    products:         list[Any]          = Field(default_factory=list)
-    reviews:          list[Any]          = Field(default_factory=list)
-    coupons:          CouponStatsOut     = Field(default_factory=CouponStatsOut)
-    wallet:           WalletOut          = Field(default_factory=WalletOut)
-    recent_activity:  list[Any]          = Field(default_factory=list)
+    profile:             dict[str, Any]
+    analytics:           AnalyticsOut
+    setup_state:         SetupStateOut
+    payout_profile:      PayoutProfileOut   = Field(default_factory=PayoutProfileOut)
+    recent_orders:       list[Any]          = Field(default_factory=list)
+    products:            list[Any]          = Field(default_factory=list)
+    reviews:             list[Any]          = Field(default_factory=list)
+    coupons:             CouponStatsOut     = Field(default_factory=CouponStatsOut)
+    wallet:              WalletOut          = Field(default_factory=WalletOut)
+    recent_activity:     list[Any]          = Field(default_factory=list)
+    low_stock_alerts:    list[Any]          = Field(default_factory=list)
 
 
 # ══════════════════════════════════════════════════════════════════
