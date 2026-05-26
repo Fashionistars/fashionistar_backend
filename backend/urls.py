@@ -77,7 +77,7 @@ urlpatterns = [
     # ── Health Check ─────────────────────────────────────────────────────────
     # GET /api/v1/health/
     # Used by: AWS ELB, Render.com, Kubernetes probes, Uptime Robot
-    path("v1/health/", HealthCheckView.as_view(), name="health-check"),
+    path("api/v1/health/", HealthCheckView.as_view(), name="health-check"),
     # Admin URL
     path("admin/", admin.site.urls),
 

@@ -182,7 +182,7 @@ class AccountNotVerifiedError(AuthenticationError):
         from django.conf import settings as _s
         _base       = getattr(_s, 'FRONTEND_URL', 'http://localhost:3000').rstrip('/')
         _verify_url = verify_url  or f"{_base}/auth/verify-otp"
-        _resend_url = resend_url  or f"{_base}/auth/verify-otp"
+        _resend_url = resend_url  or f"{_base}/auth/resend-otp"
         detail = (
             "Your account has not been verified yet. "
             "Please check your email or phone for the OTP code we sent during registration. "

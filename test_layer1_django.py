@@ -136,8 +136,8 @@ def run_tests():
     r = client.post("/api/v1/password/reset-phone-confirm/", {
         "email_or_phone": email,
         "otp": "999999", # wrong
-        "password": "YetAnother!Password#2026",
-        "password2": "YetAnother!Password#2026"
+        "new_password": "YetAnother!Password#2026",
+        "new_password_confirm": "YetAnother!Password#2026"
     }, format="json")
     try: data = r.json()
     except: data = json.loads(r.content)
