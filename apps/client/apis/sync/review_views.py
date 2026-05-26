@@ -61,13 +61,12 @@ class ClientReviewCreateView(generics.CreateAPIView):
             )
 
         data = request.data.copy()
-        data["product"] = product_id
+        data["product_id"] = product_id
 
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
 
-        headers = self.get_success_headers(serializer.data)
         logger.info(
             "Review created: product=%s rating=%s user=%s",
             product_id,
@@ -78,5 +77,4 @@ class ClientReviewCreateView(generics.CreateAPIView):
             data=serializer.data,
             message="Review submitted successfully.",
             status=status.HTTP_201_CREATED,
-            headers=headers,
         )

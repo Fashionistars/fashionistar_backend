@@ -15,7 +15,7 @@ from apps.order.models.order import (
     OrderPaymentRecord,
     OrderCommercialTransitionLog,
 )
-from apps.order.models.custom_order import (
+from apps.custom_order.models import (
     CustomOrder,
     CustomOrderMilestone,
     CustomOrderStatus,

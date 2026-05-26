@@ -24,6 +24,7 @@ from rest_framework.views import APIView
 
 from apps.common.renderers import success_response, error_response
 from apps.common.permissions import IsAuthenticatedAndActive
+from apps.common.permissions import IsClient
 from apps.order.serializers import (
     OrderListSerializer,
     OrderDetailSerializer,
@@ -48,6 +49,7 @@ from apps.common.pagination import DefaultPagination
 logger = logging.getLogger(__name__)
 
 _PERMS = [IsAuthenticated, IsAuthenticatedAndActive]
+_CLIENT_PERMS = [IsAuthenticated, IsAuthenticatedAndActive, IsClient]
 
 
 def _get_vendor_profile_from_user(user):
@@ -69,7 +71,7 @@ def _get_vendor_profile_from_user(user):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class ClientOrderListView(APIView):
-    permission_classes = _PERMS
+    permission_classes = _CLIENT_PERMS
 
     def get(self, request):
         qs = get_user_orders(request.user.id)
@@ -80,7 +82,7 @@ class ClientOrderListView(APIView):
 
 
 class PlaceOrderView(APIView):
-    permission_classes = _PERMS
+    permission_classes = _CLIENT_PERMS
 
     def post(self, request):
         serializer = PlaceOrderSerializer(data=request.data)
@@ -109,7 +111,7 @@ class PlaceOrderView(APIView):
 
 
 class ClientOrderDetailView(APIView):
-    permission_classes = _PERMS
+    permission_classes = _CLIENT_PERMS
 
     def get(self, request, order_id):
         order = get_order_by_id_for_user(order_id, request.user.id)
@@ -119,7 +121,7 @@ class ClientOrderDetailView(APIView):
 
 
 class ClientCancelOrderView(APIView):
-    permission_classes = _PERMS
+    permission_classes = _CLIENT_PERMS
 
     def post(self, request, order_id):
         order = get_order_by_id_for_user(order_id, request.user.id)
@@ -141,7 +143,7 @@ class ClientCancelOrderView(APIView):
 
 class ConfirmDeliveryView(APIView):
     """Client confirms delivery → releases escrow."""
-    permission_classes = _PERMS
+    permission_classes = _CLIENT_PERMS
 
     def post(self, request, order_id):
         order = get_order_by_id_for_user(order_id, request.user.id)
