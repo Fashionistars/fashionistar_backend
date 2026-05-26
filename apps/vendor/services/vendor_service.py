@@ -132,7 +132,7 @@ class VendorService:
         has_basics = bool(profile.store_name and profile.description)
         if has_basics:
             try:
-                profile.setup_state.mark_profile_complete()
+                profile.vendor_setup_state.mark_profile_complete()
             except Exception:
                 pass  # VendorSetupState may not exist yet — provisioner handles creation
 
@@ -226,7 +226,7 @@ class VendorService:
 
         # Mark bank_details onboarding step complete
         try:
-            profile.setup_state.mark_bank_details()
+            profile.vendor_setup_state.mark_bank_details()
         except Exception:
             pass
 
@@ -319,7 +319,7 @@ class VendorService:
         Marks the first_product onboarding milestone and triggers onboarding_done check.
         """
         try:
-            vendor_profile.setup_state.mark_first_product()
+            vendor_profile.vendor_setup_state.mark_first_product()
             logger.info(
                 "VendorService.on_first_product_listed: first_product marked for vendor=%s",
                 vendor_profile.pk,

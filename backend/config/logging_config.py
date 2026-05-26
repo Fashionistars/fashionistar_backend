@@ -544,6 +544,11 @@ def build_logging_config(
             'level': 'INFO',
             'propagate': False,
         },
+        'django.template': {
+            'handlers': _handlers_for('file.django'),
+            'level': 'INFO',
+            'propagate': False,
+        },
         'django.db.backends': {
             # SQL query logging — ⚠️ DANGER: DEBUG logs full INSERT with password
             # hashes (pbkdf2_sha256$...) to the console. Never enable DEBUG here.

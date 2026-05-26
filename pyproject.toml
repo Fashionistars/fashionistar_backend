@@ -81,7 +81,7 @@ dependencies = [
     "charset-normalizer",
     "idna",
     "urllib3",
-    "asgiref",
+    "asgiref >= 3.8.1",
     "attrs",
     "click",
     "colorama",

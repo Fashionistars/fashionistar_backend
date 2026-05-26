@@ -278,6 +278,7 @@ DATABASES = {
         ssl_require=False,
     )
 }
+DATABASES["default"]["DISABLE_SERVER_SIDE_CURSORS"] = True
 
 # SQLite-specific options (ignored for PostgreSQL)
 if "sqlite" in DATABASES["default"]["ENGINE"]:
