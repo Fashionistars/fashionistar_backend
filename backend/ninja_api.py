@@ -29,8 +29,8 @@ Router registry  ← SINGLE source-of-truth:
     /api/v1/ninja/payments/                  → apps/payment
     /api/v1/ninja/kyc/                       → apps/kyc
     /api/v1/ninja/measurements/              → apps/measurements
-    /api/v1/ninja/client/custom-orders/      → apps/order (custom_order_views)
-    /api/v1/ninja/vendor/custom-orders/      → apps/order (custom_order_views)
+    /api/v1/ninja/client/custom-orders/      → apps/apps/custom-orders (custom_order_views)
+    /api/v1/ninja/vendor/custom-orders/      → apps/apps/custom-orders (custom_order_views)
 """
 import logging
 
