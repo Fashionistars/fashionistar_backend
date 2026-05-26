@@ -120,6 +120,20 @@ def _thumbnail_url(field) -> str | None:
         return None
 
 
+def _safe_get(obj, attr, default=None):
+    if not obj:
+        return default
+    # Access __dict__ directly first to bypass descriptor lookup and prevent deferred database reload triggers
+    if attr in obj.__dict__:
+        val = obj.__dict__[attr]
+        if val is not None:
+            return val
+    try:
+        return getattr(obj, attr, default)
+    except Exception:
+        return default
+
+
 def _vendor_out(vendor) -> dict:
     if not vendor:
         return {
@@ -130,20 +144,20 @@ def _vendor_out(vendor) -> dict:
             "is_verified": False,
         }
     logo = (
-        getattr(vendor, "logo_url", None)
-        or getattr(vendor, "logo", None)
-        or getattr(vendor, "avatar", None)
+        _safe_get(vendor, "logo_url")
+        or _safe_get(vendor, "logo")
+        or _safe_get(vendor, "avatar")
     )
     return {
         "id": str(vendor.pk),
         "store_name": (
-            getattr(vendor, "store_name", None)
-            or getattr(vendor, "business_name", None)
+            _safe_get(vendor, "store_name")
+            or _safe_get(vendor, "business_name")
             or str(vendor)
         ),
-        "slug": getattr(vendor, "store_slug", None) or getattr(vendor, "slug", None),
+        "slug": _safe_get(vendor, "store_slug") or _safe_get(vendor, "slug"),
         "avatar_url": _url(logo),
-        "is_verified": getattr(vendor, "is_verified", False),
+        "is_verified": bool(_safe_get(vendor, "is_verified", False)),
     }
 
 
@@ -554,11 +568,15 @@ async def validate_coupon_async_static(request, payload: "CouponValidateIn"):
 
 @router.get("/{slug}/", auth=None, summary="Get product detail by slug")
 async def get_product(request, slug: str):
-    product = await aget_product_detail(slug)
-    if not product:
-        raise HttpError(404, "Product not found.")
-    await async_increment_product_views(product.pk)
-    return _product_detail_out(product)
+    try:
+        product = await aget_product_detail(slug)
+        if not product:
+            raise HttpError(404, "Product not found.")
+        await async_increment_product_views(product.pk)
+        return _product_detail_out(product)
+    except asyncio.CancelledError:
+        logger.debug("Request for product slug=%s cancelled by client", slug)
+        raise
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -576,11 +594,15 @@ async def get_product_bundle(request, slug: str):
     if user is not None:
         request.auth = user
 
-    product, reviews, in_wishlist = await asyncio.gather(
-        aget_product_detail(slug),
-        alist_reviews_for_product_slug(slug, limit=20),
-        auser_has_wishlist_slug(user, slug),
-    )
+    try:
+        product, reviews, in_wishlist = await asyncio.gather(
+            aget_product_detail(slug),
+            alist_reviews_for_product_slug(slug, limit=20),
+            auser_has_wishlist_slug(user, slug),
+        )
+    except asyncio.CancelledError:
+        logger.debug("Request for product bundle slug=%s cancelled by client", slug)
+        raise
 
     if not product:
         raise HttpError(404, "Product not found.")

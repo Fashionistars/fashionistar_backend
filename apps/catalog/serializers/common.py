@@ -4,11 +4,15 @@ def safe_media_url(obj, *field_names: str) -> str:
         if not value:
             continue
         if isinstance(value, str):
-            return value
-        try:
-            url = value.url
-        except (AttributeError, ValueError):
-            continue
+            url = value
+        else:
+            try:
+                url = value.url
+            except (AttributeError, ValueError):
+                continue
         if url:
+            # Advice 1: Auto-inject Cloudinary optimal transformations (q_auto, f_auto)
+            if "res.cloudinary.com" in url and "/upload/" in url:
+                return url.replace("/upload/", "/upload/f_auto,q_auto/")
             return url
     return ""
