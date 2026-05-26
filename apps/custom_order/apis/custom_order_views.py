@@ -23,6 +23,7 @@ import logging
 from typing import List
 from uuid import UUID
 
+from asgiref.sync import sync_to_async
 from django.utils import timezone
 from ninja import Router
 from ninja.errors import HttpError
@@ -69,8 +70,8 @@ def _require_vendor(request):
 
 # ── Serializer ────────────────────────────────────────────────────────────────
 
-def _serialize_custom_order(co) -> dict:
-    """Serialize a CustomOrder ORM instance to a dict matching CustomOrderOut schema."""
+def _serialize_custom_order_sync(co) -> dict:
+    """Serialize a CustomOrder ORM instance to a dict (executed synchronously)."""
     milestones = [
         {
             "id": str(m.id),
@@ -103,6 +104,11 @@ def _serialize_custom_order(co) -> dict:
     }
 
 
+async def _serialize_custom_order(co) -> dict:
+    """Async-safe custom order serialization wrapper using sync_to_async."""
+    return await sync_to_async(_serialize_custom_order_sync)(co)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  CLIENT ROUTES
 # ══════════════════════════════════════════════════════════════════════════════
@@ -133,7 +139,7 @@ async def create_custom_order(request, payload: CustomOrderCreateIn):
         status=CustomOrderStatus.SUBMITTED,
     )
     logger.info("CustomOrder %s created by client %s", co.reference, user.pk)
-    return 201, _serialize_custom_order(co)
+    return 201, await _serialize_custom_order(co)
 
 
 @client_custom_order_router.get("/", response=List[CustomOrderOut])
@@ -151,7 +157,7 @@ async def list_client_custom_orders(request, status: str | None = None):
     )
     if status:
         qs = qs.filter(status=status)
-    return [_serialize_custom_order(co) async for co in qs]
+    return [await _serialize_custom_order(co) async for co in qs]
 
 
 @client_custom_order_router.get("/{custom_order_id}/", response=CustomOrderOut)
@@ -172,7 +178,7 @@ async def get_client_custom_order(request, custom_order_id: UUID):
         )
     except CustomOrder.DoesNotExist:
         raise HttpError(404, "Custom order not found.")
-    return _serialize_custom_order(co)
+    return await _serialize_custom_order(co)
 
 
 @client_custom_order_router.post(
@@ -249,7 +255,7 @@ async def pay_next_milestone(
         .prefetch_related("milestones")
         .aget()
     )
-    return _serialize_custom_order(co)
+    return await _serialize_custom_order(co)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -279,7 +285,7 @@ async def list_vendor_custom_orders(request, status: str | None = None):
     )
     if status:
         qs = qs.filter(status=status)
-    return [_serialize_custom_order(co) async for co in qs]
+    return [await _serialize_custom_order(co) async for co in qs]
 
 
 @vendor_custom_order_router.post(
@@ -340,7 +346,7 @@ async def approve_custom_order(
         .prefetch_related("milestones")
         .aget()
     )
-    return _serialize_custom_order(co)
+    return await _serialize_custom_order(co)
 
 
 @vendor_custom_order_router.post(
@@ -377,4 +383,4 @@ async def cancel_custom_order(request, custom_order_id: UUID):
     await co.asave(update_fields=["status", "updated_at"])
     logger.info("CustomOrder %s cancelled by vendor %s", co.reference, user.pk)
 
-    return _serialize_custom_order(co)
+    return await _serialize_custom_order(co)

@@ -229,7 +229,7 @@ class CustomOrder(TimeStampedModel, SoftDeleteModel):
         self.save(update_fields=[
             "status", "agreed_amount_ngn", "vendor_approval_note", "approved_at", "updated_at"
         ])
-        self._seed_milestones()
+        self.create_milestones()
 
     def start_production(self) -> None:
         """Marks order as in production (after first milestone paid)."""
