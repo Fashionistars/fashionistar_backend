@@ -98,6 +98,7 @@ CORS_ALLOW_HEADERS = [
     "x-client-geo-lat",
     "x-client-geo-lng",
     "x-client-geo-accuracy",
+    "ngrok-skip-browser-warning",
 ]
 
 CORS_ALLOW_METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
