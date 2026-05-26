@@ -23,12 +23,14 @@ Router registry  ← SINGLE source-of-truth:
     /api/v1/ninja/catalog/         → apps/catalog
     /api/v1/ninja/products/        → apps/product
     /api/v1/ninja/cart/            → apps/cart
-    /api/v1/ninja/orders/          → apps/order
-    /api/v1/ninja/wallet/          → apps/wallet
-    /api/v1/ninja/transactions/    → apps/transactions
-    /api/v1/ninja/payments/        → apps/payment
-    /api/v1/ninja/kyc/             → apps/kyc
-    /api/v1/ninja/measurements/    → apps/measurements
+    /api/v1/ninja/orders/                    → apps/order
+    /api/v1/ninja/wallet/                    → apps/wallet
+    /api/v1/ninja/transactions/              → apps/transactions
+    /api/v1/ninja/payments/                  → apps/payment
+    /api/v1/ninja/kyc/                       → apps/kyc
+    /api/v1/ninja/measurements/              → apps/measurements
+    /api/v1/ninja/client/custom-orders/      → apps/order (custom_order_views)
+    /api/v1/ninja/vendor/custom-orders/      → apps/order (custom_order_views)
 """
 import logging
 
@@ -227,3 +229,21 @@ try:
     logger.info("✅ NinjaAPI: measurements router registered at /api/v1/ninja/measurements/")
 except Exception as exc:  # pragma: no cover
     logger.warning("ℹ️ NinjaAPI: measurements router FAILED to register: %s", exc)
+
+
+# Custom Order (Client) domain: /api/v1/ninja/client/custom-orders/
+try:
+    from apps.order.apis.async_.custom_order_views import client_custom_order_router
+    ninja_api.add_router("/client/custom-orders/", client_custom_order_router)
+    logger.info("✅ NinjaAPI: client custom-orders router registered at /api/v1/ninja/client/custom-orders/")
+except Exception as exc:  # pragma: no cover
+    logger.warning("ℹ️ NinjaAPI: client custom-orders router FAILED to register: %s", exc)
+
+
+# Custom Order (Vendor) domain: /api/v1/ninja/vendor/custom-orders/
+try:
+    from apps.order.apis.async_.custom_order_views import vendor_custom_order_router
+    ninja_api.add_router("/vendor/custom-orders/", vendor_custom_order_router)
+    logger.info("✅ NinjaAPI: vendor custom-orders router registered at /api/v1/ninja/vendor/custom-orders/")
+except Exception as exc:  # pragma: no cover
+    logger.warning("ℹ️ NinjaAPI: vendor custom-orders router FAILED to register: %s", exc)
