@@ -57,6 +57,9 @@ security_logger = logging.getLogger('security')
 # 1. REQUEST ID INJECTION  (dual WSGI + ASGI)
 # ================================================================
 
+_asyncio_exception_handler_installed = False
+
+
 class RequestIDMiddleware:
     """
     Inject a unique UUID4 ``X-Request-ID`` into every request / response.
@@ -95,6 +98,32 @@ class RequestIDMiddleware:
 
     async def __acall__(self, request):
         """Asynchronous path — ASGI (Uvicorn / Daphne). Zero thread overhead."""
+        global _asyncio_exception_handler_installed
+        if not _asyncio_exception_handler_installed:
+            try:
+                loop = asyncio.get_running_loop()
+                default_handler = loop.get_exception_handler()
+
+                def custom_handler(loop, context):
+                    message = context.get("message", "")
+                    exception = context.get("exception")
+                    # Silently ignore the shielded future CancelledError warnings typical under Python 3.14 request aborts
+                    if (
+                        "CancelledError exception in shielded future" in message
+                        or isinstance(exception, asyncio.CancelledError)
+                    ):
+                        return
+                    if default_handler:
+                        default_handler(loop, context)
+                    else:
+                        loop.default_exception_handler(context)
+
+                loop.set_exception_handler(custom_handler)
+                _asyncio_exception_handler_installed = True
+                logger.debug("Successfully installed custom asyncio event loop exception handler for shielded future warnings.")
+            except Exception as e:
+                logger.debug("Failed to set custom asyncio exception handler: %s", e)
+
         request_id = (
             request.headers.get('X-Request-Id')
             or request.headers.get('X-Request-ID')
