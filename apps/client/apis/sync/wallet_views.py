@@ -242,3 +242,85 @@ class ClientWalletWithdrawView(APIView):
             message="Withdrawal request submitted. Funds will arrive in 1–3 business days.",
             status=status.HTTP_201_CREATED,
         )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# WALLET TOP-UP INITIATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class ClientWalletTopUpView(APIView):
+    """
+    POST /api/v1/client/wallet/topup/initiate/
+
+    Initiates a Paystack wallet top-up payment intent.
+    Returns a payment_url the client redirects to for card payment.
+
+    Body:
+      {
+        "amount": 5000,                          // NGN amount (number)
+        "payment_method": "card",                // card | bank_transfer
+        "callback_url": "https://.../verify"     // optional redirect URL
+      }
+
+    Response (200):
+      {
+        "status": "pending",
+        "payment_url": "https://paystack.com/...",
+        "reference": "..."
+      }
+    """
+
+    permission_classes = [IsAuthenticated, IsClient]
+    renderer_classes = [CustomJSONRenderer, BrowsableAPIRenderer]
+
+    def post(self, request):
+        amount = request.data.get("amount")
+        callback_url = request.data.get("callback_url", "")
+
+        try:
+            amount_decimal = Decimal(str(amount))
+            if amount_decimal <= 0:
+                raise ValueError("Amount must be greater than zero.")
+        except (InvalidOperation, ValueError, TypeError):
+            return error_response(
+                message="Invalid amount. Must be a positive number.",
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            from apps.payment.models import PaymentPurpose
+            from apps.payment.services import PaymentIntentService
+            idempotency_key = (
+                request.headers.get("Idempotency-Key")
+                or f"wallet-topup:{request.user.pk}:{amount_decimal}"
+            )
+            intent = PaymentIntentService.initialize_paystack(
+                user=request.user,
+                amount=amount_decimal,
+                purpose=PaymentPurpose.WALLET_TOPUP,
+                currency="NGN",
+                idempotency_key=idempotency_key,
+                metadata={"callback_url": callback_url, "source": "client-dashboard"},
+            )
+        except Exception as exc:
+            logger.warning(
+                "ClientWalletTopUpView: failed user=%s amount=%s error=%s",
+                getattr(request.user, "email", "?"),
+                amount,
+                exc,
+            )
+            return error_response(
+                message=str(exc),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return success_response(
+            data={
+                "status": "pending",
+                "payment_url": intent.authorization_url or "",
+                "reference": intent.reference,
+            },
+            message="Top-up payment initialized. Redirect to payment_url to complete.",
+            status=status.HTTP_201_CREATED,
+        )

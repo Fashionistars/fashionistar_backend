@@ -445,6 +445,15 @@ class WalletWithdrawalService:
         from apps.transactions.services import TransactionLedgerService
 
         assert_kyc_approved(user)
+        cfg = get_platform_settings()
+        if amount < cfg.min_withdrawal_ngn:
+            raise ValidationError(
+                f"Minimum withdrawal is {cfg.min_withdrawal_ngn} NGN."
+            )
+        if amount > cfg.max_withdrawal_ngn:
+            raise ValidationError(
+                f"Maximum withdrawal is {cfg.max_withdrawal_ngn} NGN."
+            )
 
         if idempotency_key:
             existing = user.financial_transactions_sent.filter(

@@ -126,12 +126,16 @@ class ClientProfileService:
         Returns:
             Newly created ClientAddress instance.
         """
-        address = user.client_addresses.create(**address_data)
+        profile = ClientProfile.get_or_create_for_user(user)
+        address = profile.client_addresses.create(**address_data)
         logger.info(
             "ClientProfileService.add_address: created address %s for client %s",
             address.pk,
             user.pk,
         )
+        if address.is_default:
+            profile.default_shipping_address = address.street_address
+            profile.save(update_fields=["default_shipping_address", "updated_at"])
         # ── Audit event ──────────────────────────────────────────────────────────
         try:
             from apps.audit_logs.services.client import client_audit
@@ -162,7 +166,8 @@ class ClientProfileService:
         address.save()  # save() enforces uniqueness of default
 
         # Mirror to profile shortcut field
-        client_profile.update(default_shipping_address=address.street_address)
+        client_profile.default_shipping_address = address.street_address
+        client_profile.save(update_fields=["default_shipping_address", "updated_at"])
 
         logger.info(
             "ClientProfileService.set_default_address: address %s set as default for client %s",

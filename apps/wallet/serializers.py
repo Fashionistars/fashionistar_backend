@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
+from apps.global_platform_settings.cache import get_platform_settings
 from apps.wallet.models import Wallet, WalletHold
 
 
@@ -95,6 +96,18 @@ class WalletWithdrawalSerializer(serializers.Serializer):
     bank_code = serializers.CharField(max_length=20)
     account_number = serializers.RegexField(regex=r"^\d{10}$", max_length=10, min_length=10)
     account_name = serializers.CharField(max_length=160)
+
+    def validate_amount(self, value: Decimal) -> Decimal:
+        cfg = get_platform_settings()
+        if value < cfg.min_withdrawal_ngn:
+            raise serializers.ValidationError(
+                f"Minimum withdrawal is {cfg.min_withdrawal_ngn} NGN."
+            )
+        if value > cfg.max_withdrawal_ngn:
+            raise serializers.ValidationError(
+                f"Maximum withdrawal is {cfg.max_withdrawal_ngn} NGN."
+            )
+        return value
 
 
 class WalletWithdrawalResponseSerializer(serializers.Serializer):

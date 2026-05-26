@@ -233,7 +233,7 @@ except Exception as exc:  # pragma: no cover
 
 # Custom Order (Client) domain: /api/v1/ninja/client/custom-orders/
 try:
-    from apps.order.apis.async_.custom_order_views import client_custom_order_router
+    from apps.custom_order.apis.custom_order_views import client_custom_order_router
     ninja_api.add_router("/client/custom-orders/", client_custom_order_router)
     logger.info("✅ NinjaAPI: client custom-orders router registered at /api/v1/ninja/client/custom-orders/")
 except Exception as exc:  # pragma: no cover
@@ -242,7 +242,7 @@ except Exception as exc:  # pragma: no cover
 
 # Custom Order (Vendor) domain: /api/v1/ninja/vendor/custom-orders/
 try:
-    from apps.order.apis.async_.custom_order_views import vendor_custom_order_router
+    from apps.custom_order.apis.custom_order_views import vendor_custom_order_router
     ninja_api.add_router("/vendor/custom-orders/", vendor_custom_order_router)
     logger.info("✅ NinjaAPI: vendor custom-orders router registered at /api/v1/ninja/vendor/custom-orders/")
 except Exception as exc:  # pragma: no cover
