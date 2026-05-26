@@ -15,7 +15,11 @@ from apps.order.models.order import (
     OrderPaymentRecord,
     OrderCommercialTransitionLog,
 )
-from apps.custom_order.models import (
+
+# CustomOrder domain has been extracted to apps.custom_order.
+# Import here for backwards-compatibility only — use apps.custom_order directly
+# in new code.
+from apps.custom_order.models import (  # noqa: F401
     CustomOrder,
     CustomOrderMilestone,
     CustomOrderStatus,
@@ -38,7 +42,7 @@ __all__ = [
     "OrderStatusHistory",
     "OrderPaymentRecord",
     "OrderCommercialTransitionLog",
-    # Custom Order
+    # Custom Order — re-exported for backwards compat; canonical location: apps.custom_order
     "CustomOrder",
     "CustomOrderMilestone",
     "CustomOrderStatus",
