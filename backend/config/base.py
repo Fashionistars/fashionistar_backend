@@ -188,6 +188,7 @@ INSTALLED_APPS = [
         "apps.chat",           # Phase 5 (P1): Buyer-Vendor real-time messaging, offers, moderation
         "apps.support",        # Phase 5 (P2): Customer dispute & ticket management domain
         "apps.kyc",            # Phase 6: Identity verification (KYC) domain
+        "apps.custom_order",   # Phase 7: Bespoke commission (Custom Order) domain
         # ── Third Party ──────────────────────────────────────────────────────────
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",  # JWT logout blacklisting
