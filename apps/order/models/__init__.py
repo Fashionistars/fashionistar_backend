@@ -15,6 +15,13 @@ from apps.order.models.order import (
     OrderPaymentRecord,
     OrderCommercialTransitionLog,
 )
+from apps.order.models.custom_order import (
+    CustomOrder,
+    CustomOrderMilestone,
+    CustomOrderStatus,
+    MilestonePaymentStatus,
+    MILESTONE_PERCENTAGES,
+)
 
 __all__ = [
     "OrderStatus",
@@ -31,4 +38,10 @@ __all__ = [
     "OrderStatusHistory",
     "OrderPaymentRecord",
     "OrderCommercialTransitionLog",
+    # Custom Order
+    "CustomOrder",
+    "CustomOrderMilestone",
+    "CustomOrderStatus",
+    "MilestonePaymentStatus",
+    "MILESTONE_PERCENTAGES",
 ]
