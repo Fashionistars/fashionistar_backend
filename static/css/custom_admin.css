@@ -1,17 +1,723 @@
-/* Custom Jazzmin Admin Styles */
+/*
+ * FASHIONISTAR SUPER-ADMIN — Custom CSS (2026 Edition)
+ * Theme: Clean Minimalist / Flatly Light
+ * Font: Inter (Google Fonts)
+ * Version: 4.0.0
+ */
 
-/* Fix the large logo on the login screen */
+/* ── 1. GOOGLE FONTS ──────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* ── 2. DESIGN TOKENS ─────────────────────────────────────────────────────── */
+:root {
+  --fsn-primary:       #6366f1;   /* Indigo — brand */
+  --fsn-primary-dark:  #4f46e5;
+  --fsn-primary-light: #e0e7ff;
+  --fsn-accent:        #10b981;   /* Emerald — success */
+  --fsn-danger:        #ef4444;
+  --fsn-warning:       #f59e0b;
+  --fsn-info:          #3b82f6;
+  --fsn-surface:       #ffffff;
+  --fsn-surface-2:     #f8fafc;
+  --fsn-border:        #e2e8f0;
+  --fsn-text:          #1e293b;
+  --fsn-text-muted:    #64748b;
+  --fsn-radius:        8px;
+  --fsn-radius-sm:     4px;
+  --fsn-shadow:        0 1px 3px 0 rgba(0,0,0,.08), 0 1px 2px -1px rgba(0,0,0,.06);
+  --fsn-shadow-md:     0 4px 6px -1px rgba(0,0,0,.08), 0 2px 4px -2px rgba(0,0,0,.06);
+  --fsn-transition:    150ms cubic-bezier(0.4,0,0.2,1);
+}
+
+/* ── 3. BASE TYPOGRAPHY ───────────────────────────────────────────────────── */
+body,
+.wrapper,
+.content-wrapper,
+.main-header,
+.main-sidebar,
+.main-footer {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  color: var(--fsn-text) !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── 4. TOP NAVBAR ────────────────────────────────────────────────────────── */
+.main-header.navbar {
+  border-bottom: 1px solid var(--fsn-border) !important;
+  box-shadow: var(--fsn-shadow) !important;
+  backdrop-filter: blur(8px);
+}
+
+.main-header .navbar-brand {
+  font-weight: 700 !important;
+  letter-spacing: -0.02em !important;
+  color: var(--fsn-primary) !important;
+  font-size: 1rem !important;
+}
+
+/* ── 5. SIDEBAR ───────────────────────────────────────────────────────────── */
+.main-sidebar {
+  border-right: 1px solid var(--fsn-border) !important;
+  box-shadow: none !important;
+}
+
+.main-sidebar .brand-link {
+  border-bottom: 1px solid var(--fsn-border) !important;
+  padding: 14px 16px !important;
+  background: var(--fsn-surface) !important;
+}
+
+.main-sidebar .brand-link .brand-image {
+  max-height: 32px !important;
+  width: auto !important;
+  object-fit: contain;
+}
+
+.main-sidebar .brand-link .brand-text {
+  font-weight: 700 !important;
+  font-size: 0.9rem !important;
+  letter-spacing: -0.01em;
+}
+
+/* Sidebar nav items */
+.nav-sidebar .nav-item > .nav-link {
+  border-radius: var(--fsn-radius-sm) !important;
+  margin: 1px 8px !important;
+  padding: 7px 12px !important;
+  font-size: 0.8125rem !important;
+  font-weight: 500 !important;
+  transition: background var(--fsn-transition), color var(--fsn-transition) !important;
+  color: var(--fsn-text-muted) !important;
+}
+
+.nav-sidebar .nav-item > .nav-link:hover,
+.nav-sidebar .nav-item > .nav-link.active {
+  background: var(--fsn-primary-light) !important;
+  color: var(--fsn-primary) !important;
+}
+
+.nav-sidebar .nav-item > .nav-link .nav-icon {
+  width: 1.25rem !important;
+  font-size: 0.8125rem !important;
+  margin-right: 6px !important;
+  color: inherit !important;
+}
+
+/* Sidebar section headers */
+.nav-sidebar .nav-header {
+  font-size: 0.625rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  color: var(--fsn-text-muted) !important;
+  padding: 12px 20px 4px !important;
+}
+
+/* ── 6. CONTENT AREA ──────────────────────────────────────────────────────── */
+.content-wrapper {
+  background: var(--fsn-surface-2) !important;
+  min-height: calc(100vh - 57px) !important;
+}
+
+.content {
+  padding: 20px 24px !important;
+}
+
+.content-header {
+  padding: 12px 24px !important;
+  background: var(--fsn-surface) !important;
+  border-bottom: 1px solid var(--fsn-border) !important;
+  margin-bottom: 0 !important;
+}
+
+.content-header h1,
+.content-header .breadcrumb-item.active {
+  font-size: 1.125rem !important;
+  font-weight: 600 !important;
+  color: var(--fsn-text) !important;
+}
+
+/* ── 7. CARDS & BOXES ─────────────────────────────────────────────────────── */
+.card,
+.box {
+  border: 1px solid var(--fsn-border) !important;
+  border-radius: var(--fsn-radius) !important;
+  box-shadow: var(--fsn-shadow) !important;
+  background: var(--fsn-surface) !important;
+  margin-bottom: 20px !important;
+}
+
+.card-header,
+.box-header {
+  background: var(--fsn-surface) !important;
+  border-bottom: 1px solid var(--fsn-border) !important;
+  padding: 12px 16px !important;
+  font-weight: 600 !important;
+  font-size: 0.875rem !important;
+  color: var(--fsn-text) !important;
+  border-radius: var(--fsn-radius) var(--fsn-radius) 0 0 !important;
+}
+
+/* ── 8. CHANGE LIST TABLE ─────────────────────────────────────────────────── */
+#result_list {
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  border: 1px solid var(--fsn-border) !important;
+  border-radius: var(--fsn-radius) !important;
+  overflow: hidden !important;
+  width: 100% !important;
+  font-size: 0.8125rem !important;
+}
+
+#result_list thead th {
+  background: var(--fsn-surface-2) !important;
+  border-bottom: 1px solid var(--fsn-border) !important;
+  color: var(--fsn-text-muted) !important;
+  font-weight: 600 !important;
+  font-size: 0.75rem !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  padding: 10px 14px !important;
+  white-space: nowrap !important;
+}
+
+#result_list thead th a {
+  color: var(--fsn-text-muted) !important;
+  text-decoration: none !important;
+}
+
+#result_list thead th a:hover {
+  color: var(--fsn-primary) !important;
+}
+
+#result_list tbody tr {
+  border-bottom: 1px solid var(--fsn-border) !important;
+  transition: background var(--fsn-transition) !important;
+}
+
+#result_list tbody tr:hover {
+  background: var(--fsn-primary-light) !important;
+}
+
+#result_list tbody td {
+  padding: 8px 14px !important;
+  vertical-align: middle !important;
+  color: var(--fsn-text) !important;
+}
+
+#result_list tbody td a {
+  color: var(--fsn-primary) !important;
+  font-weight: 500 !important;
+  text-decoration: none !important;
+}
+
+#result_list tbody td a:hover {
+  text-decoration: underline !important;
+}
+
+/* ── 9. STATUS BADGE SYSTEM ───────────────────────────────────────────────── */
+.fsn-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+/* These work with format_html() inline span styles globally */
+span[style*="color:#22c55e"],
+span[style*="color: #22c55e"] { font-weight: 600; }
+
+span[style*="color:#ef4444"],
+span[style*="color: #ef4444"] { font-weight: 600; }
+
+/* Badge pills used by our admin format_html() helpers */
+.badge-published  { background: #dcfce7; color: #166534; }
+.badge-draft      { background: #f1f5f9; color: #475569; }
+.badge-pending    { background: #fef3c7; color: #92400e; }
+.badge-rejected   { background: #fee2e2; color: #991b1b; }
+.badge-archived   { background: #e5e7eb; color: #374151; }
+.badge-active     { background: #dcfce7; color: #166534; }
+.badge-deleted    { background: #fee2e2; color: #991b1b; }
+.badge-verified   { background: #dbeafe; color: #1e40af; }
+.badge-processing { background: #ede9fe; color: #5b21b6; }
+.badge-completed  { background: #dcfce7; color: #166534; }
+.badge-failed     { background: #fee2e2; color: #991b1b; }
+
+/* ── 10. IMAGE THUMBNAILS ─────────────────────────────────────────────────── */
+/* Cloudinary previews in changelist + changeform */
+img[height="40"],
+img[height="50"],
+img[height="70"] {
+  border-radius: var(--fsn-radius-sm) !important;
+  object-fit: cover !important;
+  border: 1px solid var(--fsn-border) !important;
+  vertical-align: middle !important;
+}
+
+img[height="120"] {
+  border-radius: var(--fsn-radius) !important;
+  object-fit: cover !important;
+  border: 1px solid var(--fsn-border) !important;
+  max-width: 160px !important;
+}
+
+/* Colour swatch squares */
+div[style*="border-radius:4px"][style*="border:1px solid"] {
+  display: inline-block !important;
+  border-radius: var(--fsn-radius-sm) !important;
+  vertical-align: middle !important;
+}
+
+/* ── 11. FIELDSETS ────────────────────────────────────────────────────────── */
+.module h2,
+.fieldset h2 {
+  background: var(--fsn-primary) !important;
+  color: #fff !important;
+  border-radius: var(--fsn-radius-sm) !important;
+  padding: 8px 14px !important;
+  font-size: 0.8125rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.01em !important;
+}
+
+.module.collapsed h2 {
+  background: var(--fsn-surface-2) !important;
+  color: var(--fsn-text-muted) !important;
+  border: 1px solid var(--fsn-border) !important;
+}
+
+fieldset {
+  border: 1px solid var(--fsn-border) !important;
+  border-radius: var(--fsn-radius) !important;
+  padding: 12px 16px !important;
+  margin-bottom: 16px !important;
+}
+
+/* ── 12. FORM CONTROLS ────────────────────────────────────────────────────── */
+.form-control,
+input[type="text"],
+input[type="email"],
+input[type="number"],
+input[type="url"],
+input[type="password"],
+select,
+textarea {
+  border: 1px solid var(--fsn-border) !important;
+  border-radius: var(--fsn-radius-sm) !important;
+  font-family: 'Inter', sans-serif !important;
+  font-size: 0.8125rem !important;
+  padding: 6px 10px !important;
+  transition: border-color var(--fsn-transition), box-shadow var(--fsn-transition) !important;
+  background: var(--fsn-surface) !important;
+  color: var(--fsn-text) !important;
+}
+
+.form-control:focus,
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--fsn-primary) !important;
+  box-shadow: 0 0 0 3px rgba(99,102,241,.12) !important;
+  outline: none !important;
+}
+
+/* ── 13. BUTTONS ──────────────────────────────────────────────────────────── */
+.btn,
+input[type="submit"],
+.button {
+  border-radius: var(--fsn-radius-sm) !important;
+  font-family: 'Inter', sans-serif !important;
+  font-size: 0.8125rem !important;
+  font-weight: 500 !important;
+  padding: 6px 14px !important;
+  transition: all var(--fsn-transition) !important;
+}
+
+.btn-primary,
+input[type="submit"].default {
+  background: var(--fsn-primary) !important;
+  border-color: var(--fsn-primary) !important;
+  color: #fff !important;
+}
+
+.btn-primary:hover {
+  background: var(--fsn-primary-dark) !important;
+  border-color: var(--fsn-primary-dark) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* ── 14. INLINE TABLES ────────────────────────────────────────────────────── */
+.inline-group .tabular table thead th {
+  background: var(--fsn-surface-2) !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  color: var(--fsn-text-muted) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  padding: 8px 10px !important;
+}
+
+.inline-group .tabular table tbody td {
+  padding: 6px 10px !important;
+  vertical-align: middle !important;
+  font-size: 0.8125rem !important;
+}
+
+.inline-group h2 {
+  font-size: 0.875rem !important;
+  color: var(--fsn-text) !important;
+}
+
+/* ── 15. TABS (Jazzmin horizontal_tabs) ───────────────────────────────────── */
+.jazzmin-tabs .nav-tabs {
+  border-bottom: 2px solid var(--fsn-border) !important;
+  gap: 4px !important;
+}
+
+.jazzmin-tabs .nav-tabs .nav-link {
+  border: none !important;
+  border-bottom: 2px solid transparent !important;
+  margin-bottom: -2px !important;
+  padding: 8px 16px !important;
+  font-size: 0.8125rem !important;
+  font-weight: 500 !important;
+  color: var(--fsn-text-muted) !important;
+  border-radius: var(--fsn-radius-sm) var(--fsn-radius-sm) 0 0 !important;
+  transition: all var(--fsn-transition) !important;
+}
+
+.jazzmin-tabs .nav-tabs .nav-link.active,
+.jazzmin-tabs .nav-tabs .nav-link:hover {
+  color: var(--fsn-primary) !important;
+  border-bottom-color: var(--fsn-primary) !important;
+  background: var(--fsn-primary-light) !important;
+}
+
+/* ── 16. FILTERS SIDEBAR ──────────────────────────────────────────────────── */
+#changelist-filter {
+  background: var(--fsn-surface) !important;
+  border-left: 1px solid var(--fsn-border) !important;
+  border-radius: 0 !important;
+  min-width: 200px !important;
+}
+
+#changelist-filter h2 {
+  background: var(--fsn-surface-2) !important;
+  color: var(--fsn-text-muted) !important;
+  font-size: 0.6875rem !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+  padding: 10px 14px !important;
+  border-bottom: 1px solid var(--fsn-border) !important;
+}
+
+#changelist-filter h3 {
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  color: var(--fsn-text) !important;
+  padding: 8px 14px 4px !important;
+}
+
+#changelist-filter ul li a {
+  font-size: 0.8125rem !important;
+  color: var(--fsn-text-muted) !important;
+  padding: 4px 14px !important;
+  display: block !important;
+  transition: color var(--fsn-transition) !important;
+}
+
+#changelist-filter ul li a:hover,
+#changelist-filter ul li.selected a {
+  color: var(--fsn-primary) !important;
+  font-weight: 500 !important;
+  text-decoration: none !important;
+}
+
+/* ── 17. BREADCRUMBS ──────────────────────────────────────────────────────── */
+.breadcrumb {
+  font-size: 0.8125rem !important;
+  background: transparent !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.breadcrumb-item a {
+  color: var(--fsn-primary) !important;
+  text-decoration: none !important;
+}
+
+.breadcrumb-item.active {
+  color: var(--fsn-text-muted) !important;
+}
+
+/* ── 18. PAGINATION ───────────────────────────────────────────────────────── */
+.paginator {
+  font-size: 0.8125rem !important;
+  color: var(--fsn-text-muted) !important;
+}
+
+.paginator a {
+  color: var(--fsn-primary) !important;
+  border: 1px solid var(--fsn-border) !important;
+  border-radius: var(--fsn-radius-sm) !important;
+  padding: 3px 8px !important;
+  text-decoration: none !important;
+  transition: all var(--fsn-transition) !important;
+}
+
+.paginator a:hover {
+  background: var(--fsn-primary-light) !important;
+  border-color: var(--fsn-primary) !important;
+}
+
+.paginator .this-page {
+  background: var(--fsn-primary) !important;
+  color: #fff !important;
+  border-radius: var(--fsn-radius-sm) !important;
+  padding: 3px 8px !important;
+  font-weight: 600 !important;
+}
+
+/* ── 19. SEARCH BAR ───────────────────────────────────────────────────────── */
+#toolbar {
+  background: var(--fsn-surface) !important;
+  border-bottom: 1px solid var(--fsn-border) !important;
+  padding: 10px 16px !important;
+  display: flex !important;
+  gap: 12px !important;
+  align-items: center !important;
+}
+
+#searchbar {
+  border: 1px solid var(--fsn-border) !important;
+  border-radius: 20px !important;
+  padding: 6px 14px !important;
+  font-size: 0.8125rem !important;
+  min-width: 280px !important;
+  transition: all var(--fsn-transition) !important;
+}
+
+#searchbar:focus {
+  border-color: var(--fsn-primary) !important;
+  box-shadow: 0 0 0 3px rgba(99,102,241,.12) !important;
+  outline: none !important;
+}
+
+/* ── 20. ACTIONS BAR ──────────────────────────────────────────────────────── */
+.actions {
+  background: var(--fsn-surface-2) !important;
+  border: 1px solid var(--fsn-border) !important;
+  border-radius: var(--fsn-radius-sm) !important;
+  padding: 8px 12px !important;
+  margin-bottom: 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+}
+
+.actions select {
+  border-radius: var(--fsn-radius-sm) !important;
+  font-size: 0.8125rem !important;
+}
+
+/* ── 21. LOGIN PAGE ───────────────────────────────────────────────────────── */
+body.login {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+}
+
+.login-box {
+  border-radius: 16px !important;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2) !important;
+  background: var(--fsn-surface) !important;
+  overflow: hidden !important;
+}
+
+.login-box .login-logo {
+  background: linear-gradient(135deg, var(--fsn-primary) 0%, var(--fsn-primary-dark) 100%) !important;
+  padding: 30px 20px !important;
+  margin-bottom: 0 !important;
+}
+
 .login-box .login-logo img {
-    max-height: 120px !important;
-    width: auto !important;
-    max-width: 100% !important;
-    object-fit: contain;
-    margin-bottom: 20px;
+  max-height: 56px !important;
+  width: auto !important;
+  max-width: 100% !important;
+  object-fit: contain !important;
+  filter: brightness(0) invert(1) !important;
 }
 
-/* Fix sidebar brand logo size if it's too large */
-.brand-link .brand-image {
-    max-height: 35px !important;
-    width: auto !important;
-    object-fit: contain;
+.login-box .login-logo a {
+  color: #fff !important;
+  font-size: 1.125rem !important;
+  font-weight: 700 !important;
 }
+
+.login-box .login-card-body {
+  padding: 28px 32px !important;
+}
+
+/* ── 22. KPI CARDS (Dashboard index) ──────────────────────────────────────── */
+.fsn-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.fsn-kpi-card {
+  background: var(--fsn-surface);
+  border: 1px solid var(--fsn-border);
+  border-radius: var(--fsn-radius);
+  padding: 20px;
+  box-shadow: var(--fsn-shadow);
+  transition: box-shadow var(--fsn-transition), transform var(--fsn-transition);
+}
+
+.fsn-kpi-card:hover {
+  box-shadow: var(--fsn-shadow-md);
+  transform: translateY(-2px);
+}
+
+.fsn-kpi-card .kpi-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--fsn-text);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.fsn-kpi-card .kpi-label {
+  font-size: 0.8125rem;
+  color: var(--fsn-text-muted);
+  font-weight: 500;
+}
+
+.fsn-kpi-card .kpi-icon {
+  font-size: 1.5rem;
+  margin-bottom: 12px;
+  color: var(--fsn-primary);
+}
+
+.fsn-kpi-card.kpi-revenue  .kpi-icon { color: #10b981; }
+.fsn-kpi-card.kpi-orders   .kpi-icon { color: #6366f1; }
+.fsn-kpi-card.kpi-vendors  .kpi-icon { color: #f59e0b; }
+.fsn-kpi-card.kpi-kyc      .kpi-icon { color: #ef4444; }
+
+/* ── 23. EMPTY STATE ──────────────────────────────────────────────────────── */
+.empty_changelist {
+  text-align: center !important;
+  padding: 60px 20px !important;
+  color: var(--fsn-text-muted) !important;
+  font-size: 0.9375rem !important;
+}
+
+/* ── 24. MESSAGES (alerts) ────────────────────────────────────────────────── */
+.alert,
+ul.messagelist li {
+  border-radius: var(--fsn-radius) !important;
+  font-size: 0.875rem !important;
+  padding: 10px 16px !important;
+  border: none !important;
+  font-weight: 500 !important;
+}
+
+ul.messagelist li.success { background: #dcfce7 !important; color: #166534 !important; }
+ul.messagelist li.warning { background: #fef3c7 !important; color: #92400e !important; }
+ul.messagelist li.error   { background: #fee2e2 !important; color: #991b1b !important; }
+ul.messagelist li.info    { background: #dbeafe !important; color: #1e40af !important; }
+
+/* ── 25. FOOTER ───────────────────────────────────────────────────────────── */
+.main-footer {
+  border-top: 1px solid var(--fsn-border) !important;
+  background: var(--fsn-surface) !important;
+  font-size: 0.75rem !important;
+  color: var(--fsn-text-muted) !important;
+  padding: 10px 24px !important;
+}
+
+/* ── 26. RESPONSIVE TWEAKS ────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .content { padding: 12px !important; }
+  #result_list thead { display: none; }
+  #result_list tbody td { display: block; padding: 4px 12px !important; }
+  .fsn-kpi-grid { grid-template-columns: 1fr 1fr; }
+}
+
+/* ── 27. MISC POLISH ──────────────────────────────────────────────────────── */
+/* Slightly reduce header jumbo padding */
+.page-header { margin-bottom: 0 !important; }
+
+/* Darken the "object-tools" (top right Save / View on site) buttons */
+ul.object-tools li a {
+  border-radius: 20px !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.02em !important;
+  text-transform: uppercase !important;
+  padding: 5px 14px !important;
+  background: var(--fsn-primary) !important;
+  color: #fff !important;
+  border: none !important;
+  transition: background var(--fsn-transition) !important;
+}
+
+ul.object-tools li a:hover {
+  background: var(--fsn-primary-dark) !important;
+}
+
+ul.object-tools li a.viewsitelink {
+  background: var(--fsn-accent) !important;
+}
+
+/* Scroll indicator on very long inlines */
+.inline-group .tabular {
+  overflow-x: auto !important;
+}
+
+/* Submit row */
+.submit-row {
+  background: var(--fsn-surface-2) !important;
+  border-top: 1px solid var(--fsn-border) !important;
+  border-radius: 0 0 var(--fsn-radius) var(--fsn-radius) !important;
+  padding: 12px 16px !important;
+  display: flex !important;
+  gap: 10px !important;
+  flex-wrap: wrap !important;
+}
+
+/* Help text in forms */
+.help,
+.helptext {
+  font-size: 0.75rem !important;
+  color: var(--fsn-text-muted) !important;
+  margin-top: 3px !important;
+}
+
+/* Deleted badge for soft-delete column */
+.badge-soft-deleted {
+  background: #fee2e2;
+  color: #991b1b;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+/* Active badge */
+.badge-soft-active {
+  background: #dcfce7;
+  color: #166534;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+/* ── END ──────────────────────────────────────────────────────────────────── */
