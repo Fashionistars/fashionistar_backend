@@ -2,6 +2,7 @@
 import logging
 from typing import List, Optional
 from ninja import Router
+
 from apps.admin_backend.permissions import admin_auth
 from apps.support.admin_backend.selectors import AdminSupportSelector
 from apps.support.admin_backend.schemas import AdminSupportTicketSchema
@@ -18,7 +19,7 @@ async def list_tickets(
     search: Optional[str] = None,
 ):
     """
-    Get all support tickets.
+    Get all support tickets in the system.
     """
     filters = {"status": status, "category": category, "search": search}
     return await AdminSupportSelector.aget_tickets_list(filters)
@@ -26,7 +27,7 @@ async def list_tickets(
 @router.get("/{ticket_id}/", response=AdminSupportTicketSchema, auth=admin_auth)
 async def get_ticket_detail(request, ticket_id: str):
     """
-    Get details of a specific support ticket.
+    Get detailed information and full chat/message log of a specific support ticket.
     """
     try:
         return await AdminSupportSelector.aget_ticket_detail(ticket_id)

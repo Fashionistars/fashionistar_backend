@@ -12,7 +12,7 @@ from ninja import Router
 from apps.admin_backend.permissions import admin_auth
 from .selectors import list_kyc_submissions_admin, get_kyc_detail_admin, get_kyc_stats_admin
 from .schemas import AdminKYCStatsSchema, AdminKYCApproveSchema, AdminKYCRejectSchema, AdminKYCActionResponse
-from .services import AdminKYCService
+from .services import AdminKycService
 
 logger = logging.getLogger(__name__)
 router = Router(tags=["Admin - KYC"])
@@ -70,11 +70,11 @@ async def admin_kyc_quick_approve(request, submission_id: str, payload: AdminKYC
     """
     from asgiref.sync import sync_to_async
     try:
-        approve_fn = sync_to_async(AdminKYCService.approve_kyc, thread_sensitive=True)
+        approve_fn = sync_to_async(AdminKycService.approve_kyc, thread_sensitive=True)
         submission = await approve_fn(
             submission_id=submission_id,
-            legal_name=payload.legal_name or "",
             admin_user=request.auth,
+            provider_reference=payload.legal_name or "",
         )
     except Exception as exc:
         return AdminKYCActionResponse(success=False, message=str(exc))
@@ -90,12 +90,12 @@ async def admin_kyc_quick_reject(request, submission_id: str, payload: AdminKYCR
     """Async PATCH fast-path for KYC rejection."""
     from asgiref.sync import sync_to_async
     try:
-        reject_fn = sync_to_async(AdminKYCService.reject_kyc, thread_sensitive=True)
+        reject_fn = sync_to_async(AdminKycService.reject_kyc, thread_sensitive=True)
         submission = await reject_fn(
             submission_id=submission_id,
-            notes=payload.notes,
-            allow_resubmit=payload.allow_resubmit,
             admin_user=request.auth,
+            review_notes=payload.notes,
+            allow_resubmit=payload.allow_resubmit,
         )
     except Exception as exc:
         return AdminKYCActionResponse(success=False, message=str(exc))
