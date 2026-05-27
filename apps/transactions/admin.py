@@ -114,15 +114,15 @@ class TransactionAdmin(admin.ModelAdmin):
 
     list_display = [
         "reference", "type_badge", "status_badge",
-        "formatted_amount", "currency", "direction",
+        "formatted_amount", "direction",
         "from_user", "to_user", "order_id",
-        "initiated_at", "completed_at",
+        "initiated_at",
     ]
     list_filter = [
-        "transaction_type", "status", "direction", "currency",
+        "transaction_type", "status", "direction",
     ]
     search_fields = [
-        "reference", "external_reference", "provider_reference",
+        "reference", "provider_reference", "idempotency_key",
         "order_id", "from_user__email", "to_user__email",
     ]
     ordering = ["-initiated_at"]
@@ -157,7 +157,7 @@ class TransactionAdmin(admin.ModelAdmin):
         }),
         (_("Financials"), {
             "fields": (
-                "amount", "fee_amount", "net_amount", "currency",
+                "amount", "fee_amount", "net_amount",
                 "exchange_rate", "original_amount", "original_currency",
             ),
         }),
@@ -258,11 +258,17 @@ class TransactionAdmin(admin.ModelAdmin):
 
 @admin.register(TransactionDispute)
 class TransactionDisputeAdmin(admin.ModelAdmin):
+    """
+    Dispute management surface.
+    Actual fields: transaction, initiated_by, status, reason,
+    disputed_amount, resolved_by, resolved_at, resolution_notes, evidence.
+    NO currency field on TransactionDispute.
+    """
     list_display = [
         "transaction", "initiated_by", "status_badge",
-        "disputed_amount", "currency", "created_at",
+        "disputed_amount", "created_at",
     ]
-    list_filter = ["status", "currency"]
+    list_filter = ["status"]
     search_fields = ["transaction__reference", "initiated_by__email", "reason"]
     ordering = ["-created_at"]
     date_hierarchy = "created_at"
@@ -273,7 +279,7 @@ class TransactionDisputeAdmin(admin.ModelAdmin):
     empty_value_display = "-N/A-"
 
     readonly_fields = [
-        "transaction", "initiated_by", "disputed_amount", "currency",
+        "transaction", "initiated_by", "disputed_amount",
         "created_at", "updated_at",
     ]
 
@@ -281,14 +287,17 @@ class TransactionDisputeAdmin(admin.ModelAdmin):
         (_("Dispute"), {
             "fields": (
                 "transaction", "initiated_by",
-                "disputed_amount", "currency", "status",
+                "disputed_amount", "status",
             ),
         }),
         (_("Details"), {
-            "fields": ("reason", "evidence_urls", "resolution_notes"),
+            "fields": ("reason", "resolution_notes", "evidence"),
         }),
-        (_("Timeline"), {
-            "fields": ("resolved_at", "created_at", "updated_at"),
+        (_("Resolution"), {
+            "fields": ("resolved_by", "resolved_at"),
+        }),
+        (_("Timestamps"), {
+            "fields": ("created_at", "updated_at"),
             "classes": ("collapse",),
         }),
     )
@@ -298,10 +307,10 @@ class TransactionDisputeAdmin(admin.ModelAdmin):
     @admin.display(description="Status")
     def status_badge(self, obj):
         colours = {
-            "open":     ("#f59e0b", "#fff"),
-            "resolved": ("#10b981", "#fff"),
-            "escalated":("#dc2626", "#fff"),
-            "closed":   ("#6b7280", "#fff"),
+            "opened":    ("#f59e0b", "#fff"),
+            "resolved":  ("#10b981", "#fff"),
+            "escalated": ("#dc2626", "#fff"),
+            "closed":    ("#6b7280", "#fff"),
         }
         bg, fg = colours.get(obj.status, ("#6b7280", "#fff"))
         return format_html(
@@ -315,7 +324,12 @@ class TransactionDisputeAdmin(admin.ModelAdmin):
         if not request.user.is_superuser:
             self.message_user(request, "Superuser only.", level=messages.ERROR)
             return
-        updated = queryset.exclude(status="resolved").update(status="resolved")
+        from django.utils import timezone
+        updated = queryset.exclude(status="resolved").update(
+            status="resolved",
+            resolved_at=timezone.now(),
+            resolved_by=request.user,
+        )
         self.message_user(
             request,
             f"✅ {updated} dispute(s) marked resolved.",
@@ -327,9 +341,14 @@ class TransactionDisputeAdmin(admin.ModelAdmin):
 
 @admin.register(TransactionFee)
 class TransactionFeeAdmin(admin.ModelAdmin):
-    list_display = ["transaction", "fee_type", "amount", "currency", "created_at"]
-    list_filter = ["fee_type", "currency"]
-    search_fields = ["transaction__reference"]
+    """
+    Fee breakdown per transaction — read-only.
+    Actual fields: transaction, fee_type, amount, percentage, description.
+    NO currency field on TransactionFee.
+    """
+    list_display = ["transaction", "fee_type", "amount", "percentage", "created_at"]
+    list_filter = ["fee_type"]
+    search_fields = ["transaction__reference", "fee_type"]
     ordering = ["-created_at"]
     list_select_related = ["transaction"]
     list_per_page = 25
@@ -415,22 +434,36 @@ class TransactionIdempotencyKeyAdmin(admin.ModelAdmin):
 
 @admin.register(CommissionRule)
 class CommissionRuleAdmin(admin.ModelAdmin):
+    """
+    Platform commission rate configuration.
+    Actual fields: vendor_user (FK), rate, min_rate, max_rate,
+                   is_active, starts_at, ends_at, notes.
+    """
     list_display = [
-        "name", "rate_pct", "applies_to", "is_active",
-        "created_at", "updated_at",
+        "vendor_user", "rate", "min_rate", "max_rate",
+        "is_active", "starts_at",
     ]
-    list_filter = ["is_active", "applies_to"]
-    search_fields = ["name", "description"]
-    ordering = ["-is_active", "rate_pct"]
+    list_filter = ["is_active"]
+    search_fields = ["vendor_user__email", "notes"]
+    ordering = ["-is_active", "-rate"]
+    list_select_related = ["vendor_user"]
+    raw_id_fields = ["vendor_user"]
     list_per_page = 25
     empty_value_display = "-N/A-"
 
+    readonly_fields = ["created_at", "updated_at"]
+
     fieldsets = (
-        (_("Rule"), {
-            "fields": ("name", "applies_to", "rate_pct", "is_active"),
+        (_("Rate"), {
+            "fields": (
+                "vendor_user", "rate", "min_rate", "max_rate", "is_active",
+            ),
         }),
-        (_("Details"), {
-            "fields": ("description", "min_amount", "max_amount"),
+        (_("Validity"), {
+            "fields": ("starts_at", "ends_at"),
+        }),
+        (_("Notes"), {
+            "fields": ("notes",),
             "classes": ("collapse",),
         }),
         (_("Timestamps"), {
@@ -439,22 +472,25 @@ class CommissionRuleAdmin(admin.ModelAdmin):
         }),
     )
 
-    readonly_fields = ["created_at", "updated_at"]
-
 
 # ── Company Revenue Entry (read-only) ─────────────────────────────────────────
 
 @admin.register(CompanyRevenueEntry)
 class CompanyRevenueEntryAdmin(admin.ModelAdmin):
+    """
+    Company revenue accounting — read-only.
+    Actual fields: transaction, category, amount, currency (FK),
+                   source_reference, metadata.
+    """
     list_display = [
-        "transaction", "amount", "currency", "revenue_type",
-        "created_at",
+        "transaction", "amount", "currency", "category",
+        "source_reference", "created_at",
     ]
-    list_filter = ["revenue_type", "currency"]
-    search_fields = ["transaction__reference"]
+    list_filter = ["category"]
+    search_fields = ["transaction__reference", "source_reference"]
     ordering = ["-created_at"]
     date_hierarchy = "created_at"
-    list_select_related = ["transaction"]
+    list_select_related = ["transaction", "currency"]
     list_per_page = 25
     show_full_result_count = False
     empty_value_display = "-N/A-"

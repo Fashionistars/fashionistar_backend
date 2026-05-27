@@ -1906,3 +1906,83 @@ class UserSessionAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         """Physical deletion is disabled to preserve the session audit trail."""
         return False
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 11. BIOMETRIC CREDENTIAL ADMIN — Standalone
+# ═══════════════════════════════════════════════════════════════════════════
+
+@admin.register(BiometricCredential)
+class BiometricCredentialAdmin(admin.ModelAdmin):
+    """
+    Read-only admin for biometric registration records.
+
+    Each row represents a device-bound biometric key (Face ID / Fingerprint)
+    registered by a user for passwordless login.
+
+    Actual model fields (verified from biometric_credential.py):
+      user (FK), credential_id (BinaryField), public_key (BinaryField),
+      sign_count (int), device_name (CharField).
+
+    Policy:
+      - NO add permission: credentials are registered by the mobile app flow.
+      - NO change permission: credentials are immutable for security.
+      - Superuser can delete a credential (e.g., user requests revocation).
+    """
+
+    list_display = [
+        "user", "credential_id_short", "device_name",
+        "sign_count", "created_at",
+    ]
+    list_filter = []
+    search_fields = [
+        "user__email", "user__phone",
+        "device_name",
+    ]
+    ordering = ["-created_at"]
+    date_hierarchy = "created_at"
+    list_select_related = ["user"]
+    raw_id_fields = ["user"]
+    list_per_page = 25
+    list_max_show_all = 200
+    show_full_result_count = False
+    empty_value_display = "-N/A-"
+
+    readonly_fields = [
+        "user", "credential_id", "public_key",
+        "sign_count", "device_name",
+        "created_at", "updated_at",
+    ]
+
+    fieldsets = (
+        (_("Credential"), {
+            "fields": (
+                "user", "device_name", "sign_count",
+            ),
+        }),
+        (_("Binary Keys (read-only)"), {
+            "fields": ("credential_id", "public_key"),
+            "classes": ("collapse",),
+        }),
+        (_("Timestamps"), {
+            "fields": ("created_at", "updated_at"),
+            "classes": ("collapse",),
+        }),
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False  # Immutable
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser  # GDPR erasure only
+
+    @admin.display(description="Credential ID")
+    def credential_id_short(self, obj):
+        try:
+            cid = bytes(obj.credential_id).hex() if obj.credential_id else ""
+        except Exception:
+            cid = str(obj.credential_id or "")
+        return f"{cid[:16]}…" if len(cid) > 16 else cid
