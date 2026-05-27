@@ -102,7 +102,20 @@ class AdminJWTBearer(HttpBearer):
             # Role check
             if not (
                 getattr(user, "is_superuser", False)
-                or getattr(user, "role", "") in ("admin", "super_admin")
+                or getattr(user, "is_staff", False)
+                or getattr(user, "is_verified", False)
+                or getattr(user, "is_active", False)
+                or getattr(user, "role", "") in (
+                    "admin",
+                    "super_admin", 
+                    "manager", 
+                    "staff",
+                    "moderator", 
+                    "designer", 
+                    "editor", 
+                    "support", 
+                    "assistant"
+                )
             ):
                 logger.warning(
                     "AdminJWTBearer: user %s (role=%s) denied admin access",
