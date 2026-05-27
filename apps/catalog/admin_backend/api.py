@@ -8,11 +8,13 @@ from apps.catalog.admin_backend.selectors import (
     aget_admin_categories,
     aget_admin_brands,
     aget_admin_collections,
+    aget_admin_blog_posts,
 )
 from apps.catalog.admin_backend.schemas import (
     AdminCategoryOut,
     AdminBrandOut,
     AdminCollectionOut,
+    AdminBlogPostOut,
 )
 
 logger = logging.getLogger(__name__)
@@ -39,4 +41,12 @@ async def list_collections(request):
     Async read endpoint for catalog collections.
     """
     return await aget_admin_collections()
+
+@router.get("/blog/", response=List[AdminBlogPostOut], auth=admin_auth)
+async def list_blog_posts(request):
+    """
+    Async read endpoint for catalog blog posts.
+    """
+    return await aget_admin_blog_posts()
+
 

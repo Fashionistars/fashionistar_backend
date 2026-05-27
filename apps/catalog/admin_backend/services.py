@@ -4,6 +4,7 @@ from django.db import transaction
 from apps.catalog.services.category_service import CategoryService
 from apps.catalog.services.brand_service import BrandService
 from apps.catalog.services.collection_service import CollectionService
+from apps.catalog.services.blog_service import BlogService
 
 logger = logging.getLogger(__name__)
 
@@ -42,4 +43,18 @@ def admin_update_collection_sync(serializer, request, old_values: dict):
 @transaction.atomic
 def admin_archive_collection_sync(instance, request, old_values: dict):
     return CollectionService.archive(instance=instance, request=request, old_values=old_values)
+
+
+@transaction.atomic
+def admin_create_blog_post_sync(serializer, request):
+    return BlogService.create(serializer=serializer, request=request)
+
+@transaction.atomic
+def admin_update_blog_post_sync(serializer, request, old_values: dict):
+    return BlogService.update(serializer=serializer, request=request, old_values=old_values)
+
+@transaction.atomic
+def admin_archive_blog_post_sync(instance, request, old_values: dict):
+    return BlogService.archive(instance=instance, request=request, old_values=old_values)
+
 
