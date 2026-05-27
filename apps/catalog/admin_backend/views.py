@@ -9,10 +9,12 @@ from apps.admin_backend.permissions import IsAdminUser
 from apps.catalog.models.category import Category
 from apps.catalog.models.brand import Brand
 from apps.catalog.models.collection import Collections
+from apps.catalog.models.blog import BlogPost
 from apps.catalog.admin_backend.serializers import (
     AdminCategoryWriteSerializer,
     AdminBrandWriteSerializer,
     AdminCollectionWriteSerializer,
+    AdminBlogPostWriteSerializer,
 )
 from apps.catalog.admin_backend.services import (
     admin_create_category_sync,
@@ -24,6 +26,9 @@ from apps.catalog.admin_backend.services import (
     admin_create_collection_sync,
     admin_update_collection_sync,
     admin_archive_collection_sync,
+    admin_create_blog_post_sync,
+    admin_update_blog_post_sync,
+    admin_archive_blog_post_sync,
 )
 
 logger = logging.getLogger(__name__)
@@ -173,3 +178,59 @@ class AdminCollectionArchiveView(APIView):
             return Response({"status": "success", "message": "Collection archived successfully."}, status=status.HTTP_200_OK)
         except Exception as exc:
             return Response({"status": "error", "message": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class AdminBlogPostCreateView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def post(self, request):
+        serializer = AdminBlogPostWriteSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({"status": "error", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            post = admin_create_blog_post_sync(serializer=serializer, request=request)
+            return Response({"status": "success", "data": {"id": str(post.id), "title": post.title}}, status=status.HTTP_201_CREATED)
+        except Exception as exc:
+            return Response({"status": "error", "message": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+class AdminBlogPostUpdateView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def patch(self, request, post_id):
+        try:
+            post = BlogPost.objects.get(id=post_id, is_deleted=False)
+        except BlogPost.DoesNotExist:
+            return Response({"status": "error", "message": "Blog post not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        old_values = {
+            "title": post.title,
+            "excerpt": post.excerpt,
+            "content": post.content,
+            "status": post.status,
+            "is_featured": post.is_featured,
+        }
+        serializer = AdminBlogPostWriteSerializer(post, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response({"status": "error", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            admin_update_blog_post_sync(serializer=serializer, request=request, old_values=old_values)
+            return Response({"status": "success", "message": "Blog post updated successfully."}, status=status.HTTP_200_OK)
+        except Exception as exc:
+            return Response({"status": "error", "message": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+class AdminBlogPostArchiveView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, post_id):
+        try:
+            post = BlogPost.objects.get(id=post_id, is_deleted=False)
+        except BlogPost.DoesNotExist:
+            return Response({"status": "error", "message": "Blog post not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        old_values = {"status": post.status}
+        try:
+            admin_archive_blog_post_sync(instance=post, request=request, old_values=old_values)
+            return Response({"status": "success", "message": "Blog post archived successfully."}, status=status.HTTP_200_OK)
+        except Exception as exc:
+            return Response({"status": "error", "message": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+

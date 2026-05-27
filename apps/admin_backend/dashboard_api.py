@@ -16,8 +16,9 @@ Performance Contract:
   - No N+1 joins: each counter is a single acount() call
 """
 
-from django.utils import asyncio
 from __future__ import annotations
+
+from django.utils import asyncio
 
 import logging
 from typing import Optional

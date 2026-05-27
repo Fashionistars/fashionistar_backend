@@ -10,9 +10,13 @@ from apps.catalog.admin_backend.views import (
     AdminCollectionCreateView,
     AdminCollectionUpdateView,
     AdminCollectionArchiveView,
+    AdminBlogPostCreateView,
+    AdminBlogPostUpdateView,
+    AdminBlogPostArchiveView,
 )
 
 app_name = "admin_catalog"
+
 
 urlpatterns = [
     # Categories
@@ -29,5 +33,11 @@ urlpatterns = [
     path("collections/create/", AdminCollectionCreateView.as_view(), name="collection-create"),
     path("collections/<collection_id>/update/", AdminCollectionUpdateView.as_view(), name="collection-update"),
     path("collections/<collection_id>/archive/", AdminCollectionArchiveView.as_view(), name="collection-archive"),
+
+    # Blogs
+    path("blog/create/", AdminBlogPostCreateView.as_view(), name="blog-create"),
+    path("blog/<post_id>/update/", AdminBlogPostUpdateView.as_view(), name="blog-update"),
+    path("blog/<post_id>/archive/", AdminBlogPostArchiveView.as_view(), name="blog-archive"),
 ]
+
 
