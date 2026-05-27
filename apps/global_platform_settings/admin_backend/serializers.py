@@ -1,0 +1,25 @@
+# apps/global_platform_settings/admin_backend/serializers.py
+from rest_framework import serializers
+
+class AdminPlatformSettingsUpdateSerializer(serializers.Serializer):
+    vendor_commission_rate = serializers.DecimalField(max_digits=5, decimal_places=4, required=False)
+    client_platform_fee_rate = serializers.DecimalField(max_digits=5, decimal_places=4, required=False)
+    measurement_fee_ngn = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    advertisement_fee_ngn = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    min_wallet_topup_ngn = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    max_wallet_topup_ngn = serializers.DecimalField(max_digits=12, decimal_places=2, required=False)
+    min_withdrawal_ngn = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    max_withdrawal_ngn = serializers.DecimalField(max_digits=12, decimal_places=2, required=False)
+    max_daily_withdrawal_ngn = serializers.DecimalField(max_digits=12, decimal_places=2, required=False)
+    cod_enabled = serializers.BooleanField(required=False)
+    in_store_payment_enabled = serializers.BooleanField(required=False)
+    cod_confirmation_window_hours = serializers.IntegerField(required=False)
+    cod_platform_commission_rate = serializers.DecimalField(max_digits=5, decimal_places=4, required=False)
+    kyc_max_retry_attempts = serializers.IntegerField(required=False)
+    kyc_lockout_hours = serializers.IntegerField(required=False)
+    ngn_usd_rate = serializers.DecimalField(max_digits=12, decimal_places=8, required=False)
+    platform_name = serializers.CharField(max_length=120, required=False)
+    support_email = serializers.EmailField(required=False)
+    support_phone = serializers.CharField(max_length=30, required=False)
+    terms_url = serializers.URLField(max_length=500, required=False)
+    privacy_url = serializers.URLField(max_length=500, required=False)

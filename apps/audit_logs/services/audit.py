@@ -96,7 +96,7 @@ def _resolve_geo(ip: str) -> dict:
             pass
 
     try:
-        from utilities.django_redis import get_redis_connection_safe
+        from apps.common.utils.redis import get_redis_connection_safe
         r = get_redis_connection_safe()
         cache_key = f"geo:{ip}"
 

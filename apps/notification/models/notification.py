@@ -52,10 +52,11 @@ class NotificationType(models.TextChoices):
     ORDER_SHIPPED           = "order_shipped",           _("Order Shipped")
     ORDER_DELIVERED         = "order_delivered",         _("Order Delivered")
     ORDER_CANCELLED         = "order_cancelled",         _("Order Cancelled")
+    ORDER_REFUNDED          = "order_refunded",          _("Order Refunded")
    
     # Custom Order
-    CUSTOM_ORDER_ACCEPTED          = "order_refunded",          _("Order Refunded")
-    CUSTOM_ORDER_REJECTED          = "order_refunded",          _("Order Refunded")
+    CUSTOM_ORDER_ACCEPTED          = "custom_order_accepted",   _("Custom Order Accepted")
+    CUSTOM_ORDER_REJECTED          = "custom_order_rejected",   _("Custom Order Rejected")
 
     # Vendor lifecycle
     VENDOR_APPROVED         = "vendor_approved",         _("Vendor Approved")
@@ -80,12 +81,8 @@ class NotificationType(models.TextChoices):
     WISHLIST_PRICE_DROP     = "wishlist_price_drop",     _("Wishlist Price Drop")
     
     # DELIVERY TRACKING ID
-    ("tracking_id_added", "Tracking ID Added"),
-    ("tracking_id_changed", "Tracking ID Changed"),
-
-    # DELIVERY COURIEER
-    ("tracking_id_added", "Tracking ID Added"),
-    ("tracking_id_changed", "Tracking ID Changed"),
+    TRACKING_ID_ADDED       = "tracking_id_added",       _("Tracking ID Added")
+    TRACKING_ID_CHANGED     = "tracking_id_changed",     _("Tracking ID Changed")
 
 
 
