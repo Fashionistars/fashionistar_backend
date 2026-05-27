@@ -24,6 +24,7 @@ from apps.kyc.apis.sync.kyc_views import (
     KycDocumentUploadView,
     KycApproveView,
     KycRejectView,
+    KycAdminSubmissionListView,
 )
 from apps.kyc.apis.sync.kyc_webhook_view import KycWebhookView
 
@@ -37,6 +38,11 @@ urlpatterns = [
 
     # ── Admin review actions ───────────────────────────────────────────────────
     path(
+        "admin/submissions/",
+        KycAdminSubmissionListView.as_view(),
+        name="admin-submissions-list",
+    ),
+    path(
         "admin/<uuid:submission_id>/approve/",
         KycApproveView.as_view(),
         name="admin-approve",
@@ -46,6 +52,7 @@ urlpatterns = [
         KycRejectView.as_view(),
         name="admin-reject",
     ),
+
 
     # ── KYC Provider Webhook Callbacks ─────────────────────────────────────────
     # POST /api/v1/kyc/webhook/smileid/

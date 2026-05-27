@@ -788,6 +788,15 @@ wheels = [
 ]
 
 [[package]]
+name = "django-admin-rangefilter"
+version = "0.13.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c3/29/ca800141c33d2df90eb3306c86f5a8c89c11d2d0493e5c503217f57fb0a1/django_admin_rangefilter-0.13.5.tar.gz", hash = "sha256:3134e9e877f59ccad5949cd25cd2db9bf20d170fd8070be584875fdca96d3a14", size = 23712, upload-time = "2025-12-13T07:58:31.327Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bd/ad/577f872dcc0107d608085b626103990028655b797eedab884242b61f6ac0/django_admin_rangefilter-0.13.5-py2.py3-none-any.whl", hash = "sha256:7fdcd1ee9007e2b76a5bd35bc017e785bdc7b17a24b8a36aef4ce80741356c47", size = 48383, upload-time = "2025-12-13T07:58:30.028Z" },
+]
+
+[[package]]
 name = "django-anymail"
 version = "14.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1272,6 +1281,7 @@ dependencies = [
     { name = "daphne" },
     { name = "dj-database-url" },
     { name = "django" },
+    { name = "django-admin-rangefilter" },
     { name = "django-anymail" },
     { name = "django-auditlog" },
     { name = "django-axes" },
@@ -1391,6 +1401,7 @@ requires-dist = [
     { name = "daphne" },
     { name = "dj-database-url" },
     { name = "django", specifier = "==6.0.3" },
+    { name = "django-admin-rangefilter" },
     { name = "django-anymail" },
     { name = "django-auditlog", specifier = ">=3.4.1" },
     { name = "django-axes" },
