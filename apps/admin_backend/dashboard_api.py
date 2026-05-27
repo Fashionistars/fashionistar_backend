@@ -16,6 +16,7 @@ Performance Contract:
   - No N+1 joins: each counter is a single acount() call
 """
 
+from django.utils import asyncio
 from __future__ import annotations
 
 import logging
@@ -170,6 +171,20 @@ async def admin_dashboard_kpi(request):
     # ── Support ────────────────────────────────────────────────────────────
     open_support_tickets = await safe_count(
         SupportTicket.objects.filter(status__in=["open", "in_progress"])
+    )
+    asyncio.gather(
+        total_users,
+        new_users_today,
+        active_vendors,
+        total_products,
+        products_pending_review,
+        low_stock_products,
+        total_orders,
+        orders_today,
+        orders_pending,
+        pending_kyc_submissions,
+        total_wallets,
+        open_support_tickets,
     )
 
     return AdminDashboardKPISchema(
