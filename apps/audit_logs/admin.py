@@ -176,7 +176,7 @@ class AuditEventLogAdmin(admin.ModelAdmin):
     )
     ordering = ("-created_at",)
     date_hierarchy = "created_at"
-    list_per_page = 50
+    list_per_page = 25
     show_full_result_count = False  # Avoids COUNT(*) on large tables
 
     # ── Detail view ─────────────────────────────────────────────────────────

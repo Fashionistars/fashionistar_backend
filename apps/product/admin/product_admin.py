@@ -217,6 +217,9 @@ class ProductAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
     list_select_related = ["vendor"]
     search_fields = ["title", "slug", "sku", "vendor__business_name"]
     prepopulated_fields = {"slug": ("title",)}
+    list_per_page = 25
+    list_max_show_all = 200
+    show_full_result_count = False
     readonly_fields = [
         "id", "sku", "views", "orders_count", "rating", "review_count",
         "created_at", "updated_at", "is_deleted", "deleted_at",
@@ -390,6 +393,8 @@ class ProductReviewAdmin(admin.ModelAdmin):
     list_select_related = ["product"]
     actions = ["moderate_selected", "deactivate_selected", "activate_selected"]
     date_hierarchy = "created_at"
+    list_per_page = 25
+    show_full_result_count = False
 
     def has_vendor_reply(self, obj):
         """Displays whether the vendor has replied."""
@@ -748,6 +753,8 @@ class ProductPriceHistoryAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
     list_select_related = ["product", "changed_by"]
     date_hierarchy = "created_at"
     ordering = ["-created_at"]
+    list_per_page = 25
+    show_full_result_count = False
 
     def price_change_display(self, obj):
         """Colour-codes price changes: green = drop, red = increase."""
@@ -785,6 +792,7 @@ class ProductViewLogAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
     list_select_related = ["product", "user"]
     date_hierarchy = "created_at"
     ordering = ["-created_at"]
+    list_per_page = 25
     show_full_result_count = False  # Performance on high-volume analytics tables
 
     def session_key_short(self, obj):
@@ -861,6 +869,8 @@ class ProductVariantAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
     search_fields = ["sku", "product__title", "product__sku", "barcode"]
     list_select_related = ["product", "size", "color"]
     raw_id_fields = ["product"]
+    list_per_page = 25
+    show_full_result_count = False
     readonly_fields = [
         "id", "sku", "created_at", "updated_at",
         "is_deleted", "deleted_at", "soft_delete_badge",

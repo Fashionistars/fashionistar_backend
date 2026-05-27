@@ -472,6 +472,8 @@ class VendorSetupStateAdmin(admin.ModelAdmin):
         "created_at",
         "updated_at",
     ]
+    list_per_page = 25
+    show_full_result_count = False
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related("vendor", "vendor__user")
@@ -515,6 +517,8 @@ class VendorPayoutProfileAdmin(admin.ModelAdmin):
         "bank_name",
     ]
     ordering      = ["-created_at"]
+    list_per_page = 25
+    show_full_result_count = False
     readonly_fields = [
         "account_number_enc",    # always read-only — encrypted blob
         "account_last4",
