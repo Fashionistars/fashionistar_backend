@@ -24,12 +24,38 @@ from django.utils.html import format_html, mark_safe
 from django.utils.translation import gettext_lazy as _
 
 from apps.common.models import (
+    CloudinaryProcessedWebhook,
     DeletedRecords,
     DeletionAuditCounter,
     ModelAnalytics,
 )
+from apps.common.admin_ui import FashionistarAdminUIMixin
 
 logger = logging.getLogger(__name__)
+
+
+@admin.register(CloudinaryProcessedWebhook)
+class CloudinaryProcessedWebhookAdmin(FashionistarAdminUIMixin, admin.ModelAdmin):
+    list_display = (
+        "public_id",
+        "asset_type",
+        "model_target",
+        "model_pk",
+        "success",
+        "processing_time_ms",
+        "processed_at",
+    )
+    list_filter = ("asset_type", "success", "model_target")
+    search_fields = ("public_id", "model_target", "model_pk", "idempotency_key")
+    ordering = ("-processed_at",)
+    date_hierarchy = "processed_at"
+    readonly_fields = [field.name for field in CloudinaryProcessedWebhook._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(DeletedRecords)

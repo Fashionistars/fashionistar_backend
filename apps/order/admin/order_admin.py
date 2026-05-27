@@ -24,7 +24,15 @@ from django.contrib import messages
 from django.http import StreamingHttpResponse
 import csv
 
-from apps.order.models import Order, CartOrderItem, OrderStatusHistory, OrderIdempotencyRecord
+from apps.common.admin_ui import FashionistarAdminUIMixin
+from apps.order.models import (
+    CartOrderItem,
+    Order,
+    OrderCommercialTransitionLog,
+    OrderIdempotencyRecord,
+    OrderPaymentRecord,
+    OrderStatusHistory,
+)
 
 logger = logging.getLogger(__name__)
 OrderItem = CartOrderItem  # alias used through this admin module
@@ -59,6 +67,62 @@ class OrderStatusHistoryInline(admin.TabularInline):
         return False
 
 
+class OrderPaymentRecordInline(admin.TabularInline):
+    model = OrderPaymentRecord
+    extra = 0
+    can_delete = False
+    readonly_fields = [
+        "sequence_number",
+        "payment_source",
+        "provider",
+        "selected_percent",
+        "applied_percent",
+        "amount",
+        "currency",
+        "cumulative_amount_paid",
+        "cumulative_percent_paid",
+        "remaining_amount",
+        "remaining_percent",
+        "is_final_payment",
+        "paid_at",
+        "actor",
+        "correlation_id",
+    ]
+    ordering = ["sequence_number", "created_at"]
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+class OrderCommercialTransitionLogInline(admin.TabularInline):
+    model = OrderCommercialTransitionLog
+    extra = 0
+    can_delete = False
+    readonly_fields = [
+        "transition_type",
+        "from_status",
+        "to_status",
+        "payment_record",
+        "selected_percent",
+        "cumulative_percent_paid",
+        "amount_delta",
+        "balance_after",
+        "actor",
+        "occurred_at",
+        "correlation_id",
+    ]
+    ordering = ["occurred_at", "created_at"]
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
     list_display = [
@@ -84,7 +148,12 @@ class OrderAdmin(admin.ModelAdmin):
         "coupon_code", "tracking_number", "escrow_released",
         "created_at", "updated_at",
     ]
-    inlines = [OrderItemInline, OrderStatusHistoryInline]
+    inlines = [
+        OrderItemInline,
+        OrderStatusHistoryInline,
+        OrderPaymentRecordInline,
+        OrderCommercialTransitionLogInline,
+    ]
     fieldsets = (
         ("Identity", {
             "fields": ("order_number", "idempotency_key", "status", "fulfillment_type", "is_test_order"),
@@ -246,6 +315,68 @@ class OrderIdempotencyRecordAdmin(admin.ModelAdmin):
     def key_short(self, obj):
         k = obj.key or ""
         return f"{k[:16]}…" if len(k) > 16 else k
+
+    def has_add_permission(self, request): return False
+    def has_change_permission(self, request, obj=None): return False
+    def has_delete_permission(self, request, obj=None): return False
+
+
+@admin.register(OrderPaymentRecord)
+class OrderPaymentRecordAdmin(FashionistarAdminUIMixin, admin.ModelAdmin):
+    list_display = [
+        "order",
+        "sequence_number",
+        "payment_source",
+        "selected_percent",
+        "amount_display",
+        "cumulative_percent_paid",
+        "is_final_payment",
+        "paid_at",
+    ]
+    list_filter = ["payment_source", "provider", "is_final_payment", "currency"]
+    search_fields = ["order__order_number", "correlation_id", "payment_intent__reference"]
+    list_select_related = ["order", "payment_intent", "actor"]
+    raw_id_fields = ["order", "payment_intent", "actor"]
+    readonly_fields = [f.name for f in OrderPaymentRecord._meta.get_fields() if hasattr(f, "name")]
+    ordering = ["-paid_at", "-created_at"]
+    date_hierarchy = "paid_at"
+
+    @admin.display(description="Amount")
+    def amount_display(self, obj):
+        return self.format_ngn(obj.amount)
+
+    def has_add_permission(self, request): return False
+    def has_change_permission(self, request, obj=None): return False
+    def has_delete_permission(self, request, obj=None): return False
+
+
+@admin.register(OrderCommercialTransitionLog)
+class OrderCommercialTransitionLogAdmin(FashionistarAdminUIMixin, admin.ModelAdmin):
+    list_display = [
+        "order",
+        "transition_type",
+        "from_status",
+        "to_status",
+        "amount_delta_display",
+        "balance_after_display",
+        "actor_role",
+        "occurred_at",
+    ]
+    list_filter = ["transition_type", "delivery_mode", "cash_payment_mode_snapshot", "actor_role"]
+    search_fields = ["order__order_number", "correlation_id", "note", "actor__email"]
+    list_select_related = ["order", "payment_record", "payment_intent", "actor"]
+    raw_id_fields = ["order", "payment_record", "payment_intent", "actor"]
+    readonly_fields = [f.name for f in OrderCommercialTransitionLog._meta.get_fields() if hasattr(f, "name")]
+    ordering = ["-occurred_at", "-created_at"]
+    date_hierarchy = "occurred_at"
+
+    @admin.display(description="Amount Delta")
+    def amount_delta_display(self, obj):
+        return self.format_ngn(obj.amount_delta)
+
+    @admin.display(description="Balance After")
+    def balance_after_display(self, obj):
+        return self.format_ngn(obj.balance_after)
 
     def has_add_permission(self, request): return False
     def has_change_permission(self, request, obj=None): return False

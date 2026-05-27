@@ -81,7 +81,7 @@ class CustomOrderAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
     list_display = [
         "reference", "status_badge", "client", "vendor",
         "budget_ngn", "agreed_amount_ngn", "currency",
-        "paid_progress", "image_count", "soft_delete_badge",
+        "paid_progress", "reference_images_preview", "soft_delete_badge",
         "created_at",
     ]
     list_filter = ["status", "currency"]
@@ -102,7 +102,7 @@ class CustomOrderAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
         "budget_ngn", "agreed_amount_ngn",
         "approved_at", "completed_at",
         "is_deleted", "deleted_at", "soft_delete_badge",
-        "created_at", "updated_at",
+        "created_at", "updated_at", "reference_images_preview",
     ]
 
     fieldsets = (
@@ -113,7 +113,7 @@ class CustomOrderAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
             "fields": ("client", "vendor"),
         }),
         (_("Design Brief"), {
-            "fields": ("design_brief", "reference_images"),
+            "fields": ("design_brief", "reference_images", "reference_images_preview"),
         }),
         (_("Style Snapshots"), {
             "fields": ("product_snapshot_id", "order_snapshot_id"),
@@ -161,17 +161,33 @@ class CustomOrderAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
             pct = obj.paid_pct
         except Exception:
             pct = 0
-        colour = "#10b981" if pct == 100 else "#6366f1" if pct > 0 else "#e2e8f0"
+        
+        if pct == 100:
+            bg, fg = "#dcfce7", "#166534"
+        elif pct > 0:
+            bg, fg = "#e0e7ff", "#4338ca"
+        else:
+            bg, fg = "#f1f5f9", "#475569"
+            
         return format_html(
-            '<span style="background:{};color:#fff;padding:2px 8px;'
+            '<span style="background:{};color:{};padding:2px 8px;'
             'border-radius:20px;font-size:11px;font-weight:700">{}%</span>',
-            colour, pct,
+            bg, fg, pct,
         )
 
     @admin.display(description="Ref. Images")
-    def image_count(self, obj):
-        count = len(obj.reference_images or [])
-        return count or "—"
+    def reference_images_preview(self, obj):
+        images = obj.reference_images or []
+        if not images:
+            return "—"
+        html_elements = []
+        for img_url in images[:3]:
+            html_elements.append(
+                f'<img src="{img_url}" height="40" style="margin-right:4px;border-radius:4px;object-fit:cover;border:1px solid #e2e8f0;" />'
+            )
+        if len(images) > 3:
+            html_elements.append(f'<span style="font-size:11px;color:#64748b;font-weight:600;">+{len(images)-3}</span>')
+        return format_html("".join(html_elements))
 
     # ── Admin actions ────────────────────────────────────────────────────────
 

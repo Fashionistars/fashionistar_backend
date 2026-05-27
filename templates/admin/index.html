@@ -1,0 +1,44 @@
+{% extends "admin/index.html" %}
+{% load static admin_dashboard %}
+
+{% block content %}
+  <section class="fsn-admin-dashboard">
+    <div class="fsn-admin-dashboard__hero">
+      <div>
+        <p class="fsn-admin-dashboard__eyebrow">Wave 1 · Admin Ecosystem Overhaul</p>
+        <h1>FASHIONISTAR Global Admin</h1>
+        <p>Control commerce, finance, operations, and compliance from a single production-grade admin surface.</p>
+      </div>
+    </div>
+
+    {% fashionistar_admin_dashboard_metrics as fashionistar_dashboard_json %}
+    <script id="fashionistar-admin-dashboard-data" type="application/json">{{ fashionistar_dashboard_json|safe }}</script>
+
+    <div class="fsn-admin-dashboard__grid">
+      <article class="fsn-metric-card">
+        <span class="fsn-metric-card__label">Daily Revenue</span>
+        <strong id="fsn-daily-revenue-total">₦0.00</strong>
+        <canvas id="fsnDailyRevenueChart" height="120"></canvas>
+      </article>
+      <article class="fsn-metric-card">
+        <span class="fsn-metric-card__label">New Vendors</span>
+        <strong id="fsn-new-vendors-total">0</strong>
+        <canvas id="fsnNewVendorsChart" height="120"></canvas>
+      </article>
+      <article class="fsn-metric-card">
+        <span class="fsn-metric-card__label">Low Stock Alerts</span>
+        <strong id="fsn-low-stock-count">0</strong>
+        <ul id="fsn-low-stock-list" class="fsn-admin-dashboard__list"></ul>
+      </article>
+      <article class="fsn-metric-card">
+        <span class="fsn-metric-card__label">KYC Pending</span>
+        <strong id="fsn-kyc-pending-count">0</strong>
+        <p class="fsn-metric-card__hint">Pending identity reviews that still need an operator decision.</p>
+      </article>
+    </div>
+  </section>
+
+  {{ block.super }}
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+{% endblock %}

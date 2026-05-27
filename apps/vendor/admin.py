@@ -20,7 +20,10 @@ from django.db.models import Avg, Count, Sum, QuerySet
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 
-from apps.vendor.models import VendorPayoutProfile, VendorProfile, VendorSetupState
+from apps.common.admin_mixins import SoftDeleteAdminMixin
+from apps.common.admin_cloudinary_mixin import CloudinaryUploadAdminMixin
+from apps.common.admin_ui import FashionistarAdminUIMixin
+from apps.vendor.models import VendorBankAccount, VendorPayoutProfile, VendorProfile, VendorSetupState
 
 logger = logging.getLogger(__name__)
 
@@ -150,7 +153,7 @@ class VendorPayoutProfileInline(admin.StackedInline):
 
 
 @admin.register(VendorProfile)
-class VendorProfileAdmin(admin.ModelAdmin):
+class VendorProfileAdmin(SoftDeleteAdminMixin, CloudinaryUploadAdminMixin, admin.ModelAdmin):
     """
     Full-featured admin for VendorProfile.
 
@@ -163,6 +166,11 @@ class VendorProfileAdmin(admin.ModelAdmin):
       ─ date_hierarchy for time-based drill-down.
       ─ Raw ID fields for FKs that can have large datasets.
     """
+
+    cloudinary_fields = {
+        "logo_url": ("fashionistar/vendors/logos", "image"),
+        "cover_url": ("fashionistar/vendors/covers", "image"),
+    }
 
     # ── Display ────────────────────────────────────────────────────
     list_display = [
@@ -205,6 +213,11 @@ class VendorProfileAdmin(admin.ModelAdmin):
     # ── Date drill-down ────────────────────────────────────────────
     date_hierarchy = "created_at"
 
+    # ── Pagination & Performance ───────────────────────────────────
+    list_per_page = 25
+    list_max_show_all = 200
+    show_full_result_count = False
+
     # ── Ordering ───────────────────────────────────────────────────
     ordering = ["-created_at"]
 
@@ -220,6 +233,8 @@ class VendorProfileAdmin(admin.ModelAdmin):
         "review_count",
         "wallet_balance",
         "user_email",
+        "logo_preview",
+        "cover_preview",
     ]
 
     # ── Fieldsets ──────────────────────────────────────────────────
@@ -230,7 +245,7 @@ class VendorProfileAdmin(admin.ModelAdmin):
         ),
         (
             "🖼️ Media",
-            {"fields": ["logo_url", "cover_url"], "classes": ["collapse"]},
+            {"fields": ["logo_url", "logo_preview", "cover_url", "cover_preview"], "classes": ["collapse"]},
         ),
         (
             "📍 Location & Hours",
@@ -306,11 +321,38 @@ class VendorProfileAdmin(admin.ModelAdmin):
             state = obj.setup_state
             pct   = state.completion_percentage
             if state.onboarding_done:
-                return format_html('<span style="color:green;font-weight:bold">✅ Live ({}%)</span>', pct)
-            return format_html('<span style="color:orange">⏳ Step {}/4 ({}%)</span>', state.current_step, pct)
+                return format_html(
+                    '<span class="fsn-badge badge-active">Live ({}%)</span>', pct
+                )
+            return format_html(
+                '<span class="fsn-badge badge-pending">Step {}/4 ({}%)</span>',
+                state.current_step, pct
+            )
         except VendorSetupState.DoesNotExist:
-            return format_html('<span style="color:red">❌ Not Started</span>')
+            return format_html(
+                '<span class="fsn-badge badge-failed">Not Started</span>'
+            )
     onboarding_status_badge.allow_tags = True  # Django admin legacy support
+
+    @admin.display(description="Logo Preview")
+    def logo_preview(self, obj):
+        if obj.logo_url:
+            try:
+                url = obj.logo_url.url if hasattr(obj.logo_url, "url") else str(obj.logo_url)
+                return format_html('<img src="{}" height="50" style="border-radius:6px;object-fit:cover;border:1px solid #e2e8f0;" />', url)
+            except Exception:
+                pass
+        return "—"
+
+    @admin.display(description="Cover Preview")
+    def cover_preview(self, obj):
+        if obj.cover_url:
+            try:
+                url = obj.cover_url.url if hasattr(obj.cover_url, "url") else str(obj.cover_url)
+                return format_html('<img src="{}" height="70" style="border-radius:6px;object-fit:cover;border:1px solid #e2e8f0;max-width:200px;" />', url)
+            except Exception:
+                pass
+        return "—"
 
     @admin.display(description="Revenue (₦)")
     def revenue_display(self, obj: VendorProfile) -> str:
@@ -549,3 +591,47 @@ class VendorPayoutProfileAdmin(admin.ModelAdmin):
     def account_last4_display(self, obj: VendorPayoutProfile) -> str:
         last4 = obj.account_last4 or "????"
         return f"****{last4}"
+
+
+@admin.register(VendorBankAccount)
+class VendorBankAccountAdmin(SoftDeleteAdminMixin, FashionistarAdminUIMixin, admin.ModelAdmin):
+    list_display = [
+        "vendor",
+        "bank_name",
+        "account_name",
+        "masked_account",
+        "verification_status",
+        "kyc_name_matched",
+        "is_default",
+        "soft_delete_badge",
+        "created_at",
+    ]
+    list_filter = ["verification_status", "is_default", "kyc_name_matched", "is_deleted"]
+    search_fields = [
+        "vendor__store_name",
+        "vendor__user__email",
+        "bank_name",
+        "account_name",
+        "paystack_recipient_code",
+    ]
+    list_select_related = ["vendor", "vendor__user"]
+    raw_id_fields = ["vendor"]
+    readonly_fields = [
+        "account_number_enc",
+        "account_last4",
+        "paystack_recipient_code",
+        "created_at",
+        "updated_at",
+        "is_deleted",
+        "deleted_at",
+        "soft_delete_badge",
+    ]
+    fieldsets = (
+        (_("Vendor"), {"fields": ("vendor", "is_default", "verification_status", "kyc_name_matched")}),
+        (_("Bank Details"), {"fields": ("bank_name", "bank_code", "account_name", "account_last4")}),
+        (_("Paystack"), {"fields": ("paystack_recipient_code", "account_number_enc")}),
+        (_("Lifecycle"), {
+            "fields": ("created_at", "updated_at", "is_deleted", "deleted_at", "soft_delete_badge"),
+            "classes": ("collapse",),
+        }),
+    )

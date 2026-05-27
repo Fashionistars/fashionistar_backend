@@ -62,6 +62,7 @@ dependencies = [
     "drf-yasg",
     "django-jazzmin",
     "django-import-export",
+    "django-admin-rangefilter",
     "openpyxl>=3.1.0",
     "drf-api-logger",
     "prometheus-client",
