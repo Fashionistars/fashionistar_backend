@@ -1,8 +1,7 @@
 # apps/custom_order/admin_backend/urls.py
 from django.urls import path
-
-app_name = "admin_custom_order"
+from .views import AdminCustomOrderStatusUpdateView
 
 urlpatterns = [
-    # DRF Sync Views mounted here
+    path("<str:custom_order_id>/status/", AdminCustomOrderStatusUpdateView.as_view(), name="admin-custom-order-status-update"),
 ]

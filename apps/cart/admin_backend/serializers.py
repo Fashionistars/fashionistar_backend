@@ -1,4 +1,5 @@
 # apps/cart/admin_backend/serializers.py
 from rest_framework import serializers
 
-# Basic Admin Write Serializers
+class AdminClearCartSerializer(serializers.Serializer):
+    pass

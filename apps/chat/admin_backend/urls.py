@@ -1,8 +1,7 @@
 # apps/chat/admin_backend/urls.py
 from django.urls import path
-
-app_name = "admin_chat"
+from .views import AdminResolveEscalationView
 
 urlpatterns = [
-    # DRF Sync Views mounted here
+    path("escalations/<str:escalation_id>/resolve/", AdminResolveEscalationView.as_view(), name="admin-chat-escalation-resolve"),
 ]

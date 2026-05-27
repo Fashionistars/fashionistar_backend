@@ -1,8 +1,8 @@
 # apps/support/admin_backend/urls.py
 from django.urls import path
-
-app_name = "admin_support"
+from .views import AdminAssignTicketView, AdminResolveTicketView
 
 urlpatterns = [
-    # DRF Sync Views mounted here
+    path("<str:ticket_id>/assign/", AdminAssignTicketView.as_view(), name="admin-ticket-assign"),
+    path("<str:ticket_id>/resolve/", AdminResolveTicketView.as_view(), name="admin-ticket-resolve"),
 ]

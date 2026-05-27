@@ -1,8 +1,7 @@
 # apps/notification/admin_backend/urls.py
 from django.urls import path
-
-app_name = "admin_notification"
+from .views import AdminBroadcastNotificationView
 
 urlpatterns = [
-    # DRF Sync Views mounted here
+    path("broadcast/", AdminBroadcastNotificationView.as_view(), name="admin-notification-broadcast"),
 ]
