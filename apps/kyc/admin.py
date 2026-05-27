@@ -45,7 +45,7 @@ class KycSubmissionAdmin(admin.ModelAdmin):
 
     list_display = (
         "user",
-        "status",
+        "status_badge",
         "legal_name",
         "submitted_at",
         "reviewed_at",
@@ -53,6 +53,14 @@ class KycSubmissionAdmin(admin.ModelAdmin):
     )
     list_filter = ("status", "submitted_at", "reviewed_at")
     search_fields = ("user__email", "user__phone", "provider_reference", "legal_name")
+    ordering = ("-submitted_at",)
+    date_hierarchy = "submitted_at"
+    list_select_related = ["user"]
+    raw_id_fields = ["user"]
+    list_per_page = 25
+    list_max_show_all = 200
+    show_full_result_count = False
+    empty_value_display = "-N/A-"
     readonly_fields = (
         "user",
         "created_at",
@@ -73,6 +81,24 @@ class KycSubmissionAdmin(admin.ModelAdmin):
     )
     inlines = [KycDocumentInline]
     actions = ["action_approve_kyc", "action_reject_kyc_resubmit", "action_trigger_legal_name_task"]
+
+    @admin.display(description="Status")
+    def status_badge(self, obj):
+        colours = {
+            "pending":   ("#f59e0b", "#fff"),
+            "submitted": ("#3b82f6", "#fff"),
+            "approved":  ("#10b981", "#fff"),
+            "rejected":  ("#ef4444", "#fff"),
+            "expired":   ("#6b7280", "#fff"),
+        }
+        bg, fg = colours.get(obj.status, ("#6b7280", "#fff"))
+        label = obj.get_status_display() if hasattr(obj, "get_status_display") else obj.status
+        return format_html(
+            '<span style="background:{};color:{};padding:2px 8px;'
+            'border-radius:20px;font-size:11px;font-weight:600">{}</span>',
+            bg, fg, label,
+        )
+
 
     def action_approve_kyc(self, request, queryset):
         """
@@ -171,7 +197,23 @@ class KycSubmissionAdmin(admin.ModelAdmin):
 class KycDocumentAdmin(admin.ModelAdmin):
     """Standalone document audit surface."""
 
-    list_display = ("submission", "document_type", "provider_verified", "created_at")
-    list_filter = ("document_type", "provider_verified", "created_at")
-    search_fields = ("submission__user__email", "public_id")
+    list_display = (
+        "submission", "document_type", "provider_verified",
+        "document_number_masked", "created_at",
+    )
+    list_filter = ("document_type", "provider_verified")
+    search_fields = ("submission__user__email", "public_id", "document_number")
+    ordering = ("-created_at",)
+    date_hierarchy = "created_at"
+    list_select_related = ["submission", "submission__user"]
+    list_per_page = 25
+    show_full_result_count = False
+    empty_value_display = "-N/A-"
     readonly_fields = ("created_at", "updated_at")
+
+    @admin.display(description="Doc Number")
+    def document_number_masked(self, obj):
+        num = obj.document_number or ""
+        if len(num) > 4:
+            return f"{'*' * (len(num) - 4)}{num[-4:]}"
+        return num or "—"

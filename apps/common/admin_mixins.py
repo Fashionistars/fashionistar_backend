@@ -704,3 +704,43 @@ class SoftDeleteAdminMixin:
         if 'is_deleted' not in base:
             return tuple(base) + ('is_deleted',)
         return base
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# READ-ONLY ADMIN MIXIN
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ReadOnlyAdminMixin:
+    """
+    Makes an entire admin class read-only.
+
+    Intended for audit/event tables that are append-only:
+      - AuditEventLog, OrderStatusHistory, TransactionLog, ProductPriceHistory
+
+    Use this mixin to prevent any accidental creation, modification, or
+    deletion of immutable ledger records via the Django admin UI.
+
+    Usage:
+        @admin.register(MyAuditModel)
+        class MyAuditModelAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
+            ...
+    """
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SOFT DELETE ADMIN MIXIN — soft_delete_badge alias
+# ─────────────────────────────────────────────────────────────────────────────
+# Some admin files call soft_delete_badge instead of _is_deleted_badge.
+# This alias is injected onto SoftDeleteAdminMixin for cross-file compatibility.
+
+SoftDeleteAdminMixin.soft_delete_badge = SoftDeleteAdminMixin._is_deleted_badge
+SoftDeleteAdminMixin.soft_delete_badge.short_description = 'Status'

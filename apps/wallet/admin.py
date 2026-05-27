@@ -49,14 +49,72 @@ class CurrencyAdmin(admin.ModelAdmin):
 class WalletAdmin(admin.ModelAdmin):
     list_display = (
         "name", "user", "owner_type", "currency",
-        "balance", "available_balance", "pending_balance",
-        "escrow_balance", "status",
+        "balance_display", "available_balance", "pending_balance",
+        "escrow_balance", "status_badge",
     )
     list_filter = ("owner_type", "currency", "status", "is_default")
     search_fields = ("name", "user__email", "user__phone", "account_number")
+    ordering = ("-created_at",)
+    date_hierarchy = "created_at"
+    list_select_related = ["user", "currency"]
+    raw_id_fields = ["user"]
+    list_per_page = 25
+    list_max_show_all = 200
+    show_full_result_count = False
+    empty_value_display = "-N/A-"
     readonly_fields = (
-        "pin_hash", "pin_set_at", "last_transaction_at", "created_at", "updated_at",
+        "balance", "available_balance", "pending_balance", "escrow_balance",
+        "pin_hash", "pin_set_at", "last_transaction_at",
+        "created_at", "updated_at",
     )
+
+    fieldsets = (
+        ("Identity", {
+            "fields": ("name", "user", "owner_type", "is_default", "status"),
+        }),
+        ("Balances (read-only)", {
+            "fields": (
+                "balance", "available_balance",
+                "pending_balance", "escrow_balance",
+                "currency",
+            ),
+        }),
+        ("Banking", {
+            "fields": ("account_number", "bank_name", "bank_code"),
+        }),
+        ("PIN & Security", {
+            "fields": ("pin_hash", "pin_set_at"),
+            "classes": ("collapse",),
+        }),
+        ("Timestamps", {
+            "fields": ("last_transaction_at", "created_at", "updated_at"),
+            "classes": ("collapse",),
+        }),
+    )
+
+    @admin.display(description="Balance")
+    def balance_display(self, obj):
+        from django.utils.html import format_html
+        return format_html(
+            '<strong style="color:#1e293b">\u20a6{:,.2f}</strong>',
+            obj.balance,
+        )
+
+    @admin.display(description="Status")
+    def status_badge(self, obj):
+        from django.utils.html import format_html
+        colours = {
+            "active":   ("#10b981", "#fff"),
+            "frozen":   ("#f59e0b", "#fff"),
+            "closed":   ("#6b7280", "#fff"),
+            "suspended":("#ef4444", "#fff"),
+        }
+        bg, fg = colours.get(obj.status, ("#6b7280", "#fff"))
+        return format_html(
+            '<span style="background:{};color:{};padding:2px 8px;'
+            'border-radius:20px;font-size:11px;font-weight:600">{}</span>',
+            bg, fg, obj.status.upper(),
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -66,11 +124,48 @@ class WalletAdmin(admin.ModelAdmin):
 @admin.register(WalletHold)
 class WalletHoldAdmin(admin.ModelAdmin):
     list_display = (
-        "reference", "order_id", "wallet", "amount",
-        "released_amount", "refunded_amount", "status", "created_at",
+        "reference", "order_id", "wallet", "amount_display",
+        "released_amount", "refunded_amount", "status_badge", "created_at",
     )
     list_filter = ("status",)
     search_fields = ("reference", "order_id", "wallet__user__email")
+    ordering = ("-created_at",)
+    date_hierarchy = "created_at"
+    list_select_related = ["wallet"]
+    list_per_page = 25
+    show_full_result_count = False
+    empty_value_display = "-N/A-"
+    readonly_fields = [
+        f.name for f in WalletHold._meta.get_fields()
+        if hasattr(f, "name")
+    ]
+
+    def has_add_permission(self, request): return False
+    def has_change_permission(self, request, obj=None): return False
+    def has_delete_permission(self, request, obj=None): return False
+
+    @admin.display(description="Amount")
+    def amount_display(self, obj):
+        from django.utils.html import format_html
+        return format_html(
+            '<strong>\u20a6{:,.2f}</strong>', obj.amount
+        )
+
+    @admin.display(description="Status")
+    def status_badge(self, obj):
+        from django.utils.html import format_html
+        colours = {
+            "held":     ("#f59e0b", "#fff"),
+            "released": ("#10b981", "#fff"),
+            "refunded": ("#6366f1", "#fff"),
+            "expired":  ("#6b7280", "#fff"),
+        }
+        bg, fg = colours.get(obj.status, ("#6b7280", "#fff"))
+        return format_html(
+            '<span style="background:{};color:{};padding:2px 8px;'
+            'border-radius:20px;font-size:11px;font-weight:600">{}</span>',
+            bg, fg, obj.status.upper(),
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
