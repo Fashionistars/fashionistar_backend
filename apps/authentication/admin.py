@@ -74,6 +74,7 @@ from apps.common.admin_import_export import (
 )
 from apps.audit_logs.mixins import AuditedModelAdmin
 from apps.authentication.models import (
+    MemberIDCounter,
     UnifiedUser,
     BiometricCredential,
     LoginEvent,
@@ -1986,3 +1987,18 @@ class BiometricCredentialAdmin(admin.ModelAdmin):
         except Exception:
             cid = str(obj.credential_id or "")
         return f"{cid[:16]}…" if len(cid) > 16 else cid
+
+
+@admin.register(MemberIDCounter)
+class MemberIDCounterAdmin(admin.ModelAdmin):
+    list_display = ["id", "counter"]
+    readonly_fields = ["id", "counter"]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

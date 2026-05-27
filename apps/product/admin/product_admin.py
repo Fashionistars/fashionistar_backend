@@ -103,6 +103,70 @@ class ProductFaqInline(admin.TabularInline):
     fields = ["question", "answer"]
 
 
+@admin.register(ProductGalleryMedia)
+class ProductGalleryMediaAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
+    list_display = [
+        "product",
+        "media_type",
+        "ordering",
+        "soft_delete_badge",
+        "media_preview",
+        "created_at",
+    ]
+    list_filter = ["media_type", "is_deleted"]
+    search_fields = ["product__title", "product__sku", "alt_text"]
+    list_select_related = ["product"]
+    raw_id_fields = ["product"]
+    readonly_fields = [
+        "id",
+        "media_preview",
+        "created_at",
+        "updated_at",
+        "is_deleted",
+        "deleted_at",
+        "soft_delete_badge",
+    ]
+    fieldsets = (
+        (_("Identity"), {"fields": ("id", "product", "media_type", "ordering")}),
+        (_("Media"), {"fields": ("media", "media_preview", "alt_text")}),
+        (_("Lifecycle"), {
+            "fields": ("created_at", "updated_at", "is_deleted", "deleted_at", "soft_delete_badge"),
+            "classes": ("collapse",),
+        }),
+    )
+    ordering = ["product", "ordering", "created_at"]
+
+    @admin.display(description=_("Preview"))
+    def media_preview(self, obj):
+        if obj.media:
+            try:
+                return format_html(
+                    '<img src="{}" height="60" style="border-radius:6px;object-fit:cover;" />',
+                    obj.media.url,
+                )
+            except Exception:
+                return "—"
+        return "—"
+
+
+@admin.register(ProductSpecification)
+class ProductSpecificationAdmin(admin.ModelAdmin):
+    list_display = ["product", "specification_title", "specification_value", "created_at"]
+    search_fields = ["product__title", "product__sku", "specification_title", "specification_value"]
+    list_select_related = ["product"]
+    raw_id_fields = ["product"]
+    ordering = ["product", "specification_title"]
+
+
+@admin.register(ProductFaq)
+class ProductFaqAdmin(admin.ModelAdmin):
+    list_display = ["product", "question", "created_at"]
+    search_fields = ["product__title", "product__sku", "question", "answer"]
+    list_select_related = ["product"]
+    raw_id_fields = ["product"]
+    ordering = ["product", "question"]
+
+
 class InventoryLogReadOnlyInline(admin.TabularInline):
     """
     Read-only snapshot of the last 10 inventory events for a product.

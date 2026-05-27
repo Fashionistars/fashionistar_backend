@@ -847,36 +847,41 @@ JAZZMIN_SETTINGS = {
     "usermodel_field_mappings": {
         "userauths.User": "avatar",
     },
-    "site_title": "Fashionistar Admin",
-    "site_header": "Fashionistar",
-    "site_brand": "AI Fashion Marketplace",
+    "site_title": "FASHIONISTAR GLOBAL ADMIN",
+    "site_header": "FASHIONISTAR GLOBAL ADMIN",
+    "site_brand": "FASHIONISTAR GLOBAL ADMIN",
     "site_icon": "images/favicon.ico",
     "site_logo": "images/logos/logo.png",
-    "welcome_sign": "Welcome to Fashionistar Admin",
+    "welcome_sign": "Welcome to FASHIONISTAR Global Admin",
     "copyright": "© 2026 Fashionistar Ltd.",
     "topmenu_links": [
         {"name": "Dashboard", "url": "admin:index", "permissions": ["auth.view_user"]},
         {
-            "name": "🛍️ Products",
+            "name": "CORE COMMERCE",
             "url": "admin:product_product_changelist",
             "permissions": ["product.view_product"],
         },
         {
-            "name": "📦 Orders",
+            "name": "FINANCIALS",
+            "url": "admin:transactions_transaction_changelist",
+            "permissions": ["transactions.view_transaction"],
+        },
+        {
+            "name": "OPERATIONS",
             "url": "admin:order_order_changelist",
             "permissions": ["order.view_order"],
         },
         {
-            "name": "🏪 Vendors",
-            "url": "admin:vendor_vendorprofile_changelist",
-            "permissions": ["vendor.view_vendorprofile"],
+            "name": "USER MANAGEMENT",
+            "url": "admin:authentication_unifieduser_changelist",
+            "permissions": ["authentication.view_unifieduser"],
         },
         {
-            "name": "🔐 KYC",
-            "url": "admin:kyc_kycsubmission_changelist",
-            "permissions": ["kyc.view_kycsubmission"],
+            "name": "AUDIT & PLATFORM",
+            "url": "admin:audit_logs_auditeventlog_changelist",
+            "permissions": ["audit_logs.view_auditeventlog"],
         },
-        {"model": "auth.User"},
+        {"model": "authentication.UnifiedUser"},
     ],
     "show_sidebar": True,
     "navigation_expanded": True,
@@ -897,13 +902,16 @@ JAZZMIN_SETTINGS = {
         "catalog",
         "catalog.category",
         "catalog.brand",
-        "catalog.collection",
-        "catalog.blog",
+        "catalog.collections",
+        "catalog.blogpost",
+        "catalog.blogmedia",
         # Product
         "product",
         "product.product",
         "product.productvariant",
         "product.productgallerymedia",
+        "product.productspecification",
+        "product.productfaq",
         "product.productreview",
         "product.productsize",
         "product.productsizetype",
@@ -926,8 +934,12 @@ JAZZMIN_SETTINGS = {
         "order.cartorderitem",
         "order.orderstatushistory",
         "order.orderidempotencyrecord",
+        "order.orderpaymentrecord",
+        "order.ordercommercialtransitionlog",
         # Custom Orders
         "custom_order",
+        "custom_order.customorder",
+        "custom_order.customordermilestone",
         # KYC
         "kyc",
         "kyc.kycsubmission",
@@ -942,16 +954,35 @@ JAZZMIN_SETTINGS = {
         "transactions.transaction",
         # Payment
         "payment",
+        "payment.paymentintent",
+        "payment.paymentprovider",
+        "payment.paymentproviderlog",
+        "payment.paymentwebhookevent",
+        "payment.paystacktransferrecipient",
         # Measurements
         "measurements",
+        "measurements.measurementprofile",
         # Notifications
         "notification",
+        "notification.notification",
+        "notification.notificationtemplate",
+        "notification.notificationpreference",
         # Chat
         "chat",
+        "chat.conversation",
+        "chat.message",
+        "chat.messagemedia",
+        "chat.chatoffer",
+        "chat.moderationflag",
+        "chat.chatescalation",
         # Support
         "support",
+        "support.supportticket",
+        "support.ticketmessage",
+        "support.ticketescalation",
         # Audit
         "audit_logs",
+        "audit_logs.auditeventlog",
         # Django internals
         "auth",
     ],
@@ -977,8 +1008,9 @@ JAZZMIN_SETTINGS = {
         "catalog":                                 "fas fa-layer-group",
         "catalog.category":                        "fas fa-tag",
         "catalog.brand":                           "fas fa-certificate",
-        "catalog.collection":                      "fas fa-palette",
-        "catalog.blog":                            "fas fa-blog",
+        "catalog.collections":                    "fas fa-palette",
+        "catalog.blogpost":                       "fas fa-blog",
+        "catalog.blogmedia":                      "fas fa-photo-video",
         # Product
         "product":                                 "fas fa-box-open",
         "product.product":                         "fas fa-tshirt",
@@ -1008,9 +1040,12 @@ JAZZMIN_SETTINGS = {
         "order.cartorderitem":                     "fas fa-shopping-basket",
         "order.orderstatushistory":                "fas fa-stream",
         "order.orderidempotencyrecord":            "fas fa-fingerprint",
+        "order.orderpaymentrecord":                "fas fa-money-check-alt",
+        "order.ordercommercialtransitionlog":      "fas fa-random",
         # Custom Orders
         "custom_order":                            "fas fa-magic",
         "custom_order.customorder":                "fas fa-pencil-ruler",
+        "custom_order.customordermilestone":       "fas fa-percentage",
         # KYC
         "kyc":                                     "fas fa-id-card",
         "kyc.kycsubmission":                       "fas fa-user-check",
@@ -1023,28 +1058,52 @@ JAZZMIN_SETTINGS = {
         # Transactions
         "transactions":                            "fas fa-exchange-alt",
         "transactions.transaction":                "fas fa-random",
+        "transactions.transactiondispute":         "fas fa-gavel",
+        "transactions.transactionfee":             "fas fa-calculator",
+        "transactions.transactionlog":             "fas fa-history",
+        "transactions.transactionidempotencykey":  "fas fa-key",
+        "transactions.commissionrule":             "fas fa-percent",
+        "transactions.companyrevenueentry":        "fas fa-landmark",
         # Payment
         "payment":                                 "fas fa-credit-card",
+        "payment.paymentintent":                   "fas fa-hand-holding-usd",
+        "payment.paymentprovider":                 "fas fa-plug",
+        "payment.paymentproviderlog":              "fas fa-stream",
+        "payment.paymentwebhookevent":             "fas fa-satellite-dish",
+        "payment.paystacktransferrecipient":       "fas fa-university",
         # Measurements
         "measurements":                            "fas fa-ruler-vertical",
+        "measurements.measurementprofile":         "fas fa-ruler-combined",
         # Notifications
         "notification":                            "fas fa-bell",
         "notification.notification":               "fas fa-bell",
+        "notification.notificationtemplate":       "fas fa-file-alt",
+        "notification.notificationpreference":     "fas fa-sliders-h",
         # Chat
         "chat":                                    "fas fa-comments",
-        "chat.chatroom":                           "fas fa-comment-dots",
-        "chat.chatmessage":                        "fas fa-comment",
+        "chat.conversation":                       "fas fa-comment-dots",
+        "chat.message":                            "fas fa-comment",
+        "chat.messagemedia":                       "fas fa-photo-video",
+        "chat.chatoffer":                          "fas fa-file-invoice-dollar",
+        "chat.moderationflag":                     "fas fa-flag",
+        "chat.chatescalation":                     "fas fa-level-up-alt",
         # Support
         "support":                                 "fas fa-headset",
         "support.supportticket":                   "fas fa-ticket-alt",
+        "support.ticketmessage":                   "fas fa-comments",
+        "support.ticketescalation":                "fas fa-level-up-alt",
         # Audit
         "audit_logs":                              "fas fa-clipboard-list",
         "audit_logs.auditeventlog":                "fas fa-search",
+        # Client
+        "client":                                  "fas fa-user",
+        "client.clientprofile":                    "fas fa-user-circle",
+        "client.clientaddress":                    "fas fa-map-marker-alt",
     },
     "default_icon_parents":  "fas fa-chevron-circle-right",
     "default_icon_children": "fas fa-circle",
     "related_modal_active":  False,
-    "custom_js":             None,
+    "custom_js":             "js/admin_dashboard.js",
     "custom_css":            "css/custom_admin.css",
     "show_ui_builder":       False,
     "changeform_format":     "horizontal_tabs",
@@ -1052,10 +1111,10 @@ JAZZMIN_SETTINGS = {
         "auth.user":                   "collapsible",
         "auth.group":                  "vertical_tabs",
         "authentication.unifieduser":  "vertical_tabs",
-        "vendor.vendorprofile":        "vertical_tabs",
-        "product.product":             "vertical_tabs",
-        "kyc.kycsubmission":           "vertical_tabs",
-        "order.order":                 "vertical_tabs",
+        "vendor.vendorprofile":        "horizontal_tabs",
+        "product.product":             "horizontal_tabs",
+        "kyc.kycsubmission":           "horizontal_tabs",
+        "order.order":                 "horizontal_tabs",
     },
     # Global top-bar search across most-used models
     "search_model": [
@@ -1075,14 +1134,14 @@ JAZZMIN_UI_TWEAKS = {
     "brand_small_text":            False,
     # ── Light theme colours (switched from dark cyborg) ──────────────────────
     "brand_colour":                "navbar-light",          # was navbar-dark
-    "accent":                      "accent-primary",        # was accent-olive
-    "navbar":                      "navbar-white",          # was navbar-dark
+    "accent":                      "accent-warning",
+    "navbar":                      "navbar-light",
     "no_navbar_border":            True,
     "navbar_fixed":                True,
     "layout_boxed":                False,
     "footer_fixed":                False,
     "sidebar_fixed":               True,
-    "sidebar":                     "sidebar-light-primary", # was sidebar-dark-info
+    "sidebar":                     "sidebar-light-warning",
     # ── Sidebar nav style ────────────────────────────────────────────────────
     "sidebar_nav_small_text":      False,
     "sidebar_disable_expand":      False,
@@ -1092,7 +1151,7 @@ JAZZMIN_UI_TWEAKS = {
     "sidebar_nav_flat_style":      False,
     # ── Theme (LIGHT) ────────────────────────────────────────────────────────
     "theme":                       "flatly",   # was "cyborg" (dark) → now light
-    "dark_mode_theme":             "darkly",   # was "cyborg"
+    "dark_mode_theme":             "flatly",
     "default_theme_mode":          "light",    # was "auto"
     # ── Button classes ────────────────────────────────────────────────────────
     "button_classes": {

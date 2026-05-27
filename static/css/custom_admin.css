@@ -10,16 +10,16 @@
 
 /* ── 2. DESIGN TOKENS ─────────────────────────────────────────────────────── */
 :root {
-  --fsn-primary:       #6366f1;   /* Indigo — brand */
-  --fsn-primary-dark:  #4f46e5;
-  --fsn-primary-light: #e0e7ff;
-  --fsn-accent:        #10b981;   /* Emerald — success */
+  --fsn-primary:       #01454A;
+  --fsn-primary-dark:  #012d31;
+  --fsn-primary-light: #dff2ef;
+  --fsn-accent:        #FDA600;
   --fsn-danger:        #ef4444;
   --fsn-warning:       #f59e0b;
   --fsn-info:          #3b82f6;
   --fsn-surface:       #ffffff;
-  --fsn-surface-2:     #f8fafc;
-  --fsn-border:        #e2e8f0;
+  --fsn-surface-2:     #F8F5ED;
+  --fsn-border:        #ECE6D6;
   --fsn-text:          #1e293b;
   --fsn-text-muted:    #64748b;
   --fsn-radius:        8px;
@@ -227,6 +227,98 @@ body,
   font-weight: 600;
   letter-spacing: 0.02em;
   white-space: nowrap;
+}
+
+.fsn-history-summary ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.fsn-history-summary li {
+  margin-bottom: 6px;
+  color: var(--fsn-text-muted);
+}
+
+.fsn-admin-dashboard {
+  margin-bottom: 24px;
+}
+
+.fsn-admin-dashboard__hero {
+  border: 1px solid var(--fsn-border);
+  border-radius: 18px;
+  background: linear-gradient(135deg, #01454A 0%, #012d31 100%);
+  color: #fff;
+  padding: 24px;
+  margin-bottom: 20px;
+  box-shadow: var(--fsn-shadow-md);
+}
+
+.fsn-admin-dashboard__hero h1 {
+  color: #fff;
+  margin: 6px 0 8px;
+  font-size: 1.6rem;
+}
+
+.fsn-admin-dashboard__hero p {
+  max-width: 760px;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.fsn-admin-dashboard__eyebrow {
+  color: #FDA600 !important;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.fsn-admin-dashboard__grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  margin-bottom: 24px;
+}
+
+.fsn-metric-card {
+  background: #fff;
+  border: 1px solid var(--fsn-border);
+  border-radius: 18px;
+  padding: 18px;
+  box-shadow: var(--fsn-shadow);
+  min-height: 240px;
+}
+
+.fsn-metric-card strong {
+  display: block;
+  font-size: 1.5rem;
+  color: var(--fsn-primary);
+  margin: 8px 0 16px;
+}
+
+.fsn-metric-card__label {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7A6B44;
+}
+
+.fsn-metric-card__hint {
+  color: var(--fsn-text-muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.fsn-admin-dashboard__list {
+  padding-left: 18px;
+  margin: 0;
+  color: var(--fsn-text-muted);
+}
+
+.fsn-admin-dashboard__list li {
+  margin-bottom: 8px;
 }
 
 /* These work with format_html() inline span styles globally */
