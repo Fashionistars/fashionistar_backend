@@ -1,8 +1,7 @@
 # apps/measurements/admin_backend/urls.py
 from django.urls import path
-
-app_name = "admin_measurements"
+from .views import AdminVerifyMeasurementView
 
 urlpatterns = [
-    # DRF Sync Views mounted here
+    path("<str:profile_id>/verify/", AdminVerifyMeasurementView.as_view(), name="admin-measurements-verify"),
 ]

@@ -1,8 +1,7 @@
 # apps/cart/admin_backend/urls.py
 from django.urls import path
-
-app_name = "admin_cart"
+from .views import AdminClearCartView
 
 urlpatterns = [
-    # DRF Sync Views mounted here
+    path("<str:cart_id>/clear/", AdminClearCartView.as_view(), name="admin-cart-clear"),
 ]
