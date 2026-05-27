@@ -47,11 +47,13 @@ class KycSubmissionSerializer(serializers.ModelSerializer):
     is_pending = serializers.BooleanField(read_only=True)
     is_rejected = serializers.BooleanField(read_only=True)
     can_resubmit = serializers.BooleanField(read_only=True)
+    user = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = KycSubmission
         fields = [
             "id",
+            "user",
             "status",
             "is_approved",
             "is_pending",
@@ -66,6 +68,22 @@ class KycSubmissionSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = fields
+
+    def get_user(self, obj):
+        user = obj.user
+        avatar_url = None
+        if user.avatar:
+            avatar_url = user.avatar.url if hasattr(user.avatar, "url") else str(user.avatar)
+        return {
+            "id": str(user.id),
+            "email": user.email,
+            "phone": str(user.phone) if user.phone else None,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "role": user.role,
+            "avatar": avatar_url,
+        }
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────

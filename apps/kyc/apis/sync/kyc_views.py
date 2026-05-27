@@ -287,3 +287,32 @@ class KycRejectView(APIView):
         return Response(
             {"status": "success", "message": "KYC submission rejected.", "data": out.data}
         )
+
+
+class KycAdminSubmissionListView(generics.ListAPIView):
+    """
+    GET /api/v1/kyc/admin/submissions/
+
+    Staff-only endpoint to list all KYC submissions with users and documents.
+    """
+    serializer_class = KycSubmissionSerializer
+    permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
+
+    def get_queryset(self):
+        from apps.kyc.models.kyc_submission import KycSubmission
+        return KycSubmission.objects.select_related("user").prefetch_related("documents").order_by("-updated_at")
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response({
+            "status": "success",
+            "message": "KYC submissions retrieved successfully.",
+            "data": serializer.data
+        })
+

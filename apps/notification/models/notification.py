@@ -52,25 +52,43 @@ class NotificationType(models.TextChoices):
     ORDER_SHIPPED           = "order_shipped",           _("Order Shipped")
     ORDER_DELIVERED         = "order_delivered",         _("Order Delivered")
     ORDER_CANCELLED         = "order_cancelled",         _("Order Cancelled")
-    ORDER_REFUNDED          = "order_refunded",          _("Order Refunded")
+   
+    # Custom Order
+    CUSTOM_ORDER_ACCEPTED          = "order_refunded",          _("Order Refunded")
+    CUSTOM_ORDER_REJECTED          = "order_refunded",          _("Order Refunded")
+
     # Vendor lifecycle
     VENDOR_APPROVED         = "vendor_approved",         _("Vendor Approved")
     VENDOR_REJECTED         = "vendor_rejected",         _("Vendor Rejected")
     PRODUCT_APPROVED        = "product_approved",        _("Product Approved")
     PRODUCT_REJECTED        = "product_rejected",        _("Product Rejected")
+
     # Financial
     PAYOUT_INITIATED        = "payout_initiated",        _("Payout Initiated")
     PAYOUT_COMPLETED        = "payout_completed",        _("Payout Completed")
     ESCROW_RELEASED         = "escrow_released",         _("Escrow Released")
+
     # Communication
     NEW_MESSAGE             = "new_message",             _("New Message")
     CHAT_OFFER              = "chat_offer",              _("Chat Offer")
     MEASUREMENT_REQUESTED   = "measurement_requested",   _("Measurement Requested")
+
     # System
     SYSTEM_ALERT            = "system_alert",            _("System Alert")
     PROMO                   = "promo",                   _("Promotional")
     REVIEW_REMINDER         = "review_reminder",         _("Review Reminder")
     WISHLIST_PRICE_DROP     = "wishlist_price_drop",     _("Wishlist Price Drop")
+    
+    # DELIVERY TRACKING ID
+    ("tracking_id_added", "Tracking ID Added"),
+    ("tracking_id_changed", "Tracking ID Changed"),
+
+    # DELIVERY COURIEER
+    ("tracking_id_added", "Tracking ID Added"),
+    ("tracking_id_changed", "Tracking ID Changed"),
+
+
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
