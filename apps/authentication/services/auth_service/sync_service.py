@@ -40,7 +40,7 @@ from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from rest_framework_simplejwt.tokens import RefreshToken
 from apps.common.request import get_client_ip
-from utilities.django_redis import get_redis_connection_safe
+from apps.common.utils.redis import get_redis_connection_safe
 
 logger = logging.getLogger('application')
 
