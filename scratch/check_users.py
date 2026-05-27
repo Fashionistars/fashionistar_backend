@@ -10,7 +10,9 @@ if PROJECT_ROOT not in sys.path:
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.config.development")
 django.setup()
 
-from userauths.models import User, Profile
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 
 print("Checking registered users...")
 clients = User.objects.filter(role=User.CLIENT)[:5]

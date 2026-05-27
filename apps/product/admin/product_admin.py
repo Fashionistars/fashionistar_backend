@@ -13,12 +13,17 @@ All admin classes use:
   - ProductWishlistAdmin (read-only analytics view)
   - ProductCommissionSnapshotAdmin (immutable financial record)
   - Enhanced ProductAdmin with inline commission and inventory summary
+  - ProductVariantAdmin standalone
 """
+import logging
 
 from django.contrib import admin
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from django.db.models import Sum, Count, Avg
+
+# ── Canonical shared mixins (do NOT re-define locally) ──────────────────────
+from apps.common.admin_mixins import SoftDeleteAdminMixin, ReadOnlyAdminMixin
 
 from apps.product.models import (
     Product,
@@ -45,46 +50,6 @@ from apps.product.models import (
     ProductViewLog,
 )
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# MIXINS
-# ─────────────────────────────────────────────────────────────────────────────
-
-class SoftDeleteAdminMixin:
-    """
-    Mixin that exposes soft-deleted records with a visual indicator.
-    Overrides get_queryset to use all_objects (or regular objects + annotated).
-    Adds 'is_deleted' to readonly_fields automatically.
-    """
-
-    def get_queryset(self, request):
-        qs = super().get_queryset(request)
-        # Show all records including soft-deleted for audit transparency
-        if hasattr(qs.model, "all_objects"):
-            return qs.model.all_objects.all()
-        return qs
-
-    def soft_delete_badge(self, obj):
-        if getattr(obj, "is_deleted", False):
-            return format_html(
-                '<span style="color:#ef4444;font-weight:bold">● Deleted</span>'
-            )
-        return format_html('<span style="color:#22c55e">● Active</span>')
-    soft_delete_badge.short_description = "Status"
-    soft_delete_badge.allow_tags = True
-
-
-class ReadOnlyAdminMixin:
-    """Makes the entire admin class read-only (useful for audit logs)."""
-
-    def has_add_permission(self, request):
-        return False
-
-    def has_change_permission(self, request, obj=None):
-        return False
-
-    def has_delete_permission(self, request, obj=None):
-        return False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -128,7 +93,8 @@ class ProductVariantInline(admin.TabularInline):
 class ProductSpecificationInline(admin.TabularInline):
     model = ProductSpecification
     extra = 0
-    fields = ["title", "content"]
+    # Correct field names from the ProductSpecification model:
+    fields = ["specification_title", "specification_value"]
 
 
 class ProductFaqInline(admin.TabularInline):
@@ -810,3 +776,48 @@ class ProductColorAdmin(admin.ModelAdmin):
             )
         return "—"
     colour_swatch.short_description = "Swatch"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PRODUCT VARIANT — STANDALONE ADMIN
+# ─────────────────────────────────────────────────────────────────────────────
+
+@admin.register(ProductVariant)
+class ProductVariantAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
+    """
+    Standalone variant admin for cross-product SKU management.
+    Allows filtering and searching variants without opening each parent product.
+    """
+
+    list_display = [
+        "sku", "product", "size", "color", "price_override",
+        "stock_qty", "is_active", "is_default", "soft_delete_badge",
+    ]
+    list_filter = ["is_active", "is_default", "size", "color"]
+    search_fields = ["sku", "product__title", "product__sku", "barcode"]
+    list_select_related = ["product", "size", "color"]
+    raw_id_fields = ["product"]
+    readonly_fields = [
+        "id", "sku", "created_at", "updated_at",
+        "is_deleted", "deleted_at", "soft_delete_badge",
+    ]
+    ordering = ["product", "size", "color"]
+    fieldsets = (
+        (_("Identity"), {
+            "fields": ("id", "sku", "barcode", "product"),
+        }),
+        (_("Variant"), {
+            "fields": ("size", "color", "price_override", "stock_qty", "weight_kg"),
+        }),
+        (_("Status"), {
+            "fields": ("is_active", "is_default", "soft_delete_badge"),
+        }),
+        (_("Lifecycle"), {
+            "fields": ("created_at", "updated_at", "is_deleted", "deleted_at"),
+            "classes": ("collapse",),
+        }),
+    )
+    empty_value_display = "-N/A-"
+
+
+logger = logging.getLogger(__name__)
