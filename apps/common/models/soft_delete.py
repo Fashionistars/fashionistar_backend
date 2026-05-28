@@ -22,6 +22,30 @@ Design Principles:
       re-triggering model validation / pre_save signals.
     - Celery notifications are fire-and-forget (retry=False, 1s timeout)
       so a dead broker NEVER blocks the caller.
+# apps/common/models/soft_delete.py
+"""
+Soft-delete infrastructure for the Fashionistar platform.
+
+Architecture:
+    SoftDeleteModel     — Abstract mixin: marks records as deleted instead
+                          of physically removing them.  Pairs with
+                          ``SoftDeleteManager`` (apps/common/managers.py)
+                          which filters out ``is_deleted=True`` rows from
+                          normal QuerySets.
+    DeletedRecords      — Archive table: stores serialised snapshots of
+                          every soft-deleted instance for forensic recovery
+                          and compliance audits.
+    DeletionAuditCounter — Atomic cumulative counters per
+                           (model_name, action) pair — tracks soft-delete,
+                           hard-delete, and restore totals for every model.
+    HardDeleteMixin     — Permission-gated hard-delete with Cloudinary
+                          media cleanup and pre-delete notification.
+
+Design Principles:
+    - QuerySet.update() is always preferred over self.save() to avoid
+      re-triggering model validation / pre_save signals.
+    - Celery notifications are fire-and-forget (retry=False, 1s timeout)
+      so a dead broker NEVER blocks the caller.
     - Analytics counters are dispatched via transaction.on_commit() to
       prevent phantom increments on transaction rollback.
 """
@@ -31,6 +55,7 @@ import logging
 from django.core.exceptions import PermissionDenied
 from django.db import models, transaction as db_transaction
 from django.utils import timezone
+from apps.common.managers.soft_delete import SoftDeleteManager
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +97,9 @@ class SoftDeleteModel(models.Model):
         blank=True,
         help_text="Timestamp of soft deletion.",
     )
+
+    objects = SoftDeleteManager()
+    all_objects = SoftDeleteManager(alive_only=False)
 
     class Meta:
         abstract = True

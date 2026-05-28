@@ -18,7 +18,7 @@ def get_kyc_submissions_admin_qs(
     from apps.kyc.models import KycSubmission
     qs = (
         KycSubmission.objects.select_related("user")
-        .prefetch_related("kyc_documents")
+        .prefetch_related("documents")
     )
     if status:
         qs = qs.filter(status=status)
@@ -51,7 +51,7 @@ async def get_kyc_detail_admin(*, submission_id: str):
     from apps.kyc.models import KycSubmission
     return await (
         KycSubmission.objects.select_related("user")
-        .prefetch_related("kyc_documents")
+        .prefetch_related("documents")
         .aget(pk=submission_id)
     )
 
