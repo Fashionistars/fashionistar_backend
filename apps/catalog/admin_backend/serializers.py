@@ -8,7 +8,8 @@ from apps.catalog.models.blog import BlogPost
 class AdminCategoryWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
-        fields = ("id", "name", "description", "active")
+        # Category model has: name, active, slug, image — no 'description' field
+        fields = ("id", "name", "active")
         read_only_fields = ("id",)
 
 class AdminBrandWriteSerializer(serializers.ModelSerializer):
@@ -20,7 +21,8 @@ class AdminBrandWriteSerializer(serializers.ModelSerializer):
 class AdminCollectionWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Collections
-        fields = ("id", "name", "description", "active")
+        # Collections model uses 'title' (not 'name') and has 'description', 'sub_title'
+        fields = ("id", "title", "sub_title", "description")
         read_only_fields = ("id",)
 
 
