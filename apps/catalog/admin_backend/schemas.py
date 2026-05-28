@@ -1,45 +1,47 @@
 from datetime import datetime
+from uuid import UUID
+from typing import Optional
 from ninja import Schema
 
 class AdminCategoryOut(Schema):
     model_config = {"from_attributes": True}
-    id: str
+    id: UUID
     name: str
-    slug: str
-    description: str = ""
+    slug: str = ""
+    description: Optional[str] = ""
     active: bool = True
     created_at: datetime
 
 class AdminBrandOut(Schema):
     model_config = {"from_attributes": True}
-    id: str
+    id: UUID
     name: str
-    slug: str
-    description: str = ""
+    slug: str = ""
+    description: Optional[str] = ""
     active: bool = True
     created_at: datetime
 
 class AdminCollectionOut(Schema):
     model_config = {"from_attributes": True}
-    id: str
+    id: UUID
     name: str
-    slug: str
-    description: str = ""
+    slug: str = ""
+    description: Optional[str] = ""
     active: bool = True
     created_at: datetime
 
 
 class AdminBlogPostOut(Schema):
     model_config = {"from_attributes": True}
-    id: str
+    id: UUID
     title: str
-    slug: str
-    excerpt: str = ""
-    content: str
-    status: str
+    slug: str = ""
+    excerpt: Optional[str] = ""
+    content: str = ""
+    status: str = "draft"
     tags: list = []
     is_featured: bool = False
-    published_at: datetime | None = None
+    published_at: Optional[datetime] = None
     view_count: int = 0
     created_at: datetime
 
