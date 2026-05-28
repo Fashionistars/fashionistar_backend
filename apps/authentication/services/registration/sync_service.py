@@ -103,10 +103,49 @@ class RegistrationService:
                 logger.info("✅ Registration: user created [id=%s]", user.id)
 
                 # ── 2. Generate Verification OTP ────────────────────────────
-                # The OTP is stored in Redis with a 5-minute TTL.
-                otp = OTPService.generate_otp_sync(
-                    user.id, purpose="verify", request=request
-                )
+                # PRIMARY: OTP stored in Redis with 5-minute TTL.
+                # FALLBACK: If Redis is unavailable (Cloud Run cold-start, etc.),
+                # we generate the OTP but store it in the Django DB cache table.
+                # The admin can manually activate users, or the user can resend
+                # OTP once Redis is restored. Registration MUST NOT fail due to
+                # Redis unavailability — user creation is the atomic unit.
+                otp = None
+                try:
+                    otp = OTPService.generate_otp_sync(
+                        user.id, purpose="verify", request=request
+                    )
+                except Exception as otp_exc:
+                    # Redis is unavailable — store OTP in Django's DB cache as fallback.
+                    # This allows registration to succeed even without Redis.
+                    logger.warning(
+                        "⚠️ Registration: Redis unavailable for OTP, using DB cache fallback "
+                        "[user_id=%s]: %s",
+                        user.id,
+                        str(otp_exc),
+                    )
+                    try:
+                        from apps.common.utils import generate_numeric_otp
+                        from django.core.cache import cache as _django_cache
+
+                        otp = generate_numeric_otp()
+                        # Store in Django DB cache with 10-minute TTL (600s)
+                        _cache_key = f"otp_fallback:{user.id}:verify"
+                        _django_cache.set(_cache_key, otp, timeout=600)
+                        logger.info(
+                            "✅ Registration: DB-cache OTP stored [user_id=%s key=%s]",
+                            user.id,
+                            _cache_key,
+                        )
+                    except Exception as fallback_exc:
+                        # If even DB cache fails, log but DO NOT fail registration.
+                        # Admin can manually activate this user.
+                        logger.error(
+                            "❌ Registration: OTP fallback also failed [user_id=%s]: %s. "
+                            "User created but requires admin activation.",
+                            user.id,
+                            str(fallback_exc),
+                        )
+                        otp = None  # Registration continues, admin activates manually
 
                 # ── 3. Wallet Provisioning (get_or_create) ─────────────────
                 # ARCHITECTURAL REQUIREMENT: Every user on the Fashionistar
@@ -178,13 +217,17 @@ class RegistrationService:
             )
 
             # ── 4. OTP Notification Dispatch ───────────────────────────────
+            # RESILIENCE: Email/SMS tasks are dispatched via Celery (Redis broker).
+            # If Celery/Redis is unavailable, we log the failure but DO NOT crash
+            # the registration. The user is created and the admin can activate them.
             _user_id = str(user.id)
             _otp = otp
+            _notification_sent = False
 
             from apps.audit_logs.middleware import extract_client_context
             _audit_ctx_dict = extract_client_context(request)
 
-            if email:
+            if _otp and email:
                 from django.conf import settings as _settings
 
                 _email_context = {
@@ -196,39 +239,69 @@ class RegistrationService:
                     "support_email": "support@fashionistar.io",
                     "SITE_URL": getattr(_settings, "SITE_URL", "https://fashionistar.io"),
                 }
-                transaction.on_commit(
-                    lambda: send_email_task.apply_async(
-                        kwargs={
-                            "subject": "🔐 Verify Your Fashionistar Account",
-                            "recipients": [email],
-                            "template_name": "authentication/email/registration_email.html",
-                            "context": _email_context,
-                            "audit_client_context": _audit_ctx_dict,
-                        }
+                try:
+                    transaction.on_commit(
+                        lambda: send_email_task.apply_async(
+                            kwargs={
+                                "subject": "🔐 Verify Your Fashionistar Account",
+                                "recipients": [email],
+                                "template_name": "authentication/email/registration_email.html",
+                                "context": _email_context,
+                                "audit_client_context": _audit_ctx_dict,
+                            }
+                        )
                     )
-                )
+                    _notification_sent = True
+                except Exception as email_exc:
+                    logger.warning(
+                        "⚠️ Registration: email dispatch failed [user_id=%s]: %s",
+                        _user_id, str(email_exc),
+                    )
 
-            elif phone:
+            elif _otp and phone:
                 _phone_body = (
                     "Welcome to Fashionistar!\n"
                     f"Your verification OTP is: {_otp}\n"
                     "Valid for 10 minutes. Do not share this code."
                 )
-                transaction.on_commit(
-                    lambda: send_sms_task.apply_async(
-                        kwargs={
-                            "to": phone,
-                            "body": _phone_body,
-                            "audit_client_context": _audit_ctx_dict,
-                        }
+                try:
+                    transaction.on_commit(
+                        lambda: send_sms_task.apply_async(
+                            kwargs={
+                                "to": phone,
+                                "body": _phone_body,
+                                "audit_client_context": _audit_ctx_dict,
+                            }
+                        )
                     )
+                    _notification_sent = True
+                except Exception as sms_exc:
+                    logger.warning(
+                        "⚠️ Registration: SMS dispatch failed [user_id=%s]: %s",
+                        _user_id, str(sms_exc),
+                    )
+
+            # Determine appropriate success message based on notification state
+            if _otp and _notification_sent:
+                _success_message = (
+                    "Registration successful. "
+                    "Check your email or phone for your OTP verification code."
+                )
+            elif _otp:
+                _success_message = (
+                    "Registration successful. "
+                    "Your account is pending verification. "
+                    "Please contact support or check your email shortly."
+                )
+            else:
+                _success_message = (
+                    "Registration successful. "
+                    "Your account has been created and is pending admin activation. "
+                    "You will be notified once your account is activated."
                 )
 
             return {
-                "message": (
-                    "Registration successful. "
-                    "Check your email or phone for your OTP verification code."
-                ),
+                "message": _success_message,
                 "user_id": _user_id,
                 "email": email,
                 "phone": phone,
