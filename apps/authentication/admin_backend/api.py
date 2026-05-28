@@ -69,7 +69,26 @@ async def admin_list_users(
     # Apply ordering
     qs = qs.order_by(ordering)
 
-    return await async_ninja_paginate(request, qs, page=page, page_size=page_size)
+    payload = await async_ninja_paginate(request, qs, page=page, page_size=page_size)
+
+    def serialize_user(user):
+        return {
+            "id": str(user.pk),
+            "email": user.email,
+            "phone": str(user.phone) if user.phone else None,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "role": user.role,
+            "auth_provider": user.auth_provider,
+            "is_active": user.is_active,
+            "is_verified": user.is_verified,
+            "is_deleted": user.is_deleted,
+            "member_id": user.member_id,
+            "date_joined": user.date_joined.isoformat() if user.date_joined else None,
+        }
+
+    payload["results"] = [serialize_user(u) for u in payload.get("results", [])]
+    return payload
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -151,7 +170,24 @@ async def admin_user_sessions(request, user_id: str, page: int = 1, page_size: i
             .select_related("user")
             .order_by("-created_at")
         )
-        return await async_ninja_paginate(request, qs, page=page, page_size=page_size)
+        payload = await async_ninja_paginate(request, qs, page=page, page_size=page_size)
+
+        def serialize_session(session):
+            return {
+                "id": str(session.pk),
+                "ip_address": session.ip_address,
+                "user_agent": session.user_agent,
+                "device_name": session.device_name,
+                "browser_family": session.browser_family,
+                "os_family": session.os_family,
+                "last_used_at": session.last_used_at.isoformat() if session.last_used_at else None,
+                "expires_at": session.expires_at.isoformat() if session.expires_at else None,
+                "revoked_at": session.revoked_at.isoformat() if session.revoked_at else None,
+                "revoked_reason": session.revoked_reason,
+            }
+
+        payload["results"] = [serialize_session(s) for s in payload.get("results", [])]
+        return payload
     except Exception:
         # UserSession model may not exist in all environments
         return {"success": True, "count": 0, "results": []}
@@ -177,6 +213,30 @@ async def admin_user_login_events(request, user_id: str, page: int = 1, page_siz
             .select_related("user")
             .order_by("-created_at")
         )
-        return await async_ninja_paginate(request, qs, page=page, page_size=page_size)
+        payload = await async_ninja_paginate(request, qs, page=page, page_size=page_size)
+
+        def serialize_event(event):
+            return {
+                "id": str(event.pk),
+                "ip_address": event.ip_address,
+                "user_agent": event.user_agent,
+                "client_type": event.client_type,
+                "browser_family": event.browser_family,
+                "os_family": event.os_family,
+                "device_type": event.device_type,
+                "country": event.country,
+                "country_code": event.country_code,
+                "region": event.region,
+                "city": event.city,
+                "auth_method": event.auth_method,
+                "outcome": event.outcome,
+                "failure_reason": event.failure_reason,
+                "is_successful": event.is_successful,
+                "risk_score": event.risk_score,
+                "created_at": event.created_at.isoformat() if event.created_at else None,
+            }
+
+        payload["results"] = [serialize_event(e) for e in payload.get("results", [])]
+        return payload
     except Exception:
         return {"success": True, "count": 0, "results": []}
