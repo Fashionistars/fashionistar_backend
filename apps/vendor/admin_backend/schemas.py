@@ -4,12 +4,13 @@
 from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
+from uuid import UUID
 from typing import Optional
 from pydantic import BaseModel
 
 
 class AdminVendorListSchema(BaseModel):
-    id: str
+    id: UUID
     store_name: str
     store_slug: str
     tagline: Optional[str] = None

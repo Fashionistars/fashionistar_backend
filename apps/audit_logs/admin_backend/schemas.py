@@ -1,11 +1,12 @@
 # apps/audit_logs/admin_backend/schemas.py
 from __future__ import annotations
 from datetime import datetime
+from uuid import UUID
 from typing import Optional, Dict, Any
 from ninja import Schema
 
 class AdminAuditEventSchema(Schema):
-    id: str
+    id: UUID
     event_type: str
     event_category: str
     severity: str

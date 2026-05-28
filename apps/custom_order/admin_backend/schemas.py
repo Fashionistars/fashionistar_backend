@@ -2,26 +2,27 @@
 from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
+from uuid import UUID
 from typing import List, Optional
 from ninja import Schema
 
 class AdminMilestoneSchema(Schema):
-    id: str
-    milestone_pct: int
-    amount_ngn: Decimal
-    payment_status: str
+    id: UUID
+    milestone_pct: int = 0
+    amount_ngn: Decimal = Decimal("0.00")
+    payment_status: str = "pending"
     paid_at: Optional[datetime] = None
-    transaction_ref: str
-    payment_reference: str
+    transaction_ref: str = ""
+    payment_reference: str = ""
 
 class AdminCustomOrderListSchema(Schema):
-    id: str
-    reference: str
-    client_email: str
-    vendor_store_name: str
-    budget_ngn: Decimal
-    agreed_amount_ngn: Decimal
-    status: str
+    id: UUID
+    reference: str = ""
+    client_email: str = ""
+    vendor_store_name: str = ""
+    budget_ngn: Decimal = Decimal("0.00")
+    agreed_amount_ngn: Decimal = Decimal("0.00")
+    status: str = "pending"
     created_at: datetime
 
     @staticmethod
@@ -33,23 +34,23 @@ class AdminCustomOrderListSchema(Schema):
         return obj.vendor.store_name if obj.vendor else ""
 
 class AdminCustomOrderDetailSchema(Schema):
-    id: str
-    reference: str
-    client_email: str
-    vendor_store_name: str
-    design_brief: str
-    reference_images: List[str]
-    product_snapshot_id: str
-    order_snapshot_id: str
-    budget_ngn: Decimal
-    agreed_amount_ngn: Decimal
-    currency: str
-    status: str
-    vendor_approval_note: str
+    id: UUID
+    reference: str = ""
+    client_email: str = ""
+    vendor_store_name: str = ""
+    design_brief: str = ""
+    reference_images: List[str] = []
+    product_snapshot_id: Optional[UUID] = None
+    order_snapshot_id: Optional[UUID] = None
+    budget_ngn: Decimal = Decimal("0.00")
+    agreed_amount_ngn: Decimal = Decimal("0.00")
+    currency: str = "NGN"
+    status: str = "pending"
+    vendor_approval_note: str = ""
     approved_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     created_at: datetime
-    milestones: List[AdminMilestoneSchema]
+    milestones: List[AdminMilestoneSchema] = []
 
     @staticmethod
     def resolve_client_email(obj):
@@ -62,3 +63,4 @@ class AdminCustomOrderDetailSchema(Schema):
     @staticmethod
     def resolve_milestones(obj):
         return list(obj.milestones.all())
+

@@ -1,15 +1,16 @@
 # apps/support/admin_backend/schemas.py
 from __future__ import annotations
 from datetime import datetime
+from uuid import UUID
 from typing import List, Optional, Dict, Any
 from ninja import Schema
 
 class AdminTicketMessageSchema(Schema):
-    id: str
+    id: UUID
     author_email: Optional[str] = None
-    body: str
-    is_staff_reply: bool
-    attachments: List[str]
+    body: str = ""
+    is_staff_reply: bool = False
+    attachments: List[str] = []
     created_at: datetime
 
     @staticmethod
@@ -17,21 +18,21 @@ class AdminTicketMessageSchema(Schema):
         return obj.author.email if obj.author else None
 
 class AdminSupportTicketSchema(Schema):
-    id: str
+    id: UUID
     submitter_email: Optional[str] = None
     order_id: Optional[str] = None
-    category: str
-    priority: str
-    status: str
-    title: str
-    description: str
-    metadata: Dict[str, Any]
+    category: str = ""
+    priority: str = "medium"
+    status: str = "open"
+    title: str = ""
+    description: str = ""
+    metadata: Dict[str, Any] = {}
     assigned_to_email: Optional[str] = None
-    resolution_notes: str
+    resolution_notes: str = ""
     resolved_at: Optional[datetime] = None
     closed_at: Optional[datetime] = None
     created_at: datetime
-    messages: List[AdminTicketMessageSchema]
+    messages: List[AdminTicketMessageSchema] = []
 
     @staticmethod
     def resolve_submitter_email(obj):

@@ -2,13 +2,14 @@
 """Django Ninja schemas for KYC admin API."""
 from __future__ import annotations
 from datetime import datetime
+from uuid import UUID
 from typing import Optional
 from pydantic import BaseModel
 
 
 class AdminKYCDocumentSchema(BaseModel):
-    id: str
-    document_type: str
+    id: UUID
+    document_type: str = ""
     status: Optional[str] = None
     created_at: datetime
     class Config:
@@ -16,11 +17,11 @@ class AdminKYCDocumentSchema(BaseModel):
 
 
 class AdminKYCSubmissionListSchema(BaseModel):
-    id: str
-    user_id: str
+    id: UUID
+    user_id: Optional[UUID] = None
     user_email: Optional[str] = None
     user_member_id: Optional[str] = None
-    status: str
+    status: str = "pending"
     legal_name: Optional[str] = None
     review_notes: Optional[str] = None
     provider_reference: Optional[str] = None
