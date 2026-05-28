@@ -24,10 +24,17 @@ Configuration:
         ``from apps.providers.backends.sms_backend import SMSBackend``
 """
 
-from apps.providers.backends.email_backend import EmailBackend
-from apps.providers.backends.sms_backend import SMSBackend
+from apps.providers.backends.email_backend import DatabaseConfiguredEmailBackend
+from apps.providers.backends.sms_backend import DatabaseConfiguredSMSBackend
+
+# For backwards compatibility / convenience
+EmailBackend = DatabaseConfiguredEmailBackend
+SMSBackend = DatabaseConfiguredSMSBackend
 
 __all__ = [
+    "DatabaseConfiguredEmailBackend",
     "EmailBackend",
+    "DatabaseConfiguredSMSBackend",
     "SMSBackend",
 ]
+
