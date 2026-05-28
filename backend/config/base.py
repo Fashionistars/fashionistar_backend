@@ -216,15 +216,15 @@ MIDDLEWARE = [
     # Every subsequent middleware & view gets request.request_id + timing
     "apps.common.middleware.RequestIDMiddleware",
     "apps.common.middleware.RequestTimingMiddleware",
+    # ── CORS (must be before SessionMiddleware and early returns) ────────────
+    "corsheaders.middleware.CorsMiddleware",
     # SIEM audit log: captures IP, UA, URL, method, role for all 7 roles
     "apps.common.middleware.SecurityAuditMiddleware",
     # Structured audit-log context (IP, UA, actor) for AuditService
     "apps.audit_logs.middleware.AuditContextMiddleware",
-    # ── Django Security & CORS ───────────────────────────────────────────────
     # ── Idempotency: Exactly-once POST semantics under 100k RPS ──
     # SETNX-based Redis locking prevents duplicate user creation
-    # from retry storms. Placed before CORS so replayed responses
-    # receive correct CORS headers from CorsMiddleware below.
+    # from retry storms.
     "apps.authentication.middleware.idempotency.IdempotencyMiddleware",
     # ────────────────────────────────────────────────────────────
     "django.middleware.security.SecurityMiddleware",
