@@ -81,6 +81,7 @@ IDEMPOTENCY_RESP_PREFIX = "idempotency:resp:"
 
 # Endpoints that deliberately skip idempotency (always fast-path through)
 IDEMPOTENCY_SKIP_PATHS = frozenset([
+    "/api/v1/auth/login/",
     "/api/v1/auth/logout/",
     "/api/v1/auth/token/refresh/",
     "/health/",
