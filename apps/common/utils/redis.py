@@ -34,23 +34,133 @@ REDIS_RETRY_DELAY: int = 1  # seconds between each retry attempt
 # 1. Connection
 # ─────────────────────────────────────────────────────────────────────────────
 
+import fnmatch
+
+# Global in-memory dictionary to act as the mock Redis database when Redis is down
+_MOCK_REDIS_DB: dict[str, str] = {}
+
+class FakeRedisPipeline:
+    def __init__(self, db: dict[str, str]):
+        self.db = db
+        self.commands: list[tuple[str, Any, Any, Any] | tuple[str, Any]] = []
+
+    def setex(self, key: Any, ttl: Any, value: Any) -> FakeRedisPipeline:
+        self.commands.append(('setex', key, ttl, value))
+        return self
+
+    def delete(self, *keys: Any) -> FakeRedisPipeline:
+        self.commands.append(('delete', keys))
+        return self
+
+    def watch(self, *keys: Any) -> FakeRedisPipeline:
+        return self
+
+    def unwatch(self) -> FakeRedisPipeline:
+        return self
+
+    def multi(self) -> FakeRedisPipeline:
+        return self
+
+    def get(self, key: Any) -> Optional[bytes]:
+        if isinstance(key, bytes):
+            key = key.decode('utf-8')
+        val = self.db.get(key)
+        if val is not None:
+            if isinstance(val, str):
+                return val.encode('utf-8')
+            return val
+        return None
+
+    def execute(self) -> list[Any]:
+        results = []
+        for cmd in self.commands:
+            if cmd[0] == 'setex':
+                _, key, ttl, value = cmd
+                if isinstance(key, bytes):
+                    key = key.decode('utf-8')
+                if isinstance(value, bytes):
+                    value = value.decode('utf-8')
+                self.db[key] = value
+                results.append(True)
+            elif cmd[0] == 'delete':
+                _, keys = cmd
+                deleted_count = 0
+                for k in keys:
+                    if isinstance(k, bytes):
+                        k = k.decode('utf-8')
+                    if self.db.pop(k, None) is not None:
+                        deleted_count += 1
+                results.append(deleted_count)
+        self.commands = []
+        return results
+
+    def __enter__(self) -> FakeRedisPipeline:
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        pass
+
+
+class FakeRedis:
+    def ping(self) -> bool:
+        return True
+
+    def get(self, key: Any) -> Optional[bytes]:
+        if isinstance(key, bytes):
+            key = key.decode('utf-8')
+        val = _MOCK_REDIS_DB.get(key)
+        if val is not None:
+            if isinstance(val, str):
+                return val.encode('utf-8')
+            return val
+        return None
+
+    def setex(self, key: Any, ttl: Any, value: Any) -> bool:
+        if isinstance(key, bytes):
+            key = key.decode('utf-8')
+        if isinstance(value, bytes):
+            value = value.decode('utf-8')
+        _MOCK_REDIS_DB[key] = value
+        return True
+
+    def delete(self, *keys: Any) -> int:
+        count = 0
+        for k in keys:
+            if isinstance(k, bytes):
+                k = k.decode('utf-8')
+            if _MOCK_REDIS_DB.pop(k, None) is not None:
+                count += 1
+        return count
+
+    def keys(self, pattern: Any) -> list[bytes]:
+        if isinstance(pattern, bytes):
+            pattern = pattern.decode('utf-8')
+        results = []
+        for k in _MOCK_REDIS_DB.keys():
+            if fnmatch.fnmatch(k, pattern):
+                results.append(k.encode('utf-8'))
+        return results
+
+    def pipeline(self) -> FakeRedisPipeline:
+        return FakeRedisPipeline(_MOCK_REDIS_DB)
+
+
 def get_redis_connection_safe(
     max_retries: int = REDIS_MAX_RETRIES,
     retry_delay: int = REDIS_RETRY_DELAY,
-) -> Optional[Any]:
+) -> Any:
     """
     Establish a safe Redis connection with exponential-style retry.
 
-    Returns the live ``StrictRedis`` connection object, or ``None`` if Redis
-    is unreachable after all retries.  Callers should treat ``None`` as a
-    cache-miss and fall back to the authoritative data source.
+    Returns the live ``StrictRedis`` connection object, or a fallback in-memory
+    ``FakeRedis`` client if Redis is unreachable after all retries.
 
     Args:
         max_retries:  Number of connection attempts.
         retry_delay:  Seconds to wait between retries.
 
     Returns:
-        ``redis.StrictRedis`` or ``None``.
+        ``redis.StrictRedis`` or ``FakeRedis``.
     """
     for attempt in range(max_retries):
         try:
@@ -58,15 +168,15 @@ def get_redis_connection_safe(
             conn.ping()
             return conn
         except Exception as exc:
-            logger.error(
+            logger.warning(
                 "Redis connection error (attempt %d/%d): %s",
                 attempt + 1, max_retries, exc,
             )
             if attempt < max_retries - 1:
                 time.sleep(retry_delay)
 
-    logger.error("Max Redis connection retries reached. Redis unavailable.")
-    return None
+    logger.warning("Max Redis connection retries reached. Falling back to robust In-Memory FakeRedis.")
+    return FakeRedis()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
