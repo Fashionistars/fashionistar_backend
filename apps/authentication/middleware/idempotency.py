@@ -151,7 +151,10 @@ class IdempotencyMiddleware:
 
         # ── LOCK: Prevent concurrent in-flight requests with same key ──────
         acquired = _cache.add(lock_key, "1", timeout=IDEMPOTENCY_LOCK_TTL)
-        if not acquired:
+        # If Redis is unreachable or throws a connection error, acquired is None
+        # (due to IGNORE_EXCEPTIONS = True). We gracefully degrade and allow the
+        # request to proceed as if lock was acquired. Only block on explicit False.
+        if acquired is False:
             logger.warning(
                 "⚠️  Idempotency LOCK CONFLICT | key=%s | path=%s | "
                 "In-flight request detected. Returning 409.",
