@@ -2,11 +2,12 @@
 from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
+from uuid import UUID
 from typing import List, Optional
 from ninja import Schema
 
 class AdminCartItemSchema(Schema):
-    id: str
+    id: UUID
     product_title: str
     product_price: Decimal
     variant_name: Optional[str] = None
@@ -31,13 +32,13 @@ class AdminCartItemSchema(Schema):
         return obj.line_total
 
 class AdminCartSchema(Schema):
-    id: str
+    id: UUID
     owner_email: Optional[str] = None
     session_key: Optional[str] = None
     coupon_code: Optional[str] = None
-    coupon_discount: Decimal
-    subtotal: Decimal
-    total: Decimal
+    coupon_discount: Decimal = Decimal("0.00")
+    subtotal: Decimal = Decimal("0.00")
+    total: Decimal = Decimal("0.00")
     last_activity: datetime
     items: List[AdminCartItemSchema]
 

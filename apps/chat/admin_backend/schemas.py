@@ -1,13 +1,14 @@
 # apps/chat/admin_backend/schemas.py
 from __future__ import annotations
 from datetime import datetime
+from uuid import UUID
 from typing import List, Optional
 from ninja import Schema
 
 class AdminChatMessageSchema(Schema):
-    id: str
-    author_email: str
-    content: str
+    id: UUID
+    author_email: str = ""
+    content: str = ""
     created_at: datetime
 
     @staticmethod
@@ -15,13 +16,13 @@ class AdminChatMessageSchema(Schema):
         return obj.author.email if obj.author else ""
 
 class AdminConversationSchema(Schema):
-    id: str
-    buyer_email: str
-    vendor_email: str
-    status: str
+    id: UUID
+    buyer_email: str = ""
+    vendor_email: str = ""
+    status: str = "active"
     created_at: datetime
     updated_at: datetime
-    messages: List[AdminChatMessageSchema]
+    messages: List[AdminChatMessageSchema] = []
 
     @staticmethod
     def resolve_buyer_email(obj):
@@ -36,12 +37,12 @@ class AdminConversationSchema(Schema):
         return list(obj.messages.all()[:50])
 
 class AdminChatEscalationSchema(Schema):
-    id: str
-    conversation_id: str
-    buyer_email: str
-    vendor_email: str
-    reason: str
-    status: str
+    id: UUID
+    conversation_id: Optional[str] = None
+    buyer_email: str = ""
+    vendor_email: str = ""
+    reason: str = ""
+    status: str = "open"
     resolution_notes: Optional[str] = None
     resolved_at: Optional[datetime] = None
     assigned_admin_email: Optional[str] = None
@@ -62,3 +63,4 @@ class AdminChatEscalationSchema(Schema):
     @staticmethod
     def resolve_assigned_admin_email(obj):
         return obj.assigned_admin.email if obj.assigned_admin else None
+

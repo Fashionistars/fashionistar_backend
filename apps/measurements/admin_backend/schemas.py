@@ -2,15 +2,16 @@
 from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
+from uuid import UUID
 from typing import Optional
 from ninja import Schema
 
 class AdminMeasurementProfileSchema(Schema):
-    id: str
-    owner_email: str
-    name: str
-    is_default: bool
-    unit: str
+    id: UUID
+    owner_email: str = ""
+    name: str = ""
+    is_default: bool = False
+    unit: str = "cm"
     bust: Optional[Decimal] = None
     waist: Optional[Decimal] = None
     hips: Optional[Decimal] = None
@@ -25,9 +26,9 @@ class AdminMeasurementProfileSchema(Schema):
     wrist: Optional[Decimal] = None
     height: Optional[Decimal] = None
     weight_kg: Optional[Decimal] = None
-    is_verified: bool
+    is_verified: bool = False
     verified_by_email: Optional[str] = None
-    notes: str
+    notes: str = ""
     created_at: datetime
     updated_at: datetime
 
@@ -38,3 +39,4 @@ class AdminMeasurementProfileSchema(Schema):
     @staticmethod
     def resolve_verified_by_email(obj):
         return obj.verified_by.email if obj.verified_by else None
+
