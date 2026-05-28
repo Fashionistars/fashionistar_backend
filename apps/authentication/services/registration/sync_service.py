@@ -239,9 +239,15 @@ class RegistrationService:
                     "support_email": "support@fashionistar.io",
                     "SITE_URL": getattr(_settings, "SITE_URL", "https://fashionistar.io"),
                 }
-                try:
-                    transaction.on_commit(
-                        lambda: send_email_task.apply_async(
+                # CRITICAL: try/except MUST be INSIDE the lambda, not outside.
+                # transaction.on_commit() only registers the callback — it never
+                # raises. The Celery broker exception fires when the lambda runs
+                # after commit, outside the atomic block. Catching it here ensures
+                # broker failures never cause a 500 response.
+                _ec = _email_context  # capture loop variable for closure
+                def _send_email_safe():
+                    try:
+                        send_email_task.apply_async(
                             kwargs={
                                 "subject": "🔐 Verify Your Fashionistar Account",
                                 "recipients": [email],
@@ -250,13 +256,14 @@ class RegistrationService:
                                 "audit_client_context": _audit_ctx_dict,
                             }
                         )
-                    )
-                    _notification_sent = True
-                except Exception as email_exc:
-                    logger.warning(
-                        "⚠️ Registration: email dispatch failed [user_id=%s]: %s",
-                        _user_id, str(email_exc),
-                    )
+                    except Exception as email_exc:
+                        logger.warning(
+                            "\u26a0\ufe0f Registration: email dispatch failed (broker unavailable) "
+                            "[user_id=%s]: %s",
+                            _user_id, str(email_exc),
+                        )
+                transaction.on_commit(_send_email_safe)
+                _notification_sent = True
 
             elif _otp and phone:
                 _phone_body = (
@@ -264,22 +271,24 @@ class RegistrationService:
                     f"Your verification OTP is: {_otp}\n"
                     "Valid for 10 minutes. Do not share this code."
                 )
-                try:
-                    transaction.on_commit(
-                        lambda: send_sms_task.apply_async(
+                _pb = _phone_body  # capture for closure
+                def _send_sms_safe():
+                    try:
+                        send_sms_task.apply_async(
                             kwargs={
                                 "to": phone,
-                                "body": _phone_body,
+                                "body": _pb,
                                 "audit_client_context": _audit_ctx_dict,
                             }
                         )
-                    )
-                    _notification_sent = True
-                except Exception as sms_exc:
-                    logger.warning(
-                        "⚠️ Registration: SMS dispatch failed [user_id=%s]: %s",
-                        _user_id, str(sms_exc),
-                    )
+                    except Exception as sms_exc:
+                        logger.warning(
+                            "\u26a0\ufe0f Registration: SMS dispatch failed (broker unavailable) "
+                            "[user_id=%s]: %s",
+                            _user_id, str(sms_exc),
+                        )
+                transaction.on_commit(_send_sms_safe)
+                _notification_sent = True
 
             # Determine appropriate success message based on notification state
             if _otp and _notification_sent:
