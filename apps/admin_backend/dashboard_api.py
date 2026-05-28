@@ -18,15 +18,15 @@ Performance Contract:
 
 from __future__ import annotations
 
-from django.utils import asyncio
+import asyncio
 
 import logging
 from typing import Optional
 
 from django.utils import timezone
 from ninja import Router
-from ninja.security import HttpBearer
 from pydantic import BaseModel
+from apps.admin_backend.permissions import admin_auth
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +82,7 @@ class AdminDashboardKPISchema(BaseModel):
         "Each metric is fetched independently using Django async ORM acount(). "
         "Required: admin or superuser role."
     ),
-    auth=None,  # Auth enforced by URL-level middleware in admin_backend router
+    auth=admin_auth,
 )
 async def admin_dashboard_kpi(request):
     """
@@ -96,7 +96,7 @@ async def admin_dashboard_kpi(request):
     from apps.vendor.models import VendorProfile
     from apps.product.models import Product, ProductStatus
     from apps.order.models import Order
-    from apps.kyc.models import KYCSubmission
+    from apps.kyc.models import KycSubmission
     from apps.wallet.models import Wallet
     from apps.support.models import SupportTicket
 
@@ -111,69 +111,7 @@ async def admin_dashboard_kpi(request):
             return 0
 
     # ── Users ──────────────────────────────────────────────────────────────
-    total_users = await safe_count(
-        UnifiedUser.objects.filter(is_deleted=False)
-    )
-    new_users_today = await safe_count(
-        UnifiedUser.objects.filter(
-            is_deleted=False,
-            date_joined__date=today,
-        )
-    )
-
-    # ── Vendors ────────────────────────────────────────────────────────────
-    # Anchor: VendorProfile — traverse nothing
-    active_vendors = await safe_count(
-        VendorProfile.objects.filter(
-            is_approved=True,
-            user__is_active=True,
-            user__is_deleted=False,
-        ).select_related("user")
-    )
-
-    # ── Products ───────────────────────────────────────────────────────────
-    total_products = await safe_count(
-        Product.objects.filter(is_deleted=False)
-    )
-    products_pending_review = await safe_count(
-        Product.objects.filter(
-            status=ProductStatus.PENDING,
-            is_deleted=False,
-        )
-    )
-    low_stock_products = await safe_count(
-        Product.objects.filter(
-            is_deleted=False,
-            in_stock=True,
-            stock_qty__lte=5,
-            stock_qty__gt=0,
-        )
-    )
-
-    # ── Orders ─────────────────────────────────────────────────────────────
-    total_orders = await safe_count(Order.objects.all())
-    orders_today = await safe_count(
-        Order.objects.filter(created_at__date=today)
-    )
-    orders_pending = await safe_count(
-        Order.objects.filter(
-            status__in=["pending", "payment_pending", "processing"]
-        )
-    )
-
-    # ── KYC ────────────────────────────────────────────────────────────────
-    pending_kyc_submissions = await safe_count(
-        KYCSubmission.objects.filter(status="pending")
-    )
-
-    # ── Wallets ────────────────────────────────────────────────────────────
-    total_wallets = await safe_count(Wallet.objects.all())
-
-    # ── Support ────────────────────────────────────────────────────────────
-    open_support_tickets = await safe_count(
-        SupportTicket.objects.filter(status__in=["open", "in_progress"])
-    )
-    asyncio.gather(
+    (
         total_users,
         new_users_today,
         active_vendors,
@@ -186,6 +124,48 @@ async def admin_dashboard_kpi(request):
         pending_kyc_submissions,
         total_wallets,
         open_support_tickets,
+    ) = await asyncio.gather(
+        safe_count(UnifiedUser.objects.filter(is_deleted=False)),
+        safe_count(
+            UnifiedUser.objects.filter(
+                is_deleted=False,
+                date_joined__date=today,
+            )
+        ),
+        safe_count(
+            VendorProfile.objects.filter(
+                is_verified=True,
+                user__is_active=True,
+                user__is_deleted=False,
+            ).select_related("user")
+        ),
+        safe_count(Product.objects.filter(is_deleted=False)),
+        safe_count(
+            Product.objects.filter(
+                status=ProductStatus.PENDING,
+                is_deleted=False,
+            )
+        ),
+        safe_count(
+            Product.objects.filter(
+                is_deleted=False,
+                in_stock=True,
+                stock_qty__lte=5,
+                stock_qty__gt=0,
+            )
+        ),
+        safe_count(Order.objects.all()),
+        safe_count(Order.objects.filter(created_at__date=today)),
+        safe_count(
+            Order.objects.filter(
+                status__in=["pending", "payment_pending", "processing"]
+            )
+        ),
+        safe_count(KycSubmission.objects.filter(status="pending")),
+        safe_count(Wallet.objects.all()),
+        safe_count(
+            SupportTicket.objects.filter(status__in=["open", "in_progress"])
+        ),
     )
 
     return AdminDashboardKPISchema(

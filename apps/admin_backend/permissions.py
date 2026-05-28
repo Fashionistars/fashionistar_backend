@@ -20,6 +20,22 @@ from rest_framework.permissions import BasePermission
 logger = logging.getLogger(__name__)
 
 
+ALLOWED_ADMIN_ROLES = {
+    "admin",
+    "super_admin",
+    "staff",
+    "super_staff",
+    "editor",
+    "super_editor",
+    "support",
+    "super_support",
+    "assistant",
+    "super_assistant",
+    "moderator",
+    "super_moderator",
+}
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # DRF Sync Permission (for mutation views)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -40,8 +56,10 @@ class IsAdminUser(BasePermission):
             return False
         if getattr(user, "is_superuser", False):
             return True
+        if getattr(user, "is_staff", False):
+            return True
         role = getattr(user, "role", "")
-        return role in ("admin", "super_admin")
+        return role in ALLOWED_ADMIN_ROLES
 
 
 class IsSuperuserOnly(BasePermission):
@@ -99,22 +117,16 @@ class AdminJWTBearer(HttpBearer):
             # Async user fetch
             user = await User.objects.select_related().aget(pk=user_id)
 
-            # Role check
+            # Admin-only role check. Active/verified public users must never
+            # gain access to admin async endpoints by virtue of being active.
             if not (
                 getattr(user, "is_superuser", False)
-                or getattr(user, "is_staff", False)
-                or getattr(user, "is_verified", False)
-                or getattr(user, "is_active", False)
-                or getattr(user, "role", "") in (
-                    "admin",
-                    "super_admin", 
-                    "manager", 
-                    "staff",
-                    "moderator", 
-                    "designer", 
-                    "editor", 
-                    "support", 
-                    "assistant"
+                or (
+                    getattr(user, "is_active", False)
+                    and (
+                        getattr(user, "is_staff", False)
+                        or getattr(user, "role", "") in ALLOWED_ADMIN_ROLES
+                    )
                 )
             ):
                 logger.warning(
