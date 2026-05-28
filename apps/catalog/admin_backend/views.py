@@ -55,7 +55,8 @@ class AdminCategoryUpdateView(APIView):
         except Category.DoesNotExist:
             return Response({"status": "error", "message": "Category not found."}, status=status.HTTP_404_NOT_FOUND)
         
-        old_values = {"name": category.name, "description": category.description, "active": category.active}
+        # Category model has no 'description' field — only name, active, slug
+        old_values = {"name": category.name, "active": category.active}
         serializer = AdminCategoryWriteSerializer(category, data=request.data, partial=True)
         if not serializer.is_valid():
             return Response({"status": "error", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
@@ -140,7 +141,8 @@ class AdminCollectionCreateView(APIView):
             return Response({"status": "error", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
         try:
             collection = admin_create_collection_sync(serializer=serializer, request=request)
-            return Response({"status": "success", "data": {"id": str(collection.id), "name": collection.name}}, status=status.HTTP_201_CREATED)
+            # Collections model uses 'title', not 'name'
+            return Response({"status": "success", "data": {"id": str(collection.id), "title": collection.title}}, status=status.HTTP_201_CREATED)
         except Exception as exc:
             return Response({"status": "error", "message": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -153,7 +155,8 @@ class AdminCollectionUpdateView(APIView):
         except Collections.DoesNotExist:
             return Response({"status": "error", "message": "Collection not found."}, status=status.HTTP_404_NOT_FOUND)
         
-        old_values = {"name": collection.name, "description": collection.description, "active": collection.active}
+        # Collections model uses 'title' and has no 'active' field
+        old_values = {"title": collection.title, "description": collection.description}
         serializer = AdminCollectionWriteSerializer(collection, data=request.data, partial=True)
         if not serializer.is_valid():
             return Response({"status": "error", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
