@@ -37,11 +37,40 @@ async def admin_list_vendors(
     page: int = 1,
     page_size: int = 25,
 ):
-    return await list_vendors_admin(
+    payload = await list_vendors_admin(
         is_verified=is_verified, is_active=is_active, is_featured=is_featured,
         country=country, search=search, ordering=ordering,
         page=page, page_size=page_size,
     )
+
+    def serialize_vendor(vendor):
+        return {
+            "id": str(vendor.pk),
+            "store_name": vendor.store_name,
+            "store_slug": vendor.store_slug,
+            "tagline": vendor.tagline,
+            "country": vendor.country,
+            "city": vendor.city,
+            "is_verified": vendor.is_verified,
+            "is_active": vendor.is_active,
+            "is_featured": vendor.is_featured,
+            "is_deleted": vendor.is_deleted,
+            "total_products": vendor.total_products,
+            "total_sales": vendor.total_sales,
+            "total_revenue": float(vendor.total_revenue),
+            "average_rating": float(vendor.average_rating),
+            "review_count": vendor.review_count,
+            "wallet_balance": float(vendor.wallet_balance),
+            "product_count": getattr(vendor, "product_count", 0),
+            "user_email": vendor.user.email if vendor.user else None,
+            "user_phone": str(vendor.user.phone) if (vendor.user and vendor.user.phone) else None,
+            "user_member_id": vendor.user.member_id if vendor.user else None,
+            "created_at": vendor.created_at.isoformat() if vendor.created_at else None,
+            "updated_at": vendor.updated_at.isoformat() if vendor.updated_at else None,
+        }
+
+    payload["results"] = [serialize_vendor(v) for v in payload.get("results", [])]
+    return payload
 
 
 @router.get("/stats/", response=AdminVendorStatsSchema, summary="Admin: Vendor KPI Stats", auth=admin_auth)
@@ -100,6 +129,22 @@ async def admin_vendor_detail(request, vendor_id: str):
 async def admin_vendor_products(
     request, vendor_id: str, page: int = 1, page_size: int = 25
 ):
-    return await get_vendor_products_admin(
+    payload = await get_vendor_products_admin(
         vendor_id=vendor_id, page=page, page_size=page_size
     )
+
+    def serialize_product(product):
+        return {
+            "id": str(product.pk),
+            "title": product.title,
+            "slug": product.slug,
+            "sku": product.sku,
+            "price": float(product.price),
+            "stock_qty": product.stock_qty,
+            "is_active": product.is_active,
+            "created_at": product.created_at.isoformat() if product.created_at else None,
+            "updated_at": product.updated_at.isoformat() if product.updated_at else None,
+        }
+
+    payload["results"] = [serialize_product(p) for p in payload.get("results", [])]
+    return payload
