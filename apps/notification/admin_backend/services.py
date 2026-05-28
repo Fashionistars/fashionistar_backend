@@ -34,7 +34,10 @@ def admin_broadcast_notification(
                 channel=NotificationChannel.IN_APP,
                 title=title,
                 body=body,
-                metadata={"broadcasted_by": admin_user.email},
+                metadata={
+                    "broadcasted_by": admin_user.email,
+                    "target_role": target_role or "all",
+                },
             )
         )
         
