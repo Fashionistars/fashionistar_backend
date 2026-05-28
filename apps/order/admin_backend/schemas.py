@@ -2,21 +2,22 @@
 from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional
+from uuid import UUID
 from ninja import Schema
 
 class AdminOrderUserOut(Schema):
-    id: int
+    id: UUID
     email: str
-    first_name: str = ""
-    last_name: str = ""
+    first_name: Optional[str] = ""
+    last_name: Optional[str] = ""
 
 class AdminOrderVendorOut(Schema):
-    id: str
-    store_name: str = ""
+    id: UUID
+    store_name: Optional[str] = ""
 
 class AdminOrderItemOut(Schema):
     model_config = {"from_attributes": True}
-    id: str
+    id: UUID
     product_title_snapshot: str
     product_sku_snapshot: str
     unit_price: Decimal
@@ -25,7 +26,7 @@ class AdminOrderItemOut(Schema):
 
 class AdminOrderOut(Schema):
     model_config = {"from_attributes": True}
-    id: str
+    id: UUID
     order_number: str
     status: str
     fulfillment_type: str
@@ -36,8 +37,8 @@ class AdminOrderOut(Schema):
     commission_amount: Decimal
     vendor_payout: Decimal
     currency: str
-    payment_reference: str = ""
-    payment_gateway: str = ""
+    payment_reference: Optional[str] = ""
+    payment_gateway: Optional[str] = ""
     paid_at: Optional[datetime] = None
     is_fully_paid: bool
     created_at: datetime
@@ -48,11 +49,11 @@ class AdminOrderOut(Schema):
 class AdminOrderDetailOut(AdminOrderOut):
     model_config = {"from_attributes": True}
     delivery_address: dict = {}
-    tracking_number: str = ""
+    tracking_number: Optional[str] = ""
     estimated_delivery: Optional[datetime] = None
-    measurement_profile_id: Optional[str] = None
+    measurement_profile_id: Optional[UUID] = None
     is_custom_order: bool
     measurement_data: dict = {}
-    customization_notes: str = ""
+    customization_notes: Optional[str] = ""
     escrow_released: bool
     cart_order_items: List[AdminOrderItemOut] = []

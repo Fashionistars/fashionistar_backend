@@ -224,15 +224,14 @@ MIDDLEWARE = [
     "apps.audit_logs.middleware.AuditContextMiddleware",
     # ── Idempotency: Exactly-once POST semantics under 100k RPS ──
     # SETNX-based Redis locking prevents duplicate user creation
-    # from retry storms.
+    # from retry storms. Placed before CORS so replayed responses
+    # receive correct CORS headers from CorsMiddleware below.
     "apps.authentication.middleware.idempotency.IdempotencyMiddleware",
     # ────────────────────────────────────────────────────────────
     "django.middleware.security.SecurityMiddleware",
     # Whitenoise Middleware - serves static files in production.
     # Should be placed right after the security middleware.
     "whitenoise.middleware.WhiteNoiseMiddleware",
-    # ── CORS (must be before SessionMiddleware) ──────────────────────────────
-    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
