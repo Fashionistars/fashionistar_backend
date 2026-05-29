@@ -175,7 +175,7 @@ class AdminCollectionArchiveView(APIView):
         except Collections.DoesNotExist:
             return Response({"status": "error", "message": "Collection not found."}, status=status.HTTP_404_NOT_FOUND)
         
-        old_values = {"active": collection.active}
+        old_values = {"title": collection.title}
         try:
             admin_archive_collection_sync(instance=collection, request=request, old_values=old_values)
             return Response({"status": "success", "message": "Collection archived successfully."}, status=status.HTTP_200_OK)

@@ -8,14 +8,14 @@ class AdminCategoryOut(Schema):
     id: UUID
     name: str
     slug: str = ""
-    description: Optional[str] = ""
+    # Category model has no 'description' field
     active: bool = True
     created_at: datetime
 
 class AdminBrandOut(Schema):
     model_config = {"from_attributes": True}
     id: UUID
-    name: str
+    title: str          # Brand model uses 'title', not 'name'
     slug: str = ""
     description: Optional[str] = ""
     active: bool = True
@@ -24,11 +24,13 @@ class AdminBrandOut(Schema):
 class AdminCollectionOut(Schema):
     model_config = {"from_attributes": True}
     id: UUID
-    name: str
+    title: str          # Collections model uses 'title', not 'name'
+    sub_title: Optional[str] = ""
     slug: str = ""
     description: Optional[str] = ""
-    active: bool = True
+    # Collections model has no 'active' field
     created_at: datetime
+
 
 
 class AdminBlogPostOut(Schema):
