@@ -79,15 +79,27 @@ def seed_users():
     vendor_user.is_verified = True
     vendor_user.save()
     
-    vendor_profile = VendorProfile.get_or_create_for_user(vendor_user)
-    vendor_profile.store_name = "Adaeze Couture"
-    vendor_profile.city = "Lagos"
-    vendor_profile.state = "Lagos"
-    vendor_profile.country = "Nigeria"
-    vendor_profile.address = "10 Kingsway Road"
-    vendor_profile.is_active = True
-    vendor_profile.is_verified = True
-    vendor_profile.save()
+    vendor_profile, created_profile = VendorProfile.objects.get_or_create(
+        user=vendor_user,
+        defaults={
+            "store_name": "Adaeze Couture",
+            "city": "Lagos",
+            "state": "Lagos",
+            "country": "Nigeria",
+            "address": "10 Kingsway Road",
+            "is_active": True,
+            "is_verified": True
+        }
+    )
+    if not created_profile:
+        vendor_profile.store_name = "Adaeze Couture"
+        vendor_profile.city = "Lagos"
+        vendor_profile.state = "Lagos"
+        vendor_profile.country = "Nigeria"
+        vendor_profile.address = "10 Kingsway Road"
+        vendor_profile.is_active = True
+        vendor_profile.is_verified = True
+        vendor_profile.save()
     
     print(f"Vendor user {'created' if created else 'updated'} & activated.")
     print("Seeding complete successfully!")
