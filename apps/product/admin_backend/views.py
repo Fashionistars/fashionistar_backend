@@ -105,3 +105,31 @@ class AdminInventoryAdjustView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+
+class AdminProductDeleteView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def delete(self, request, product_id):
+        try:
+            from apps.product.models import Product
+            with transaction.atomic():
+                product = Product.objects.get(id=product_id)
+                sku = product.sku
+                product.delete()
+            return Response(
+                {"status": "success", "message": f"Product {sku} permanently deleted successfully."},
+                status=status.HTTP_200_OK
+            )
+        except Product.DoesNotExist:
+            return Response(
+                {"status": "error", "message": "Product not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as exc:
+            logger.exception("Product deletion failed: %s", exc)
+            return Response(
+                {"status": "error", "message": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+

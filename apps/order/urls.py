@@ -10,6 +10,7 @@ from apps.order.apis.sync.order_views import (
     VendorOrderDetailView,
     VendorOrderTransitionView,
     AdminDeliveryStatusView,
+    VerifyPickupView,
 )
 
 app_name = "order"
@@ -18,6 +19,7 @@ urlpatterns = [
     # ── Client ─────────────────────────────────────────────────────────────────
     path("", ClientOrderListView.as_view(), name="client-order-list"),
     path("place/", PlaceOrderView.as_view(), name="place-order"),
+    path("verify-pickup/", VerifyPickupView.as_view(), name="verify-pickup"),
     path("<uuid:order_id>/", ClientOrderDetailView.as_view(), name="client-order-detail"),
     path("<uuid:order_id>/cancel/", ClientCancelOrderView.as_view(), name="client-order-cancel"),
     path("<uuid:order_id>/confirm-delivery/", ConfirmDeliveryView.as_view(), name="confirm-delivery"),

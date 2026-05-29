@@ -48,6 +48,7 @@ from apps.client.apis.sync.wallet_views import (
     ClientWalletBalanceView,
     ClientWalletTransferView,
     ClientWalletWithdrawView,
+    ClientWalletTopUpView,
 )
 from apps.client.apis.sync.wishlist_views import (
     ClientWishlistToggleView,
@@ -84,5 +85,6 @@ urlpatterns = [
     path("wallet/balance/", ClientWalletBalanceView.as_view(), name="wallet-balance"),
     path("wallet/transfer/", ClientWalletTransferView.as_view(), name="wallet-transfer"),
     path("wallet/withdraw/", ClientWalletWithdrawView.as_view(), name="wallet-withdraw"),
+    path("wallet/topup/initiate/", ClientWalletTopUpView.as_view(), name="wallet-topup-initiate"),
 ]
 

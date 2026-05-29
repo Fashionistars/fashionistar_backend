@@ -262,3 +262,40 @@ class AdminDeliveryStatusView(APIView):
             data=OrderDetailSerializer(order).data,
             message=f"Order delivery status updated to '{order.status}'.",
         )
+
+
+class VerifyPickupView(APIView):
+    """Verify order pickup token, release escrow, and transition to Completed status."""
+    permission_classes = _PERMS
+
+    def put(self, request):
+        token = request.data.get("pickup_token", "")
+        if not token:
+            return error_response(message="pickup_token is required.", status=status.HTTP_400_BAD_REQUEST)
+
+        parts = token.split("-")
+        order_id = parts[-1] if len(parts) > 1 else token
+
+        from apps.order.models import Order
+        try:
+            order = Order.objects.get(id=order_id)
+        except (Order.DoesNotExist, ValueError):
+            return error_response(message="Invalid pickup token or Order not found.", status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            order = release_escrow(order=order, actor=request.user)
+            if order.status != "completed":
+                order = transition_status(
+                    order=order,
+                    new_status="completed",
+                    actor=request.user,
+                    note="Verified via shop QR pickup scan."
+                )
+        except (ValueError, Exception) as exc:
+            return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
+
+        return success_response(
+            data=OrderDetailSerializer(order).data,
+            message="Order Pickup Verified",
+        )
+
