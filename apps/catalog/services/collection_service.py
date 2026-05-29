@@ -56,8 +56,7 @@ class CollectionService:
 
     @classmethod
     def archive(cls, *, instance, request, old_values: dict):
-        instance.cloudinary_url = instance.cloudinary_url or ""
-        instance.save(update_fields=["cloudinary_url", "updated_at"])
+        instance.soft_delete()
 
         from apps.audit_logs.services.catalog import catalog_audit
         from django.db import transaction
