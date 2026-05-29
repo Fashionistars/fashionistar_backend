@@ -75,7 +75,8 @@ gunicorn
 # ═══════════════════════════════════════════════════════════
 channels
 channels-redis                  # settings.py CHANNEL_LAYERS backend
-
+django-websockets   
+websockets
 
 # ═══════════════════════════════════════════════════════════
 # 9. CORS & MIDDLEWARE
