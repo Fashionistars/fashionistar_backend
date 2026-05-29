@@ -19,14 +19,14 @@ async def aget_admin_brands():
     Optimized async selector for Brand list.
     """
     queryset = Brand.objects.filter(is_deleted=False)
-    return [brand async for brand in queryset.order_by("name")]
+    return [brand async for brand in queryset.order_by("title")]
 
 async def aget_admin_collections():
     """
     Optimized async selector for Collections list.
     """
     queryset = Collections.objects.filter(is_deleted=False)
-    return [collection async for collection in queryset.order_by("name")]
+    return [collection async for collection in queryset.order_by("title")]
 
 async def aget_admin_blog_posts():
     """
