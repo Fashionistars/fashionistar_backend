@@ -11,6 +11,7 @@ from django.utils import timezone
 from apps.authentication.models import UnifiedUser
 from apps.catalog.models.blog import BlogPost
 from apps.catalog.models.category import Category
+from apps.client.models import ClientProfile
 from apps.wallet.models import Wallet
 from apps.wallet.services import WalletProvisioningService, WalletBalanceService, WalletPinService
 
@@ -89,17 +90,13 @@ class SoftHardDeleteAndLedgerTestCase(TestCase):
             slug="traditional-agbada"
         )
 
-        # Create a draft blog post under this category if there was a relation,
-        # or assert hard-delete purging on a BlogPost author cascade.
-        # Since BlogPost has author=ForeignKey(UnifiedUser, on_delete=CASCADE),
-        # hard deleting the UnifiedUser must cascade-delete the BlogPost.
-        post = BlogPost.objects.create(
-            author=self.user,
-            title="Cascade Elegance",
-            content="Testing cascading delete rules."
+        # Create a ClientProfile (which inherits from SoftDeleteModel and has a OneToOne cascade to UnifiedUser)
+        profile = ClientProfile.objects.create(
+            user=self.user,
+            bio="Test cascade deletion."
         )
 
-        self.assertIn(post, BlogPost.objects.all())
+        self.assertIn(profile, ClientProfile.objects.all())
 
         # Perform hard-delete on user. UnifiedUser has HardDeleteMixin
         # Let's perform user.hard_delete() or physical deletion
@@ -109,9 +106,9 @@ class SoftHardDeleteAndLedgerTestCase(TestCase):
         with self.assertRaises(UnifiedUser.DoesNotExist):
             UnifiedUser.objects.get(id=self.user.id)
 
-        # BlogPost must be cascade purged completely (and since author was CASCADE, it's hard deleted)
-        with self.assertRaises(BlogPost.DoesNotExist):
-            BlogPost.all_objects.all_with_deleted().get(id=post.id)
+        # ClientProfile must be cascade purged completely (since user was CASCADE, it's hard deleted)
+        with self.assertRaises(ClientProfile.DoesNotExist):
+            ClientProfile.all_objects.all_with_deleted().get(id=profile.id)
 
     def test_wallet_transfer_database_transactional_integrity(self):
         """

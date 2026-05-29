@@ -171,3 +171,12 @@ SIMPLE_JWT = {
 # =============================================================================
 GOOGLE_CLIENT_ID     = env("GOOGLE_CLIENT_ID", default="")      # noqa: F405
 GOOGLE_CLIENT_SECRET = env("GOOGLE_CLIENT_SECRET", default="")  # noqa: F405
+
+# =============================================================================
+# CELERY — Eager Mode for Development & Robust Local Runs
+# =============================================================================
+# Executes tasks synchronously in-process instead of sending them to a broker.
+# Bypasses local Redis connectivity/timeout issues completely.
+CELERY_TASK_ALWAYS_EAGER = True
+CELERY_TASK_EAGER_PROPAGATES = True
+
