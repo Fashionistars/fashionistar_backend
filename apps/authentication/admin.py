@@ -582,7 +582,7 @@ class LoginEventInline(admin.TabularInline):
     extra = 0
     can_delete = False
     classes = ("collapse",)
-    readonly_fields = ("ip_address", "user_agent", "country", "city", "status", "created_at")
+    readonly_fields = ("ip_address", "user_agent", "country", "city", "outcome", "is_successful", "created_at")
     show_change_link = True
     verbose_name = "Login History"
     verbose_name_plural = "Login History"
