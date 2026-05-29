@@ -115,7 +115,7 @@ def generate_member_id():
     return f"{MEMBER_ID_PREFIX}{seq:0{MEMBER_ID_DIGITS}d}"
 
 
-class UnifiedUser(AbstractUser, TimeStampedModel, SoftDeleteModel, HardDeleteMixin):
+class UnifiedUser(HardDeleteMixin, AbstractUser, TimeStampedModel, SoftDeleteModel):
     """
     The Central Identity Entity.
 
