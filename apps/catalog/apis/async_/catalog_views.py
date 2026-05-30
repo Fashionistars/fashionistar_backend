@@ -49,6 +49,13 @@ from apps.common.utils.redis import api_cache_get, api_cache_set
 logger = logging.getLogger(__name__)
 router = Router(tags=["Catalog — Async Reads"])
 
+# H1 — Wire admin sub-router (staff-only cache invalidation + health endpoints)
+try:
+    from apps.catalog.apis.async_.admin_views import admin_router
+    router.add_router("/admin", admin_router)
+except ImportError:
+    logger.warning("[catalog_views] admin_views not found — admin endpoints disabled")
+
 # ── TTLs ────────────────────────────────────────────────────────────────────────
 _TTL_CATALOG   = 5 * 60    # 5 minutes — categories, brands, collections
 _TTL_BLOG      = 10 * 60   # 10 minutes — editorial content

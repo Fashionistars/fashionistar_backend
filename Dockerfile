@@ -32,7 +32,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_PROJECT_ENVIRONMENT=/opt/venv \
     PATH="/opt/venv/bin:$PATH" \
     DJANGO_SETTINGS_MODULE=backend.config.production \
-    PORT=8001
+    PORT=8001 \
+    UVICORN_WORKERS=1 \
+    UVICORN_KEEP_ALIVE=120 \
+    UVICORN_WS=auto
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
@@ -56,7 +59,11 @@ RUN chmod +x /entrypoint.sh
 
 USER appuser
 
+EXPOSE 8001
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -fsS "http://127.0.0.1:${PORT}/health/" || exit 1
+
 ENTRYPOINT ["/entrypoint.sh"]
 
-# Start simple python HTTP server in background to keep Cloud Run happy, and run Celery worker
-CMD ["sh", "-c", "python3 -m http.server ${PORT:-8001} & exec uv run --no-sync celery -A backend worker --loglevel=info --pool=solo --events"]
+CMD ["sh", "-c", "exec uv run --no-sync uvicorn backend.asgi:application --host 0.0.0.0 --port ${PORT:-8001} --workers ${UVICORN_WORKERS:-1} --ws ${UVICORN_WS:-auto} --timeout-keep-alive ${UVICORN_KEEP_ALIVE:-120} --log-config uvicorn_log_config.json"]
