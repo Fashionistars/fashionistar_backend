@@ -32,6 +32,7 @@ Usage:
 import logging
 
 from django.contrib import admin
+from django.db import transaction
 from django.http import HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
@@ -285,56 +286,85 @@ class SoftDeleteAdminMixin:
             klass_name,
         )
 
-        # 3. Fire-and-forget notification PER RECORD + lifecycle registry
-        for obj in klass.objects.all_with_deleted().filter(
-            pk__in=pks,
-            is_deleted=True,
+        # 3. Post-commit: fire notifications + audit trail (non-blocking)
+        #
+        # PERFORMANCE FIX (Phase 4):
+        # Previously steps 3-5 ran inline — that was N Redis writes + N DB writes
+        # (one per record) blocking the HTTP response. At 100 records = 100+ DB ops
+        # holding the Django admin thread open for seconds.
+        #
+        # Now ALL side-effects are deferred to transaction.on_commit():
+        #   - Django calls the callback AFTER the UPDATE transaction commits.
+        #   - The HTTP response is returned to the browser immediately.
+        #   - Celery tasks handle the actual work asynchronously.
+        #
+        # Captured variables (klass_name, pks, updated, admin_user_id) are
+        # primitive scalars — safe to capture in closure across commit boundary.
+        admin_user_id = str(request.user.pk)
+
+        def _post_commit_side_effects(
+            _model_name=klass_name,
+            _pks=pks,
+            _updated=updated,
+            _admin_user_id=admin_user_id,
         ):
-            if hasattr(obj, '_fire_and_forget_notification'):
-                obj._fire_and_forget_notification('soft_deleted')
+            """Runs after the DB transaction commits. Never blocks the admin page."""
 
-            # ── Lifecycle registry hook (UnifiedUser only) ──────────────────
-            if klass_name == 'UnifiedUser':
+            # ── 3a. Lifecycle registry (UnifiedUser only) ──────────────────────
+            if _model_name == 'UnifiedUser':
                 try:
-                    from django.db import transaction as _tx
                     from apps.common.tasks import upsert_user_lifecycle_registry
-                    _uuid = str(obj.pk)
-
-                    def _fire_lifecycle(_uid=_uuid):
+                    for _uuid in _pks:
                         try:
                             upsert_user_lifecycle_registry.apply_async(
-                                kwargs={'user_uuid': _uid, 'action': 'soft_deleted'},
+                                kwargs={'user_uuid': str(_uuid), 'action': 'soft_deleted'},
                                 retry=False,
                                 ignore_result=True,
                             )
                         except Exception:
                             pass
-                    _tx.on_commit(_fire_lifecycle)
                 except Exception:
-                    pass  # Never block admin actions for analytics
+                    pass
 
-        # 4. Increment audit counter
-        try:
-            from apps.common.models import DeletionAuditCounter
-            DeletionAuditCounter.increment(
-                model_name=klass_name,
-                action='soft_delete',
-                count=updated,
-            )
-        except Exception:
-            pass  # Never block admin actions for audit counters
+            # ── 3b. DeletionAuditCounter (single atomic increment) ─────────────
+            try:
+                from apps.common.models import DeletionAuditCounter
+                DeletionAuditCounter.increment(
+                    model_name=_model_name,
+                    action='soft_delete',
+                    count=_updated,
+                )
+            except Exception:
+                pass
 
-        # 5. Admin audit trail (compliance-grade)
-        try:
-            from apps.audit_logs.services.admin_backend import admin_audit
-            admin_audit.log_bulk_delete(
-                actor=request.user,
-                resource_type=klass_name,
-                count=updated,
-                request=request,
-            )
-        except Exception:
-            pass  # Never block admin actions for audit logging
+            # ── 3c. Admin audit trail (compliance-grade, via Celery) ───────────
+            try:
+                from apps.audit_logs.tasks import write_audit_event
+                write_audit_event.apply_async(
+                    kwargs={
+                        "payload": {
+                            "event_type": "SOFT_DELETE",
+                            "event_category": "ADMIN",
+                            "severity": "WARNING",
+                            "action": f"Admin bulk soft-delete: {_updated} {_model_name} record(s)",
+                            "actor_id": _admin_user_id,
+                            "resource_type": _model_name,
+                            "metadata": {
+                                "pks": [str(pk) for pk in _pks],
+                                "count": _updated,
+                            },
+                            "is_compliance": True,
+                            "retention_days": 2555,  # 7 years for compliance events
+                        }
+                    },
+                    retry=False,
+                    ignore_result=True,
+                )
+            except Exception:
+                pass
+
+        # Register the post-commit callback — runs after the UPDATE commits
+        transaction.on_commit(_post_commit_side_effects)
 
         self.message_user(
             request,
