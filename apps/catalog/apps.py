@@ -10,64 +10,127 @@ class CatalogConfig(AppConfig):
     def ready(self):
         super().ready()
 
-        # ── 1. Auditlog registration ────────────────────────────────────────────
+        import logging
+
+        _log = logging.getLogger(__name__)
+
+        # ── 1. Auditlog registration ───────────────────────────────────────────
         try:
-            from auditlog.registry import auditlog
+            from auditlog.registry import auditlog  # type: ignore[import]
 
-            from apps.catalog.models import BlogMedia, BlogPost, Brand, Category, Collections
-
-            for model in (Brand, Category, Collections, BlogPost, BlogMedia):
-                auditlog.register(model)
-        except Exception:
-            import logging
-
-            logging.getLogger("application").debug(
-                "catalog auditlog registration skipped (registry unavailable)"
+            from apps.catalog.models import (
+                BlogMedia,
+                BlogPost,
+                Brand,
+                CatalogBanner,
+                Category,
+                Collections,
+                Tag,
             )
 
-        # ── 2. Redis cache-invalidation signal ─────────────────────────────────
-        #
-        # Fires on every save/delete of any catalog model from the Django admin
-        # or any service layer call.  Invalidates the entire catalog:* key
-        # namespace so that the next Ninja async request re-populates the cache
-        # from the DB rather than returning stale data.
-        #
-        # Pattern used:  api_cache_delete_pattern("catalog:*")
-        # This covers:
-        #   • catalog:categories:{page}:{page_size}
-        #   • catalog:brands:{page}:{page_size}
-        #   • catalog:collections:{page}:{page_size}
-        #   • catalog:blog:{page}:{page_size}
-        #
-        # Design: the handler is intentionally fail-safe. A Redis outage must
-        # NEVER raise an exception that would abort an admin save() operation.
-        # ──────────────────────────────────────────────────────────────────────
+            for model in (Brand, Category, Collections, BlogPost, BlogMedia, CatalogBanner, Tag):
+                auditlog.register(model)
+        except Exception:
+            _log.debug("catalog auditlog registration skipped (registry unavailable)")
+
+        # ── 2. EventBus subscription bootstrap ────────────────────────────────
+        # All catalog domain events are wired here via EventBus (no raw signal
+        # business logic). Handlers live in apps/catalog/events/__init__.py.
+        try:
+            from apps.catalog.events import subscribe_catalog_events
+
+            subscribe_catalog_events()
+        except Exception as exc:
+            _log.debug("catalog EventBus subscription skipped: %s", exc)
+
+        # ── 3. Django signal → EventBus bridge ────────────────────────────────
+        # Connects Django ORM post_save / post_delete signals to the EventBus
+        # bridge functions in apps/catalog/signals.py.
+        # Each bridge uses transaction.on_commit() internally.
         try:
             from django.db.models.signals import post_delete, post_save
 
-            from apps.catalog.models import BlogMedia, BlogPost, Brand, Category, Collections
-            from apps.catalog.signals import invalidate_catalog_cache
+            from apps.catalog.models import (
+                BlogPost,
+                Brand,
+                CatalogBanner,
+                Category,
+                Collections,
+            )
+            from apps.catalog.signals import (
+                invalidate_catalog_cache,
+                on_banner_post_delete,
+                on_banner_post_save,
+                on_blog_post_save,
+                on_brand_post_save,
+                on_category_post_delete,
+                on_category_post_save,
+                on_collection_post_save,
+            )
 
-            _CATALOG_MODELS = (Brand, Category, Collections, BlogPost, BlogMedia)
-            _dispatch_uid_prefix = "catalog_cache_bust"
+            _pfx = "catalog"
 
-            for _model in _CATALOG_MODELS:
+            # ── Generic cache-bust for all catalog models ──────────────────────
+            _ALL_MODELS = (Brand, Category, Collections, BlogPost, CatalogBanner)
+            for _m in _ALL_MODELS:
                 post_save.connect(
                     invalidate_catalog_cache,
-                    sender=_model,
-                    dispatch_uid=f"{_dispatch_uid_prefix}_save_{_model.__name__}",
+                    sender=_m,
+                    dispatch_uid=f"{_pfx}_cache_save_{_m.__name__}",
                     weak=False,
                 )
                 post_delete.connect(
                     invalidate_catalog_cache,
-                    sender=_model,
-                    dispatch_uid=f"{_dispatch_uid_prefix}_delete_{_model.__name__}",
+                    sender=_m,
+                    dispatch_uid=f"{_pfx}_cache_delete_{_m.__name__}",
                     weak=False,
                 )
 
-        except Exception:
-            import logging
-
-            logging.getLogger("application").debug(
-                "catalog cache-bust signal registration skipped"
+            # ── Specific EventBus bridge signals ──────────────────────────────
+            post_save.connect(
+                on_category_post_save,
+                sender=Category,
+                dispatch_uid=f"{_pfx}_eventbus_save_category",
+                weak=False,
             )
+            post_delete.connect(
+                on_category_post_delete,
+                sender=Category,
+                dispatch_uid=f"{_pfx}_eventbus_delete_category",
+                weak=False,
+            )
+            post_save.connect(
+                on_brand_post_save,
+                sender=Brand,
+                dispatch_uid=f"{_pfx}_eventbus_save_brand",
+                weak=False,
+            )
+            post_save.connect(
+                on_collection_post_save,
+                sender=Collections,
+                dispatch_uid=f"{_pfx}_eventbus_save_collection",
+                weak=False,
+            )
+            post_save.connect(
+                on_banner_post_save,
+                sender=CatalogBanner,
+                dispatch_uid=f"{_pfx}_eventbus_save_banner",
+                weak=False,
+            )
+            post_delete.connect(
+                on_banner_post_delete,
+                sender=CatalogBanner,
+                dispatch_uid=f"{_pfx}_eventbus_delete_banner",
+                weak=False,
+            )
+            post_save.connect(
+                on_blog_post_save,
+                sender=BlogPost,
+                dispatch_uid=f"{_pfx}_eventbus_save_blog",
+                weak=False,
+            )
+
+            _log.debug("Catalog signal bridges registered.")
+
+        except Exception as exc:
+            _log.debug("catalog signal registration skipped: %s", exc)

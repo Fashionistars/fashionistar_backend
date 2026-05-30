@@ -295,6 +295,7 @@ MIDDLEWARE = [
     #    OWASP A05 / A02. Do NOT move this above CorsMiddleware — it breaks
     #    HTTPS redirect on preflight OPTIONS requests.
     "django.middleware.security.SecurityMiddleware",
+    # Whitenoise Middleware - serves static files in production.
     # Should be placed right after the security middleware.
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",

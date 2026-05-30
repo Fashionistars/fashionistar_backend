@@ -534,3 +534,239 @@ async def get_homepage_bundle(
     api_cache_set(cache_key, result, ttl=_TTL_HOMEPAGE)
     return result
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  PHASE B1 — MISSING ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_TTL_BANNER  = 60       # 60s — fast invalidation on CMS banner change
+_TTL_SEARCH  = 30       # 30s — short for freshness
+_TTL_TAGS    = 10 * 60  # 10 min — tags change rarely
+
+
+def _banner_out(row: dict) -> dict:
+    """Serialize a CatalogBanner .values() row to frontend-ready dict."""
+    def _cdn(raw) -> str | None:
+        if not raw:
+            return None
+        s = str(raw)
+        if s.startswith("http"):
+            return s
+        return f"https://res.cloudinary.com/{s}" if s else None
+
+    return {
+        "id": str(row["id"]),
+        "slot": row.get("slot", "hero"),
+        "title": row.get("title", ""),
+        "subtitle": row.get("subtitle", ""),
+        "cta_text": row.get("cta_text", "Shop Now"),
+        "cta_url": row.get("cta_url", ""),
+        "image_url": _cdn(row.get("image")),
+        "mobile_image_url": _cdn(row.get("mobile_image")),
+        "sort_order": row.get("sort_order", 0),
+    }
+
+
+@router.get("/homepage/banners/", auth=None, summary="Active hero banners for homepage carousel")
+async def list_homepage_banners(request, slot: str = "hero"):
+    """Active CatalogBanners for a slot (hero | mid | footer_cta). Cache 60s."""
+    cache_key = f"catalog:banners:{slot}"
+    cached = api_cache_get(cache_key)
+    if cached is not None:
+        return cached
+    rows = await CatalogSelector.aget_homepage_banners(slot=slot, limit=10)
+    result = {"banners": [_banner_out(r) for r in rows], "slot": slot}
+    api_cache_set(cache_key, result, ttl=_TTL_BANNER)
+    return result
+
+
+@router.get("/tags/", auth=None, summary="Trending catalog tags")
+async def list_tags(request):
+    """Trending taxonomy tags for homepage tags rail. Cache 10 min."""
+    cache_key = "catalog:tags:trending"
+    cached = api_cache_get(cache_key)
+    if cached is not None:
+        return cached
+    tags = await CatalogSelector.aget_trending_tags(limit=30)
+    result = {"tags": tags, "count": len(tags)}
+    api_cache_set(cache_key, result, ttl=_TTL_TAGS)
+    return result
+
+
+@router.get("/categories/{slug}/detail/", auth=None, summary="Category detail with sub-categories")
+async def get_category_detail(request, slug: str):
+    """Single category detail + immediate children. Cache 5 min."""
+    cache_key = f"catalog:category:detail:{slug}"
+    cached = api_cache_get(cache_key)
+    if cached is not None:
+        return cached
+    detail = await CatalogSelector.aget_category_with_children(slug=slug)
+    if detail is None:
+        raise HttpError(404, "Category not found.")
+    api_cache_set(cache_key, detail, ttl=_TTL_CATALOG)
+    return detail
+
+
+@router.get("/categories/{slug}/products/", auth=None, summary="Paginated products in category")
+async def list_category_products(request, slug: str, page: int = 1, page_size: int = 12):
+    """Paginated products by category slug. Cache 60s."""
+    cache_key = f"catalog:category:products:{slug}:p{page}:s{page_size}"
+    cached = api_cache_get(cache_key)
+    if cached is not None:
+        return cached
+    try:
+        from apps.product.selectors import aget_products_by_category_slug
+        products, total = await aget_products_by_category_slug(slug=slug, page=page, page_size=page_size)
+        result = {"results": [_homepage_product_out(p) for p in products], "count": total, "page": page, "page_size": page_size}
+    except (ImportError, AttributeError):
+        result = {"results": [], "count": 0, "page": page, "page_size": page_size}
+    api_cache_set(cache_key, result, ttl=_TTL_BANNER)
+    return result
+
+
+@router.get("/brands/{slug}/detail/", auth=None, summary="Brand detail")
+async def get_brand_detail(request, slug: str):
+    """Single brand detail dict. Cache 5 min."""
+    cache_key = f"catalog:brand:detail:{slug}"
+    cached = api_cache_get(cache_key)
+    if cached is not None:
+        return cached
+    detail = await CatalogSelector.aget_brand_detail(slug=slug)
+    if detail is None:
+        raise HttpError(404, "Brand not found.")
+    api_cache_set(cache_key, detail, ttl=_TTL_CATALOG)
+    return detail
+
+
+@router.get("/brands/{slug}/products/", auth=None, summary="Paginated products by brand")
+async def list_brand_products(request, slug: str, page: int = 1, page_size: int = 12):
+    """Paginated products by brand slug. Cache 60s."""
+    cache_key = f"catalog:brand:products:{slug}:p{page}:s{page_size}"
+    cached = api_cache_get(cache_key)
+    if cached is not None:
+        return cached
+    try:
+        from apps.product.selectors import aget_products_by_brand_slug
+        products, total = await aget_products_by_brand_slug(slug=slug, page=page, page_size=page_size)
+        result = {"results": [_homepage_product_out(p) for p in products], "count": total, "page": page, "page_size": page_size}
+    except (ImportError, AttributeError):
+        result = {"results": [], "count": 0, "page": page, "page_size": page_size}
+    api_cache_set(cache_key, result, ttl=_TTL_BANNER)
+    return result
+
+
+@router.get("/collections/{slug}/detail/", auth=None, summary="Collection detail")
+async def get_collection_detail(request, slug: str):
+    """Single collection detail dict. Cache 5 min."""
+    cache_key = f"catalog:collection:detail:{slug}"
+    cached = api_cache_get(cache_key)
+    if cached is not None:
+        return cached
+    detail = await CatalogSelector.aget_collection_detail(slug=slug)
+    if detail is None:
+        raise HttpError(404, "Collection not found.")
+    api_cache_set(cache_key, detail, ttl=_TTL_CATALOG)
+    return detail
+
+
+@router.get("/collections/{slug}/products/", auth=None, summary="Paginated products in collection")
+async def list_collection_products(request, slug: str, page: int = 1, page_size: int = 12):
+    """Paginated products by collection slug. Cache 60s."""
+    cache_key = f"catalog:collection:products:{slug}:p{page}:s{page_size}"
+    cached = api_cache_get(cache_key)
+    if cached is not None:
+        return cached
+    try:
+        from apps.product.selectors import aget_products_by_collection_slug
+        products, total = await aget_products_by_collection_slug(slug=slug, page=page, page_size=page_size)
+        result = {"results": [_homepage_product_out(p) for p in products], "count": total, "page": page, "page_size": page_size}
+    except (ImportError, AttributeError):
+        result = {"results": [], "count": 0, "page": page, "page_size": page_size}
+    api_cache_set(cache_key, result, ttl=_TTL_BANNER)
+    return result
+
+
+@router.get("/search/", auth=None, summary="Catalog full-text search across categories, brands, collections")
+async def catalog_search(request, q: str = "", page_size: int = 12):
+    """icontains search across catalog entities. Cache 30s."""
+    if not q.strip():
+        return {"categories": [], "brands": [], "collections": [], "query": q}
+    safe_q = q.strip().lower().replace(" ", "_")[:60]
+    cache_key = f"catalog:search:{safe_q}"
+    cached = api_cache_get(cache_key)
+    if cached is not None:
+        return cached
+    result = await CatalogSelector.aget_catalog_search(q=q.strip(), limit=page_size)
+    result["query"] = q
+    api_cache_set(cache_key, result, ttl=_TTL_SEARCH)
+    return result
+
+
+# ── B3: Homepage bundle v2 — 6-gather (adds banners) ─────────────────────────
+
+@router.get("/homepage/bundle/", auth=None, summary="Homepage bundle v2 — 6 concurrent DB reads")
+async def get_homepage_bundle_v2(
+    request,
+    collections_limit: int = 10,
+    categories_limit: int = 10,
+    products_limit: int = 10,
+    hot_deals_limit: int = 10,
+    reviews_limit: int = 8,
+    banners_limit: int = 5,
+):
+    """
+    Homepage data bundle v2 — asyncio.gather() with 6 concurrent DB queries.
+
+    Sections: collections, categories, featured_products, hot_deals, reviews, banners.
+    Cache: catalog:homepage:bundle:v2:{params} — 5 min TTL.
+    """
+    cache_key = (
+        f"catalog:homepage:bundle:v2"
+        f":{collections_limit}:{categories_limit}"
+        f":{products_limit}:{hot_deals_limit}:{reviews_limit}:{banners_limit}"
+    )
+    cached = api_cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    from apps.product.selectors import (
+        aget_homepage_hot_deals,
+        aget_homepage_products,
+        aget_homepage_reviews,
+    )
+
+    (
+        raw_collections,
+        raw_categories,
+        featured_products,
+        hot_deals,
+        reviews,
+        raw_banners,
+    ) = await asyncio.gather(
+        CatalogSelector.aget_homepage_collections(limit=collections_limit),
+        CatalogSelector.aget_homepage_categories(limit=categories_limit),
+        aget_homepage_products(limit=products_limit),
+        aget_homepage_hot_deals(limit=hot_deals_limit),
+        aget_homepage_reviews(limit=reviews_limit),
+        CatalogSelector.aget_homepage_banners(slot="hero", limit=banners_limit),
+    )
+
+    result = {
+        "collections": [_homepage_collection_from_dict(r) for r in raw_collections],
+        "categories": [_homepage_category_from_dict(r) for r in raw_categories],
+        "featured_products": [_homepage_product_out(p) for p in featured_products],
+        "hot_deals": [_homepage_product_out(p) for p in hot_deals],
+        "reviews": reviews,
+        "banners": [_banner_out(r) for r in raw_banners],
+        "meta": {
+            "collections_count": len(raw_collections),
+            "categories_count": len(raw_categories),
+            "products_count": len(featured_products),
+            "hot_deals_count": len(hot_deals),
+            "reviews_count": len(reviews),
+            "banners_count": len(raw_banners),
+        },
+    }
+
+    api_cache_set(cache_key, result, ttl=_TTL_HOMEPAGE)
+    return result
