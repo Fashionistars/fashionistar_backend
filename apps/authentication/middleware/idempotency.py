@@ -179,17 +179,24 @@ class IdempotentOperation(models.Model):
 
 class IdempotencyMiddleware:
     """
-    WSGI-compatible Django middleware for POST endpoint idempotency.
+    Dual-mode ASGI + WSGI middleware for POST endpoint idempotency.
 
     Position in MIDDLEWARE list:
         Place AFTER SecurityAuditMiddleware but BEFORE CorsMiddleware
         so that replayed responses still get proper CORS headers.
     """
 
+    async_capable = True
+    sync_capable = True
+
     def __init__(self, get_response):
         self.get_response = get_response
+        from asgiref.sync import iscoroutinefunction, markcoroutinefunction
+        if iscoroutinefunction(self.get_response):
+            markcoroutinefunction(self)
 
     def __call__(self, request):
+        """Synchronous path — WSGI (manage.py runserver / gunicorn)."""
         # ── Only intercept POST requests ───────────────────────────────────
         if request.method != "POST":
             return self.get_response(request)
@@ -208,7 +215,6 @@ class IdempotencyMiddleware:
             # No key provided → pass through without idempotency protection
             # (backwards compatible — existing clients without the header work fine)
             return self.get_response(request)
-
 
         # ── Validate key format (must be UUID4 or any non-empty string ≤128 chars)
         if len(raw_key) > 128:
@@ -297,5 +303,109 @@ class IdempotencyMiddleware:
 
         # ── RELEASE: Delete in-flight lock ────────────────────────────────
         _cache.delete(lock_key)
+
+        return response
+
+    async def __acall__(self, request):
+        """Asynchronous path — ASGI (Uvicorn / Daphne). Zero thread-overhead."""
+        # ── Only intercept POST requests ───────────────────────────────────
+        if request.method != "POST":
+            return await self.get_response(request)
+
+        # ── Skip whitelisted paths ─────────────────────────────────────────
+        if request.path in IDEMPOTENCY_SKIP_PATHS:
+            return await self.get_response(request)
+
+        # ── Extract idempotency key from header ────────────────────────────
+        raw_key = request.META.get(IDEMPOTENCY_HEADER, "").strip()
+        logger.debug(
+            "🔑 IdempotencyMiddleware | path=%s | raw_key=%r | len=%d | header=%s",
+            request.path, raw_key[:20] if raw_key else "(empty)", len(raw_key), IDEMPOTENCY_HEADER,
+        )
+        if not raw_key:
+            # No key provided → pass through without idempotency protection
+            return await self.get_response(request)
+
+        # ── Validate key format (must be UUID4 or any non-empty string ≤128 chars)
+        if len(raw_key) > 128:
+            return JsonResponse(
+                {"status": "error", "message": "X-Idempotency-Key must be ≤128 characters."},
+                status=400,
+            )
+
+        lock_key = f"{IDEMPOTENCY_LOCK_PREFIX}{raw_key}"
+        resp_key = f"{IDEMPOTENCY_RESP_PREFIX}{raw_key}"
+        _cache = _get_cache()  # Resolve once per request
+
+        # ── CHECK: Cached response exists? ────────────────────────────────
+        cached = await _cache.aget(resp_key)
+        if cached is not None:
+            logger.info(
+                "♻️  Idempotency HIT | key=%s | path=%s | Replaying cached response.",
+                raw_key, request.path,
+            )
+            try:
+                data = json.loads(cached)
+                return JsonResponse(data["body"], status=data["status"], safe=False)
+            except (json.JSONDecodeError, KeyError, TypeError) as exc:
+                logger.warning(
+                    "⚠️  Idempotency cache deserialization failed | key=%s: %s",
+                    raw_key, exc,
+                )
+
+        # ── LOCK: Prevent concurrent in-flight requests with same key ──────
+        acquired = await _cache.aadd(lock_key, "1", timeout=IDEMPOTENCY_LOCK_TTL)
+        if acquired is False:
+            logger.warning(
+                "⚠️  Idempotency LOCK CONFLICT | key=%s | path=%s | "
+                "In-flight request detected. Returning 409.",
+                raw_key, request.path,
+            )
+            return JsonResponse(
+                {
+                    "status": "error",
+                    "message": (
+                        "A request with this Idempotency-Key is already in progress. "
+                        "Retry after a moment."
+                    ),
+                    "idempotency_key": raw_key,
+                },
+                status=409,
+            )
+
+        # ── PROCESS: Call the actual view ──────────────────────────────────
+        try:
+            response = await self.get_response(request)
+        except Exception:
+            # Always release the lock on exception — never leave it dangling
+            await _cache.adelete(lock_key)
+            raise
+
+        # ── CACHE: Store successful responses only (2xx status codes) ──────
+        if 200 <= response.status_code < 300:
+            try:
+                response_body = json.loads(response.content.decode("utf-8"))
+                payload = json.dumps({
+                    "status": response.status_code,
+                    "body": response_body,
+                })
+                await _cache.aset(resp_key, payload, timeout=IDEMPOTENCY_TTL)
+                logger.info(
+                    "💾 Idempotency STORED | key=%s | status=%s | path=%s | TTL=%ss",
+                    raw_key, response.status_code, request.path, IDEMPOTENCY_TTL,
+                )
+            except (json.JSONDecodeError, UnicodeDecodeError, Exception) as exc:
+                logger.debug(
+                    "ℹ️  Idempotency skipped caching non-JSON response | key=%s: %s",
+                    raw_key, exc,
+                )
+        else:
+            logger.debug(
+                "🚫 Idempotency NOT cached (non-2xx status=%s) | key=%s | path=%s",
+                response.status_code, raw_key, request.path,
+            )
+
+        # ── RELEASE: Delete in-flight lock ────────────────────────────────
+        await _cache.adelete(lock_key)
 
         return response

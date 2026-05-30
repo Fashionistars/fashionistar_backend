@@ -54,7 +54,7 @@ logger = logging.getLogger(__name__)
 # Geo-IP extraction — synchronous, Redis-cached 24 h, fail-safe
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _resolve_geo(ip: str) -> dict:
+def _resolve_geo(ip: str, allow_network: bool = False) -> dict:
     """Resolve geographic location data for a public IP address.
 
     Skips RFC-1918 private ranges, loopback (127.x, ::1), and the
@@ -71,6 +71,8 @@ def _resolve_geo(ip: str) -> dict:
 
     Args:
         ip: IPv4 or IPv6 address string. May be empty or ``None``.
+        allow_network: If True, allows external HTTP requests to resolve the location on cache miss.
+                       If False, only performs a cache lookup and returns immediately on miss.
 
     Returns:
         dict: A mapping with up to four keys — ``country``,
@@ -108,6 +110,12 @@ def _resolve_geo(ip: str) -> dict:
                     return json.loads(cached)
                 except Exception:
                     pass
+
+        # Speed Optimization: On the synchronous request-response path, we only do
+        # a fast in-memory Redis check. If we hit a cache miss, we return empty info
+        # and defer the external HTTP API lookups to the asynchronous Celery task.
+        if not allow_network:
+            return {}
 
         import json as _json
         import os as _os

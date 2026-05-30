@@ -367,47 +367,38 @@ class TestAuthenticationAuditHelpers:
 class TestThrottleAuditIntegration:
     """Throttle violations write AuditEventLog LOGIN_BLOCKED events."""
 
-    def test_burst_throttle_calls_audit_service(self, rf, mocker):
+    def test_burst_throttle_calls_audit_service(self, rf):
         """BurstRateThrottle.throttle_failure() calls _audit_throttle_violation."""
         from apps.authentication.throttles import BurstRateThrottle
 
-        mock_audit = mocker.patch(
-            "apps.authentication.throttles._audit_throttle_violation"
-        )
+        with patch("apps.authentication.throttles._audit_throttle_violation") as mock_audit:
+            throttle = BurstRateThrottle()
+            throttle.request = rf.get("/api/v1/auth/login/")
+            throttle.request.META["REMOTE_ADDR"] = "5.5.5.5"
 
-        throttle = BurstRateThrottle()
-        throttle.request = rf.get("/api/v1/auth/login/")
-        throttle.request.META["REMOTE_ADDR"] = "5.5.5.5"
+            # Mock the wait() method and super().throttle_failure()
+            with patch.object(throttle, "wait", return_value=60):
+                with patch(
+                    "apps.authentication.throttles.AnonRateThrottle.throttle_failure",
+                    return_value=False,
+                ):
+                    throttle.throttle_failure()
+                    mock_audit.assert_called_once()
 
-        # Mock the wait() method
-        mocker.patch.object(throttle, "wait", return_value=60)
-        # Mock super().throttle_failure() to avoid cache issues
-        mocker.patch(
-            "apps.authentication.throttles.AnonRateThrottle.throttle_failure",
-            return_value=False,
-        )
-
-        throttle.throttle_failure()
-        mock_audit.assert_called_once()
-
-    def test_sustained_throttle_calls_audit_service(self, rf, mocker):
+    def test_sustained_throttle_calls_audit_service(self, rf):
         """SustainedRateThrottle.throttle_failure() calls _audit_throttle_violation."""
         from apps.authentication.throttles import SustainedRateThrottle
 
-        mock_audit = mocker.patch(
-            "apps.authentication.throttles._audit_throttle_violation"
-        )
-
-        throttle = SustainedRateThrottle()
-        throttle.request = rf.get("/api/v1/auth/login/")
-        mocker.patch.object(throttle, "wait", return_value=86400)
-        mocker.patch(
-            "apps.authentication.throttles.UserRateThrottle.throttle_failure",
-            return_value=False,
-        )
-
-        throttle.throttle_failure()
-        mock_audit.assert_called_once()
+        with patch("apps.authentication.throttles._audit_throttle_violation") as mock_audit:
+            throttle = SustainedRateThrottle()
+            throttle.request = rf.get("/api/v1/auth/login/")
+            with patch.object(throttle, "wait", return_value=86400):
+                with patch(
+                    "apps.authentication.throttles.UserRateThrottle.throttle_failure",
+                    return_value=False,
+                ):
+                    throttle.throttle_failure()
+                    mock_audit.assert_called_once()
 
 
 class TestCeleryContextPropagation:
