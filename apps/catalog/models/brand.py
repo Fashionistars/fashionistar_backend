@@ -6,7 +6,6 @@ from django.conf import settings
 
 # pyrefly: ignore [missing-import]
 from django.db import models
-from django.utils import timezone
 from django.utils.html import mark_safe
 
 # pyrefly: ignore [missing-import]
@@ -18,6 +17,7 @@ from apps.common.models import SoftDeleteModel, TimeStampedModel
 class Brand(SoftDeleteModel, TimeStampedModel):
     """Admin-managed brand metadata used by public catalog discovery."""
 
+    # ── Core identity ─────────────────────────────────────────────────────
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
@@ -29,6 +29,10 @@ class Brand(SoftDeleteModel, TimeStampedModel):
     )
     title = models.CharField(max_length=100)
     description = models.TextField(null=True, blank=True)
+    slug = models.SlugField(unique=True, blank=True, null=True, db_index=True)
+    active = models.BooleanField(default=True, db_index=True)
+
+    # ── Cloudinary images ─────────────────────────────────────────────────
     image = CloudinaryField(
         "image",
         folder="fashionistar/catalog/brands/",
@@ -40,13 +44,56 @@ class Brand(SoftDeleteModel, TimeStampedModel):
             "Use .url in serializers to retrieve the full HTTPS secure_url."
         ),
     )
-    active = models.BooleanField(default=True, db_index=True)
-    slug = models.SlugField(unique=True, blank=True, null=True, db_index=True)
+    logo_banner = CloudinaryField(
+        "logo_banner",
+        folder="fashionistar/catalog/brands/banners/",
+        blank=True,
+        null=True,
+        help_text="Wide-format logo / hero banner for brand detail page.",
+    )
+
+    # ── Extended brand metadata ───────────────────────────────────────────
+    country = models.CharField(
+        max_length=60,
+        blank=True,
+        help_text="Country of origin (e.g. 'Nigeria', 'Ghana', 'South Africa').",
+    )
+    website_url = models.URLField(blank=True)
+    established_year = models.PositiveSmallIntegerField(
+        null=True, blank=True, help_text="Year the brand was established."
+    )
+
+    # ── Trust & placement flags ───────────────────────────────────────────
+    verified = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Admin-verified brand. Shows a verified badge.",
+    )
+    premium = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Premium placement slot — shown first in brand grids.",
+    )
+
+    # ── SEO ───────────────────────────────────────────────────────────────
+    meta_title = models.CharField(max_length=180, blank=True)
+    meta_description = models.CharField(max_length=320, blank=True)
+
+    # ── Cached counter ────────────────────────────────────────────────────
+    cached_product_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Cached product count. Refreshed by update_brand_product_count Celery task.",
+    )
 
     class Meta:
         managed = True
         verbose_name = "Catalog Brand"
         verbose_name_plural = "Catalog Brands"
+        ordering = ["-premium", "title"]
+        indexes = [
+            models.Index(fields=["verified", "premium"], name="brand_verified_premium_idx"),
+            models.Index(fields=["slug"], name="brand_slug_idx"),
+        ]
 
     def brand_image(self):
         if not self.image:
