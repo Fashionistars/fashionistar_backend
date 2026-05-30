@@ -441,3 +441,62 @@ class CatalogSelector(BaseSelector):
         except Exception as exc:
             logger.error("aget_collection_vendor_count slug=%s: %s", collection_slug, exc)
             return {}
+
+    # ══════════════════════════════════════════════════════════════════
+    #  HOMEPAGE BUNDLE SELECTORS  (Phase 11)
+    #  All return list[dict] — minimal payload, maximum parallelism.
+    #  These are called exclusively from the /catalog/homepage/ endpoint
+    #  via asyncio.gather() — 5 queries in parallel, <30ms total.
+    # ══════════════════════════════════════════════════════════════════
+
+    @staticmethod
+    async def aget_homepage_categories(limit: int = 10) -> list[dict]:
+        """
+        Async: first N active categories for homepage category grid.
+
+        Returns:
+            list[dict] with id, name, title, slug, image_url, active.
+            Limited to ``limit`` rows, ordered by name (stable).
+
+        Performance:
+            .values() avoids model instantiation — no Cloudinary/storage
+            descriptor evaluation at this level (image_url resolved in
+            catalog_views serializer).
+        """
+        try:
+            qs = (
+                Category.objects.filter(active=True)
+                .values("id", "name", "slug", "image", "active", "created_at")
+                .order_by("name")[:limit]
+            )
+            return [row async for row in qs]
+        except Exception as exc:
+            logger.error("aget_homepage_categories: %s", exc)
+            return []
+
+    @staticmethod
+    async def aget_homepage_collections(limit: int = 10) -> list[dict]:
+        """
+        Async: first N collections for homepage collection carousel.
+
+        Returns:
+            list[dict] with id, title, slug, sub_title, description, image, created_at.
+            Limited to ``limit`` rows, ordered by newest-first.
+        """
+        try:
+            qs = (
+                Collections.objects.values(
+                    "id",
+                    "title",
+                    "slug",
+                    "sub_title",
+                    "description",
+                    "image",
+                    "background_image",
+                    "created_at",
+                ).order_by("-created_at")[:limit]
+            )
+            return [row async for row in qs]
+        except Exception as exc:
+            logger.error("aget_homepage_collections: %s", exc)
+            return []

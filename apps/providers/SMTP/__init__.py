@@ -37,6 +37,15 @@ from apps.providers.SMTP.brevo import BREVO_PROVIDER
 from apps.providers.SMTP.mailgun import MAILGUN_PROVIDER
 from apps.providers.SMTP.zoho import ZOHO_PROVIDER
 
+# Phase 10: Provider contract + singletons
+from apps.providers.SMTP.contract import (
+    SMTPProviderContract,
+    ProviderHealthResult,
+)
+from apps.providers.SMTP.brevo_provider   import BREVO
+from apps.providers.SMTP.mailgun_provider import MAILGUN
+from apps.providers.SMTP.zoho_provider    import ZOHO
+
 # ── Registry ──────────────────────────────────────────────────────────────────
 
 # All known email providers in display-priority order
@@ -85,4 +94,10 @@ __all__ = [
     "get_email_backend_label",
     # Provider registry list
     "_ALL_EMAIL_PROVIDERS",
+    # Phase 10 — Contract + singletons
+    "SMTPProviderContract",
+    "ProviderHealthResult",
+    "BREVO",
+    "MAILGUN",
+    "ZOHO",
 ]
