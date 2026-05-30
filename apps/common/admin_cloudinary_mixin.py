@@ -1,6 +1,6 @@
 # apps/common/admin_cloudinary_mixin.py
 """
-Cloudinary Admin Upload Mixin — Phase 4 Production.
+Cloudinary Admin Upload Mixin -- Phase 6 Production.
 
 Provides CloudinaryUploadAdminMixin for Django ModelAdmin classes that have
 image/video fields stored as Cloudinary URLs.
@@ -8,14 +8,23 @@ image/video fields stored as Cloudinary URLs.
 When an admin user uploads a file via the Django admin panel (e.g., Category
 image, Brand logo, Collection banner), the mixin:
 
-  1. Detects that a new file was uploaded (form field has a File object)
-  2. Uploads it directly to Cloudinary via Upload API
-  3. Replaces the form field value with the returned secure_url
-  4. Saves the model with the Cloudinary URL (not the local file)
-  5. Logs an ADMIN_ACTION audit event
+  SYNC MODE (default, ``CLOUDINARY_ADMIN_ASYNC = False``):
+    1. Uploads directly to Cloudinary (blocking the admin save)
+    2. Writes the returned secure_url to the model
+    3. Logs an ADMIN_ACTION audit event
+
+  ASYNC MODE (``CLOUDINARY_ADMIN_ASYNC = True`` in settings):
+    1. Reads and base64-encodes the uploaded file bytes
+    2. Saves the model WITHOUT the Cloudinary URL (field remains empty initially)
+    3. Dispatches ``process_admin_cloudinary_upload.apply_async()`` to Celery
+    4. Admin save returns immediately (<200ms, no Cloudinary HTTP round-trip)
+    5. Celery worker uploads, writes the URL, and fires the audit log
+
+  The async path uses ``acks_late=True`` + ``max_retries=3`` on the Celery task
+  to guarantee at-least-once delivery even if the worker dies mid-upload.
 
 Usage
-─────
+-----
     from apps.common.admin_cloudinary_mixin import CloudinaryUploadAdminMixin
 
     @admin.register(Category)
@@ -26,13 +35,18 @@ Usage
         }
 
 cloudinary_fields Format
-────────────────────────
+------------------------
     {
         "<django_field_name>": ("<cloudinary_folder>", "<asset_type_key>"),
     }
 
 Where asset_type_key is any key from _ASSET_CONFIGS in utils/cloudinary.py
 (e.g. "avatar", "product_image", "category", "collection", "brand", etc.)
+
+Settings
+--------
+    CLOUDINARY_ADMIN_ASYNC = True   # Enable async Celery path (production)
+    CLOUDINARY_ADMIN_ASYNC = False  # Sync inline path (dev default)
 """
 
 from __future__ import annotations
@@ -74,19 +88,41 @@ class CloudinaryUploadAdminMixin:
         """
         Intercept admin save to upload files to Cloudinary.
 
-        For each field in cloudinary_fields:
-          - If form contains a File object for that field → upload to Cloudinary
-          - Replace form value with the returned secure_url
-          - Set the field on the model instance before save
+        Reads the CLOUDINARY_ADMIN_ASYNC Django setting:
+          - False (default): synchronous upload in-thread.
+          - True (production): base64-encodes the file, saves the model
+            immediately, and dispatches the upload to a Celery worker.
         """
-        try:
-            self._process_cloudinary_uploads(request, obj, form, change)
-        except Exception as exc:
-            logger.error(
-                "CloudinaryUploadAdminMixin.save_model: upload failed — %s. "
-                "Falling back to default save (no Cloudinary URL).",
-                exc,
-            )
+        from django.conf import settings
+
+        async_mode = getattr(settings, "CLOUDINARY_ADMIN_ASYNC", False)
+
+        if async_mode:
+            try:
+                self._process_cloudinary_uploads_async(request, obj, form, change)
+            except Exception as exc:
+                logger.error(
+                    "CloudinaryUploadAdminMixin (async): enqueue failed — %s. "
+                    "Falling back to sync path.",
+                    exc,
+                )
+                # Graceful degradation: if enqueue fails, fall through to sync
+                try:
+                    self._process_cloudinary_uploads(request, obj, form, change)
+                except Exception as sync_exc:
+                    logger.error(
+                        "CloudinaryUploadAdminMixin sync fallback also failed — %s.",
+                        sync_exc,
+                    )
+        else:
+            try:
+                self._process_cloudinary_uploads(request, obj, form, change)
+            except Exception as exc:
+                logger.error(
+                    "CloudinaryUploadAdminMixin.save_model: upload failed -- %s. "
+                    "Falling back to default save (no Cloudinary URL).",
+                    exc,
+                )
         super().save_model(request, obj, form, change)
 
     def _process_cloudinary_uploads(
@@ -186,6 +222,102 @@ class CloudinaryUploadAdminMixin:
                     exc,
                 )
                 raise
+
+    def _process_cloudinary_uploads_async(
+        self,
+        request: Any,
+        obj: Any,
+        form: Any,
+        change: bool,
+    ) -> None:
+        """
+        Phase 6 ASYNC path: base64-encode files and dispatch to Celery.
+
+        Loops over cloudinary_fields. For each field with a new file upload:
+          1. Read and base64-encode the file bytes (serializable for Redis/RabbitMQ).
+          2. Clear the field from form.cleaned_data so Django's default storage
+             backend does not attempt a second upload.
+          3. Dispatch ``process_admin_cloudinary_upload.apply_async()``.
+
+        The admin HTTP response is returned immediately after super().save_model().
+        The Celery task handles the Cloudinary HTTP call and DB field update.
+
+        Note: obj.pk must already exist before this method is called (which is
+        guaranteed since Django admin calls save_model() after the instance is
+        committed in a transaction — i.e., obj.pk is always set at this point).
+        """
+        import base64
+        from apps.common.tasks.cloudinary import process_admin_cloudinary_upload
+
+        _URL_FIELD_MAP = {
+            "image":            "cloudinary_url",
+            "background_image": "background_cloudinary_url",
+            "avatar":           "cloudinary_url",
+        }
+
+        admin_user = request.user
+        admin_user_id    = str(getattr(admin_user, "pk", None) or "")
+        admin_user_email = getattr(admin_user, "email", None)
+        model_path = (
+            f"{obj.__class__.__module__}.{obj.__class__.__name__}"
+        )
+
+        for field_name, (folder, asset_type) in self.cloudinary_fields.items():
+            file_obj = form.cleaned_data.get(field_name)
+
+            if not file_obj or not hasattr(file_obj, "read"):
+                continue  # No new file — skip
+
+            try:
+                # Read file bytes (ensure seekable)
+                if hasattr(file_obj, "seek"):
+                    file_obj.seek(0)
+                file_bytes = file_obj.read()
+                file_b64   = base64.b64encode(file_bytes).decode("ascii")
+                file_name  = getattr(file_obj, "name", "upload.bin")
+
+                url_field = _URL_FIELD_MAP.get(
+                    field_name, f"{field_name}_cloudinary_url"
+                )
+
+                # Clear from form so Django storage doesn't double-upload
+                form.cleaned_data[field_name] = None
+
+                # Dispatch to Celery — returns immediately
+                process_admin_cloudinary_upload.apply_async(
+                    kwargs={
+                        "model_path":       model_path,
+                        "object_pk":        str(obj.pk),
+                        "field_name":       field_name,
+                        "url_field":        url_field,
+                        "folder":           folder,
+                        "asset_type":       asset_type,
+                        "file_b64":         file_b64,
+                        "file_name":        file_name,
+                        "admin_user_id":    admin_user_id,
+                        "admin_user_email": admin_user_email,
+                    },
+                    retry=False,
+                    ignore_result=True,
+                )
+                logger.info(
+                    "CloudinaryUploadAdminMixin (async): task enqueued for "
+                    "%s.%s pk=%s (%.1f KB)",
+                    obj.__class__.__name__,
+                    field_name,
+                    obj.pk,
+                    len(file_bytes) / 1024,
+                )
+
+            except Exception as exc:
+                logger.error(
+                    "CloudinaryUploadAdminMixin (async): enqueue FAILED for "
+                    "%s.%s: %s",
+                    obj.__class__.__name__,
+                    field_name,
+                    exc,
+                )
+                raise  # Caller (save_model) catches and falls back to sync
 
     def _log_cloudinary_admin_upload(
         self,

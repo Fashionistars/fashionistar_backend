@@ -335,7 +335,7 @@ class SoftDeleteAdminMixin:
                     count=_updated,
                 )
             except Exception:
-            pass  # Never block admin actions for audit counters
+                pass  # Never block admin actions for audit counters
 
             # ── 3c. Admin audit trail (compliance-grade, via Celery) ───────────
             try:
@@ -361,7 +361,7 @@ class SoftDeleteAdminMixin:
                     ignore_result=True,
                 )
             except Exception:
-            pass  # Never block admin actions for audit logging
+                pass  # Never block admin actions for audit logging
 
         self.message_user(
             request,
