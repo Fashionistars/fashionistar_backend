@@ -1,3 +1,4 @@
+# apps/common/request.py
 """
 Request helpers shared across middleware, permissions, services, and exception
 handling.
