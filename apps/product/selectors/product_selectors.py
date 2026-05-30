@@ -1026,30 +1026,72 @@ async def alist_products(
 
 async def aget_featured_products(limit: int = 12) -> list:
     """
-    Async: return top featured products for the homepage hero grid.
+    Async: return top featured products for the homepage featured-products grid.
 
-    Uses asyncio.gather to annotate and slice in parallel — the annotation
-    query and the final select run concurrently on the same connection pool.
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │  FASHIONISTAR AD PLATFORM — FUTURE BUSINESS MODEL                      │
+    │                                                                         │
+    │  This selector is the canonical source for the homepage "Featured        │
+    │  Products" section. The `featured` boolean flag on the Product model    │
+    │  is the gateway for our PAID ADVERTISEMENT service:                     │
+    │                                                                         │
+    │  Phase A (current):  Admin manually sets product.featured = True       │
+    │  Phase B (future):   Vendor pays for "Featured Slot" subscription →    │
+    │    AdCampaign.create(vendor=vendor, slot="homepage_featured", ...)     │
+    │    → Celery task sets product.featured = True for campaign duration    │
+    │    → Campaign ends → product.featured reset to False automatically     │
+    │                                                                         │
+    │  Ordering by (-orders_count, -rating) ensures that within a tier of   │
+    │  paying vendors, the best-performing products surface first —          │
+    │  good for advertisers AND for customer conversion rates.               │
+    │                                                                         │
+    │  The same endpoint powers the GET /catalog/homepage/ bundle via        │
+    │  asyncio.gather() — all 5 homepage sections load in parallel.          │
+    └─────────────────────────────────────────────────────────────────────────┘
 
-    Returns a list of Product instances (not a queryset).
+    Architecture:
+      - featured=True filter + rating/orders_count ordering surfaces paid
+        featured products first within each popularity tier.
+      - select_related("vendor") prevents N+1 on vendor name rendering.
+      - prefetch_related("categories", "sizes", "colors") fills M2M caches.
+        These prefetch caches are read by _homepage_product_out() in
+        catalog_views.py with ZERO extra DB queries.
+      - Returns list (not QuerySet) — safe to pass across asyncio.gather().
+      - Wrapped in try/except — a DB error returns [] rather than crashing
+        the entire homepage bundle gather.
+
+    Returns:
+        list[Product] — at most ``limit`` items, ordered by
+        (-orders_count, -rating, -created_at). Default limit=12 covers
+        a 4-column × 3-row homepage grid; the bundle endpoint passes limit=10.
+
+    Future ad-platform hook (Phase B):
+        When AdCampaign billing is live, replace `.filter(featured=True)` with:
+            .filter(
+                Q(featured=True) | Q(ad_campaigns__slot="homepage_featured",
+                                     ad_campaigns__is_active=True)
+            ).distinct()
     """
-    qs = (
-        Product.objects
-        .filter(
-            status=ProductStatus.PUBLISHED,
-            is_deleted=False,
-            featured=True,
+    try:
+        qs = (
+            Product.objects
+            .filter(
+                status=ProductStatus.PUBLISHED,
+                is_deleted=False,
+                featured=True,
+            )
+            .select_related("vendor")
+            .prefetch_related("categories", "sub_categories", "sizes", "colors")
+            .annotate(
+                computed_review_count=Count("reviews", distinct=True),
+                computed_avg_rating=Avg("reviews__rating"),
+            )
+            .order_by("-orders_count", "-rating", "-created_at")
         )
-        .select_related("vendor")
-        .prefetch_related("categories", "sub_categories", "sizes", "colors")
-        .annotate(
-            computed_review_count=Count("reviews", distinct=True),
-            computed_avg_rating=Avg("reviews__rating"),
-        )
-        .order_by("-orders_count", "-rating", "-created_at")
-    )
-
-    return [p async for p in qs[:limit]]
+        return [p async for p in qs[:limit]]
+    except Exception as exc:
+        logger.error("aget_featured_products: %s", exc)
+        return []
 
 
 async def aget_products_by_vendor_async(
@@ -1101,40 +1143,41 @@ async def aget_products_by_vendor_async(
 
 async def aget_homepage_products(limit: int = 10) -> list:
     """
-    Async: return top N featured published products for the homepage grid.
+    Async: thin delegator to ``aget_featured_products`` for the homepage bundle.
 
-    Architecture:
-      - featured=True filter + rating/orders_count ordering ensures top items.
-      - select_related("vendor") prevents N+1 on vendor name rendering.
-      - prefetch_related("categories", "sizes", "colors") fills M2M caches.
-      - Returns list (not queryset) — safe to pass across asyncio.gather boundary.
+    The canonical query logic and ad-platform extension points live in
+    ``aget_featured_products``; this wrapper exists so the catalog views can
+    import a semantically clear name from the Phase 11 bundle section.
 
-    Returns:
-        list[Product] — at most ``limit`` items, ordered by popularity.
+    Called exclusively via asyncio.gather() in GET /catalog/homepage/:
+
+        aget_homepage_products(limit=products_limit)   ← this function
+        aget_homepage_hot_deals(limit=hot_deals_limit)
+        aget_homepage_reviews(limit=reviews_limit)
+        aget_homepage_collections(limit=...)
+        aget_homepage_categories(limit=...)
+
+    Future ad-platform hook: update ``aget_featured_products`` to include
+    AdCampaign slot filter — this delegator automatically inherits it.
     """
-    try:
-        qs = (
-            Product.objects
-            .filter(
-                status=ProductStatus.PUBLISHED,
-                is_deleted=False,
-                featured=True,
-            )
-            .select_related("vendor")
-            .prefetch_related("categories", "sub_categories", "sizes", "colors")
-            .annotate(
-                computed_review_count=Count("reviews", distinct=True),
-                computed_avg_rating=Avg("reviews__rating"),
-            )
-            .order_by("-orders_count", "-rating", "-created_at")
-        )
-        return [p async for p in qs[:limit]]
-    except Exception as exc:
-        logger.error("aget_homepage_products: %s", exc)
-        return []
+    return await aget_featured_products(limit=limit)
 
 
 async def aget_homepage_hot_deals(limit: int = 10) -> list:
+    # ┌──────────────────────────────────────────────────────────────────────┐
+    # │  FASHIONISTAR AD PLATFORM — SECOND BUSINESS MODEL (Future)          │
+    # │                                                                      │
+    # │  The "Deals of the Week" / Hot Deals section will be Fashionistar's │
+    # │  second revenue stream:                                             │
+    # │    Phase A (current): Admin sets product.hot_deal = True            │
+    # │    Phase B (future):  Vendor pays for "Hot Deal Slot" → Celery task │
+    # │      sets hot_deal=True for the campaign period, auto-resets on     │
+    # │      campaign expiry. Priority slot = more discount_percentage.     │
+    # │                                                                      │
+    # │  Future hook: add AdCampaign Q() filter same as featured products.  │
+    # └──────────────────────────────────────────────────────────────────────┘
+    #
+    # Same note: (original docstring below)
     """
     Async: return top N hot-deal products for the "Deals of the Week" section.
 
