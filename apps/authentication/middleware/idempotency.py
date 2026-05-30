@@ -176,12 +176,23 @@ class IdempotencyMiddleware:
         # Fast-path: skip non-POST requests immediately
         if request.method != "POST":
             return self.get_response(request)
+
+        # ── Skip whitelisted paths ─────────────────────────────────────────
         if request.path in IDEMPOTENCY_SKIP_PATHS:
             return self.get_response(request)
 
+        # ── Extract idempotency key from header ────────────────────────────
         raw_key = request.META.get(IDEMPOTENCY_HEADER, "").strip()
+        logger.debug(
+            "🔑 IdempotencyMiddleware | path=%s | raw_key=%r | len=%d | header=%s",
+            request.path, raw_key[:20] if raw_key else "(empty)", len(raw_key), IDEMPOTENCY_HEADER,
+        )
         if not raw_key:
+            # No key provided → pass through without idempotency protection
+            # (backwards compatible — existing clients without the header work fine)
             return self.get_response(request)
+
+        # ── Validate key format (must be UUID4 or any non-empty string ≤128 chars)
         if len(raw_key) > 128:
             return JsonResponse(
                 {"status": "error", "message": "X-Idempotency-Key must be ≤128 characters."},
@@ -208,6 +219,9 @@ class IdempotencyMiddleware:
         # cache.add() is atomic (SETNX equivalent). Returns True on acquisition.
         # None = Redis unreachable (IGNORE_EXCEPTIONS) → degrade gracefully.
         acquired = _cache.add(lock_key, "1", timeout=IDEMPOTENCY_LOCK_TTL)
+        # If Redis is unreachable or throws a connection error, acquired is None
+        # (due to IGNORE_EXCEPTIONS = True). We gracefully degrade and allow the
+        # request to proceed as if lock was acquired. Only block on explicit False.
         if acquired is False:
             logger.warning("⚠️  Idempotency LOCK CONFLICT | key=%s | path=%s", raw_key, request.path)
             return JsonResponse(
@@ -265,12 +279,22 @@ class IdempotencyMiddleware:
         # Fast-path: skip non-POST requests immediately (no await needed)
         if request.method != "POST":
             return await self.get_response(request)
+
+        # ── Skip whitelisted paths ─────────────────────────────────────────
         if request.path in IDEMPOTENCY_SKIP_PATHS:
             return await self.get_response(request)
 
+        # ── Extract idempotency key from header ────────────────────────────
         raw_key = request.META.get(IDEMPOTENCY_HEADER, "").strip()
+        logger.debug(
+            "🔑 IdempotencyMiddleware | path=%s | raw_key=%r | len=%d | header=%s",
+            request.path, raw_key[:20] if raw_key else "(empty)", len(raw_key), IDEMPOTENCY_HEADER,
+        )
         if not raw_key:
+            # No key provided → pass through without idempotency protection
             return await self.get_response(request)
+
+        # ── Validate key format (must be UUID4 or any non-empty string ≤128 chars)
         if len(raw_key) > 128:
             return JsonResponse(
                 {"status": "error", "message": "X-Idempotency-Key must be ≤128 characters."},

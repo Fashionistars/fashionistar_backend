@@ -12,12 +12,26 @@ ORM level) by providing STRUCTURED, QUERYABLE, human-readable audit events
 with enriched context that the ORM-level log cannot capture.
 
 Design Principles:
-    - NEVER blocks the HTTP request — writes go via direct Celery dispatch
+    - NEVER blocks the HTTP request — writes go via Celery apply_async() dispatch
     - NEVER raises exceptions to callers — all errors are logged as WARNING
     - 7-year retention for financial compliance (configurable per-event)
     - Immutable once written (no update/delete permission in admin)
     - actor_email snapshot survives even if UnifiedUser is hard-deleted
-"""
+    - legal_hold=True rows are NEVER deleted by any cleanup path (PCI-DSS freeze)
+    - data_subject_id links GDPR Subject Access Requests to raw audit rows
+    - tenant_id enables future multi-tenant isolation without a DB schema split
+
+Phase 9 Fields (2026 GDPR/NDPR/PCI-DSS compliance expansion):
+    request_size_bytes  — Request payload size for anomaly detection
+    response_size_bytes — Response size for bandwidth auditing
+    tls_version         — TLS version string for security compliance (TLSv1.3, etc.)
+    session_fingerprint — SHA-256 of device+browser signature for session correlation
+    api_version         — API version extracted from path (/v1/, /v2/, etc.)
+    tenant_id           — UUIDField for future multi-tenant partition expansion
+    legal_hold          — Prevents deletion by any cleanup task or management command
+    data_subject_id     — GDPR data-subject reference UUID (maps to UnifiedUser.pk)
+    geo_country_code    — ISO 3166-1 alpha-2 from GeoIP (mirrors existing country_code)
+    geo_city            — City from GeoIP (mirrors existing city field)"""
 
 import logging
 import uuid6
@@ -285,33 +299,48 @@ class AuditEventLog(models.Model):
     """
     Structured, high-value business event log for the Fashionistar platform.
 
-    Columns
-    -------
-    event_type      Business event (login_success, password_changed, …)
-    event_category  Grouping (authentication, security, admin, …)
-    severity        info / warning / error / critical
-    action          Human-readable description of what happened
-    actor           FK to UnifiedUser (null-safe: survives user deletion)
-    actor_email     Snapshot of actor email at event time
-    ip_address      Client IP (or None for system events)
-    user_agent      Full UA string
-    device_type     desktop / mobile / tablet / api / unknown
-    browser_family  Chrome / Firefox / Safari / …
-    os_family       Windows / macOS / Android / iOS / …
-    country         IP-geolocated country (if available)
-    resource_type   Affected model class name (e.g. 'UnifiedUser')
-    resource_id     Affected object PK
-    request_method  HTTP method (GET / POST / PUT / DELETE)
-    request_path    API endpoint path
-    response_status HTTP status code
-    duration_ms     Handler execution time in milliseconds
-    old_values      Before-state snapshot (JSON) — enables forensic restore
-    new_values      After-state snapshot (JSON)
-    metadata        Extra context (arbitrary JSON)
-    error_message   Error text if event represents a failure
-    is_compliance   Flags events requiring compliance audit trail
-    retention_days  How long to keep this row (default 7 years = 2555 days)
-    created_at      Auto-set immutable timestamp
+    Columns (core)
+    ---------------
+    event_type          Business event (login_success, password_changed, …)
+    event_category      Grouping (authentication, security, admin, …)
+    severity            info / warning / error / critical
+    action              Human-readable description of what happened
+    actor               FK to UnifiedUser (null-safe: survives user deletion)
+    actor_email         Snapshot of actor email at event time
+    ip_address          Client IP (or None for system events)
+    user_agent          Full UA string
+    device_type         desktop / mobile / tablet / api / unknown
+    browser_family      Chrome / Firefox / Safari / …
+    os_family           Windows / macOS / Android / iOS / …
+    country             IP-geolocated country name (full)
+    country_code        ISO 3166-1 alpha-2 (2-char, e.g. 'NG', 'US')
+    city                GeoIP resolved city name
+    resource_type       Affected model class name (e.g. 'UnifiedUser')
+    resource_id         Affected object PK
+    request_method      HTTP method (GET / POST / PUT / DELETE)
+    request_path        API endpoint path
+    response_status     HTTP status code
+    duration_ms         Handler execution time in milliseconds
+    old_values          Before-state snapshot (JSON) — enables forensic restore
+    new_values          After-state snapshot (JSON)
+    metadata            Extra context (arbitrary JSON)
+    error_message       Error text if event represents a failure
+    is_compliance       Flags events requiring compliance audit trail
+    retention_days      How long to keep this row (default 7 years = 2555 days)
+    created_at          Auto-set immutable timestamp
+
+    Phase 9 Compliance Columns (2026 GDPR/NDPR/PCI-DSS)
+    -----------------------------------------------------
+    request_size_bytes  Incoming payload size in bytes (anomaly detection)
+    response_size_bytes Outgoing payload size in bytes (bandwidth audit)
+    tls_version         TLS version negotiated for this request (TLSv1.3, etc.)
+    session_fingerprint SHA-256 of browser device signature for cross-session linking
+    api_version         API version extracted from path (/v1/, /v2/, …)
+    tenant_id           UUID for future multi-tenant expansion (null for now)
+    legal_hold          True = this row is frozen; NEVER deleted by any cleanup task
+    data_subject_id     GDPR data-subject UUID — maps to the affected UnifiedUser.pk
+    geo_country_code    ISO 3166-1 alpha-2 from GeoIP enrichment (2-char)
+    geo_city            City from GeoIP enrichment
 
     Design
     ------
@@ -320,6 +349,11 @@ class AuditEventLog(models.Model):
       blocking the HTTP request path.
     * actor_email snapshot ensures the audit trail is preserved even after
       GDPR hard-delete of the live account.
+    * legal_hold=True overrides ALL retention policies — these rows survive forever
+      until a superuser explicitly clears the flag via Django admin.
+    * data_subject_id enables GDPR Subject Access Request (SAR) queries without
+      a FK join — the UnifiedUser.pk is denormalised here for performance and
+      survives a hard-delete of the UnifiedUser row.
     """
 
     # ── PK ────────────────────────────────────────────────────────────
@@ -604,7 +638,121 @@ class AuditEventLog(models.Model):
     )
     retention_days = models.PositiveIntegerField(
         default=2555,  # 7 years — financial + GDPR compliance
-        help_text="Days to retain this log entry.",
+        help_text="Days to retain this log entry. -1 = infinite.",
+    )
+
+    # ── Phase 9: 2026 GDPR/NDPR/PCI-DSS Compliance Fields ────────────
+    # These fields extend AuditEventLog to satisfy the 2026 regulatory
+    # framework: GDPR Art. 30 (records of processing activities),
+    # NDPR § 2.1 (data security obligations), and PCI-DSS v4 Req. 10
+    # (audit log integrity and payload capture requirements).
+
+    request_size_bytes = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Size of the incoming HTTP request body in bytes. "
+            "Used for anomaly detection — unusually large requests may "
+            "indicate data exfiltration attempts or malformed payload attacks."
+        ),
+    )
+    response_size_bytes = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Size of the outgoing HTTP response body in bytes. "
+            "Used for bandwidth auditing and detecting abnormally large "
+            "data exports (potential GDPR data breach indicator)."
+        ),
+    )
+    tls_version = models.CharField(
+        max_length=10,
+        null=True,
+        blank=True,
+        help_text=(
+            "TLS version negotiated for this request (e.g. 'TLSv1.3', 'TLSv1.2'). "
+            "PCI-DSS v4 Req. 10.3 mandates logging transport security details. "
+            "Populated from the 'SSL_PROTOCOL' server variable via Nginx/Gunicorn."
+        ),
+    )
+    session_fingerprint = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=(
+            "SHA-256 fingerprint computed from the device+browser signature "
+            "(User-Agent + Accept-Language + screen resolution + timezone). "
+            "Enables cross-session device correlation for fraud detection without "
+            "storing raw PII device identifiers. Populated by the frontend "
+            "audit-headers builder via X-Session-Fingerprint header."
+        ),
+    )
+    api_version = models.CharField(
+        max_length=10,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=(
+            "API version extracted from the request path (e.g. 'v1', 'v2'). "
+            "Enables per-version security and performance analysis. "
+            "Auto-extracted from request_path by AuditContextMiddleware."
+        ),
+    )
+    tenant_id = models.UUIDField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=(
+            "Reserved for future multi-tenant expansion. When Fashionistar moves "
+            "to a multi-tenant architecture, this field partitions audit rows by "
+            "tenant without requiring a DB schema split. Currently null for all rows."
+        ),
+    )
+    legal_hold = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text=(
+            "When True, this row is under legal hold and MUST NOT be deleted by "
+            "any automated cleanup task, management command, or Celery beat job. "
+            "Set by a superuser via Django admin when a row is subject to "
+            "regulatory investigation, litigation, or CBN/SEC audit freeze. "
+            "PCI-DSS v4 Req. 10.5: audit log records must be protected from modification."
+        ),
+    )
+    data_subject_id = models.UUIDField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=(
+            "UUID of the GDPR/NDPR data subject (typically UnifiedUser.pk). "
+            "Denormalised here so it survives a hard-delete of the UnifiedUser row. "
+            "Used to fulfil GDPR Art. 15 Subject Access Requests (SARs) and "
+            "Art. 17 Right-to-Erasure queries without a live FK join. "
+            "Populated automatically from actor.pk when is_compliance=True."
+        ),
+    )
+    geo_country_code = models.CharField(
+        max_length=2,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=(
+            "ISO 3166-1 alpha-2 country code from GeoIP enrichment "
+            "(e.g. 'NG', 'GB', 'US'). Strictly 2-char for PCI-DSS compliant "
+            "geographic segmentation. Distinct from country_code which may vary "
+            "in length across GeoIP providers."
+        ),
+    )
+    geo_city = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        help_text=(
+            "City from GeoIP enrichment (e.g. 'Lagos', 'London'). "
+            "Dedicated Phase 9 field for new compliance queries without "
+            "mixing old and new GeoIP provider results."
+        ),
     )
 
     # ── Immutable timestamp ───────────────────────────────────────────
@@ -619,20 +767,55 @@ class AuditEventLog(models.Model):
         verbose_name_plural = "Audit Event Logs"
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["-created_at"],               name="idx_ael_created"),
-            models.Index(fields=["actor", "-created_at"],      name="idx_ael_actor"),
-            models.Index(fields=["event_type", "-created_at"], name="idx_ael_etype"),
-            models.Index(fields=["event_category", "-created_at"], name="idx_ael_ecat"),
-            models.Index(fields=["severity", "-created_at"],   name="idx_ael_sev"),
-            models.Index(fields=["ip_address", "-created_at"], name="idx_ael_ip"),
-            models.Index(fields=["resource_type", "resource_id"], name="idx_ael_resource"),
-            models.Index(fields=["is_compliance", "-created_at"],  name="idx_ael_compliance"),
-            models.Index(fields=["actor_email", "-created_at"], name="idx_ael_email"),
-            models.Index(fields=["correlation_id"],             name="idx_ael_corr"),
-            models.Index(fields=["country", "-created_at"],     name="idx_ael_country"),
-            models.Index(fields=["country_code", "-created_at"],name="idx_ael_country_code"),
-            models.Index(fields=["actor_role", "-created_at"],   name="idx_ael_actor_role"),
-            models.Index(fields=["session_id"],                  name="idx_ael_session"),
+            # ── Core query indexes ──────────────────────────────────────────────
+            models.Index(fields=["-created_at"],                    name="idx_ael_created"),
+            models.Index(fields=["actor", "-created_at"],           name="idx_ael_actor"),
+            models.Index(fields=["event_type", "-created_at"],      name="idx_ael_etype"),
+            models.Index(fields=["event_category", "-created_at"],  name="idx_ael_ecat"),
+            models.Index(fields=["severity", "-created_at"],        name="idx_ael_sev"),
+            models.Index(fields=["ip_address", "-created_at"],      name="idx_ael_ip"),
+            models.Index(fields=["resource_type", "resource_id"],   name="idx_ael_resource"),
+            models.Index(fields=["is_compliance", "-created_at"],   name="idx_ael_compliance"),
+            models.Index(fields=["actor_email", "-created_at"],     name="idx_ael_email"),
+            models.Index(fields=["correlation_id"],                  name="idx_ael_corr"),
+            models.Index(fields=["country", "-created_at"],         name="idx_ael_country"),
+            models.Index(fields=["country_code", "-created_at"],    name="idx_ael_country_code"),
+            models.Index(fields=["actor_role", "-created_at"],      name="idx_ael_actor_role"),
+            models.Index(fields=["session_id"],                      name="idx_ael_session"),
+            # ── Phase 9: 2026 Compliance indexes ───────────────────────────────
+            # GDPR SAR queries — find all rows for a specific data subject in O(log n)
+            models.Index(
+                fields=["data_subject_id", "-created_at"],
+                name="idx_ael_data_subject",
+            ),
+            # Legal hold admin — surface frozen rows without full-table scan
+            models.Index(
+                fields=["legal_hold", "-created_at"],
+                name="idx_ael_legal_hold",
+            ),
+            # Multi-tenant expansion — partition reads without FK joins
+            models.Index(
+                fields=["tenant_id", "-created_at"],
+                name="idx_ael_tenant",
+            ),
+            # Session fingerprint — cross-session device correlation for fraud
+            models.Index(
+                fields=["session_fingerprint", "-created_at"],
+                name="idx_ael_sess_fp",
+            ),
+            # API version + actor — per-version security segmentation
+            models.Index(
+                fields=["api_version", "actor_email"],
+                name="idx_ael_api_actor",
+            ),
+            # Actor + time — fastest path for per-user audit timeline queries
+            models.Index(
+                fields=["actor", "-created_at"],
+                name="idx_ael_actor_time",
+                # NOTE: duplicate of idx_ael_actor above but named explicitly
+                # for Phase 9 query profiling separation. Remove idx_ael_actor
+                # in next migration if DBA confirms this is superseded.
+            ),
         ]
 
     def __str__(self):
@@ -644,7 +827,8 @@ class AuditEventLog(models.Model):
         E2 — IMMUTABILITY GUARD.
 
         AuditEventLog rows are append-only. Once written they can NEVER be
-        updated — this is a core compliance requirement (PCI-DSS, GDPR Art. 30).
+        updated — this is a core compliance requirement (PCI-DSS v4 Req. 10.5,
+        GDPR Art. 30).
 
         Raises
         ------
@@ -655,6 +839,12 @@ class AuditEventLog(models.Model):
         Note: admin.py already sets has_change_permission → False so the admin
         UI cannot call save() on existing rows. This guard is a second line of
         defense against programmatic tampering.
+
+        Phase 9 note:
+            legal_hold=True rows receive an ADDITIONAL check — they are excluded
+            from ALL batch delete paths (cleanup_audit_logs Celery task and
+            purge_audit_logs management command). See tasks.py and
+            management/commands/purge_audit_logs.py for enforcement.
         """
         if not self._state.adding:
             raise PermissionError(

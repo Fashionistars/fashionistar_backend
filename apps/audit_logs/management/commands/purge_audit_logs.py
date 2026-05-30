@@ -130,8 +130,11 @@ class Command(BaseCommand):
 
         # ── Split compliance vs non-compliance ────────────────────────────────
 
-        non_compliance_qs = qs.filter(is_compliance=False)
-        compliance_qs = qs.filter(is_compliance=True)
+        # Phase 9: legal_hold rows are EXCLUDED from ALL purge operations.
+        # A legal_hold=True row is under regulatory freeze (PCI-DSS v4 Req. 10.5)
+        # and must never be deleted by any automated path.
+        non_compliance_qs = qs.filter(is_compliance=False, legal_hold=False)
+        compliance_qs = qs.filter(is_compliance=True, legal_hold=False)
 
         non_compliance_count = non_compliance_qs.count()
         self.stdout.write(
@@ -215,7 +218,10 @@ class Command(BaseCommand):
                 break
 
             with transaction.atomic():
-                count, _ = qs.model.objects.filter(id__in=batch_ids).delete()
+                count, _ = qs.model.objects.filter(
+                    id__in=batch_ids,
+                    legal_hold=False,  # Phase 9 triple-guard: never delete frozen rows
+                ).delete()
 
             deleted_total += count
             self.stdout.write(

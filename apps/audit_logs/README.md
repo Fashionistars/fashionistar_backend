@@ -1,1124 +1,106 @@
-# `apps/audit_logs` — Enterprise Audit Event Logging
+# `apps/audit_logs` — Enterprise Audit Logging System
 
-> **Version** 2026-03-19 · **Django** 6.0.2 · **Fashionistar Engineering**
->
-> 7-year compliance-grade audit trail for financial, security, AI measurement, and business operations. Non-blocking, immutable, searchable, with fraud detection insights.
+> **Version:** v2.0 — Phase 9 (2026 GDPR / NDPR / PCI-DSS v4 Production Release)
+> **Scope:** Structured, immutable, append-only audit trail for the full Fashionistar platform
+> **Migration:** Currently at `0006_phase9_compliance_fields`
 
 ---
 
 ## Table of Contents
 
-1. [Architecture Overview](#architecture-overview)
-2. [Quick Start](#quick-start)
-3. [Core Concepts](#core-concepts)
-4. [Models & Fields](#models--fields)
-5. [AuditService API](#auditservice-api)
-6. [Event Types Reference](#event-types-reference)
-7. [Django Admin Integration](#django-admin-integration)
-8. [Middleware: Auto-Context Capture](#middleware-auto-context-capture)
-9. [Admin Actions Audit (AuditedModelAdmin)](#admin-actions-audit-auditedmodeladmin)
-10. [Step-by-Step Integration Guide for New Apps](#step-by-step-integration-guide-for-new-apps)
-11. [Advanced Usage & Querying](#advanced-usage--querying)
-12. [Security & Compliance](#security--compliance)
-13. [File Structure](#file-structure)
-14. [Database Schema & Indexes](#database-schema--indexes)
-15. [Troubleshooting](#troubleshooting)
+1. [Overview](#overview)
+2. [Architecture](#architecture)
+3. [File Structure](#file-structure)
+4. [Database Schema & Indexes](#database-schema--indexes)
+5. [Model: AuditEventLog](#model-auditeventlog)
+6. [Event Types & Categories](#event-types--categories)
+7. [AuditService API](#auditservice-api)
+8. [Phase 9 Compliance Fields](#phase-9-compliance-fields)
+9. [Phase 4 Dispatch Decoupling](#phase-4-dispatch-decoupling)
+10. [Middleware: AuditContextMiddleware](#middleware-auditcontextmiddleware)
+11. [Celery Task: write_audit_event](#celery-task-write_audit_event)
+12. [Retention & Legal Hold](#retention--legal-hold)
+13. [Admin Interface](#admin-interface)
+14. [Domain-Specific Usage Examples](#domain-specific-usage-examples)
+15. [Advanced Queries](#advanced-queries)
+16. [Security & Compliance Design](#security--compliance-design)
+17. [Troubleshooting](#troubleshooting)
 
 ---
 
-## Architecture Overview
+## Overview
 
-```
-HTTP Request / Admin Action / Celery Task
-        │
-        ▼
-AuditService.log(...)  ◀─ Called from views, services, middleware (any thread)
-(apps/audit_logs/services/audit.py)
-        │
-        ├─► Resolve actor, IP, user-agent, device info
-        ├─► UA parsing (browser/OS family)
-        └─► Dispatch to Celery task (async, never blocks)
-                │
-                ▼
-        write_audit_event.apply_async()  ◀─ Enqueued to Redis immediately
-        (apps/audit_logs/tasks.py)
-                │
-                ├─► Try Celery worker write
-                ├─► Retry up to 2 times on transient DB errors
-                └─► log WARNING on persistent failure (never crash)
-                        │
-                        ▼
-                AuditEventLog.objects.create()  ◀─ Immutable DB row
-                (apps/audit_logs/models.py)
-                        │
-                        └─► Indexed for fast queries, 7-year retention
-```
+`apps/audit_logs` is the **enterprise audit backbone** of the Fashionistar platform. Every compliance-critical event — from login attempts and payment processing to admin bulk deletions and KYC verifications — flows through this single system.
 
-### Design Principles
+### Design Guarantees
 
-| Principle | Implementation |
-|---|---|
-| **Non-Blocking** | Direct `apply_async()` dispatch — HTTP request completes immediately |
-| **Fault-Tolerant** | Celery retry + sync fallback — events NEVER lost or silently dropped |
-| **Immutable** | No update/delete in application code; admin read-only; database-enforced |
-| **Tamper-Proof** | Created-at immutable; no delete permission; archived for 7 years |
-| **Enriched Context** | IP, device, browser, OS, actor snapshot, before/after diffs, correlation ID |
-| **Compliant** | Financial audit trails (GDPR, PCI-DSS, SOC2 ready) |
+| Guarantee | Mechanism |
+|-----------|-----------|
+| **Immutable** | `save()` guard blocks any UPDATE after creation |
+| **Never lost** | Celery + PostgreSQL fallback; broker-down safe |
+| **Non-blocking** | All writes are fire-and-forget via `apply_async()` |
+| **Tamper-proof** | Admin shows read-only; no delete permission |
+| **GDPR Art. 30** | Records of processing activities with `data_subject_id` |
+| **PCI-DSS v4 Req. 10** | TLS version, payload sizes, legal hold enforcement |
+| **NDPR § 2.1** | Nigerian Data Protection Regulation data security |
+| **Legal hold** | `legal_hold=True` rows survive ALL automated deletion paths |
 
 ---
 
-## Quick Start
+## Architecture
 
-### Installation
-
-1. **Add to `INSTALLED_APPS`** (in `backend/config/base.py`):
-```python
-INSTALLED_APPS = [
-    ...
-    'apps.audit_logs',
-    ...
-]
+```
+HTTP Request
+    │
+    ▼
+AuditContextMiddleware (entry)
+  • Extracts IP, UA, correlation-id, actor
+  • Phase 9: extracts api_version, tls_version,
+    session_fingerprint, request_size_bytes
+  • Stores in _audit_ctx (contextvars.ContextVar)
+    │
+    ▼
+Django View / DRF Endpoint / Ninja Handler
+  • Business logic runs
+  • Calls AuditService.log() at key decision points
+    │
+    ▼
+AuditService.log()
+  • Resolves actor, IP, UA, geo, session
+  • Phase 9: auto-resolves api_version, tls_version,
+    data_subject_id
+  • Builds payload dict
+  • Calls AuditService._dispatch(payload)
+    │
+    ├─── Celery broker UP → apply_async() → Celery worker
+    │                              │
+    │                              ▼
+    │                    write_audit_event task
+    │                      • Background GeoIP enrichment
+    │                      • Phase 9: geo_country_code, geo_city
+    │                      • AuditEventLog(**payload).save()
+    │
+    └─── Celery broker DOWN → _write_sync(payload)
+                               • Direct DB write (no broker needed)
+                               • NEVER drops events
+    │
+    ▼
+AuditContextMiddleware (exit)
+  • If response is 4xx/5xx → ASGI: asyncio.get_running_loop().create_task()
+                            → WSGI: daemon threading.Thread
+  • Never blocks the HTTP response path
 ```
 
-2. **Add middleware** (in `backend/config/base.py`):
-```python
-MIDDLEWARE = [
-    ...
-    'apps.audit_logs.middleware.AuditContextMiddleware',
-    ...
-]
-```
-
-3. **Run migrations**:
-```bash
-python manage.py migrate
-```
-
-### 1. Log a Simple Event
-
-```python
-from apps.audit_logs.services.audit import AuditService
-from apps.audit_logs.models import EventType, EventCategory
-
-# Minimal — context auto-filled by middleware
-AuditService.log(
-    event_type=EventType.LOGIN_SUCCESS,
-    event_category=EventCategory.AUTHENTICATION,
-    action="User logged in successfully",
-    request=request,  # optional — auto-extracts IP, UA, method, path
-)
-# ✅ Non-blocking — returns immediately
-```
-
-### 2. Log with Full Context (Before/After Diffs)
-
-```python
-AuditService.log(
-    event_type=EventType.ACCOUNT_UPDATED,
-    event_category=EventCategory.ACCOUNT,
-    action="Profile bio updated via settings page",
-    severity="info",
-    request=request,
-    resource_type="UnifiedUser",
-    resource_id=str(user.pk),
-    old_values={"bio": "Old bio text"},
-    new_values={"bio": "New bio text"},
-    metadata={"source": "profile_settings"},
-    is_compliance=True,  # 7-year retention
-)
-```
-
-### 3. Log Payment Transactions (Financial)
+### ASGI vs WSGI Pattern
 
 ```python
-AuditService.log(
-    event_type=EventType.PAYMENT_SUCCESS,
-    event_category=EventCategory.PAYMENT,
-    action=f"Payment of ₦{amount:,.2f} completed via Paystack",
-    severity="info",
-    request=request,
-    resource_type="Order",
-    resource_id=str(order.pk),
-    metadata={
-        "payment_ref": payment_ref,
-        "gateway": "paystack",
-        "amount_kobo": str(int(amount * 100)),
-        "currency": "NGN",
-        "receipt_url": receipt_url,
-    },
-    is_compliance=True,  # Flagged for compliance audit
-)
-```
-
-### 4. Log AI Measurement Events
-
-```python
-AuditService.log(
-    event_type=EventType.AI_ANALYSIS_COMPLETED,
-    event_category=EventCategory.MEASUREMENT,
-    action="Body measurement analysis completed — AI v2.1",
-    severity="info" if confidence > 0.85 else "warning",
-    resource_type="Measurement",
-    resource_id=str(measurement.pk),
-    metadata={
-        "model_version": "v2.1",
-        "confidence_score": f"{confidence:.4f}",
-        "processing_time_ms": int(elapsed_ms),
-        "measurements": {
-            "chest": str(measurements['chest']),
-            "waist": str(measurements['waist']),
-        },
-    },
-    is_compliance=False,  # Not financial
-)
-```
-
----
-
-## Core Concepts
-
-### AuditEventLog Model
-
-Immutable, high-value business event record. **Never updated or deleted** after creation.
-
-**Example rows:**
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ id: 550e8400-e29b... | event_type: LOGIN_SUCCESS             │
-│ actor_email: alice@example.com                               │
-│ ip_address: 192.168.1.100                                    │
-│ device_type: mobile | browser_family: Chrome                 │
-│ severity: info | created_at: 2026-03-19T14:23:45.123Z        │
-└─────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────┐
-│ id: 660e8400-e29b... | event_type: PAYMENT_SUCCESS           │
-│ actor_email: vendor@shop.com                                 │
-│ resource_type: Order | resource_id: order_7890               │
-│ severity: info | is_compliance: true | created_at: 2026-03-19T14:22:11.500Z │
-│ metadata: {                                                   │
-│   "payment_ref": "PSK_12345678",                              │
-│   "amount_kobo": "500000",                                    │
-│   "gateway": "paystack"                                       │
-│ }                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Event Types & Categories
-
-**15 Categories** with 51+ Event Types for comprehensive business logging:
-
-| Category | Examples | Use Case |
-|---|---|---|
-| **Authentication** | LOGIN_SUCCESS, LOGIN_FAILED, LOGOUT, TOKEN_REFRESHED | User sessions |
-| **Account** | ACCOUNT_CREATED, ACCOUNT_UPDATED, ACCOUNT_SOFT_DELETED, AVATAR_UPLOADED | User profile changes |
-| **Security** | PASSWORD_CHANGED, PASSWORD_RESET_DONE, MFA_ENABLED, SUSPICIOUS_ACTIVITY | Fraud + access control |
-| **Admin** | ADMIN_ACTION, ADMIN_BULK_DELETE, ADMIN_BULK_IMPORT | Staff auditing |
-| **Payment** | PAYMENT_SUCCESS, PAYMENT_FAILED, REFUND_INITIATED, DISPUTE_RESOLVED | Financial compliance |
-| **Order** | ORDER_CREATED, ORDER_UPDATED, ORDER_FULFILLED, ORDER_RETURNED | E-commerce audit |
-| **Cart** | CART_UPDATED, CHECKOUT_STARTED, CHECKOUT_COMPLETED | Checkout funnel |
-| **Measurement** | MEASUREMENT_CREATED, AI_ANALYSIS_COMPLETED, AI_ANALYSIS_FAILED | AI operations |
-| **Compliance** | (metadata-driven) | Regulatory requirements |
-
----
-
-## Models & Fields
-
-### AuditEventLog
-
-```python
-class AuditEventLog(models.Model):
-    # Primary Key
-    id = UUIDField(primary_key=True, default=uuid7)  # Time-sortable
-
-    # Event Classification
-    event_type = CharField(max_length=60, choices=EventType.choices, indexed)
-    event_category = CharField(max_length=60, choices=EventCategory.choices, indexed)
-    severity = CharField(choices=[debug, info, warning, error, critical], indexed)
-    action = TextField()  # Human-readable: "User logged in from Chrome mobile"
-
-    # Actor (Who)
-    actor = ForeignKey(UnifiedUser, null=True, on_delete=models.SET_NULL)  # Nullable for system events
-    actor_email = EmailField(null=True, indexed)  # Snapshot — survives user hard-delete
-
-    # Request Context
-    ip_address = GenericIPAddressField(null=True, indexed)
-    user_agent = TextField(null=True)  # Full UA string
-    device_type = CharField(null=True)  # desktop / mobile / tablet / api / unknown
-    browser_family = CharField(null=True)  # Chrome / Firefox / Safari
-    os_family = CharField(null=True)  # Windows / macOS / iOS / Android
-    country = CharField(null=True, indexed)  # GeoIP-resolved country code
-
-    # Distributed Tracing
-    correlation_id = CharField(max_length=64, null=True, indexed)  # X-Request-ID cross-correlation
-
-    # Resource Affected
-    resource_type = CharField(max_length=100, null=True, indexed)  # Model class name
-    resource_id = CharField(max_length=255, null=True, indexed)  # Resource PK
-
-    # HTTP Context
-    request_method = CharField(max_length=10, null=True)  # GET / POST / PUT / DELETE
-    request_path = CharField(max_length=500, null=True)  # /api/v1/orders/
-    response_status = PositiveSmallIntegerField(null=True)  # 200 / 400 / 500
-    duration_ms = FloatField(null=True)  # Handler execution time
-
-    # Diff / Forensic Restore
-    old_values = JSONField(null=True)  # Before-state (sensitive fields redacted)
-    new_values = JSONField(null=True)  # After-state
-    metadata = JSONField(null=True)  # Arbitrary key-value context
-
-    # Error / Failure
-    error_message = TextField(null=True)  # If event represents failure
-
-    # Compliance & Retention
-    is_compliance = BooleanField(default=False, indexed)  # Flag for audit review
-    retention_days = PositiveIntegerField(default=2555)  # 7 years = 2555 days
-
-    # Immutable Timestamp
-    created_at = DateTimeField(auto_now_add=True, indexed)
-
-    class Meta:
-        ordering = ["-created_at"]
-        indexes = [11 composite indexes for common queries]
-```
-
-### All Supported Fields
-
-| Field | Type | Indexed | Null | Notes |
-|---|---|---|---|---|
-| `id` | UUID7 | ✅ | No | Time-sortable PK |
-| `event_type` | CharField | ✅ | No | EventType enum |
-| `event_category` | CharField | ✅ | No | EventCategory enum |
-| `severity` | CharField | ✅ | No | debug/info/warning/error/critical |
-| `action` | TextField | No | No | Human description of event |
-| `actor` | FK → UnifiedUser | Yes (ind) | ✅ | Who triggered event |
-| `actor_email` | EmailField | ✅ | ✅ | Email snapshot (survives deletion) |
-| `ip_address` | GenericIPAddressField | ✅ | ✅ | Client IP (X-Forwarded-For aware) |
-| `user_agent` | TextField | No | ✅ | Full UA string |
-| `device_type` | CharField | No | ✅ | desktop/mobile/tablet/api |
-| `browser_family` | CharField | No | ✅ | Chrome/Firefox/Safari/…|
-| `os_family` | CharField | No | ✅ | Windows/macOS/iOS/Android/…|
-| `country` | CharField | ✅ | ✅ | GeoIP country code |
-| `correlation_id` | CharField | ✅ | ✅ | X-Request-ID for tracing |
-| `resource_type` | CharField | ✅ | ✅ | Affected model name |
-| `resource_id` | CharField | ✅ | ✅ | Affected object PK |
-| `request_method` | CharField | No | ✅ | GET/POST/PUT/PATCH/DELETE |
-| `request_path` | CharField | No | ✅ | URL path |
-| `response_status` | PositiveSmallIntegerField | No | ✅ | HTTP status code |
-| `duration_ms` | FloatField | No | ✅ | Handler time in ms |
-| `old_values` | JSONField | No | ✅ | Before-state (redacted) |
-| `new_values` | JSONField | No | ✅ | After-state |
-| `metadata` | JSONField | No | ✅ | Arbitrary context |
-| `error_message` | TextField | No | ✅ | Failure reason |
-| `is_compliance` | BooleanField | ✅ | No | 7-year retention flag |
-| `retention_days` | PositiveIntegerField | No | No | Retention period |
-| `created_at` | DateTimeField | ✅ | No | Immutable timestamp |
-
----
-
-## AuditService API
-
-**File:** `apps/audit_logs/services/audit.py`
-
-### Method Signature
-
-```python
-@classmethod
-def AuditService.log(
-    *,  # Keyword-only arguments
-    # Event Classification (required)
-    event_type: str,
-    event_category: str,
-    action: str,
-    severity: str = "info",  # debug / info / warning / error / critical
-
-    # Actor (optional — auto-resolved if not provided)
-    actor = None,  # UnifiedUser instance
-    actor_email: str | None = None,
-
-    # Request Context (optional — auto-filled by middleware if None)
-    request = None,  # Django HttpRequest
-    ip_address: str | None = None,
-    user_agent: str | None = None,
-    device_type: str | None = None,
-    browser_family: str | None = None,
-    os_family: str | None = None,
-    request_method: str | None = None,
-    request_path: str | None = None,
-    response_status: int | None = None,
-    duration_ms: float | None = None,
-
-    # Resource Affected
-    resource_type: str | None = None,  # Model class name (e.g., 'Product')
-    resource_id: str | None = None,    # Resource PK (e.g., 'prod_12345')
-
-    # Diff / Context
-    old_values: dict | None = None,    # Before-state snapshot
-    new_values: dict | None = None,    # After-state snapshot
-    metadata: dict | None = None,      # Arbitrary key-value context
-    error_message: str | None = None,  # Error reason if failure
-
-    # Compliance & Retention
-    is_compliance: bool = False,        # Flag for compliance audit
-    retention_days: int = 2555,         # 7 years = 2555 days
-) -> None:  # Returns immediately — always succeeds (never raises)
-```
-
-### Dispatch Mechanism
-
-**Key behavior: `apply_async()` is called DIRECTLY, NOT inside `transaction.on_commit()`**
-
-```python
-# Why? Three reasons:
-# 1. Events are enqueued to Redis immediately, regardless of TX commit/rollback
-# 2. Failed-request audit logs (e.g., validation errors in atomic()) are never dropped
-# 3. Celery worker writes in its own connection, so no lock contention
-
-write_audit_event.apply_async(kwargs={"payload": ...}, retry=False)
-#              ↑ Enqueued NOW, even if calling TX rolls back
-#              ↑ Worker retries up to 2x on transient errors
-#              ↑ Logged as WARNING on persistent failure (never crashes)
-
-# If Celery broker is down:
-#   → Sync fallback: writes directly to DB
-#   → Events NEVER silently dropped
-```
-
----
-
-## Event Types Reference
-
-### Full Event Catalog (51 types across 15 categories)
-
-**Authentication (8 types)**
-```python
-LOGIN_SUCCESS              # Successful login
-LOGIN_FAILED               # Failed login attempt
-LOGIN_BLOCKED              # Login blocked (rate limit / suspicious)
-LOGOUT                     # User logged out
-TOKEN_REFRESHED            # JWT refresh token used
-GOOGLE_LOGIN               # Google OAuth login
-REGISTER_SUCCESS           # Registration success
-REGISTER_FAILED            # Registration failure (email exists, weak password, etc.)
-```
-
-**Account & Profile (8 types)**
-```python
-ACCOUNT_CREATED            # New account created
-ACCOUNT_UPDATED            # Profile updated (bio, name, etc.)
-ACCOUNT_SOFT_DELETED       # Account soft-deleted (recoverable)
-ACCOUNT_RESTORED           # Soft-deleted account restored
-ACCOUNT_HARD_DELETED       # Permanent account deletion (GDPR)
-EMAIL_VERIFIED             # Email verification completed
-PHONE_VERIFIED             # Phone verification completed
-AVATAR_UPLOADED            # Avatar uploaded to Cloudinary
-```
-
-**Security (8 types)**
-```python
-PASSWORD_CHANGED           # User changed password
-PASSWORD_RESET_REQUEST     # Password reset OTP sent
-PASSWORD_RESET_DONE        # Password reset completed
-MFA_ENABLED                # Multi-factor authentication enabled
-MFA_DISABLED               # MFA disabled
-SUSPICIOUS_ACTIVITY        # Anomalous behavior detected
-IP_BLOCKED                 # IP address blocked
-FAILED_LOGINS_EXCEEDED     # Too many failed login attempts
-```
-
-**Admin Actions (5 types)**
-```python
-ADMIN_ACTION               # Single admin save/delete/edit
-ADMIN_BULK_EXPORT          # CSV/XLSX export from admin
-ADMIN_BULK_IMPORT          # Data import via CSV/XLSX
-ADMIN_BULK_DELETE          # Bulk delete from changelist
-SETTINGS_CHANGED           # System settings changed
-```
-
-**Data Operations (3 types)**
-```python
-DATA_VIEWED                # Sensitive data viewed
-DATA_EXPORTED              # Data exported (GDPR subject access request)
-SENSITIVE_DATA_ACCESS      # PII / financial data accessed
-```
-
-**E-Commerce: Orders (5 types)**
-```python
-ORDER_CREATED              # Order created
-ORDER_UPDATED              # Order status updated
-ORDER_CANCELLED            # Order cancelled
-ORDER_FULFILLED            # Order shipped/fulfilled
-ORDER_RETURNED             # Order returned
-```
-
-**E-Commerce: Payments (7 types)** — *Financial Compliance Critical*
-```python
-PAYMENT_INITIATED          # Payment started
-PAYMENT_SUCCESS            # Payment successful (PCI-DSS level)
-PAYMENT_FAILED             # Payment declined/failed
-REFUND_INITIATED           # Refund requested
-REFUND_COMPLETED           # Refund successfully processed
-DISPUTE_OPENED             # Chargeback/dispute opened
-DISPUTE_RESOLVED           # Dispute resolved
-```
-
-**E-Commerce: Cart (4 types)**
-```python
-CART_UPDATED               # Cart item added/removed/quantity changed
-CHECKOUT_STARTED           # Checkout process initiated
-CHECKOUT_COMPLETED         # Checkout successful
-CHECKOUT_ABANDONED         # Cart abandoned (funnel analysis)
-```
-
-**AI Measurement (6 types)**
-```python
-MEASUREMENT_CREATED        # Measurement record created
-MEASUREMENT_UPDATED        # Measurement updated
-MEASUREMENT_DELETED        # Measurement deleted
-AI_ANALYSIS_STARTED        # AI analysis job started
-AI_ANALYSIS_COMPLETED      # AI analysis successful
-AI_ANALYSIS_FAILED         # AI analysis failed
-```
-
-**System (4 types)**
-```python
-SYSTEM_ERROR               # Unexpected system error
-API_CALL                   # External API called
-WEBHOOK_RECEIVED           # Inbound webhook received
-CELERY_TASK_FAILED         # Background job failed
-```
-
----
-
-## Django Admin Integration
-
-### Read-Only Audit Dashboard
-
-Navigate to **Django Admin → Audit Logs → Audit Event Logs**
-
-**Features:**
-- ✅ **Read-only** — no create/edit/delete via admin
-- ✅ **Color-coded badges** — severity (red=critical, orange=warning) + category
-- ✅ **Full-text search** — actor_email, IP, action, resource_id
-- ✅ **Advanced filters** — by event_type, severity, category, is_compliance
-- ✅ **Rich detail view** — organized fieldsets with collapse sections
-- ✅ **50 rows per page** — optimized for large datasets
-- ✅ **Date hierarchy** — quick drill-down by date
-- ✅ **Superadmin-only** — `has_view_permission` returns `is_superuser`
-
-**List Display:**
-```
-created_at | Severity | Category | Event Type | Actor Email | IP | Resource | Status
-───────────┼──────────┼──────────┼────────────┼─────────────┼────┼──────────┼──────
-2026-03-19 |   🔴 ERR |  PAYMENT | PAYMENT_FAILED | bob@sho... | 192... | Order | 402
-2026-03-19 |   ⚠ WAR |   SECURITY | FAILED_LOGINS_EXCEEDED | eve@... | 10... | User | 429
-2026-03-19 |   ℹ INF |  AUTH | LOGIN_SUCCESS | alice@... | 172... | User | 200
-```
-
----
-
-## Middleware: Auto-Context Capture
-
-### AuditContextMiddleware
-
-**File:** `apps/audit_logs/middleware.py`
-
-Automatically captures HTTP request context in thread-local storage so `AuditService.log()` doesn't require passing `request=` explicitly.
-
-**Configured in:**
-```python
-# backend/config/base.py
-MIDDLEWARE = [
-    ...
-    'apps.audit_logs.middleware.AuditContextMiddleware',
-    ...
-]
-```
-
-**What it captures:**
-- `ip_address` — Real IP via `X-Forwarded-For` chain (leftmost is real client)
-- `user_agent` — Full User-Agent header
-- `request_method` — GET / POST / PUT / PATCH / DELETE
-- `request_path` — URL path (e.g., `/api/v1/orders/`)
-- `actor` — Authenticated user (None if anonymous)
-- `actor_email` — Email snapshot
-
-**Usage without middleware:**
-```python
-# Without middleware, must pass request explicitly
-AuditService.log(
-    event_type=EventType.LOGIN_SUCCESS,
-    event_category=EventCategory.AUTHENTICATION,
-    action="...",
-    request=request,  # ← Must provide
-)
-```
-
-**Usage with middleware:**
-```python
-# With middleware, context auto-filled from thread-local
-AuditService.log(
-    event_type=EventType.LOGIN_SUCCESS,
-    event_category=EventCategory.AUTHENTICATION,
-    action="...",
-    # ← request= not required; context auto-populated from middleware
-)
-```
-
----
-
-## Admin Actions Audit (AuditedModelAdmin)
-
-### Mixin for Grand Staff Accountability
-
-**File:** `apps/audit_logs/mixins.py`
-
-Automatically logs every admin save, delete, and bulk delete action to audit trail with before/after diffs.
-
-### Integration
-
-**Step 1: Import the mixin**
-```python
-from apps.audit_logs.mixins import AuditedModelAdmin
-```
-
-**Step 2: Add to ModelAdmin MRO** (before `admin.ModelAdmin`)
-```python
-@admin.register(MyModel)
-class MyModelAdmin(AuditedModelAdmin, admin.ModelAdmin):
-    list_display = ('name', 'created_at')
-    # ... rest of admin config
-```
-
-**What it captures automatically:**
-- ✅ **save_model(…, change=False)** → `ADMIN_ACTION` with new_values
-- ✅ **save_model(…, change=True)** → `ADMIN_ACTION` with old_values + new_values diff
-- ✅ **delete_model()** → `ADMIN_ACTION` with old_values snapshot
-- ✅ **delete_queryset()** → `ADMIN_BULK_DELETE` with affected PKs in metadata
-- ✅ **Sensitive field redaction** — passwords, secrets set to `***REDACTED***`
-- ✅ **Before/after comparison** — only shows changed fields
-- ✅ **Actor (staff user)** — auto-resolved from request
-- ✅ **IP address** — captured from middleware
-- ✅ **Compliance flag** — `is_compliance=True` for 7-year retention
-
-### Example Output
-
-```python
-# Admin clicks "Save" on User form, changes email
-# → Automatically logs:
-AuditEventLog.objects.create(
-    event_type="admin_action",
-    event_category="admin",
-    action="Admin updated UnifiedUser (pk=550e8400...) — fields: email, phone",
-    actor=request.user,  # Staff member
-    actor_email=request.user.email,
-    resource_type="UnifiedUser",
-    resource_id="550e8400...",
-    old_values={
-        "email": "alice@old.com",
-        "phone": "+234901234567",
-        "password": "***REDACTED***",  # Never logged in cleartext
-    },
-    new_values={
-        "email": "alice@new.com",
-        "phone": "+234901234567",
-        "password": "***REDACTED***",
-    },
-    is_compliance=True,  # 7-year retention
-    severity="info",
-    ip_address="192.168.1.100",
-    request_method="POST",
-    request_path="/admin/authentication/unifieduser/550e8400.../change/",
-    response_status=302,
-)
-```
-
----
-
-## Step-by-Step Integration Guide for New Apps
-
-### For `apps/orders` (E-Commerce Orders)
-
-#### Step 1: Import AuditService in your view/service
-
-**File:** `apps/orders/services/order_service.py`
-
-```python
-from apps.audit_logs.services.audit import AuditService
-from apps.audit_logs.models import EventType, EventCategory
-```
-
-#### Step 2: Log order creation
-
-**In your OrderService.create() method:**
-
-```python
-class OrderService:
-    @staticmethod
-    def create_order(user, cart_items, shipping_address, request):
-        """Create an order from cart."""
-
-        # ... validate / process cart items ...
-
-        order = Order.objects.create(
-            user=user,
-            total_amount=total,
-            status="pending",
-        )
-
-        # ✅ LOG EVENT: Order created
-        AuditService.log(
-            event_type=EventType.ORDER_CREATED,
-            event_category=EventCategory.ORDER,
-            action=f"Order {order.id} created with {len(cart_items)} items",
-            request=request,
-            resource_type="Order",
-            resource_id=str(order.pk),
-            metadata={
-                "item_count": len(cart_items),
-                "total_amount_kobo": str(int(total * 100)),
-                "currency": "NGN",
-                "shipping_to": shipping_address.country,
-            },
-            is_compliance=True,  # Orders are business-critical
-        )
-
-        return order
-```
-
-#### Step 3: Log order status changes
-
-**In your OrderService.update_status() method:**
-
-```python
-def update_status(order, new_status, request):
-    """Update order status (pending → processing → shipped → delivered)."""
-
-    old_status = order.status
-    order.status = new_status
-    order.save()
-
-    # ✅ LOG EVENT: Order status changed
-    AuditService.log(
-        event_type=EventType.ORDER_UPDATED,
-        event_category=EventCategory.ORDER,
-        action=f"Order {order.id} status changed: {old_status} → {new_status}",
-        request=request,
-        resource_type="Order",
-        resource_id=str(order.pk),
-        old_values={"status": old_status},
-        new_values={"status": new_status},
-        metadata={
-            "transition": f"{old_status}→{new_status}",
-            "timestamp_utc": str(datetime.utcnow()),
-        },
-        is_compliance=True,
-    )
-```
-
-#### Step 4: Log order cancellation/fulfillment
-
-```python
-def cancel_order(order, reason, request):
-    """Cancel an order."""
-
-    order.status = "cancelled"
-    order.cancelled_at = datetime.now()
-    order.cancellation_reason = reason
-    order.save()
-
-    # ✅ LOG EVENT: Order cancelled
-    AuditService.log(
-        event_type=EventType.ORDER_CANCELLED,
-        event_category=EventCategory.ORDER,
-        action=f"Order {order.id} cancelled: {reason}",
-        severity="warning",  # Order cancellation is notable
-        request=request,
-        resource_type="Order",
-        resource_id=str(order.pk),
-        old_values={"status": "pending", "cancelled_at": None},
-        new_values={
-            "status": "cancelled",
-            "cancelled_at": str(order.cancelled_at),
-            "cancellation_reason": reason,
-        },
-        is_compliance=True,
-    )
-```
-
-#### Step 5: Enable admin audit (optional but recommended)
-
-**File:** `apps/orders/admin.py`
-
-```python
-from apps.audit_logs.mixins import AuditedModelAdmin
-
-@admin.register(Order)
-class OrderAdmin(AuditedModelAdmin, admin.ModelAdmin):
-    list_display = ('id', 'user', 'total_amount', 'status', 'created_at')
-    list_filter = ('status', 'created_at')
-    search_fields = ('id', 'user__email')
-    readonly_fields = ('id', 'created_at', 'updated_at')
-    # ← AuditedModelAdmin automatically logs all admin actions
-```
-
-### For `apps/payments` (Payment Processing)
-
-#### Step 1: Log payment initiation
-
-**File:** `apps/payments/services/payment_service.py`
-
-```python
-from apps.audit_logs.services.audit import AuditService
-from apps.audit_logs.models import EventType, EventCategory, SeverityLevel
-
-class PaymentService:
-    @staticmethod
-    def initiate_payment(order, customer_email, amount, gateway, request):
-        """Initiate payment transaction."""
-
-        # ✅ LOG EVENT: Payment initiated
-        AuditService.log(
-            event_type=EventType.PAYMENT_INITIATED,
-            event_category=EventCategory.PAYMENT,
-            action=f"Payment ₦{amount:,.2f} initiated for Order {order.id} via {gateway}",
-            severity="info",
-            request=request,
-            resource_type="Order",
-            resource_id=str(order.pk),
-            metadata={
-                "amount_kobo": str(int(amount * 100)),
-                "currency": "NGN",
-                "gateway": gateway,
-                "customer_email": customer_email,
-            },
-            is_compliance=True,  # Financial transaction
-        )
-```
-
-#### Step 2: Log successful payment
-
-**Called from Paystack webhook handler:**
-
-```python
-def handle_paystack_webhook(payload, request=None):
-    """Handle Paystack payment webhook."""
-
-    reference = payload.get('reference')
-    amount_kobo = payload.get('amount')
-    status = payload.get('status')
-    customer_email = payload.get('customer', {}).get('email')
-
-    if status == 'success':
-        order = Order.objects.get(external_reference=reference)
-        order.status = 'paid'
-        order.save()
-
-        # ✅ LOG EVENT: Payment successful (critical for PCI-DSS)
-        AuditService.log(
-            event_type=EventType.PAYMENT_SUCCESS,
-            event_category=EventCategory.PAYMENT,
-            action=f"Payment ₦{amount_kobo/100:,.2f} successful for Order {order.id}",
-            severity="info",
-            resource_type="Order",
-            resource_id=str(order.pk),
-            metadata={
-                "payment_ref": reference,
-                "amount_kobo": str(amount_kobo),
-                "gateway": "paystack",
-                "status_code": status,
-                "customer_email": customer_email,
-                "receipt_url": payload.get('authorization', {}).get('receipt_number'),
-            },
-            is_compliance=True,  # PCI-DSS Level 1 compliance
-        )
-```
-
-#### Step 3: Log payment failures
-
-```python
-def handle_payment_failure(order, error_reason, error_code, request=None):
-    """Log payment failure."""
-
-    # ✅ LOG EVENT: Payment failed
-    AuditService.log(
-        event_type=EventType.PAYMENT_FAILED,
-        event_category=EventCategory.PAYMENT,
-        action=f"Payment failed for Order {order.id}: {error_reason}",
-        severity="warning",  # Failed payment is notable
-        resource_type="Order",
-        resource_id=str(order.pk),
-        error_message=f"{error_code}: {error_reason}",
-        metadata={
-            "error_code": error_code,
-            "error_reason": error_reason,
-            "attempted_amount_kobo": str(int(order.total * 100)),
-        },
-        is_compliance=True,  # Financial audit trail
-    )
-```
-
-#### Step 4: Log refunds
-
-```python
-def initiate_refund(order, refund_reason, refund_amount, request):
-    """Initiate refund for an order."""
-
-    # ✅ LOG EVENT: Refund initiated
-    AuditService.log(
-        event_type=EventType.REFUND_INITIATED,
-        event_category=EventCategory.PAYMENT,
-        action=f"Refund ₦{refund_amount:,.2f} initiated for order {order.id}",
-        severity="warning",  # Refund is notable
-        request=request,
-        resource_type="Order",
-        resource_id=str(order.pk),
-        metadata={
-            "refund_amount_kobo": str(int(refund_amount * 100)),
-            "refund_reason": refund_reason,
-            "original_transaction": str(order.payment_ref),
-        },
-        is_compliance=True,  # Financial compliance
-    )
-```
-
-### For `apps/products` (Inventory Management)
-
-#### Step 1: Log product creation/updates
-
-**File:** `apps/products/services/product_service.py`
-
-```python
-from apps.audit_logs.services.audit import AuditService
-from apps.audit_logs.models import EventType, EventCategory
-
-class ProductService:
-    @staticmethod
-    def create_product(vendor, name, price, description, request):
-        """Create a new product listing."""
-
-        product = Product.objects.create(
-            vendor=vendor,
-            name=name,
-            price=price,
-            description=description,
-        )
-
-        # ✅ LOG EVENT: Product created
-        AuditService.log(
-            event_type=EventType.ADMIN_ACTION,  # Or custom event type
-            event_category=EventCategory.DATA_MODIFICATION,
-            action=f"Product '{name}' created by vendor {vendor.email}",
-            request=request,
-            resource_type="Product",
-            resource_id=str(product.pk),
-            new_values={
-                "name": name,
-                "price": str(price),
-                "vendor_id": str(vendor.pk),
-            },
-            is_compliance=False,  # Not financial
-        )
-
-        return product
-```
-
-#### Step 2: Log price/inventory changes
-
-```python
-def update_product(product, updates, request):
-    """Update product fields (e.g., price, stock)."""
-
-    old_values = {
-        "price": str(product.price),
-        "stock_quantity": product.stock_quantity,
-    }
-
-    for key, value in updates.items():
-        setattr(product, key, value)
-    product.save()
-
-    new_values = {
-        "price": str(product.price),
-        "stock_quantity": product.stock_quantity,
-    }
-
-    # ✅ LOG EVENT: Product updated
-    AuditService.log(
-        event_type=EventType.ADMIN_ACTION,
-        event_category=EventCategory.DATA_MODIFICATION,
-        action=f"Product '{product.name}' updated: {list(updates.keys())}",
-        request=request,
-        resource_type="Product",
-        resource_id=str(product.pk),
-        old_values=old_values,
-        new_values=new_values,
-        metadata={"updated_fields": list(updates.keys())},
-        is_compliance=False,
-    )
-```
-
----
-
-## Advanced Usage & Querying
-
-### Query Recent Login Attempts (Security)
-
-```python
-from apps.audit_logs.models import AuditEventLog, EventType
-from django.utils import timezone
-from datetime import timedelta
-
-# Get failed logins in last 24 hours
-recent_failures = AuditEventLog.objects.filter(
-    event_type=EventType.LOGIN_FAILED,
-    created_at__gte=timezone.now() - timedelta(hours=24),
-).order_by('-created_at')
-
-for event in recent_failures:
-    print(f"{event.actor_email} failed login @ {event.ip_address}")
-```
-
-### Query Compliance Events
-
-```python
-# Get all compliance-flagged events for audit review
-compliance_events = AuditEventLog.objects.filter(
-    is_compliance=True,
-    event_category__in=['payment', 'admin', 'security'],
-    created_at__gte='2026-01-01',
-).order_by('-created_at')
-
-for event in compliance_events:
-    print(f"[{event.severity}] {event.action} @ {event.created_at}")
-```
-
-### Query Resource Audit Trail
-
-```python
-# Get full audit trail for a specific Order
-order_id = "order_abc123"
-order_timeline = AuditEventLog.objects.filter(
-    resource_type="Order",
-    resource_id=order_id,
-).order_by('created_at')
-
-for event in order_timeline:
-    print(f"{event.created_at}: {event.event_type} by {event.actor_email}")
-    if event.old_values and event.new_values:
-        print(f"  Changes: {event.old_values} → {event.new_values}")
-```
-
-### Query User Action History
-
-```python
-# Get all actions by a specific user (actor)
-user_actions = AuditEventLog.objects.filter(
-    actor_email="alice@example.com",
-    created_at__gte='2026-03-01',
-).select_related('actor').order_by('-created_at')
-
-for event in user_actions:
-    print(f"{event.event_type}: {event.action}")
-```
-
-### Export Compliance Report
-
-```python
-# Get compliance events for a date range (e.g., monthly audits)
-import csv
-from django.utils import timezone
-from datetime import timedelta
-
-start_date = timezone.now() - timedelta(days=30)
-compliance_report = AuditEventLog.objects.filter(
-    is_compliance=True,
-    created_at__gte=start_date,
-).values(
-    'created_at', 'actor_email', 'event_type', 'action',
-    'resource_type', 'resource_id', 'severity'
-).order_by('created_at')
-
-with open('compliance_audit_2026_03.csv', 'w') as f:
-    writer = csv.DictWriter(f, fieldnames=[...])
-    writer.writeheader()
-    writer.writerows(compliance_report)
-```
-
----
-
-## Security & Compliance
-
-### Design Principles
-
-| Principle | Implementation |
-|---|---|
-| **Immutable** | No UPDATE / DELETE after creation; admin read-only |
-| **Non-Blocking** | Async Celery dispatch; never slows HTTP request |
-| **Fault-Tolerant** | Sync fallback if broker down; events never dropped |
-| **Sensitive Data Redacted** | Passwords, secrets replaced with `***REDACTED***` |
-| **Actor Snapshot** | `actor_email` preserved even if user hard-deleted |
-| **Context Rich** | IP, device, browser, OS captured for fraud detection |
-| **Compliance Ready** | 7-year retention for financial/regulatory requirements |
-
-### Data Redaction
-
-**Automatically redacted fields** in `AuditedModelAdmin` and diffs:
-```python
-_REDACTED_FIELDS = frozenset({
-    "password", "api_secret", "secret_key", "token",
-    "otp_secret", "otp_base32",
-})
-
-# Also redacts fields matching:
-if "password" in key.lower() or "secret" in key.lower():
-    data[k] = "***REDACTED***"
-```
-
-### Compliance Retention
-
-```python
-# Financial compliance (7 years)
-AuditService.log(
-    ...,
-    event_type=EventType.PAYMENT_SUCCESS,
-    is_compliance=True,  # ← 2555 days (7 years) retention by default
-)
-
-# Non-compliance (shorter retention possible)
-AuditService.log(
-    ...,
-    event_type=EventType.LOGIN_SUCCESS,
-    is_compliance=False,  # ← Default 90-day logger rotation
-)
-```
-
-### GDPR Data Subject Access Request (DSAR)
-
-```python
-# Get all audit events for a user (GDPR Article 15)
-user_email = "alice@example.com"
-user_events = AuditEventLog.objects.filter(
-    actor_email=user_email,
-).order_by('created_at')
-
-# Export as JSON for user
-import json
-events_json = [
-    {
-        'created_at': str(e.created_at),
-        'event_type': e.event_type,
-        'action': e.action,
-        'ip_address': e.ip_address,
-        'device_type': e.device_type,
-        'country': e.country,
-    }
-    for e in user_events
-]
-
-with open(f'dsar_{user_email}.json', 'w') as f:
-    json.dump(events_json, f, indent=2)
+# ASGI path (non-blocking, no sync_to_async needed)
+loop = asyncio.get_running_loop()
+loop.create_task(_async_dispatch_audit(payload))
+
+# WSGI path (daemon thread — does not block gunicorn worker)
+t = threading.Thread(target=_sync_dispatch_audit, args=(payload,), daemon=True)
+t.start()
 ```
 
 ---
@@ -1128,93 +110,970 @@ with open(f'dsar_{user_email}.json', 'w') as f:
 ```
 apps/audit_logs/
 ├── __init__.py
-├── admin.py                    # AuditEventLogAdmin — read-only superadmin interface
-├── apps.py                     # AppConfig
-├── middleware.py               # AuditContextMiddleware — thread-local context capture
-├── mixins.py                   # AuditedModelAdmin — auto-log admin actions
-├── models.py                   # AuditEventLog model with 51 event types, 15 categories
+├── admin.py                        # AuditEventLogAdmin — read-only, CSV export, Phase 9 fieldsets
+├── apps.py                         # AppConfig
+├── middleware.py                   # AuditContextMiddleware — dual ASGI/WSGI, Phase 9 extraction
+├── mixins.py                       # AuditedModelAdmin — auto-log admin create/update/delete
+├── models.py                       # AuditEventLog — 55+ event types, 15 categories, Phase 9 fields
 ├── services/
-│   ├── __init__.py
-│   └── audit.py               # AuditService.log() — high-level API
-├── tasks.py                    # write_audit_event — Celery task with retry/fallback
+│   ├── __init__.py                 # Re-exports AuditService
+│   ├── audit.py                    # AuditService.log() — canonical high-level API
+│   └── admin_backend.py            # admin_audit helpers (log_admin_action, log_bulk_delete)
+├── tasks.py                        # write_audit_event, cleanup_audit_logs Celery tasks
+├── management/
+│   └── commands/
+│       └── purge_audit_logs.py     # Management command with legal_hold guard
 ├── migrations/
 │   ├── 0001_initial_audit_event_log.py
-│   └── 0002_auditeventlog_correlation_id_...py
-├── README.md                   # This file
+│   ├── 0002_auditeventlog_correlation_id_idx.py
+│   ├── 0003_client_context_fields.py
+│   ├── 0004_additional_indexes.py
+│   ├── 0005_actor_role_session_fields.py
+│   └── 0006_phase9_compliance_fields.py  # ← CURRENT: 10 new compliance fields
+├── README.md                       # This file
 └── tests/
     ├── __init__.py
     ├── test_models.py
     ├── test_services.py
     ├── test_admin.py
-    └── test_middleware.py
+    ├── test_middleware.py
+    └── test_tasks.py
 ```
 
 ---
 
 ## Database Schema & Indexes
 
-### Main Model: AuditEventLog
+### Full AuditEventLog DDL (PostgreSQL 17)
 
 ```sql
 CREATE TABLE audit_logs_auditeventlog (
-    id UUID PRIMARY KEY,
-    event_type VARCHAR(60) NOT NULL,
-    event_category VARCHAR(60) NOT NULL,
-    severity VARCHAR(20) NOT NULL DEFAULT 'info',
-    action TEXT NOT NULL,
-    actor_id UUID REFERENCES authentication_unifieduser(id) ON DELETE SET NULL,
-    actor_email VARCHAR(254),
-    ip_address INET,
-    user_agent TEXT,
-    device_type VARCHAR(30),
-    browser_family VARCHAR(80),
-    os_family VARCHAR(80),
-    country VARCHAR(100),
-    correlation_id VARCHAR(64),
-    resource_type VARCHAR(100),
-    resource_id VARCHAR(255),
-    request_method VARCHAR(10),
-    request_path VARCHAR(500),
-    response_status SMALLINT,
-    duration_ms FLOAT,
-    old_values JSONB,
-    new_values JSONB,
-    metadata JSONB,
-    error_message TEXT,
-    is_compliance BOOLEAN NOT NULL DEFAULT FALSE,
-    retention_days INTEGER NOT NULL DEFAULT 2555,
-    created_at TIMESTAMP NOT NULL
+    -- ── Identity ─────────────────────────────────────────────────────────
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    -- ── Event classification ─────────────────────────────────────────────
+    event_type          VARCHAR(60) NOT NULL,
+    event_category      VARCHAR(60) NOT NULL,
+    severity            VARCHAR(20) NOT NULL DEFAULT 'info',
+    action              TEXT NOT NULL,
+
+    -- ── Actor snapshot ───────────────────────────────────────────────────
+    actor_id            UUID REFERENCES authentication_unifieduser(id) ON DELETE SET NULL,
+    actor_email         VARCHAR(254),
+    actor_role          VARCHAR(30),
+    session_id          VARCHAR(128),
+
+    -- ── Network context ──────────────────────────────────────────────────
+    ip_address          INET,
+    user_agent          TEXT,
+    device_type         VARCHAR(30),
+    browser_family      VARCHAR(80),
+    os_family           VARCHAR(80),
+    country             VARCHAR(100),
+    country_code        VARCHAR(10),
+    city                VARCHAR(100),
+    correlation_id      VARCHAR(64),
+
+    -- ── Resource ─────────────────────────────────────────────────────────
+    resource_type       VARCHAR(100),
+    resource_id         VARCHAR(255),
+
+    -- ── HTTP context ─────────────────────────────────────────────────────
+    request_method      VARCHAR(10),
+    request_path        VARCHAR(500),
+    response_status     SMALLINT,
+    duration_ms         FLOAT,
+
+    -- ── Diff / forensic ──────────────────────────────────────────────────
+    old_values          JSONB,
+    new_values          JSONB,
+    metadata            JSONB,
+
+    -- ── Error ────────────────────────────────────────────────────────────
+    error_message       TEXT,
+
+    -- ── Frontend client context (Wave B3) ────────────────────────────────
+    client_device_id    VARCHAR(128),
+    client_timezone     VARCHAR(64),
+    client_locale       VARCHAR(20),
+    client_platform     VARCHAR(30),
+    client_geo_lat      FLOAT,
+    client_geo_lng      FLOAT,
+    client_geo_accuracy_m FLOAT,
+
+    -- ── Compliance ───────────────────────────────────────────────────────
+    is_compliance       BOOLEAN NOT NULL DEFAULT FALSE,
+    retention_days      INTEGER NOT NULL DEFAULT 2555,
+
+    -- ── Phase 9: 2026 GDPR/NDPR/PCI-DSS compliance fields ───────────────
+    request_size_bytes  INTEGER,            -- incoming payload size (anomaly detection)
+    response_size_bytes INTEGER,            -- outgoing payload size (breach indicator)
+    tls_version         VARCHAR(10),        -- 'TLSv1.3', 'TLSv1.2' (PCI-DSS Req.10.3)
+    session_fingerprint VARCHAR(64),        -- SHA-256 device fingerprint (fraud detection)
+    api_version         VARCHAR(10),        -- 'v1', 'v2' (per-version security analysis)
+    tenant_id           UUID,               -- future multi-tenant partition
+    legal_hold          BOOLEAN NOT NULL DEFAULT FALSE,  -- PCI freeze, blocks ALL deletion
+    data_subject_id     UUID,               -- GDPR Art.15 SAR reference (denormalised)
+    geo_country_code    VARCHAR(2),         -- strict ISO 3166-1 alpha-2 (e.g. 'NG','GB')
+    geo_city            VARCHAR(100),       -- GeoIP city (separate from legacy `city`)
+
+    -- ── Immutable timestamp ───────────────────────────────────────────────
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
 
-### Optimized Indexes (11 Composite)
+### Indexes (17 composite, covering all production query patterns)
 
 ```sql
--- Time-range queries
-CREATE INDEX idx_ael_created ON audit_logs_auditeventlog(created_at DESC);
+-- ── Core time-range ──────────────────────────────────────────────────────
+CREATE INDEX idx_ael_created    ON audit_logs_auditeventlog(created_at DESC);
 
--- Actor lookup
-CREATE INDEX idx_ael_actor ON audit_logs_auditeventlog(actor_id, created_at DESC);
-CREATE INDEX idx_ael_email ON audit_logs_auditeventlog(actor_email, created_at DESC);
+-- ── Actor / authentication ───────────────────────────────────────────────
+CREATE INDEX idx_ael_actor      ON audit_logs_auditeventlog(actor_id, created_at DESC);
+CREATE INDEX idx_ael_actor_time ON audit_logs_auditeventlog(actor_id, created_at DESC);
+CREATE INDEX idx_ael_email      ON audit_logs_auditeventlog(actor_email, created_at DESC);
 
--- Event filtering
-CREATE INDEX idx_ael_etype ON audit_logs_auditeventlog(event_type, created_at DESC);
-CREATE INDEX idx_ael_ecat ON audit_logs_auditeventlog(event_category, created_at DESC);
+-- ── Event filtering ───────────────────────────────────────────────────────
+CREATE INDEX idx_ael_etype      ON audit_logs_auditeventlog(event_type, created_at DESC);
+CREATE INDEX idx_ael_ecat       ON audit_logs_auditeventlog(event_category, created_at DESC);
 
--- Security dashboard
-CREATE INDEX idx_ael_sev ON audit_logs_auditeventlog(severity, created_at DESC);
-CREATE INDEX idx_ael_ip ON audit_logs_auditeventlog(ip_address, created_at DESC);
+-- ── Security dashboard ───────────────────────────────────────────────────
+CREATE INDEX idx_ael_sev        ON audit_logs_auditeventlog(severity, created_at DESC);
+CREATE INDEX idx_ael_ip         ON audit_logs_auditeventlog(ip_address, created_at DESC);
 
--- Resource lookup
-CREATE INDEX idx_ael_resource ON audit_logs_auditeventlog(resource_type, resource_id);
+-- ── Resource audit trail ─────────────────────────────────────────────────
+CREATE INDEX idx_ael_resource   ON audit_logs_auditeventlog(resource_type, resource_id);
 
--- Compliance reports
+-- ── Compliance reports ───────────────────────────────────────────────────
 CREATE INDEX idx_ael_compliance ON audit_logs_auditeventlog(is_compliance, created_at DESC);
 
--- Tracing
-CREATE INDEX idx_ael_corr ON audit_logs_auditeventlog(correlation_id);
-CREATE INDEX idx_ael_country ON audit_logs_auditeventlog(country, created_at DESC);
+-- ── Distributed tracing ──────────────────────────────────────────────────
+CREATE INDEX idx_ael_corr       ON audit_logs_auditeventlog(correlation_id);
+
+-- ── Geo segmentation ─────────────────────────────────────────────────────
+CREATE INDEX idx_ael_country    ON audit_logs_auditeventlog(country, created_at DESC);
+
+-- ── Phase 9 compliance indexes (migration 0006) ──────────────────────────
+CREATE INDEX idx_ael_data_subject ON audit_logs_auditeventlog(data_subject_id, created_at DESC);
+CREATE INDEX idx_ael_legal_hold   ON audit_logs_auditeventlog(legal_hold, created_at DESC);
+CREATE INDEX idx_ael_tenant       ON audit_logs_auditeventlog(tenant_id, created_at DESC);
+CREATE INDEX idx_ael_sess_fp      ON audit_logs_auditeventlog(session_fingerprint, created_at DESC);
+CREATE INDEX idx_ael_api_actor    ON audit_logs_auditeventlog(api_version, actor_email);
 ```
+
+---
+
+## Model: AuditEventLog
+
+### Immutability Guard
+
+```python
+# models.py — AuditEventLog.save()
+def save(self, *args, **kwargs):
+    """Enforce append-only semantics — block all UPDATE attempts."""
+    if not self._state.adding:
+        raise PermissionError(
+            "AuditEventLog is immutable. "
+            "Records cannot be updated after creation. "
+            "(PCI-DSS v4 Req. 10.5.2: audit records must be protected from modification)"
+        )
+    super().save(*args, **kwargs)
+```
+
+### Field Groups
+
+**Core Classification:**
+- `event_type` — one of 55+ `EventType` constants
+- `event_category` — one of 15 `EventCategory` values
+- `severity` — `debug` | `info` | `warning` | `error` | `critical`
+- `action` — human-readable description
+
+**Actor Snapshot:**
+- `actor` — FK to `UnifiedUser` (`SET NULL` on hard-delete)
+- `actor_email` — denormalised (survives user deletion)
+- `actor_role` — role at event time (`client`, `vendor`, `admin`)
+- `session_id` — JWT `jti` or Django session key
+
+**Network Context:**
+- `ip_address`, `user_agent`, `device_type`, `browser_family`, `os_family`
+- `country`, `country_code`, `city` — legacy GeoIP fields
+- `correlation_id` — request trace ID
+
+**Phase 9 Fields** — see [Phase 9 section](#phase-9-compliance-fields).
+
+---
+
+## Event Types & Categories
+
+### EventType (55+ constants)
+
+```python
+class EventType(models.TextChoices):
+    # Authentication
+    LOGIN_SUCCESS       = "login_success"
+    LOGIN_FAILED        = "login_failed"
+    LOGOUT              = "logout"
+    TOKEN_REFRESH       = "token_refresh"
+    PASSWORD_RESET      = "password_reset"
+    PASSWORD_CHANGED    = "password_changed"
+    EMAIL_VERIFIED      = "email_verified"
+    MFA_ENABLED         = "mfa_enabled"
+    MFA_DISABLED        = "mfa_disabled"
+    FAILED_LOGINS_EXCEEDED = "failed_logins_exceeded"
+    ACCOUNT_LOCKED      = "account_locked"
+    ACCOUNT_UNLOCKED    = "account_unlocked"
+    ACCOUNT_RESTORED    = "account_restored"
+    SESSION_EXPIRED     = "session_expired"
+    SUSPICIOUS_LOGIN    = "suspicious_login"
+
+    # Payment & Financial
+    PAYMENT_SUCCESS     = "payment_success"
+    PAYMENT_FAILED      = "payment_failed"
+    PAYMENT_INITIATED   = "payment_initiated"
+    REFUND_INITIATED    = "refund_initiated"
+    REFUND_SUCCESS      = "refund_success"
+    REFUND_FAILED       = "refund_failed"
+    PAYOUT_INITIATED    = "payout_initiated"
+    PAYOUT_SUCCESS      = "payout_success"
+    PAYOUT_FAILED       = "payout_failed"
+    WALLET_FUNDED       = "wallet_funded"
+    WALLET_DEBITED      = "wallet_debited"
+    CHARGEBACK          = "chargeback"
+    DISPUTE_OPENED      = "dispute_opened"
+
+    # User Management
+    USER_REGISTERED     = "user_registered"
+    USER_UPDATED        = "user_updated"
+    USER_DELETED        = "user_deleted"
+    USER_SUSPENDED      = "user_suspended"
+    USER_RESTORED       = "user_restored"
+    ROLE_CHANGED        = "role_changed"
+    PERMISSION_CHANGED  = "permission_changed"
+
+    # KYC
+    KYC_SUBMITTED       = "kyc_submitted"
+    KYC_APPROVED        = "kyc_approved"
+    KYC_REJECTED        = "kyc_rejected"
+    KYC_EXPIRED         = "kyc_expired"
+
+    # Orders
+    ORDER_PLACED        = "order_placed"
+    ORDER_CONFIRMED     = "order_confirmed"
+    ORDER_CANCELLED     = "order_cancelled"
+    ORDER_COMPLETED     = "order_completed"
+
+    # Admin
+    ADMIN_ACTION        = "admin_action"
+    SOFT_DELETE         = "soft_delete"
+    HARD_DELETE         = "hard_delete"
+
+    # System
+    SYSTEM_ERROR        = "system_error"
+    SYSTEM_WARNING      = "system_warning"
+    API_CALL            = "api_call"
+    CONFIG_CHANGED      = "config_changed"
+    DATA_EXPORT         = "data_export"
+```
+
+### EventCategory (15 categories)
+
+```python
+class EventCategory(models.TextChoices):
+    AUTHENTICATION    = "authentication"
+    PAYMENT           = "payment"
+    FINANCIAL         = "financial"
+    USER_MANAGEMENT   = "user_management"
+    ADMIN             = "admin"
+    SECURITY          = "security"
+    DATA_MODIFICATION = "data_modification"
+    KYC               = "kyc"
+    ORDER             = "order"
+    NOTIFICATION      = "notification"
+    SYSTEM            = "system"
+    PRODUCT           = "product"
+    CATALOG           = "catalog"
+    MEASUREMENT       = "measurement"
+    COMPLIANCE        = "compliance"
+```
+
+---
+
+## AuditService API
+
+### Basic Usage
+
+```python
+from apps.audit_logs.services import AuditService
+from apps.audit_logs.models import EventType, EventCategory
+
+# ── Minimal call ─────────────────────────────────────────────────────────
+AuditService.log(
+    event_type=EventType.LOGIN_SUCCESS,
+    event_category=EventCategory.AUTHENTICATION,
+    action="User logged in via email OTP",
+    actor=request.user,
+    request=request,     # ← auto-extracts IP, UA, path, method
+)
+
+# ── With compliance flags ─────────────────────────────────────────────────
+AuditService.log(
+    event_type=EventType.PAYMENT_SUCCESS,
+    event_category=EventCategory.PAYMENT,
+    action=f"Payment ₦50,000 processed for Order #{order.id}",
+    actor=request.user,
+    request=request,
+    resource_type="Order",
+    resource_id=str(order.pk),
+    metadata={"reference": "PAY-REF-12345", "gateway": "paystack"},
+    is_compliance=True,      # ← 7-year retention, data_subject_id auto-set
+    retention_days=2555,
+)
+
+# ── With diff (before/after snapshot) ────────────────────────────────────
+AuditService.log(
+    event_type=EventType.USER_UPDATED,
+    event_category=EventCategory.USER_MANAGEMENT,
+    action="User email updated",
+    actor=admin_user,
+    request=request,
+    resource_type="UnifiedUser",
+    resource_id=str(target_user.pk),
+    old_values={"email": "old@example.com"},
+    new_values={"email": "new@example.com"},
+)
+```
+
+### Full Signature (v2.0)
+
+```python
+AuditService.log(
+    # ── Required ───────────────────────────────────────────────────────────
+    event_type: str,            # EventType constant
+    event_category: str,        # EventCategory constant
+    action: str,                # Human-readable description
+
+    # ── Actor ──────────────────────────────────────────────────────────────
+    actor=None,                 # UnifiedUser instance or None
+    actor_email: str | None,    # Auto-resolved from actor if not given
+    actor_role: str | None,     # Auto-resolved from actor.user_type
+    session_id: str | None,     # JWT jti or session key
+
+    # ── Request context (auto-filled when request= given) ─────────────────
+    request=None,               # Django HttpRequest — auto-extracts everything
+    ip_address: str | None,     # Override IP (takes priority over X-Forwarded-For)
+    user_agent: str | None,
+    device_type: str | None,    # 'mobile' | 'tablet' | 'desktop' | 'bot'
+    browser_family: str | None,
+    os_family: str | None,
+    request_method: str | None,
+    request_path: str | None,
+    response_status: int | None,
+    duration_ms: float | None,
+
+    # ── Geo (auto-resolved from IP via Redis-cached GeoIP) ─────────────────
+    country: str | None,
+    country_code: str | None,
+    city: str | None,
+
+    # ── Resource ───────────────────────────────────────────────────────────
+    resource_type: str | None,  # e.g. 'Order', 'WalletLedgerEntry'
+    resource_id: str | None,    # Model PK (coerced to str)
+
+    # ── Diff / forensic ────────────────────────────────────────────────────
+    old_values: dict | None,
+    new_values: dict | None,
+    metadata: dict | None,
+    error_message: str | None,
+    severity: str = "info",
+
+    # ── Compliance ──────────────────────────────────────────────────────────
+    is_compliance: bool = False,
+    retention_days: int = 2555,
+
+    # ── Frontend client context (X-Client-* headers) ──────────────────────
+    client_device_id: str | None,
+    client_timezone: str | None,
+    client_locale: str | None,
+    client_platform: str | None,
+    client_geo_lat: float | None,
+    client_geo_lng: float | None,
+    client_geo_accuracy_m: float | None,
+
+    # ── Phase 9: 2026 GDPR/NDPR/PCI-DSS compliance fields ─────────────────
+    request_size_bytes: int | None,     # Manual: caller passes CONTENT_LENGTH
+    response_size_bytes: int | None,    # Manual: middleware extracts Content-Length
+    tls_version: str | None,            # Auto: from SSL_PROTOCOL / X-Forwarded-Proto-Version
+    session_fingerprint: str | None,    # Auto: from X-Session-Fingerprint header
+    api_version: str | None,            # Auto: extracted from /v1/ in request_path
+    tenant_id=None,                     # Manual: UUID or str
+    legal_hold: bool = False,           # Manual: set by superuser for regulatory freeze
+    data_subject_id=None,               # Auto: actor.pk when is_compliance=True
+    geo_country_code: str | None,       # Auto: set in Celery worker GeoIP task
+    geo_city: str | None,               # Auto: set in Celery worker GeoIP task
+) -> None
+```
+
+**Key Design Properties:**
+- Returns `None`, never raises — all exceptions caught and logged at `WARNING`
+- Thread-safe, async-safe (stateless class methods)
+- All `None`-safe — every field has a sensible default or auto-resolution path
+
+---
+
+## Phase 9 Compliance Fields
+
+Phase 9 adds 10 new fields to `AuditEventLog` to satisfy the **2026 regulatory compliance framework** (GDPR Art. 30, NDPR § 2.1, PCI-DSS v4 Req. 10).
+
+| Field | Type | Auto-Populated? | Compliance Requirement |
+|-------|------|-----------------|------------------------|
+| `request_size_bytes` | `PositiveIntegerField` | Middleware (CONTENT_LENGTH) | PCI-DSS anomaly detection |
+| `response_size_bytes` | `PositiveIntegerField` | Middleware (Content-Length header) | GDPR breach indicator |
+| `tls_version` | `CharField(10)` | `SSL_PROTOCOL` Nginx var | PCI-DSS v4 Req. 10.3 |
+| `session_fingerprint` | `CharField(64)` | `X-Session-Fingerprint` header | Fraud detection (no raw PII) |
+| `api_version` | `CharField(10)` | Regex from request path | Per-version security analysis |
+| `tenant_id` | `UUIDField` | Manual (future multi-tenant) | Multi-tenant data isolation |
+| `legal_hold` | `BooleanField` | Manual (superuser admin) | PCI-DSS Req. 10.5 freeze |
+| `data_subject_id` | `UUIDField` | `actor.pk` when `is_compliance=True` | GDPR Art. 15 SAR, Art. 17 erasure |
+| `geo_country_code` | `CharField(2)` | Celery GeoIP (ISO 3166-1 alpha-2) | PCI-DSS geographic segmentation |
+| `geo_city` | `CharField(100)` | Celery GeoIP | Geographic compliance reporting |
+
+### Auto-Resolution Flow
+
+```
+HTTP Request arrives
+    │
+    ▼
+AuditContextMiddleware._build_context()
+  ├── api_version = _extract_api_version(request.path)  # regex /v(\d+)/
+  ├── tls_version = request.META.get("SSL_PROTOCOL")     # Nginx sets this
+  ├── session_fingerprint = request.META.get("HTTP_X_SESSION_FINGERPRINT")
+  └── request_size_bytes = int(request.META.get("CONTENT_LENGTH", 0))
+
+    │
+    ▼
+AuditService.log()
+  ├── data_subject_id = actor.pk  (only when is_compliance=True)
+  └── geo_country_code: left empty here (populated by Celery task)
+
+    │
+    ▼
+write_audit_event Celery task
+  ├── GeoIP enrichment (allow_network=True)
+  ├── geo_country_code = raw_cc[:2].upper()   # strict 2-char ISO 3166-1
+  └── geo_city = geo.get("city")
+```
+
+### Legal Hold Enforcement (Triple Guard)
+
+`legal_hold=True` rows are protected at **three** independent levels:
+
+```python
+# 1. Celery cleanup task (tasks.py)
+AuditEventLog.objects.filter(
+    is_compliance=False,
+    retention_days__gt=0,
+    legal_hold=False,     # ← Guard 1
+).annotate(...).filter(expiry_at__lt=now)...
+
+# 2. Celery cleanup batch delete (tasks.py)
+AuditEventLog.objects.filter(
+    id__in=expired_ids,
+    is_compliance=False,
+    legal_hold=False,     # ← Guard 2 (triple-check)
+).delete()
+
+# 3. Management command (purge_audit_logs.py)
+qs.filter(is_compliance=False, legal_hold=False)  # ← Guard 3
+qs.model.objects.filter(id__in=batch_ids, legal_hold=False).delete()
+```
+
+---
+
+## Phase 4 Dispatch Decoupling
+
+**Before Phase 4:** Audit side-effects (DeletionAuditCounter, notifications, audit trail) ran inline in the admin action handlers, blocking the HTTP response by N DB writes + N Redis writes per record.
+
+**After Phase 4:** ALL side-effects are deferred to `transaction.on_commit()` callbacks:
+
+```python
+# apps/common/admin_mixins.py — soft_delete_selected (Phase 4)
+def _post_commit_side_effects(...):
+    """Runs after the UPDATE transaction commits. Never blocks the admin page."""
+    # 3a. UnifiedUser lifecycle registry → Celery apply_async()
+    # 3b. DeletionAuditCounter.increment()
+    # 3c. write_audit_event.apply_async()
+
+transaction.on_commit(_post_commit_side_effects)
+
+# apps/common/admin_mixins.py — restore_selected (RC-5 fix)
+def _restore_post_commit(...):
+    """Runs after the UPDATE transaction commits. Never blocks the admin page."""
+    # 3a. upsert_user_lifecycle_registry → Celery
+    # 3b. DeletionAuditCounter.increment()
+    # 3c. write_audit_event.apply_async()
+
+transaction.on_commit(_restore_post_commit)
+```
+
+**Performance impact:** 100-record bulk action went from `~500ms` (100 DB writes blocking the response) to `<5ms` (single UPDATE + deferred side-effects).
+
+---
+
+## Middleware: AuditContextMiddleware
+
+**File:** [`middleware.py`](./middleware.py)
+
+```python
+MIDDLEWARE = [
+    ...
+    "apps.audit_logs.middleware.AuditContextMiddleware",
+    ...
+]
+```
+
+### What it captures
+
+| Context Key | Source | Phase |
+|-------------|--------|-------|
+| `ip_address` | `X-Forwarded-For` → `REMOTE_ADDR` | Original |
+| `user_agent` | `HTTP_USER_AGENT` | Original |
+| `correlation_id` | `X-Correlation-ID` or generated UUID4 | Original |
+| `actor` | `request.user` (if authenticated) | Original |
+| `client_device_id` | `X-Device-ID` header | Wave B3 |
+| `client_timezone` | `X-Client-Timezone` header | Wave B3 |
+| `client_locale` | `X-Client-Locale` header | Wave B3 |
+| `client_platform` | `X-Client-Platform` header | Wave B3 |
+| `client_geo_lat/lng` | `X-Client-Geo-Lat/Lng` headers | Wave B3 |
+| `session_fingerprint` | `X-Session-Fingerprint` header | Phase 9 |
+| `tls_version` | `SSL_PROTOCOL` / `X-Forwarded-Proto-Version` | Phase 9 |
+| `api_version` | regex `/v(\d+)/` on `request.path` | Phase 9 |
+| `request_size_bytes` | `CONTENT_LENGTH` header | Phase 9 |
+
+### Auto-capture for 4xx / 5xx
+
+The middleware automatically creates audit events for failed HTTP responses (401, 403, 404, 5xx) without any caller action. The auto-capture payload now includes all Phase 9 fields.
+
+### ASGI Deprecation Fix
+
+The middleware was updated to use the non-deprecated pattern:
+
+```python
+# Before (deprecated in Python 3.10+):
+asyncio.get_event_loop().create_task(...)
+
+# After (correct):
+loop = asyncio.get_running_loop()
+loop.create_task(_async_dispatch_audit(payload))
+```
+
+---
+
+## Celery Task: write_audit_event
+
+**File:** [`tasks.py`](./tasks.py)
+
+```python
+@shared_task(name="write_audit_event", bind=True, max_retries=2, default_retry_delay=5)
+def write_audit_event(self, payload: dict) -> None:
+    ...
+```
+
+### `_KNOWN_FIELDS` allowlist
+
+The task strips any unknown payload keys via an allowlist to prevent `TypeError: unexpected keyword argument` when the model evolves. The allowlist now includes all Phase 9 fields:
+
+```python
+_KNOWN_FIELDS = {
+    # Core fields (original)
+    "event_type", "event_category", "severity", "action",
+    "actor", "actor_email", "actor_role", "session_id",
+    "ip_address", "user_agent", "device_type",
+    "browser_family", "os_family",
+    "country", "country_code", "city", "correlation_id",
+    "resource_type", "resource_id",
+    "request_method", "request_path", "response_status", "duration_ms",
+    "old_values", "new_values", "metadata", "error_message",
+    "is_compliance", "retention_days",
+    # Wave B3: client context fields
+    "client_device_id", "client_timezone", "client_locale", "client_platform",
+    "client_geo_lat", "client_geo_lng", "client_geo_accuracy_m",
+    # Phase 9: 2026 compliance fields
+    "request_size_bytes", "response_size_bytes", "tls_version",
+    "session_fingerprint", "api_version", "tenant_id",
+    "legal_hold", "data_subject_id", "geo_country_code", "geo_city",
+}
+```
+
+### Background GeoIP Enrichment
+
+The task performs full GeoIP resolution (with network calls allowed) in the Celery worker process, keeping the HTTP request path zero-latency:
+
+```python
+geo = _resolve_geo(ip_address, allow_network=True)
+if geo:
+    payload["country"]      = geo.get("country") or ""
+    payload["country_code"] = geo.get("country_code") or ""
+    payload["city"]         = geo.get("city") or ""
+    # Phase 9: strict 2-char ISO 3166-1 alpha-2
+    raw_cc = geo.get("country_code") or ""
+    payload.setdefault("geo_country_code", raw_cc[:2].upper() or None)
+    payload.setdefault("geo_city", geo.get("city") or None)
+```
+
+### Cleanup Task
+
+```python
+@shared_task(name="audit_log_cleanup", bind=True, max_retries=1)
+def cleanup_audit_logs(self) -> dict:
+    """Daily cleanup respecting per-row retention_days.
+    
+    Never deletes:
+    - is_compliance=True rows
+    - legal_hold=True rows (Phase 9 triple-guard)
+    - retention_days <= 0 (permanent)
+    """
+```
+
+---
+
+## Retention & Legal Hold
+
+### Retention Matrix
+
+| Event Type | `is_compliance` | `retention_days` | Deletable? |
+|-----------|-----------------|------------------|------------|
+| Financial / Payment | `True` | 2555 (7 years) | ❌ Never |
+| KYC / Regulatory | `True` | 2555 (7 years) | ❌ Never |
+| Legal Hold | Any | Any | ❌ Never (`legal_hold=True`) |
+| Security events | `False` | 730 (2 years) | ✅ After 2 years |
+| Auth / Login | `False` | 365 (1 year) | ✅ After 1 year |
+| Debug / System | `False` | 90 (3 months) | ✅ After 90 days |
+
+### Setting Legal Hold (Django Admin)
+
+```python
+# In Django Admin → Audit Event Logs → [select row]
+# Scroll to "2026 Compliance (Phase 9)" fieldset
+# legal_hold = True
+# ✅ This row will NEVER be deleted by ANY automated process
+```
+
+### GDPR Subject Access Request (SAR) — Art. 15
+
+```python
+# Find all events linked to a specific data subject
+# Works even if the user has been hard-deleted (denormalised UUID)
+from apps.audit_logs.models import AuditEventLog
+import uuid
+
+subject_id = uuid.UUID("user-pk-here")
+
+# New Phase 9 query (survives user deletion)
+events = AuditEventLog.objects.filter(
+    data_subject_id=subject_id,
+).order_by("created_at")
+
+# Legacy query (works while user exists)
+events = AuditEventLog.objects.filter(
+    actor_email="user@example.com",
+).order_by("created_at")
+```
+
+### Management Command
+
+```bash
+# Preview what would be deleted (dry-run)
+python manage.py purge_audit_logs --dry-run
+
+# Delete expired non-compliance rows older than 90 days
+python manage.py purge_audit_logs --older-than 90
+
+# Include compliance rows (requires --force for production)
+python manage.py purge_audit_logs --include-compliance --force
+
+# Note: legal_hold=True rows are ALWAYS excluded regardless of flags
+```
+
+---
+
+## Admin Interface
+
+**File:** [`admin.py`](./admin.py)
+
+### Access
+
+- URL: `/admin/audit_logs/auditeventlog/`
+- Requires: superuser or staff with `view` permission
+
+### Features
+
+| Feature | Description |
+|---------|-------------|
+| **Read-only** | No add/change/delete permissions — immutable audit trail |
+| **CSV Export** | `export_compliance_csv` action — streams all fields including Phase 9 |
+| **Advanced search** | By IP, email, correlation ID, resource ID |
+| **Filters** | Severity, event type, category, is_compliance, `legal_hold`, `api_version`, country |
+| **Phase 9 Fieldset** | Collapsible "2026 Compliance (Phase 9)" section in detail view |
+| **Pagination** | 50 rows per page for performance |
+
+### Phase 9 Admin Fieldset
+
+The detail view now includes a collapsible **"2026 Compliance (Phase 9 — GDPR/NDPR/PCI-DSS)"** section showing all 10 new compliance fields:
+
+```
+▼ 2026 Compliance (Phase 9 — GDPR/NDPR/PCI-DSS)
+  Request size: 2,048 bytes
+  Response size: 15,360 bytes
+  TLS version: TLSv1.3
+  Session fingerprint: a3f8d2...
+  API version: v2
+  Tenant ID: —
+  Legal hold: No
+  Data subject ID: 550e8400-e29b-41d4-a716-446655440000
+  Geo country code: NG
+  Geo city: Lagos
+```
+
+---
+
+## Domain-Specific Usage Examples
+
+### Authentication App
+
+```python
+# apps/authentication/services/auth_service.py
+
+from apps.audit_logs.services import AuditService
+from apps.audit_logs.models import EventType, EventCategory
+
+def login_user(request, user, method="email_otp"):
+    AuditService.log(
+        event_type=EventType.LOGIN_SUCCESS,
+        event_category=EventCategory.AUTHENTICATION,
+        action=f"Login successful via {method}",
+        actor=user,
+        request=request,
+        metadata={"method": method},
+    )
+
+def login_failed(request, email, reason):
+    AuditService.log(
+        event_type=EventType.LOGIN_FAILED,
+        event_category=EventCategory.AUTHENTICATION,
+        action=f"Login failed for {email}: {reason}",
+        severity="warning",
+        request=request,
+        actor_email=email,
+        error_message=reason,
+    )
+```
+
+### Payment Webhook Handler
+
+```python
+# apps/payments/webhooks/paystack.py
+
+def handle_paystack_charge_success(payload, request=None):
+    reference = payload["reference"]
+    amount_kobo = payload["amount"]
+    order = Order.objects.get(external_reference=reference)
+    order.mark_paid()
+
+    AuditService.log(
+        event_type=EventType.PAYMENT_SUCCESS,
+        event_category=EventCategory.PAYMENT,
+        action=f"Payment ₦{amount_kobo / 100:,.2f} confirmed via Paystack",
+        resource_type="Order",
+        resource_id=str(order.pk),
+        metadata={
+            "reference": reference,
+            "amount_kobo": amount_kobo,
+            "gateway": "paystack",
+            "channel": payload.get("channel"),
+        },
+        is_compliance=True,  # ← PCI-DSS Level 1
+        # data_subject_id auto-set from actor.pk since is_compliance=True
+    )
+```
+
+### Admin Bulk Delete (with transaction.on_commit)
+
+```python
+# This is already implemented in apps/common/admin_mixins.py
+# soft_delete_selected and restore_selected both use transaction.on_commit()
+# The audit event fires AFTER the DB transaction commits — non-blocking.
+
+# Example from your own admin:
+with transaction.atomic():
+    queryset.filter(pk__in=pks).update(is_deleted=True, deleted_at=now)
+
+def _post_commit():
+    write_audit_event.apply_async(kwargs={"payload": {...}})
+
+transaction.on_commit(_post_commit)
+```
+
+### KYC Verification
+
+```python
+# Inside compliance-grade KYC approval flow
+
+def approve_kyc(kyc_submission, reviewer, request):
+    kyc_submission.approve()
+
+    AuditService.log(
+        event_type=EventType.KYC_APPROVED,
+        event_category=EventCategory.KYC,
+        action=f"KYC approved for {kyc_submission.user.email}",
+        actor=reviewer,
+        request=request,
+        resource_type="KYCSubmission",
+        resource_id=str(kyc_submission.pk),
+        is_compliance=True,
+        retention_days=2555,  # 7 years (CBN / NDPR requirement)
+        # data_subject_id auto-set to kyc_submission.user.pk
+    )
+```
+
+---
+
+## Advanced Queries
+
+### GDPR Subject Access Request (Phase 9)
+
+```python
+# Uses denormalised data_subject_id — works even after user deletion
+from apps.audit_logs.models import AuditEventLog
+import uuid
+
+subject_id = uuid.UUID("user-pk-uuid-here")
+events = AuditEventLog.objects.filter(
+    data_subject_id=subject_id,
+).order_by("created_at").values(
+    "created_at", "event_type", "action",
+    "ip_address", "country", "geo_city",
+    "api_version", "tls_version",
+)
+```
+
+### Detect TLS Downgrade Attacks (Phase 9)
+
+```python
+# Flag any request that used TLS 1.2 or below
+downgrade_events = AuditEventLog.objects.filter(
+    tls_version__in=["TLSv1.2", "TLSv1.1", "TLSv1"],
+    created_at__gte=timezone.now() - timedelta(days=7),
+).order_by("-created_at")
+```
+
+### Per-API-Version Security Analysis (Phase 9)
+
+```python
+# Count auth failures by API version
+from django.db.models import Count
+AuditEventLog.objects.filter(
+    event_type=EventType.LOGIN_FAILED,
+    created_at__gte=timezone.now() - timedelta(days=30),
+).values("api_version").annotate(fail_count=Count("id")).order_by("-fail_count")
+```
+
+### Session Fingerprint Cross-Correlation (Phase 9)
+
+```python
+# Find all events sharing a fingerprint across different user accounts
+fingerprint = "a3f8d2b1..."  # from fraud alert
+suspicious = AuditEventLog.objects.filter(
+    session_fingerprint=fingerprint,
+).values("actor_email", "ip_address", "event_type").distinct()
+# → Reveals credential stuffing / account takeover using same device
+```
+
+### Find Legal-Hold Rows
+
+```python
+frozen_rows = AuditEventLog.objects.filter(
+    legal_hold=True,
+).order_by("-created_at")
+print(f"{frozen_rows.count()} rows under legal hold — will never be deleted")
+```
+
+### Compliance Report Export
+
+```python
+import csv
+from apps.audit_logs.models import AuditEventLog
+
+def export_pci_compliance_report(output_file, start_date, end_date):
+    """Export PCI-DSS compliance report for a date range."""
+    qs = AuditEventLog.objects.filter(
+        is_compliance=True,
+        created_at__range=(start_date, end_date),
+    ).values(
+        "id", "created_at", "event_type", "actor_email",
+        "ip_address", "geo_country_code", "geo_city",
+        "tls_version", "api_version", "request_size_bytes",
+        "response_size_bytes", "resource_type", "resource_id",
+        "legal_hold", "data_subject_id",
+    ).order_by("created_at")
+
+    with open(output_file, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(qs[0].keys()))
+        writer.writeheader()
+        for row in qs.iterator(chunk_size=500):
+            writer.writerow(row)
+```
+
+---
+
+## Security & Compliance Design
+
+### Immutability Chain
+
+```
+1. Model save() guard → raises PermissionError on any UPDATE
+2. Admin → ReadOnlyAdminMixin → has_change_permission = False
+3. DRF → no update endpoint exists for AuditEventLog
+4. Ninja → no mutation schema defined
+5. Database → no application-level user has UPDATE on audit table (recommended)
+```
+
+### Data Redaction
+
+Sensitive fields are automatically replaced with `***REDACTED***` in `old_values` / `new_values` diffs:
+
+```python
+_REDACTED_FIELDS = frozenset({
+    "password", "api_secret", "secret_key", "token",
+    "otp_secret", "otp_base32", "private_key",
+})
+
+# Also redacts any key containing "password" or "secret"
+```
+
+### GeoIP Caching (Performance)
+
+```
+First call for IP 197.210.1.1:
+  → Cache miss → HTTP call to IPinfo API (1.5s timeout)
+  → Result cached in Redis for 24 hours
+
+Subsequent calls:
+  → Cache hit → 0ms (Redis GET)
+  → No external HTTP call
+```
+
+### Compliance Regulatory Coverage
+
+| Regulation | Coverage |
+|-----------|----------|
+| **GDPR Art. 15** | SAR via `data_subject_id` (survives user deletion) |
+| **GDPR Art. 17** | Erasure exemption: `is_compliance=True` rows retained |
+| **GDPR Art. 30** | Records of processing activities — every audit row |
+| **NDPR § 2.1** | Data security obligations — immutable, encrypted transit |
+| **PCI-DSS v4 Req. 10.2** | Audit log events generated for all access |
+| **PCI-DSS v4 Req. 10.3** | TLS version captured per request |
+| **PCI-DSS v4 Req. 10.5** | `legal_hold` prevents modification/deletion |
+| **CBN KYC** | 7-year retention for KYC/AML compliance events |
 
 ---
 
@@ -1222,112 +1081,63 @@ CREATE INDEX idx_ael_country ON audit_logs_auditeventlog(country, created_at DES
 
 ### Q: Events not being logged?
 
-**Check:**
-1. Middleware registered in `INSTALLED_APPS` and `MIDDLEWARE`
+1. Check middleware registration:
 ```python
-INSTALLED_APPS = [..., 'apps.audit_logs', ...]
-MIDDLEWARE = [..., 'apps.audit_logs.middleware.AuditContextMiddleware', ...]
+# settings/base.py
+MIDDLEWARE = [
+    ...
+    "apps.audit_logs.middleware.AuditContextMiddleware",
+    ...
+]
 ```
 
-2. Celery broker running:
+2. Check Celery broker:
 ```bash
-# If using Redis
 redis-cli PING  # Should return PONG
-# If using RabbitMQ
-rabbitmqctl status
-```
-
-3. Celery worker running:
-```bash
 celery -A backend worker -l info
 ```
 
-4. Check logs:
+3. Check for broker-fallback mode:
 ```bash
-tail -f logs/audit.log
-# Or check Django logs
-python manage.py runserver --verbosity 3 2>&1 | grep -i audit
+# If broker is down, audit writes go directly to DB via _write_sync()
+grep "AuditService._write_sync" logs/django.log
 ```
 
-### Q: Celery broker is down — will events be lost?
+### Q: Phase 9 fields are all NULL?
 
-**No.** AuditService implements automatic fallback:
+**`tls_version`:** Requires Nginx `ssl_protocol` configuration:
+```nginx
+# nginx.conf
+uwsgi_param SSL_PROTOCOL $ssl_protocol;
+# or for gunicorn:
+proxy_set_header X-Forwarded-Proto-Version $ssl_protocol;
 ```
-Try Celery task → Broker down? → Write synchronously to DB
-               │
-               ├─ Success: async write
-               └─ Failure: sync write (events NEVER lost)
+
+**`session_fingerprint`:** Requires frontend to send the `X-Session-Fingerprint` header:
+```typescript
+// frontend/lib/audit-headers.ts
+const fingerprint = await computeSessionFingerprint(); // SHA-256 of UA+lang+tz+screen
+headers["X-Session-Fingerprint"] = fingerprint;
 ```
 
-### Q: How do I query for fraud suspicious activity?
-
-```python
-from apps.audit_logs.models import AuditEventLog, EventType
-from django.utils import timezone
-from datetime import timedelta
-
-# Get failed logins from single IP in last hour
-suspicious_ips = AuditEventLog.objects.filter(
-    event_type__in=[
-        EventType.LOGIN_FAILED,
-        EventType.FAILED_LOGINS_EXCEEDED,
-    ],
-    created_at__gte=timezone.now() - timedelta(hours=1),
-).values('ip_address').annotate(Count('id')).filter(id__count__gte=5)
-
-for entry in suspicious_ips:
-    print(f"🚨 Suspicious IP: {entry['ip_address']} ({entry['id__count']} attempts)")
-```
+**`geo_country_code` / `geo_city`:** Populated in Celery task. Check worker is running.
 
 ### Q: Can I delete audit logs?
 
-**No, by design:**
-- Application code: no `delete()` method exposed
-- Django admin: no delete permission (even for superuser)
-- Reason: audit trail must be tamper-proof for compliance
+**No.** By design:
+- Application: no `delete()` endpoint
+- Admin: `ReadOnlyAdminMixin` removes delete permission
+- `legal_hold=True`: survives all automated deletion paths
+- `is_compliance=True`: never touched by cleanup tasks
 
-### Q: What's the retention policy?
+### Q: How do I perform a GDPR erasure (Right to Be Forgotten)?
 
-```python
-# Default for compliance = 7 years
-retention_days = 2555  # 365.25 * 7
-
-# Can be customized per-event
-AuditService.log(
-    ...,
-    is_compliance=True,
-    retention_days=365,  # Override to 1 year
-)
-
-# Retention enforcement (e.g., Celery periodic task)
-from apps.audit_logs.models import AuditEventLog
-from django.utils import timezone
-from datetime import timedelta
-
-expired = AuditEventLog.objects.filter(
-    is_compliance=False,
-    created_at__lt=timezone.now() - timedelta(days=90),
-)
-expired_count = expired.count()
-# Manual delete or archive to cold storage
-```
+Compliance-grade approach:
+1. Set `actor_email` = `"***REDACTED***"` (manual DB operation by DPO only)
+2. `data_subject_id` is retained (UUID, not PII) for SAR reference
+3. `actor_id` FK → `NULL` (already happens on hard-delete of UnifiedUser)
+4. Audit events themselves are retained (GDPR Art. 17(3)(b) — legal obligation)
 
 ---
 
-## Event Limits & Rate Limiting
-
-```python
-# AuditService logs a max of 1 event per millisecond per process
-# High-volume logging (e.g., per-request analytics) should use separate table
-
-# ❌ Anti-pattern: audit every API read
-for product in Product.objects.all():
-    AuditService.log(...)  # DON'T — creates million rows
-
-# ✅ Pattern: audit business-critical events only
-AuditService.log(event_type=EventType.PAYMENT_SUCCESS, ...)  # DO
-```
-
----
-
-**Last updated:** 2026-03-19 · **Maintainer:** Fashionistar Engineering
+**Last updated:** 2026-05-30 · **Phase:** v2.0 Phase 9 · **Maintainer:** Fashionistar Engineering

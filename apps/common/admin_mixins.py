@@ -324,7 +324,7 @@ class SoftDeleteAdminMixin:
                         except Exception:
                             pass
                 except Exception:
-                    pass
+                    pass  # Never block admin actions for analytics
 
             # ── 3b. DeletionAuditCounter (single atomic increment) ─────────────
             try:
@@ -335,7 +335,7 @@ class SoftDeleteAdminMixin:
                     count=_updated,
                 )
             except Exception:
-                pass
+            pass  # Never block admin actions for audit counters
 
             # ── 3c. Admin audit trail (compliance-grade, via Celery) ───────────
             try:
@@ -361,10 +361,7 @@ class SoftDeleteAdminMixin:
                     ignore_result=True,
                 )
             except Exception:
-                pass
-
-        # Register the post-commit callback — runs after the UPDATE commits
-        transaction.on_commit(_post_commit_side_effects)
+            pass  # Never block admin actions for audit logging
 
         self.message_user(
             request,
@@ -443,35 +440,81 @@ class SoftDeleteAdminMixin:
             purge_count,
         )
 
-        # 3. Fire-and-forget notifications for each restored user
-        #    (best-effort — never blocks the response)
-        for obj in klass.objects.filter(pk__in=selected_pks):
-            if hasattr(obj, '_fire_and_forget_notification'):
-                obj._fire_and_forget_notification('restored')
+        # 3–5. Post-commit side-effects (non-blocking)
+        #
+        # RC-5 PERFORMANCE FIX (Phase 4):
+        # Previously, the notification loop + audit counter + audit log were
+        # all called inline here — for 100 records that was 100 per-row lookups
+        # + 100 Redis writes + 1 DB write all blocking the Django admin response.
+        #
+        # Now ALL side-effects are deferred to transaction.on_commit() so the
+        # HTTP response is returned to the browser immediately after the UPDATE
+        # commits. Celery tasks handle the actual work asynchronously.
+        admin_user_id = str(request.user.pk)
 
-        # 4. Increment audit counter (restore reduces soft-delete count)
-        try:
-            from apps.common.models import DeletionAuditCounter
-            DeletionAuditCounter.increment(
-                model_name=klass_name,
-                action='restore',
-                count=updated,
-            )
-        except Exception:
-            pass  # Never block admin actions for audit counters
+        def _restore_post_commit(
+            _model_name=klass_name,
+            _pks=selected_pks,
+            _updated=updated,
+            _admin_user_id=admin_user_id,
+        ):
+            """Runs after the UPDATE transaction commits. Never blocks the admin page."""
 
-        # 5. Admin audit trail
-        try:
-            from apps.audit_logs.services.admin_backend import admin_audit
-            admin_audit.log_admin_action(
-                actor=request.user,
-                action_description=f"Bulk restore: {updated} {klass_name} records restored",
-                resource_type=klass_name,
-                new_values={"count": updated},
-                request=request,
-            )
-        except Exception:
-            pass
+            # 3a. Fire-and-forget notifications (best-effort, per-user lifecycle)
+            if _model_name == 'UnifiedUser':
+                try:
+                    from apps.common.tasks import upsert_user_lifecycle_registry
+                    for _uuid in _pks:
+                        try:
+                            upsert_user_lifecycle_registry.apply_async(
+                                kwargs={'user_uuid': str(_uuid), 'action': 'restored'},
+                                retry=False,
+                                ignore_result=True,
+                            )
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+
+            # 3b. Increment audit counter (restore reduces soft-delete count)
+            try:
+                from apps.common.models import DeletionAuditCounter
+                DeletionAuditCounter.increment(
+                    model_name=_model_name,
+                    action='restore',
+                    count=_updated,
+                )
+            except Exception:
+                pass
+
+            # 3c. Admin audit trail via Celery (compliance-grade, non-blocking)
+            try:
+                from apps.audit_logs.tasks import write_audit_event
+                write_audit_event.apply_async(
+                    kwargs={
+                        "payload": {
+                            "event_type": "ACCOUNT_RESTORED",
+                            "event_category": "ADMIN",
+                            "severity": "INFO",
+                            "action": f"Admin bulk restore: {_updated} {_model_name} record(s)",
+                            "actor_id": _admin_user_id,
+                            "resource_type": _model_name,
+                            "metadata": {
+                                "pks": [str(pk) for pk in _pks[:100]],
+                                "count": _updated,
+                            },
+                            "is_compliance": True,
+                            "retention_days": 2555,
+                        }
+                    },
+                    retry=False,
+                    ignore_result=True,
+                )
+            except Exception:
+                pass
+
+        # Register the post-commit callback — runs after the UPDATE commits
+        transaction.on_commit(_restore_post_commit)
 
         self.message_user(
             request,
