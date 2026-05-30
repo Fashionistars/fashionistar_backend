@@ -46,6 +46,14 @@ from apps.providers.SMTP.brevo_provider   import BREVO
 from apps.providers.SMTP.mailgun_provider import MAILGUN
 from apps.providers.SMTP.zoho_provider    import ZOHO
 
+# Phase F5 — Unified registry + get_active_provider()
+from apps.providers.SMTP.registry import (
+    SMTP_PROVIDER_REGISTRY,
+    get_active_provider,
+    get_provider_by_slug,
+    run_all_health_checks,
+)
+
 # ── Registry ──────────────────────────────────────────────────────────────────
 
 # All known email providers in display-priority order
