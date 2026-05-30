@@ -45,6 +45,7 @@ from apps.common.tasks.cloudinary import (        # noqa: F401
     generate_eager_transformations,
     purge_cloudinary_cache,
     bulk_sync_cloudinary_urls,
+    process_admin_cloudinary_upload,  # Phase 6: async admin upload
 )
 
 # ── User Lifecycle ────────────────────────────────────────────────────────────
@@ -67,6 +68,7 @@ __all__ = [
     "generate_eager_transformations",
     "purge_cloudinary_cache",
     "bulk_sync_cloudinary_urls",
+    "process_admin_cloudinary_upload",  # Phase 6
     # lifecycle
     "upsert_user_lifecycle_registry",
     "increment_lifecycle_login_counter",

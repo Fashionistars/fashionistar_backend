@@ -24,6 +24,7 @@ Reverse FK / related-name traversal map for this domain:
 Google-style docstrings required for all non-trivial functions.
 """
 
+import asyncio
 import logging
 from decimal import Decimal
 from typing import Any, Optional
@@ -542,3 +543,74 @@ async def aget_vendor_low_stock_alerts(vendor_profile, threshold: int = 5) -> li
 async def aget_vendor_setup_state_data_extended(vendor_profile) -> dict:
     """Alias — delegates to aget_vendor_setup_state_data (backward compat)."""
     return await aget_vendor_setup_state_data(vendor_profile)
+
+
+async def aget_vendor_dashboard_parallel(vendor_profile) -> dict[str, Any]:
+    """
+    Phase 8 — Fully parallel vendor dashboard loader.
+
+    Fires 7 independent vendor dashboard data-fetchers concurrently via
+    asyncio.gather(). Replaces the previous sequential pattern where each
+    Ninja dashboard view called these selectors one after another.
+
+    Sequential baseline:  7 × DB_RTT  ≈  7 × 8ms = 56ms
+    Parallel result:      1 × DB_RTT  ≈  8ms  (all run concurrently)
+
+    Data loaded in parallel:
+      • order_stats       — total orders, revenue, pending/active counts
+      • recent_orders     — last 10 orders (title, status, total)
+      • products_summary  — top 10 products by listing date
+      • wallet            — balance + last 10 transactions
+      • reviews           — last 5 reviews across vendor products
+      • revenue_trends    — monthly revenue for last 6 months
+      • low_stock_alerts  — products with stock_qty < 5
+
+    Args:
+        vendor_profile: VendorProfile instance (already resolved from user).
+
+    Returns:
+        dict with keys: order_stats, recent_orders, products_summary,
+                        wallet, reviews, revenue_trends, low_stock_alerts.
+    """
+    try:
+        (
+            order_stats,
+            recent_orders,
+            products_summary,
+            wallet,
+            reviews,
+            revenue_trends,
+            low_stock_alerts,
+        ) = await asyncio.gather(
+            aget_vendor_order_stats(vendor_profile),
+            aget_vendor_recent_orders(vendor_profile, limit=10),
+            aget_vendor_products_summary(vendor_profile, limit=10),
+            aget_vendor_wallet_data(vendor_profile),
+            aget_vendor_reviews_summary(vendor_profile, limit=5),
+            aget_vendor_revenue_trends(vendor_profile, months=6),
+            aget_vendor_low_stock_alerts(vendor_profile, threshold=5),
+        )
+        return {
+            "order_stats": order_stats,
+            "recent_orders": recent_orders,
+            "products_summary": products_summary,
+            "wallet": wallet,
+            "reviews": reviews,
+            "revenue_trends": revenue_trends,
+            "low_stock_alerts": low_stock_alerts,
+        }
+    except Exception as exc:
+        logger.error(
+            "aget_vendor_dashboard_parallel vendor=%s: %s",
+            getattr(vendor_profile, "pk", vendor_profile),
+            exc,
+        )
+        return {
+            "order_stats": {"total_orders": 0, "total_revenue": 0, "pending_count": 0, "active_count": 0},
+            "recent_orders": [],
+            "products_summary": [],
+            "wallet": {"balance": 0.0, "recent_transactions": []},
+            "reviews": [],
+            "revenue_trends": [],
+            "low_stock_alerts": [],
+        }
