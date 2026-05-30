@@ -262,7 +262,7 @@ def get_redis_connection_safe(
     global _REDIS_OFFLINE_UNTIL
     now = time.time()
     if now < _REDIS_OFFLINE_UNTIL:
-        # Circuit breaker is tripped — skip Redis to save time
+        # Circuit breaker is tripped! Skip checking Redis connection to save time and prevent blocking the worker.
         return FakeRedis()
 
     for attempt in range(max_retries):
@@ -278,7 +278,7 @@ def get_redis_connection_safe(
             if attempt < max_retries - 1:
                 time.sleep(retry_delay)
 
-    # Trip the circuit breaker for 15 seconds to prevent repeated blocking
+    # Trip the circuit breaker for the next 15 seconds to prevent subsequent connection attempts from blocking.
     _REDIS_OFFLINE_UNTIL = time.time() + 15.0
     logger.warning(
         "Max Redis connection retries reached. Circuit breaker tripped for 15s. "

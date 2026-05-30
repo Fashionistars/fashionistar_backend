@@ -77,6 +77,15 @@ def _compliance_csv_rows(queryset):
         "correlation_id",
         "is_compliance",
         "error_message",
+        # Phase 9 compliance columns
+        "request_size_bytes",
+        "response_size_bytes",
+        "tls_version",
+        "api_version",
+        "legal_hold",
+        "data_subject_id",
+        "geo_country_code",
+        "geo_city",
     ]
     yield FIELDS
     for obj in queryset.only(*FIELDS).iterator(chunk_size=500):
@@ -164,6 +173,8 @@ class AuditEventLogAdmin(admin.ModelAdmin):
         "event_type",
         "event_category",
         "is_compliance",
+        "legal_hold",     # Phase 9: surface frozen rows at a glance
+        "api_version",    # Phase 9: filter by API version for security analysis
         "country",
     )
     search_fields = (
@@ -207,6 +218,17 @@ class AuditEventLogAdmin(admin.ModelAdmin):
         "is_compliance",
         "retention_days",
         "correlation_id",
+        # Phase 9 fields
+        "request_size_bytes",
+        "response_size_bytes",
+        "tls_version",
+        "session_fingerprint",
+        "api_version",
+        "tenant_id",
+        "legal_hold",
+        "data_subject_id",
+        "geo_country_code",
+        "geo_city",
     )
 
     fieldsets = (
@@ -264,6 +286,30 @@ class AuditEventLogAdmin(admin.ModelAdmin):
             {
                 "classes": ("collapse",),
                 "fields": ("retention_days",),
+            },
+        ),
+        (
+            "2026 Compliance (Phase 9 — GDPR/NDPR/PCI-DSS)",
+            {
+                "classes": ("collapse",),
+                "description": (
+                    "Fields added in Phase 9 for 2026 regulatory compliance. "
+                    "All fields are read-only and immutable. "
+                    "legal_hold=True means this row is under a regulatory freeze and "
+                    "cannot be deleted by any automated task."
+                ),
+                "fields": (
+                    "request_size_bytes",
+                    "response_size_bytes",
+                    "tls_version",
+                    "session_fingerprint",
+                    "api_version",
+                    "tenant_id",
+                    "legal_hold",
+                    "data_subject_id",
+                    "geo_country_code",
+                    "geo_city",
+                ),
             },
         ),
     )

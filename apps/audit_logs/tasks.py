@@ -62,11 +62,24 @@ def write_audit_event(self, payload: dict) -> None:
         "request_method", "request_path", "response_status", "duration_ms",
         "old_values", "new_values", "metadata", "error_message",
         "is_compliance", "retention_days",
-        # ── Wave B3: Frontend client context fields (migration 0005) ──────────
+        # ── Wave B3: Frontend client context fields (migration 0005) ─────────────
         # Added for device-level audit trails per GDPR/NDPR/PCI-DSS requirements.
         # These are populated from X-Client-* request headers via AuditMiddleware.
         "client_device_id", "client_timezone", "client_locale", "client_platform",
         "client_geo_lat", "client_geo_lng", "client_geo_accuracy_m",
+        # ── Phase 9: 2026 GDPR/NDPR/PCI-DSS compliance fields (migration 0009) ───
+        # New fields that extend the audit schema for full 2026 compliance coverage.
+        # See apps/audit_logs/models.py for complete field documentation.
+        "request_size_bytes",   # Incoming payload size (anomaly detection)
+        "response_size_bytes",  # Outgoing payload size (bandwidth audit)
+        "tls_version",          # TLS version for PCI-DSS Req. 10.3 compliance
+        "session_fingerprint",  # SHA-256 device fingerprint (fraud detection)
+        "api_version",          # /v1/, /v2/ for per-version security segmentation
+        "tenant_id",            # Multi-tenant partition (future expansion)
+        "legal_hold",           # PCI-DSS freeze — blocks ALL deletion paths
+        "data_subject_id",      # GDPR SAR reference UUID (Art. 15 compliance)
+        "geo_country_code",     # ISO 3166-1 alpha-2 strict 2-char GeoIP code
+        "geo_city",             # GeoIP city for geographic compliance segmentation
     }
 
 
@@ -88,9 +101,14 @@ def write_audit_event(self, payload: dict) -> None:
                 from apps.audit_logs.services.audit import _resolve_geo
                 geo = _resolve_geo(ip_address, allow_network=True)
                 if geo:
-                    payload["country"] = geo.get("country") or country or ""
-                    payload["country_code"] = geo.get("country_code") or country_code or ""
-                    payload["city"] = geo.get("city") or city or ""
+                    payload["country"]          = geo.get("country")       or country or ""
+                    payload["country_code"]      = geo.get("country_code")  or country_code or ""
+                    payload["city"]              = geo.get("city")          or city or ""
+                    # Phase 9: Also populate the new strict 2-char compliance fields.
+                    # geo_country_code is always exactly 2 chars (ISO 3166-1 alpha-2).
+                    raw_cc = geo.get("country_code") or country_code or ""
+                    payload.setdefault("geo_country_code", raw_cc[:2].upper() if raw_cc else None)
+                    payload.setdefault("geo_city", geo.get("city") or city or None)
             except Exception as geo_exc:
                 logger.debug("write_audit_event: background geo enrichment failed: %s", geo_exc)
 
@@ -191,6 +209,7 @@ def cleanup_audit_logs(self) -> dict:
                 AuditEventLog.objects.filter(
                     is_compliance=False,
                     retention_days__gt=0,   # exclude permanent (-1) rows
+                    legal_hold=False,        # Phase 9: NEVER delete legal-hold rows
                 )
                 .annotate(
                     expiry_at=ExpressionWrapper(
@@ -212,6 +231,7 @@ def cleanup_audit_logs(self) -> dict:
             deleted_count, _ = AuditEventLog.objects.filter(
                 id__in=expired_ids,
                 is_compliance=False,  # double-guard — never delete compliance rows
+                legal_hold=False,     # Phase 9 triple-guard — never delete frozen rows
             ).delete()
             total_deleted += deleted_count
 

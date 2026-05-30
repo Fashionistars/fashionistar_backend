@@ -176,6 +176,52 @@ _AUTO_CAPTURE_EXEMPT_PREFIXES = (
 _AUTO_CAPTURE_EXEMPT_METHODS = frozenset({"OPTIONS", "HEAD"})
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 9: Pure context-extraction helpers — zero I/O, safe to call anywhere
+# ─────────────────────────────────────────────────────────────────────────────
+
+import re as _re
+
+_API_VERSION_RE = _re.compile(r"/v(\d+)/")
+
+
+def _extract_api_version(path: str | None) -> str | None:
+    """Extract the API version segment from a URL path.
+
+    Scans the path for patterns like /v1/, /v2/, /v3/ and returns
+    the version string (e.g. 'v1', 'v2').  Returns None if not found.
+
+    Args:
+        path: URL path string (e.g. '/api/v2/orders/').
+
+    Returns:
+        str | None: Version string like 'v1', or None if not an API path.
+    """
+    if not path:
+        return None
+    m = _API_VERSION_RE.search(path)
+    return f"v{m.group(1)}" if m else None
+
+
+def _safe_content_length(request) -> int | None:
+    """Safely extract Content-Length from an HttpRequest.
+
+    Never raises — returns None on any error or when the header is absent.
+    Used to populate request_size_bytes for Phase 9 anomaly detection.
+
+    Args:
+        request: Django HttpRequest.
+
+    Returns:
+        int | None: Content-Length in bytes, or None.
+    """
+    try:
+        cl = request.META.get("CONTENT_LENGTH") or request.META.get("HTTP_CONTENT_LENGTH")
+        return int(cl) if cl else None
+    except (TypeError, ValueError):
+        return None
+
+
 class AuditContextMiddleware:
     """
     Enterprise audit middleware — ASGI-safe, dual-mode, zero-blocking.
@@ -281,6 +327,14 @@ class AuditContextMiddleware:
             "client_geo_lat":   request.META.get("HTTP_X_CLIENT_GEO_LAT"),
             "client_geo_lng":   request.META.get("HTTP_X_CLIENT_GEO_LNG"),
             "client_geo_acc":   request.META.get("HTTP_X_CLIENT_GEO_ACCURACY"),
+            # Phase 9: 2026 compliance fields injected into context at entry point
+            "session_fingerprint": request.META.get("HTTP_X_SESSION_FINGERPRINT"),
+            "tls_version":         (
+                request.META.get("SSL_PROTOCOL")
+                or request.META.get("HTTP_X_FORWARDED_PROTO_VERSION")
+            ),
+            "api_version":         _extract_api_version(request.path),
+            "request_size_bytes":  _safe_content_length(request),
         }
         # Inject correlation ID onto the request for downstream view access
         request.correlation_id = correlation_id
@@ -292,9 +346,10 @@ class AuditContextMiddleware:
         """
         Dispatch an audit event for 4xx/5xx responses — ASGI fire-and-forget.
 
-        Uses asyncio.create_task() so the event is enqueued on the running
-        event loop but processed AFTER the HTTP response has been sent.
-        The response path is completely non-blocking.
+        Uses asyncio.get_running_loop().create_task() (preferred over
+        get_event_loop() which is deprecated in Python 3.10+) so the event
+        is enqueued on the running event loop but processed AFTER the HTTP
+        response has been sent. The response path is completely non-blocking.
 
         Args:
             request: Django HttpRequest.
@@ -306,9 +361,8 @@ class AuditContextMiddleware:
         ctx = _audit_ctx.get()
         payload = self._build_capture_payload(request, response, correlation_id, ctx)
         try:
-            asyncio.get_event_loop().create_task(
-                _async_dispatch_audit(payload)
-            )
+            loop = asyncio.get_running_loop()
+            loop.create_task(_async_dispatch_audit(payload))
         except RuntimeError:
             # No running event loop (e.g. tests) — fall back to daemon thread
             self._dispatch_in_daemon_thread(payload)
@@ -378,20 +432,35 @@ class AuditContextMiddleware:
         actor = ctx.get("actor")
         actor_id = getattr(actor, "pk", None)
 
+        # Phase 9: capture response size from Content-Length header (best-effort)
+        resp_size: int | None = None
+        try:
+            cl = response.get("Content-Length") or response.get("content-length")
+            if cl:
+                resp_size = int(cl)
+        except (TypeError, ValueError):
+            pass
+
         return {
-            "event_type_key":     event_type_key,
-            "event_category_key": event_category_key,
-            "severity_key":       severity_key,
-            "action":             f"API {request.method} {request.path} → {response.status_code}",
-            "actor_id":           str(actor_id) if actor_id else None,
-            "actor_email":        ctx.get("actor_email"),
-            "ip_address":         ctx.get("ip_address"),
-            "user_agent":         request.META.get("HTTP_USER_AGENT", ""),
-            "request_method":     request.method,
-            "request_path":       request.path,
-            "response_status":    response.status_code,
-            "correlation_id":     correlation_id,
-            "is_compliance":      response.status_code >= 500,
+            "event_type_key":      event_type_key,
+            "event_category_key":  event_category_key,
+            "severity_key":        severity_key,
+            "action":              f"API {request.method} {request.path} → {response.status_code}",
+            "actor_id":            str(actor_id) if actor_id else None,
+            "actor_email":         ctx.get("actor_email"),
+            "ip_address":          ctx.get("ip_address"),
+            "user_agent":          request.META.get("HTTP_USER_AGENT", ""),
+            "request_method":      request.method,
+            "request_path":        request.path,
+            "response_status":     response.status_code,
+            "correlation_id":      correlation_id,
+            "is_compliance":       response.status_code >= 500,
+            # Phase 9 fields — auto-extracted at the middleware layer
+            "request_size_bytes":  ctx.get("request_size_bytes"),
+            "response_size_bytes": resp_size,
+            "tls_version":         ctx.get("tls_version"),
+            "session_fingerprint": ctx.get("session_fingerprint"),
+            "api_version":         ctx.get("api_version"),
             "metadata": {
                 "auto_captured": True,
                 "correlation_id": correlation_id,

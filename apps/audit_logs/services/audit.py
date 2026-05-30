@@ -15,6 +15,16 @@ Non-Blocking Design:
     is NEVER delayed.  If the broker is unreachable the fallback ``_write_sync``
     writes directly to PostgreSQL so audit events are NEVER silently dropped.
 
+Phase 9 Auto-Enrichment (2026 GDPR/NDPR/PCI-DSS):
+    The following Phase 9 fields are auto-populated when not explicitly provided:
+    - ``api_version``         — extracted from request.path or resolved_path (/v1/, /v2/ …)
+    - ``tls_version``         — from ``request.META['SSL_PROTOCOL']`` (Nginx variable)
+    - ``data_subject_id``     — auto-set to ``actor.pk`` when ``is_compliance=True``
+    - ``geo_country_code``    — set in Celery task during background GeoIP enrichment
+    - ``geo_city``            — set in Celery task during background GeoIP enrichment
+    Fields that require caller knowledge (``request_size_bytes``, ``response_size_bytes``,
+    ``session_fingerprint``, ``tenant_id``, ``legal_hold``) are passed explicitly by callers.
+
 Auto-Enrichment:
     Every event is automatically enriched with:
     - ``ip_address``, ``user_agent`` — from Django ``HttpRequest.META``
@@ -223,6 +233,18 @@ class AuditService:
         client_geo_lat=None,
         client_geo_lng=None,
         client_geo_accuracy_m: float | None = None,
+        # ── Phase 9: 2026 GDPR/NDPR/PCI-DSS compliance fields ──────────────────
+        # Callers may pass any of these explicitly; otherwise auto-resolved below.
+        request_size_bytes: int | None = None,
+        response_size_bytes: int | None = None,
+        tls_version: str | None = None,
+        session_fingerprint: str | None = None,
+        api_version: str | None = None,
+        tenant_id=None,         # UUID or str — coerced internally
+        legal_hold: bool = False,
+        data_subject_id=None,   # UUID or str — auto-set from actor.pk for compliance events
+        geo_country_code: str | None = None,
+        geo_city: str | None = None,
     ) -> None:
         """Record a structured audit event.
 
@@ -385,6 +407,42 @@ class AuditService:
 
             safe_retention_days = retention_days if retention_days >= 0 else 0
 
+            # ── Phase 9: Auto-resolve api_version from request path ──────────────
+            # Extracts /v1/, /v2/ etc. from the path so every audit event is
+            # automatically tagged with the API version it was called against.
+            resolved_api_version = api_version
+            if not resolved_api_version and (resolved_path or ""):
+                import re as _re
+                _m = _re.search(r'/v(\d+)/', resolved_path or "")
+                resolved_api_version = f"v{_m.group(1)}" if _m else None
+
+            # ── Phase 9: Auto-resolve tls_version from SSL_PROTOCOL ────────────
+            # Nginx sets the SSL_PROTOCOL variable which Django/Gunicorn forwards
+            # as request.META['SSL_PROTOCOL'] (e.g. 'TLSv1.3').
+            resolved_tls = tls_version
+            if not resolved_tls and request:
+                resolved_tls = (
+                    request.META.get("SSL_PROTOCOL")
+                    or request.META.get("HTTP_X_FORWARDED_PROTO_VERSION")
+                    or None
+                )
+
+            # ── Phase 9: Auto-populate data_subject_id for compliance events ───
+            # GDPR Art. 30 requires that records of processing activities link
+            # to the data subject. We denormalise actor.pk here so the link
+            # survives even a hard-delete of the UnifiedUser row.
+            resolved_data_subject_id = data_subject_id
+            if not resolved_data_subject_id and is_compliance and resolved_actor:
+                try:
+                    resolved_data_subject_id = resolved_actor.pk
+                except Exception:
+                    pass
+
+            # ── Phase 9: session_fingerprint from X-Session-Fingerprint header ──
+            resolved_session_fp = session_fingerprint
+            if not resolved_session_fp and request:
+                resolved_session_fp = request.META.get("HTTP_X_SESSION_FINGERPRINT")
+
             # ── Resolve client-side context from thread-local if not explicitly passed ──
             # Falling back to request.META directly if thread-local ctx is cleared (e.g. inside transaction on_commit)
             resolved_client_device_id = client_device_id or ctx.get("client_device_id") or (request.META.get("HTTP_X_DEVICE_ID") if request else None)
@@ -433,6 +491,17 @@ class AuditService:
                 client_geo_lat=resolved_client_geo_lat,
                 client_geo_lng=resolved_client_geo_lng,
                 client_geo_accuracy_m=resolved_client_geo_acc,
+                # ── Phase 9 fields ──────────────────────────────────────────────
+                request_size_bytes=request_size_bytes,
+                response_size_bytes=response_size_bytes,
+                tls_version=resolved_tls,
+                session_fingerprint=resolved_session_fp,
+                api_version=resolved_api_version,
+                tenant_id=str(tenant_id) if tenant_id else None,
+                legal_hold=legal_hold,
+                data_subject_id=str(resolved_data_subject_id) if resolved_data_subject_id else None,
+                geo_country_code=(geo_country_code or "")[:2].upper() or None,
+                geo_city=geo_city or None,
             )
 
             cls._dispatch(payload)
