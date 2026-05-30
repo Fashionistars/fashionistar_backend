@@ -385,6 +385,12 @@ CLOUDINARY_UPLOAD_PRESET_VIDEO = env(
 # Must be ≤ 3600 (Cloudinary 1-hour max). We use 3300 (55 min) for safety.
 CLOUDINARY_SIGNATURE_TTL = int(env("CLOUDINARY_SIGNATURE_TTL", default=3300))
 
+
+CLOUDINARY_ADMIN_ASYNC = True   # Enable async Celery path (production)
+#CLOUDINARY_ADMIN_ASYNC = False  # Sync inline path (dev default)
+
+
+
 # MirrorSize / GetMeasured provider settings. Credentials must live in .env;
 # never hardcode the merchant API key in views or frontend code.
 MIRRORSIZE_API_KEY = env("MIRRORSIZE_API_KEY", default="")

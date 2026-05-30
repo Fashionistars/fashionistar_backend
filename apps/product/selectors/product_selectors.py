@@ -1090,3 +1090,146 @@ async def aget_products_by_vendor_async(
 
     count, results = await asyncio.gather(_count(), _page())
     return {"count": count, "results": results}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 7. PHASE 11 — HOMEPAGE BUNDLE SELECTORS
+#    Called exclusively via asyncio.gather() in GET /catalog/homepage/
+#    All return Python lists — no lazy querysets — safe for asyncio.gather()
+#    Target: < 30ms total (all 5 queries run in parallel on PgBouncer pool)
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def aget_homepage_products(limit: int = 10) -> list:
+    """
+    Async: return top N featured published products for the homepage grid.
+
+    Architecture:
+      - featured=True filter + rating/orders_count ordering ensures top items.
+      - select_related("vendor") prevents N+1 on vendor name rendering.
+      - prefetch_related("categories", "sizes", "colors") fills M2M caches.
+      - Returns list (not queryset) — safe to pass across asyncio.gather boundary.
+
+    Returns:
+        list[Product] — at most ``limit`` items, ordered by popularity.
+    """
+    try:
+        qs = (
+            Product.objects
+            .filter(
+                status=ProductStatus.PUBLISHED,
+                is_deleted=False,
+                featured=True,
+            )
+            .select_related("vendor")
+            .prefetch_related("categories", "sub_categories", "sizes", "colors")
+            .annotate(
+                computed_review_count=Count("reviews", distinct=True),
+                computed_avg_rating=Avg("reviews__rating"),
+            )
+            .order_by("-orders_count", "-rating", "-created_at")
+        )
+        return [p async for p in qs[:limit]]
+    except Exception as exc:
+        logger.error("aget_homepage_products: %s", exc)
+        return []
+
+
+async def aget_homepage_hot_deals(limit: int = 10) -> list:
+    """
+    Async: return top N hot-deal products for the "Deals of the Week" section.
+
+    Architecture:
+      - hot_deal=True + discount ordering surfaces best value-for-money items.
+      - Same prefetch contract as aget_homepage_products — no extra queries.
+
+    Returns:
+        list[Product] — at most ``limit`` items, ordered by discount descending.
+    """
+    try:
+        qs = (
+            Product.objects
+            .filter(
+                status=ProductStatus.PUBLISHED,
+                is_deleted=False,
+                hot_deal=True,
+            )
+            .select_related("vendor")
+            .prefetch_related("categories", "sub_categories", "sizes", "colors")
+            .annotate(
+                computed_review_count=Count("reviews", distinct=True),
+                computed_avg_rating=Avg("reviews__rating"),
+            )
+            .order_by("-discount_percentage", "-created_at")
+        )
+        return [p async for p in qs[:limit]]
+    except Exception as exc:
+        logger.error("aget_homepage_hot_deals: %s", exc)
+        return []
+
+
+async def aget_homepage_reviews(limit: int = 8) -> list[dict]:
+    """
+    Async: return top N moderated public product reviews for the homepage.
+
+    Uses .values() to avoid full model instantiation — only the fields
+    needed for the review card are fetched (reviewer name, rating, text,
+    avatar, product title). ZERO sync_to_async.
+
+    Returns:
+        list[dict] with reviewer_name, rating, review_text, product_title,
+        reviewer_avatar_url, created_at.
+    """
+    try:
+        qs = (
+            ProductReview.objects
+            .filter(active=True, moderated=True)
+            .select_related(
+                "user",
+                "user__client_profile",
+                "user__vendor_profile",
+                "product",
+            )
+            .order_by("-helpful_votes", "-rating", "-created_at")[:limit]
+        )
+        rows: list[dict] = []
+        async for review in qs:
+            user = getattr(review, "user", None)
+            profile = None
+            if user:
+                profile = (
+                    getattr(user, "client_profile", None)
+                    or getattr(user, "vendor_profile", None)
+                )
+            avatar = getattr(profile, "avatar", None) if profile else None
+            avatar_url: str | None = None
+            if avatar:
+                try:
+                    raw = str(avatar.url)
+                    if "res.cloudinary.com" in raw and "/upload/" in raw:
+                        avatar_url = raw.replace(
+                            "/upload/", "/upload/w_120,h_120,c_fill,f_auto,q_auto/"
+                        )
+                    else:
+                        avatar_url = raw
+                except Exception:
+                    avatar_url = None
+
+            reviewer_name = review.reviewer_name or (
+                getattr(user, "get_full_name", lambda: "")() if user else None
+            ) or "Anonymous"
+            product = getattr(review, "product", None)
+            rows.append({
+                "id": str(review.pk),
+                "reviewer_name": reviewer_name,
+                "reviewer_avatar_url": avatar_url,
+                "product_title": product.title if product else None,
+                "product_slug": product.slug if product else None,
+                "rating": review.rating,
+                "review_text": review.review or "",
+                "helpful_votes": review.helpful_votes,
+                "created_at": review.created_at.isoformat() if review.created_at else None,
+            })
+        return rows
+    except Exception as exc:
+        logger.error("aget_homepage_reviews: %s", exc)
+        return []

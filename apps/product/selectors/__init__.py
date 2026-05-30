@@ -36,6 +36,10 @@ from apps.product.selectors.product_selectors import (
     alist_products,
     aget_featured_products,
     aget_products_by_vendor_async,
+    # Phase 11 — Homepage bundle selectors
+    aget_homepage_products,
+    aget_homepage_hot_deals,
+    aget_homepage_reviews,
 )
 
 __all__ = [
@@ -76,4 +80,8 @@ __all__ = [
     "alist_products",
     "aget_featured_products",
     "aget_products_by_vendor_async",
+    # Phase 11 — Homepage bundle selectors
+    "aget_homepage_products",
+    "aget_homepage_hot_deals",
+    "aget_homepage_reviews",
 ]
