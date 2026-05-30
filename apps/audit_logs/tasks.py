@@ -76,6 +76,24 @@ def write_audit_event(self, payload: dict) -> None:
         # Extract actor_id separately (set via obj.actor_id, not __init__)
         actor_id = payload.get("actor_id")
 
+        # ⚡ Background Geo-IP enrichment (Async-path Only)
+        # If the IP address is present but geo location fields are missing/empty,
+        # trigger the full geo lookup allowing network calls in this Celery worker thread.
+        ip_address = payload.get("ip_address")
+        country = payload.get("country")
+        country_code = payload.get("country_code")
+        city = payload.get("city")
+        if ip_address and not (country and country_code):
+            try:
+                from apps.audit_logs.services.audit import _resolve_geo
+                geo = _resolve_geo(ip_address, allow_network=True)
+                if geo:
+                    payload["country"] = geo.get("country") or country or ""
+                    payload["country_code"] = geo.get("country_code") or country_code or ""
+                    payload["city"] = geo.get("city") or city or ""
+            except Exception as geo_exc:
+                logger.debug("write_audit_event: background geo enrichment failed: %s", geo_exc)
+
         # ⚡ Strip any keys the ORM doesn't know about (geo extras, future fields)
         safe_payload = {k: v for k, v in payload.items() if k in _KNOWN_FIELDS}
 

@@ -145,6 +145,9 @@ class FakeRedis:
         return FakeRedisPipeline(_MOCK_REDIS_DB)
 
 
+_REDIS_OFFLINE_UNTIL: float = 0.0
+
+
 def get_redis_connection_safe(
     max_retries: int = REDIS_MAX_RETRIES,
     retry_delay: int = REDIS_RETRY_DELAY,
@@ -162,6 +165,12 @@ def get_redis_connection_safe(
     Returns:
         ``redis.StrictRedis`` or ``FakeRedis``.
     """
+    global _REDIS_OFFLINE_UNTIL
+    now = time.time()
+    if now < _REDIS_OFFLINE_UNTIL:
+        # Circuit breaker is tripped! Skip checking Redis connection to save time and prevent blocking the worker.
+        return FakeRedis()
+
     for attempt in range(max_retries):
         try:
             conn = get_redis_connection("default")
@@ -175,7 +184,9 @@ def get_redis_connection_safe(
             if attempt < max_retries - 1:
                 time.sleep(retry_delay)
 
-    logger.warning("Max Redis connection retries reached. Falling back to robust In-Memory FakeRedis.")
+    # Trip the circuit breaker for the next 15 seconds to prevent subsequent connection attempts from blocking.
+    _REDIS_OFFLINE_UNTIL = time.time() + 15.0
+    logger.warning("Max Redis connection retries reached. Tripping circuit breaker for 15s. Falling back to robust In-Memory FakeRedis.")
     return FakeRedis()
 
 

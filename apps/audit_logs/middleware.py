@@ -31,7 +31,10 @@ logger = logging.getLogger(__name__)
 
 from contextlib import contextmanager
 
-_audit_ctx = threading.local()
+import contextvars
+from asgiref.sync import iscoroutinefunction, markcoroutinefunction
+
+_audit_ctx_var: contextvars.ContextVar[dict | None] = contextvars.ContextVar("audit_context", default=None)
 
 
 def get_audit_context() -> dict:
@@ -39,7 +42,22 @@ def get_audit_context() -> dict:
     Return the current request's audit context dict.
     Returns an empty dict outside of a request (e.g. Celery tasks).
     """
-    return getattr(_audit_ctx, "ctx", {})
+    ctx = _audit_ctx_var.get()
+    if ctx is None:
+        return {}
+
+    # Lazily resolve user credentials from the stashed request if available.
+    # This solves the timing/ordering issue where AuditContextMiddleware runs
+    # before AuthenticationMiddleware.
+    request = ctx.get("request")
+    if request:
+        user = getattr(request, "user", None)
+        if user and getattr(user, "is_authenticated", False):
+            ctx["actor"] = user
+            ctx["actor_email"] = getattr(user, "email", None)
+            ctx["actor_role"] = getattr(user, "user_type", None) or getattr(user, "role", None)
+
+    return ctx
 
 
 def extract_client_context(request=None) -> dict:
@@ -81,19 +99,18 @@ def extract_client_context(request=None) -> dict:
 @contextmanager
 def audit_context_override(context_dict: dict):
     """
-    Context manager to override/populate the thread-local audit context.
+    Context manager to override/populate the context-local audit context.
     Extremely useful inside Celery tasks to propagate client context metadata.
     """
-    global _audit_ctx
-    old_ctx = getattr(_audit_ctx, "ctx", {})
     if context_dict and "client_geo_accuracy_m" in context_dict:
         context_dict = dict(context_dict)
         context_dict["client_geo_acc"] = context_dict.pop("client_geo_accuracy_m")
-    _audit_ctx.ctx = context_dict or {}
+    
+    token = _audit_ctx_var.set(context_dict or {})
     try:
         yield
     finally:
-        _audit_ctx.ctx = old_ctx
+        _audit_ctx_var.reset(token)
 
 
 def propagate_audit_context(func):
@@ -130,7 +147,7 @@ class AuditContextMiddleware:
     """
     Enterprise audit middleware with two responsibilities:
 
-    1. Context injection: populates a thread-local store with request metadata
+    1. Context injection: populates a context-local store with request metadata
        (IP, UA, method, path, actor, correlation_id) so AuditService.log()
        can auto-enrich without requiring callers to pass the request.
 
@@ -138,19 +155,24 @@ class AuditContextMiddleware:
        AuditService.log() event (API_CALL / SYSTEM_ERROR) so all failures
        are captured without the view needing explicit audit calls.
 
-    Thread Safety
-    ─────────────
-    Uses threading.local() — safe for multi-threaded WSGI servers (gunicorn,
-    uWSGI). Each thread gets its own _audit_ctx.ctx dict, cleared at the end
-    of every request in the finally block.
+    Context Safety
+    ──────────────
+    Uses Python contextvars — safe for both multi-threaded WSGI servers (gunicorn,
+    uWSGI) and async-native ASGI handlers (Uvicorn, Daphne). ContextVars isolate
+    data per coroutine/thread execution context.
     """
+
+    async_capable = True
+    sync_capable = True
 
     def __init__(self, get_response):
         self.get_response = get_response
+        if iscoroutinefunction(self.get_response):
+            markcoroutinefunction(self)
 
     def __call__(self, request):
+        """Synchronous path — WSGI (manage.py runserver / gunicorn)."""
         # ── 1. Build correlation ID (E1) ──────────────────────────────────
-        # Prefer header from API gateway / load balancer, generate UUID7 if absent
         correlation_id = (
             request.META.get("HTTP_X_REQUEST_ID")
             or request.META.get("HTTP_X_CORRELATION_ID")
@@ -162,63 +184,117 @@ class AuditContextMiddleware:
         ip = (xff.split(",")[0].strip() if xff
               else request.META.get("REMOTE_ADDR"))
 
-        # ── 3. Resolve actor (may be AnonymousUser at middleware time) ─────
-        user = getattr(request, "user", None)
-        actor = user if (user and getattr(user, "is_authenticated", False)) else None
-        actor_email = getattr(actor, "email", None)
-
-        # ── 4. Populate thread-local context ──────────────────────────────
-        _audit_ctx.ctx = {
+        # ── 3. Populate context-local context (User will be lazily evaluated) ──────────────────
+        ctx_dict = {
             "ip_address":      ip,
             "user_agent":      request.META.get("HTTP_USER_AGENT", ""),
             "request_method":  request.method,
             "request_path":    request.path,
-            "actor":           actor,
-            "actor_email":     actor_email,
             "correlation_id":  correlation_id,
             "request_id":      correlation_id,
-        }
-
-        # ── 4b. Enrich with frontend audit context headers ──────────────────────────
-        # The frontend sends X-Client-* headers from audit-headers.ts.
-        # These enrich (never replace) server-derived IP/UA values.
-        # Backend fallback (REMOTE_ADDR, HTTP_USER_AGENT) remains canonical.
-        _audit_ctx.ctx.update({
-            # Device identification (stable across browser sessions)
+            "request":         request,
+            
+            # Enrich with frontend audit context headers
             "client_device_id":  request.META.get("HTTP_X_DEVICE_ID"),
-            # Locale and platform context
             "client_timezone":   request.META.get("HTTP_X_CLIENT_TIMEZONE"),
             "client_locale":     request.META.get("HTTP_X_CLIENT_LOCALE"),
             "client_platform":   request.META.get("HTTP_X_CLIENT_PLATFORM"),
-            # Optional GPS coordinates (only present when user granted geolocation)
             "client_geo_lat":    request.META.get("HTTP_X_CLIENT_GEO_LAT"),
             "client_geo_lng":    request.META.get("HTTP_X_CLIENT_GEO_LNG"),
             "client_geo_acc":    request.META.get("HTTP_X_CLIENT_GEO_ACCURACY"),
-        })
+        }
 
-        # ── 5. Inject correlation ID into request for downstream use ───────
+        token = _audit_ctx_var.set(ctx_dict)
+
+        # ── 4. Inject correlation ID into request for downstream use ───────
         request.correlation_id = correlation_id
         request.request_id = correlation_id
 
         try:
             response = self.get_response(request)
         except Exception:
-            _audit_ctx.ctx = {}
+            _audit_ctx_var.reset(token)
             raise
 
-        # ── 6. Auto failed API capture (E3) ───────────────────────────────
+        # ── 5. Auto failed API capture (E3) ───────────────────────────────
         if (
             response.status_code >= 400
             and request.method not in _AUTO_CAPTURE_EXEMPT_METHODS
             and not any(request.path.startswith(p) for p in _AUTO_CAPTURE_EXEMPT_PREFIXES)
         ):
+            lazy_ctx = get_audit_context()
+            actor = lazy_ctx.get("actor")
             self._capture_failed_response(request, response, correlation_id, ip, actor)
 
-        # ── 7. Always inject correlation ID into response headers ──────────
+        # ── 6. Always inject correlation ID into response headers ──────────
         response["X-Correlation-ID"] = correlation_id
 
-        # ── 8. Always clear — prevents context leaking across threads ─────
-        _audit_ctx.ctx = {}
+        # ── 7. Always clear — prevents context leaking ─────
+        _audit_ctx_var.reset(token)
+
+        return response
+
+    async def __acall__(self, request):
+        """Asynchronous path — ASGI (Uvicorn / Daphne)."""
+        # ── 1. Build correlation ID (E1) ──────────────────────────────────
+        correlation_id = (
+            request.META.get("HTTP_X_REQUEST_ID")
+            or request.META.get("HTTP_X_CORRELATION_ID")
+            or str(uuid.uuid4())
+        )
+
+        # ── 2. Resolve real IP (X-Forwarded-For safe) ─────────────────────
+        xff = request.META.get("HTTP_X_FORWARDED_FOR")
+        ip = (xff.split(",")[0].strip() if xff
+              else request.META.get("REMOTE_ADDR"))
+
+        # ── 3. Populate context-local context (User will be lazily evaluated) ──────────────────
+        ctx_dict = {
+            "ip_address":      ip,
+            "user_agent":      request.META.get("HTTP_USER_AGENT", ""),
+            "request_method":  request.method,
+            "request_path":    request.path,
+            "correlation_id":  correlation_id,
+            "request_id":      correlation_id,
+            "request":         request,
+            
+            # Enrich with frontend audit context headers
+            "client_device_id":  request.META.get("HTTP_X_DEVICE_ID"),
+            "client_timezone":   request.META.get("HTTP_X_CLIENT_TIMEZONE"),
+            "client_locale":     request.META.get("HTTP_X_CLIENT_LOCALE"),
+            "client_platform":   request.META.get("HTTP_X_CLIENT_PLATFORM"),
+            "client_geo_lat":    request.META.get("HTTP_X_CLIENT_GEO_LAT"),
+            "client_geo_lng":    request.META.get("HTTP_X_CLIENT_GEO_LNG"),
+            "client_geo_acc":    request.META.get("HTTP_X_CLIENT_GEO_ACCURACY"),
+        }
+
+        token = _audit_ctx_var.set(ctx_dict)
+
+        # ── 4. Inject correlation ID into request for downstream use ───────
+        request.correlation_id = correlation_id
+        request.request_id = correlation_id
+
+        try:
+            response = await self.get_response(request)
+        except Exception:
+            _audit_ctx_var.reset(token)
+            raise
+
+        # ── 5. Auto failed API capture (E3) ───────────────────────────────
+        if (
+            response.status_code >= 400
+            and request.method not in _AUTO_CAPTURE_EXEMPT_METHODS
+            and not any(request.path.startswith(p) for p in _AUTO_CAPTURE_EXEMPT_PREFIXES)
+        ):
+            lazy_ctx = get_audit_context()
+            actor = lazy_ctx.get("actor")
+            self._capture_failed_response(request, response, correlation_id, ip, actor)
+
+        # ── 6. Always inject correlation ID into response headers ──────────
+        response["X-Correlation-ID"] = correlation_id
+
+        # ── 7. Always clear — prevents context leaking ─────
+        _audit_ctx_var.reset(token)
 
         return response
 
