@@ -615,10 +615,6 @@ SPECTACULAR_SETTINGS = {
         {"url": "http://127.0.0.1:8001", "description": "Development (ASGI/Uvicorn)"},
     ],
     # ── Filter: Only expose /api/v1/auth/ in schema ──────────────────────
-    # Prevents legacy store/vendor/admin_backend URLs from triggering 500s
-    "PREPROCESSING_HOOKS": [
-        "apps.common.schema_hooks.filter_auth_endpoints_only",
-    ],
 }
 
 SWAGGER_SETTINGS = {

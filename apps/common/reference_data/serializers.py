@@ -1,3 +1,4 @@
+# apps/common/reference_data/serializers.py
 """DRF serializers for common reference data."""
 
 from __future__ import annotations
