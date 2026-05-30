@@ -15,12 +15,12 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 print("Checking registered users...")
-clients = User.objects.filter(role=User.CLIENT)[:5]
+clients = User.objects.filter(role=User.ROLE_CLIENT)[:5]
 print(f"Found {len(clients)} clients:")
 for c in clients:
-    print(f"- ID: {c.id}, Email: {c.email}, Phone: {c.phone}, Active: {c.is_active}, Verified: {c.verified}")
+    print(f"- ID: {c.id}, Email: {c.email}, Phone: {c.phone}, Active: {c.is_active}, Verified: {c.is_verified}")
 
-vendors = User.objects.filter(role=User.VENDOR)[:5]
+vendors = User.objects.filter(role=User.ROLE_VENDOR)[:5]
 print(f"\nFound {len(vendors)} vendors:")
 for v in vendors:
-    print(f"- ID: {v.id}, Email: {v.email}, Phone: {v.phone}, Active: {v.is_active}, Verified: {v.verified}")
+    print(f"- ID: {v.id}, Email: {v.email}, Phone: {v.phone}, Active: {v.is_active}, Verified: {v.is_verified}")
