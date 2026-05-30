@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 # ── Models we deliberately skip to avoid noise / circularity ──────
 _EXCLUDED_MODEL_NAMES = frozenset({
     # Django internals
-    'Session', 'ContentType', 'Permission', 'LogEntry',
+    'Session', 'ContentType', 'Permission', 'LogEntry', 'Migration',
     # JWT / token models
     'BlacklistedToken', 'OutstandingToken',
     # Analytics models themselves (no recursive counting)
@@ -71,6 +71,7 @@ _EXCLUDED_APP_LABELS = frozenset({
     'sessions',       # Session
     'django_celery_beat',
     'auditlog',
+    'migrations',     # Django migrations
 })
 
 
