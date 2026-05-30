@@ -238,6 +238,10 @@ qrcode
 # OpenAI
 openai
 
+# profiling nN + 1 queries
+nplusone
+django-db-geeks 
+debug-tool-bar
 
 
 # ============================================================================================
