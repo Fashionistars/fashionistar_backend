@@ -5,7 +5,10 @@ Dedicated concurrency and race condition tests for the catalog homepage bundle.
 
 These are separate from test_homepage_bundle.py so they can be run selectively
 against a live Redis instance in CI with:
-    pytest apps/catalog/tests/test_catalog_concurrency.py -v --asyncio-mode=auto -m concurrency
+    pytest apps/catalog/tests/test_catalog_concurrency.py -v -m concurrency
+
+Fixtures (from conftest.py):
+    seeded_db  — Lighter seed (Category + Collection only)
 
 Tags: concurrency, async, race_condition, cache
 """
@@ -20,24 +23,9 @@ import pytest
 pytestmark = [
     pytest.mark.django_db(transaction=True),
     pytest.mark.asyncio,
+    pytest.mark.concurrency,
+    pytest.mark.catalog,
 ]
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Fixtures
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-@pytest.fixture
-def seeded_db(db):
-    """Light seed for concurrency tests."""
-    from apps.catalog.models import Category, Collections
-    Category.objects.create(name="Concurrency Test Cat", active=True)
-    Collections.objects.create(
-        title="Concurrency Test Coll",
-        sub_title="Sub",
-        description="Test",
-    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

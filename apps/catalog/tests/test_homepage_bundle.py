@@ -6,64 +6,31 @@ pytest unit + integration tests for the asyncio.gather() homepage bundle endpoin
 Coverage:
     G1 — Unit tests for async selectors
     G2 — Integration tests for the Ninja endpoint
+    G5 — Race-condition concurrency assertions
+
+Fixtures (from conftest.py):
+    catalog_seed  — Category + Brand + Collection + CatalogBanner
+    sync_client   — Unauthenticated DRF APIClient
+    seeded_db     — Lighter seed for concurrency tests
 
 Run with:
-    pytest apps/catalog/tests/test_homepage_bundle.py -v --asyncio-mode=auto
+    pytest apps/catalog/tests/test_homepage_bundle.py -v
+    (asyncio_mode=auto already set in pytest.ini)
 """
 from __future__ import annotations
 
 import asyncio
 import time
-from unittest.mock import AsyncMock, patch
 
 import pytest
-from django.test import AsyncClient
 from django.utils import timezone
 
 pytestmark = [
     pytest.mark.django_db(transaction=True),
     pytest.mark.asyncio,
+    pytest.mark.catalog,
+    pytest.mark.bundle,
 ]
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Fixtures
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-@pytest.fixture
-def api_client():
-    return AsyncClient()
-
-
-@pytest.fixture
-def sync_client():
-    from rest_framework.test import APIClient
-    return APIClient()
-
-
-@pytest.fixture
-def catalog_seed(db):
-    """Seed minimal catalog data for all bundle selector tests."""
-    from apps.catalog.models import Category, Collections, Brand
-    from apps.catalog.models.banner import CatalogBanner
-
-    cat = Category.objects.create(name="Test Category", active=True)
-    brand = Brand.objects.create(title="Test Brand", active=True)
-    coll = Collections.objects.create(
-        title="Test Collection",
-        sub_title="Test subtitle",
-        description="A test collection.",
-    )
-    banner = CatalogBanner.objects.create(
-        slot="hero",
-        title="Hero Banner",
-        subtitle="The best deals",
-        cta_text="Shop Now",
-        cta_url="/products",
-        is_active=True,
-    )
-    return {"category": cat, "brand": brand, "collection": coll, "banner": banner}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
