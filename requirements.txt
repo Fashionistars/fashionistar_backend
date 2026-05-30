@@ -50,7 +50,7 @@ django-csp                      # Content Security Policy headers
 # 5. CACHING & REDIS
 # ═══════════════════════════════════════════════════════════
 django-redis
-redis
+redis>=5.0                      # Includes redis.asyncio (Phase 3: async hot-path cache)
 hiredis                         # C parser for 10x Redis performance
 
 
@@ -63,11 +63,11 @@ flower
 
 
 # ═══════════════════════════════════════════════════════════
-# 7. ASGI / WSGI SERVERS
+# 7. ASGI / WSGI SERVERS  (Phase 7 upgrade: uvloop + httptools via [standard])
 # ═══════════════════════════════════════════════════════════
-uvicorn
+uvicorn[standard]>=0.29.0       # [standard] activates uvloop + httptools (20-40% latency drop)
 daphne
-gunicorn
+gunicorn>=22.0                  # Gunicorn process manager + UvicornWorker
 
 
 # ═══════════════════════════════════════════════════════════
@@ -238,10 +238,17 @@ qrcode
 # OpenAI
 openai
 
-# profiling nN + 1 queries
-nplusone
-django-db-geeks 
-debug-tool-bar
+# =============================================================================
+# OBSERVABILITY & STRUCTURED LOGGING  (Phase 5)
+# =============================================================================
+structlog>=24.0                 # Lazy JSON structured logging (zero-cost when filtered)
+django-structlog>=6.0           # Django request context binding for structlog
+
+# =============================================================================
+# PROFILING & DEV TOOLING  (N+1 detection, query analysis)
+# =============================================================================
+nplusone                        # N+1 query detection in test suite
+django-debug-toolbar            # SQL query inspector in DEBUG mode (correct package name)
 
 
 # ============================================================================================

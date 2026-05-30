@@ -1253,10 +1253,21 @@ def _apply_logging_config(config):
     Custom LOGGING_CONFIG callable — called by Django during setup().
     Applies our logging config via dictConfig() at the correct time,
     after all apps load, ensuring handlers attach directly to loggers.
+
+    Phase 5 addition: also initializes structlog immediately after dictConfig
+    so both standard Python logging AND structlog share the same log level
+    settings from the start.
     """
     import logging.config as _lc
 
     _lc.dictConfig(config)
+
+    # Initialize structlog with the same debug flag used by build_logging_config
+    try:
+        from backend.config.logging_config import configure_structlog
+        configure_structlog(debug=_debug_mode)
+    except Exception:
+        pass  # structlog not installed — no-op, stdlib logging still works
 
 
 # Django reads LOGGING_CONFIG as a dotted path and calls it with LOGGING dict.
