@@ -33,6 +33,11 @@ from apps.common.tasks.notifications import (     # noqa: F401
     send_account_status_sms,
 )
 
+# ── Public engagement ────────────────────────────────────────────────────────
+from apps.common.tasks.engagement import (        # noqa: F401
+    send_public_engagement_email,
+)
+
 # ── Analytics ─────────────────────────────────────────────────────────────────
 from apps.common.tasks.analytics import (         # noqa: F401
     update_model_analytics_counter,
@@ -60,6 +65,7 @@ __all__ = [
     # notifications
     "send_account_status_email",
     "send_account_status_sms",
+    "send_public_engagement_email",
     # analytics
     "update_model_analytics_counter",
     # cloudinary

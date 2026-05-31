@@ -68,9 +68,41 @@ class AdminUserReactivateView(APIView):
         )
 
 
+
 class AdminUserUpdateView(APIView):
     permission_classes = [IsAdminUser]
     renderer_classes = [CustomJSONRenderer]
+
+    def get(self, request: Request, user_id: str, *args, **kwargs) -> Response:
+        try:
+            user = UnifiedUser.objects.all_with_deleted().get(pk=user_id)
+        except UnifiedUser.DoesNotExist:
+            return Response({"detail": "User not found."}, status=404)
+
+        return Response({
+            "id": str(user.pk),
+            "email": user.email,
+            "phone": str(user.phone) if user.phone else None,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "member_id": user.member_id,
+            "role": user.role,
+            "auth_provider": user.auth_provider,
+            "is_active": user.is_active,
+            "is_verified": user.is_verified,
+            "is_deleted": user.is_deleted,
+            "is_superuser": user.is_superuser,
+            "is_staff": user.is_staff,
+            "bio": user.bio,
+            "country": user.country,
+            "state": user.state,
+            "city": user.city,
+            "address": user.address,
+            "avatar": user.avatar.url if user.avatar else None,
+            "date_joined": user.date_joined.isoformat() if user.date_joined else None,
+            "updated_at": user.updated_at.isoformat() if user.updated_at else None,
+            "deleted_at": getattr(user, "deleted_at", None).isoformat() if getattr(user, "deleted_at", None) else None,
+        })
 
     @transaction.atomic
     def put(self, request: Request, user_id: str, *args, **kwargs) -> Response:
@@ -93,10 +125,12 @@ class AdminUserUpdateView(APIView):
             fields=updated_fields,
         )
 
-        return success_response(
-            data={"user_id": str(user.pk)},
-            message="User account updated successfully.",
-        )
+        return Response({
+            "success": True,
+            "message": "User account updated successfully.",
+            "data": {"user_id": str(user.pk)},
+        })
+
 
 
 class AdminUserVerifyView(APIView):
