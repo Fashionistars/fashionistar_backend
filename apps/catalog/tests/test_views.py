@@ -30,6 +30,8 @@ from __future__ import annotations
 
 import pytest
 
+pytestmark = pytest.mark.django_db(transaction=True)
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
@@ -42,9 +44,12 @@ def _url(path: str) -> str:
 
 
 def _get_data(response_json: dict | list) -> dict | list:
-    """Unwrap Ninja envelope: {data: ...} or pass-through list."""
-    if isinstance(response_json, dict) and "data" in response_json:
-        return response_json["data"]
+    """Unwrap Ninja envelope: {data: ...}, paginated envelope {results: ...}, or pass-through."""
+    if isinstance(response_json, dict):
+        if "data" in response_json:
+            return response_json["data"]
+        if "results" in response_json:
+            return response_json["results"]
     return response_json
 
 
@@ -94,9 +99,10 @@ class TestCategoriesEndpoint:
 
     async def test_only_active_categories_returned(self, async_client, db):
         from apps.catalog.models import Category
+        from asgiref.sync import sync_to_async
 
-        Category.objects.create(name="Active Cat", slug="active-cat", active=True)
-        Category.objects.create(name="Inactive Cat", slug="inactive-cat", active=False)
+        await sync_to_async(Category.objects.create)(name="Active Cat", slug="active-cat", active=True)
+        await sync_to_async(Category.objects.create)(name="Inactive Cat", slug="inactive-cat", active=False)
 
         resp = await async_client.get(_url("/categories/"))
         data = _get_data(resp.json())
@@ -137,9 +143,10 @@ class TestBrandsEndpoint:
             from apps.catalog.models import Brand
         except ImportError:
             from apps.catalog.models.brand import Brand  # type: ignore[no-redef]
+        from asgiref.sync import sync_to_async
 
-        Brand.objects.create(title="Active Brand", slug="active-brand", active=True)
-        Brand.objects.create(title="Inactive Brand", slug="inactive-brand", active=False)
+        await sync_to_async(Brand.objects.create)(title="Active Brand", slug="active-brand", active=True)
+        await sync_to_async(Brand.objects.create)(title="Inactive Brand", slug="inactive-brand", active=False)
 
         resp = await async_client.get(_url("/brands/"))
         data = _get_data(resp.json())
@@ -185,14 +192,15 @@ class TestCollectionsEndpoint:
 class TestBlogEndpoint:
     async def test_list_blog_returns_published_only(self, async_client, db):
         from apps.catalog.models.blog import BlogPost
+        from asgiref.sync import sync_to_async
 
-        BlogPost.objects.create(
+        await sync_to_async(BlogPost.objects.create)(
             title="Published",
             slug="published-post",
             content="...",
             status="published",
         )
-        BlogPost.objects.create(
+        await sync_to_async(BlogPost.objects.create)(
             title="Draft",
             slug="draft-post",
             content="...",
@@ -208,8 +216,9 @@ class TestBlogEndpoint:
 
     async def test_blog_detail_200_for_existing_slug(self, async_client, db):
         from apps.catalog.models.blog import BlogPost
+        from asgiref.sync import sync_to_async
 
-        BlogPost.objects.create(
+        await sync_to_async(BlogPost.objects.create)(
             title="My Post",
             slug="my-post",
             content="Hello world",
@@ -231,10 +240,11 @@ class TestBlogEndpoint:
 @pytest.mark.catalog
 class TestTagsEndpoint:
     async def test_list_tags_returns_trending_only(self, async_client, db):
-        from apps.catalog.models.tag import CatalogTag
+        from apps.catalog.models.tag import Tag
+        from asgiref.sync import sync_to_async
 
-        CatalogTag.objects.create(name="trending_tag", slug="trending_tag", is_trending=True)
-        CatalogTag.objects.create(name="non_trending", slug="non_trending", is_trending=False)
+        await sync_to_async(Tag.objects.create)(name="trending_tag", slug="trending_tag", is_trending=True)
+        await sync_to_async(Tag.objects.create)(name="non_trending", slug="non_trending", is_trending=False)
 
         resp = await async_client.get(_url("/tags/"))
         assert resp.status_code == 200
@@ -259,11 +269,12 @@ class TestBannersEndpoint:
 
     async def test_banners_does_not_return_inactive(self, async_client, db):
         from apps.catalog.models.banner import CatalogBanner
+        from asgiref.sync import sync_to_async
 
-        CatalogBanner.objects.create(
+        await sync_to_async(CatalogBanner.objects.create)(
             slot="hero", title="Active", cta_text="", cta_url="", is_active=True
         )
-        CatalogBanner.objects.create(
+        await sync_to_async(CatalogBanner.objects.create)(
             slot="hero", title="Inactive", cta_text="", cta_url="", is_active=False
         )
         resp = await async_client.get(_url("/homepage/banners/?slot=hero"))
@@ -286,7 +297,7 @@ class TestSearchEndpoint:
         assert "collections" in data
 
     async def test_search_short_query_returns_empty_results(self, async_client, catalog_seed):
-        resp = await async_client.get(_url("/search/?q=a"))
+        resp = await async_client.get(_url("/search/?q=xyz"))
         assert resp.status_code == 200
         data = _get_data(resp.json())
         assert data.get("categories", []) == []

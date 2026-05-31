@@ -28,6 +28,8 @@ from __future__ import annotations
 
 import pytest
 
+pytestmark = pytest.mark.django_db(transaction=True)
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Fixtures
 # ─────────────────────────────────────────────────────────────────────────────
@@ -401,7 +403,8 @@ class TestBannerSelector:
     async def test_inactive_banner_excluded(self, rich_seed, db):
         from apps.catalog.models import CatalogBanner
         from apps.catalog.selectors import CatalogSelector
-        CatalogBanner.objects.create(
+        from asgiref.sync import sync_to_async
+        await sync_to_async(CatalogBanner.objects.create)(
             slot="hero", title="Inactive Banner",
             cta_text="", cta_url="", is_active=False,
         )
