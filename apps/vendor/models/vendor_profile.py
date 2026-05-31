@@ -223,11 +223,15 @@ class VendorProfile(TimeStampedModel, SoftDeleteModel):
     # ── Slug auto-generation ───────────────────────────────────────
 
     def save(self, *args, **kwargs) -> None:
-        if not self.store_slug and self.store_name:
+        if not self.store_slug:
             from django.utils.text import slugify
             import shortuuid
 
-            base = slugify(self.store_name)
+            if self.store_name:
+                base = slugify(self.store_name)
+            else:
+                user_id_str = str(self.user_id) if self.user_id else shortuuid.uuid()[:8].lower()
+                base = f"vendor-{user_id_str}"
             slug = f"{base}-{shortuuid.uuid()[:4].lower()}"
             # Guarantee uniqueness
             while (
