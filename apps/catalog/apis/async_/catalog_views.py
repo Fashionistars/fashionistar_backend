@@ -693,6 +693,102 @@ async def list_collection_products(request, slug: str, page: int = 1, page_size:
     return result
 
 
+def _vendor_card_out(vendor) -> dict:
+    """Lean vendor card serialization for public collection pages."""
+    logo = None
+    try:
+        logo_field = getattr(vendor, "logo_url", None)
+        if logo_field:
+            raw = str(logo_field.url) if hasattr(logo_field, "url") else str(logo_field)
+            if raw and "res.cloudinary.com" in raw and "/upload/" in raw:
+                logo = raw.replace("/upload/", "/upload/w_200,h_200,c_fill,f_auto,q_auto/")
+            else:
+                logo = raw or None
+    except Exception:
+        logo = None
+    return {
+        "id": str(vendor.pk),
+        "store_name": vendor.store_name or "",
+        "store_slug": vendor.store_slug or "",
+        "tagline": vendor.tagline or "",
+        "description": (vendor.description or "")[:200],
+        "city": vendor.city or "",
+        "state": vendor.state or "",
+        "country": vendor.country or "",
+        "logo_url": logo,
+        "is_verified": bool(vendor.is_verified),
+        "is_featured": bool(vendor.is_featured),
+        "total_products": vendor.total_products,
+        "average_rating": float(vendor.average_rating or 0),
+        "review_count": vendor.review_count,
+    }
+
+
+@router.get("/collections/{slug}/vendors/", auth=None, summary="Paginated vendors in a collection")
+async def list_collection_vendors(request, slug: str, page: int = 1, page_size: int = 12):
+    """
+    Return vendors (VendorProfile) that have selected this collection during setup.
+    Uses reverse M2M: Collections.vendor_collections (related_name on VendorProfile.collections).
+    Cache: 5 minutes.
+    """
+    from apps.vendor.models import VendorProfile
+    from apps.catalog.models import Collections
+
+    cache_key = f"catalog:collection:vendors:{slug}:p{page}:s{page_size}"
+    cached = api_cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        # Resolve collection
+        collection = await Collections.objects.filter(
+            slug=slug, is_deleted=False,
+        ).afirst()
+
+        if collection is None:
+            result = {"results": [], "count": 0, "page": page, "page_size": page_size}
+            api_cache_set(cache_key, result, ttl=_TTL_CATALOG)
+            return result
+
+        # Count total vendors
+        total = await VendorProfile.objects.filter(
+            collections=collection,
+            is_deleted=False,
+            is_active=True,
+        ).acount()
+
+        # Paginate
+        page_size = min(page_size, 48)
+        offset = (page - 1) * page_size
+        vendors = [
+            v async for v in (
+                VendorProfile.objects
+                .filter(collections=collection, is_deleted=False, is_active=True)
+                .only(
+                    "id", "store_name", "store_slug", "tagline", "description",
+                    "logo_url", "city", "state", "country",
+                    "is_verified", "is_featured", "total_products",
+                    "average_rating", "review_count",
+                )
+                .order_by("-is_featured", "-total_products", "store_name")[offset: offset + page_size]
+            )
+        ]
+
+        result = {
+            "results": [_vendor_card_out(v) for v in vendors],
+            "count": total,
+            "page": page,
+            "page_size": page_size,
+        }
+    except Exception as exc:
+        logger.error("[list_collection_vendors] slug=%s error=%s", slug, exc)
+        result = {"results": [], "count": 0, "page": page, "page_size": page_size}
+
+    api_cache_set(cache_key, result, ttl=_TTL_CATALOG)
+    return result
+
+
+
 @router.get("/search/", auth=None, summary="Catalog full-text search across categories, brands, collections")
 async def catalog_search(request, q: str = "", page_size: int = 12):
     """icontains search across catalog entities. Cache 30s."""
