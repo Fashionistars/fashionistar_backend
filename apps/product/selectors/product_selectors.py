@@ -286,12 +286,14 @@ def search_products(query: str):
 def filter_products(
     *,
     category_id: Any = None,
+    sub_category: str | None = None,
     brand_id: Any = None,
     vendor_id: Any = None,
     min_price: Any = None,
     max_price: Any = None,
     in_stock: bool | None = None,
     featured: bool | None = None,
+    hot_deal: bool | None = None,
     size_ids: list | None = None,
     color_ids: list | None = None,
     query: str | None = None,
@@ -321,6 +323,9 @@ def filter_products(
         ).distinct()
     if category_id:
         qs = qs.filter(_category_lookup(category_id)).distinct()
+    if sub_category:
+        # Filter by sub-category slug via M2M relation on Product.sub_categories
+        qs = qs.filter(sub_categories__slug=sub_category).distinct()
     if brand_id:
         logger.debug(
             "Ignoring product brand filter=%s because Brand is marketing metadata.",
@@ -349,6 +354,8 @@ def filter_products(
         qs = qs.filter(in_stock=in_stock)
     if featured is not None:
         qs = qs.filter(featured=featured)
+    if hot_deal is not None:
+        qs = qs.filter(hot_deal=hot_deal)
     if size_ids:
         qs = qs.filter(sizes__id__in=size_ids).distinct()
     if color_ids:
@@ -525,24 +532,28 @@ def get_active_coupons_for_vendor(vendor_id: Any):
 def afilter_products(
     *,
     category: str | None = None,
+    sub_category: str | None = None,
     brand: str | None = None,
     vendor: str | None = None,
     min_price: Any = None,
     max_price: Any = None,
     in_stock: bool | None = None,
     featured: bool | None = None,
+    hot_deal: bool | None = None,
     query: str | None = None,
     ordering: str = "-created_at",
 ):
     """Return an async-ready published product queryset for Ninja feeds."""
     return filter_products(
         category_id=category,
+        sub_category=sub_category,
         brand_id=brand,
         vendor_id=vendor,
         min_price=min_price,
         max_price=max_price,
         in_stock=in_stock,
         featured=featured,
+        hot_deal=hot_deal,
         query=query,
         ordering=ordering,
     )
