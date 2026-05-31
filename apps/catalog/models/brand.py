@@ -106,6 +106,18 @@ class Brand(SoftDeleteModel, TimeStampedModel):
     def __str__(self):
         return self.title or ""
 
+    @property
+    def product_count(self) -> int:
+        """Compatibility accessor for read layers expecting product_count."""
+        return self.cached_product_count
+
+    def get_live_product_count(self) -> int:
+        """Return the uncached live product total where the relation exists."""
+        try:
+            return self.brand_products.count()
+        except Exception:
+            return 0
+
     def save(self, *args, **kwargs):
         if not self.slug and self.title:
             import shortuuid
