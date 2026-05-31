@@ -89,6 +89,12 @@ class Collections(TimeStampedModel, SoftDeleteModel):
         default=0,
         help_text="Cached product count. Refreshed by update_collection_product_count Celery task.",
     )
+    catalog_tags = models.ManyToManyField(
+        "catalog.Tag",
+        blank=True,
+        related_name="collections",
+        help_text="Shared merchandising tags for discovery, campaigns, and future faceted search.",
+    )
 
     class Meta:
         managed = True
@@ -125,6 +131,17 @@ class Collections(TimeStampedModel, SoftDeleteModel):
             return self.vendor_collections.all()
         except Exception:
             return []
+
+    @property
+    def product_count(self) -> int:
+        """
+        Compatibility accessor for read layers expecting product_count.
+
+        In the live repo, collections currently map most directly to vendor
+        discovery rather than direct product ownership. This accessor keeps the
+        existing cached counter readable without forcing downstream breakage.
+        """
+        return self.cached_product_count
 
     def save(self, *args, **kwargs):
         if not self.slug and self.title:

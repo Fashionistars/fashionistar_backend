@@ -85,6 +85,12 @@ class BlogPost(TimeStampedModel, SoftDeleteModel):
         symmetrical=True,
         help_text="Manually curated related blog posts (bi-directional).",
     )
+    catalog_tags = models.ManyToManyField(
+        "catalog.Tag",
+        blank=True,
+        related_name="blog_posts",
+        help_text="Normalized shared taxonomy tags. Legacy JSON tags are preserved for backward compatibility.",
+    )
 
     # ── Engagement counters ───────────────────────────────────────────────
     view_count = models.PositiveBigIntegerField(default=0)
@@ -111,6 +117,29 @@ class BlogPost(TimeStampedModel, SoftDeleteModel):
 
     def __str__(self):
         return self.title
+
+    @property
+    def meta_title(self) -> str:
+        """Compatibility accessor for newer metadata contracts."""
+        return self.seo_title
+
+    @property
+    def meta_description(self) -> str:
+        """Compatibility accessor for newer metadata contracts."""
+        return self.seo_description
+
+    @property
+    def resolved_tags(self) -> list[str]:
+        """
+        Return normalized tags with graceful fallback to the legacy JSON field.
+
+        This keeps old payloads working while Phase A introduces shared Tag
+        relations for newer integrations.
+        """
+        relation_names = list(self.catalog_tags.values_list("name", flat=True))
+        if relation_names:
+            return relation_names
+        return [str(tag).strip() for tag in self.tags if str(tag).strip()]
 
     def _calculate_read_time(self) -> int:
         """Estimate reading time: total words ÷ 200 words per minute, min 1."""
