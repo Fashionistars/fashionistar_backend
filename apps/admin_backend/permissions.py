@@ -121,6 +121,16 @@ class AdminJWTBearer(HttpBearer):
             # gain access to admin async endpoints by virtue of being active.
             if not (
                 getattr(user, "is_superuser", False)
+                or
+                getattr(user, "admin", False)
+                or
+                getattr(user, "editor", False)
+                or
+                getattr(user, "moderator", False)
+                or
+                getattr(user, "support", False)
+                or
+                getattr(user, "assistant", False)
                 or (
                     getattr(user, "is_active", False)
                     and (

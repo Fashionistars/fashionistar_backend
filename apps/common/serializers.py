@@ -97,3 +97,69 @@ class WebhookPayloadSerializer(serializers.Serializer):
 
     class Meta:
         ref_name = "CommonWebhookPayload"
+
+
+class NewsletterSignupSerializer(serializers.Serializer):
+    """Input serializer for POST /api/v1/public/newsletter/."""
+
+    email = serializers.EmailField()
+    source = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default="newsletter",
+        max_length=80,
+    )
+
+    class Meta:
+        ref_name = "CommonNewsletterSignup"
+
+
+class WaitlistSignupSerializer(serializers.Serializer):
+    """Input serializer for POST /api/v1/public/waitlist/."""
+
+    email = serializers.EmailField()
+    source = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default="waitlist",
+        max_length=80,
+    )
+
+    class Meta:
+        ref_name = "CommonWaitlistSignup"
+
+
+class ContactSubmissionSerializer(serializers.Serializer):
+    """Input serializer for POST /api/v1/public/contact/."""
+
+    full_name = serializers.CharField(min_length=2, max_length=120)
+    email = serializers.EmailField()
+    phone = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=40,
+    )
+    subject = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=120,
+    )
+    message = serializers.CharField(min_length=10, max_length=5000)
+    vendor = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=120,
+    )
+    inquiry_type = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=60,
+    )
+    page_url = serializers.URLField(
+        required=False,
+        allow_blank=True,
+        max_length=500,
+    )
+
+    class Meta:
+        ref_name = "CommonContactSubmission"

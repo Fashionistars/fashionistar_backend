@@ -10,6 +10,11 @@ Endpoints:
   POST /api/v1/upload/webhook/cloudinary/     — Cloudinary HMAC-signed event receiver
 """
 from django.urls import path
+from apps.common.public_engagement_views import (
+  PublicContactSubmissionView,
+  PublicNewsletterSignupView,
+  PublicWaitlistSignupView,
+)
 from apps.common.views import CloudinaryPresignView, CloudinaryWebhookView
 from apps.global_platform_settings.views import PublicPlatformSettingsView
 from apps.common.reference_data.views import (
@@ -72,4 +77,9 @@ urlpatterns = [
   # GET /api/v1/platform/settings/public/
   # Returns public-safe limits (min/max withdrawal) for vendor payout modal.
   path("v1/platform/settings/public/", PublicPlatformSettingsView.as_view(), name="platform-settings-public"),
+
+  # ── Public Commerce Funnel Writes ─────────────────────────────────────────
+  path("v1/public/contact/", PublicContactSubmissionView.as_view(), name="public-contact"),
+  path("v1/public/newsletter/", PublicNewsletterSignupView.as_view(), name="public-newsletter"),
+  path("v1/public/waitlist/", PublicWaitlistSignupView.as_view(), name="public-waitlist"),
 ]
