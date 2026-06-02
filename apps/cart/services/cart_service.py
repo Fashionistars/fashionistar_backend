@@ -331,7 +331,7 @@ def remove_coupon(*, user=None, session_key: str | None = None) -> Cart:
 def clear_cart(*, user=None, session_key: str | None = None, request=None) -> None:
     """Remove all items. Called after successful order placement."""
     cart = _locked_cart(user=user, session_key=session_key)
-    cart.items.all().delete()
+    cart.items.all().hard_delete()
     cart.coupon = None
     cart.coupon_discount = 0
     cart.save(update_fields=["coupon", "coupon_discount", "updated_at"])
