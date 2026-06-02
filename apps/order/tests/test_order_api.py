@@ -109,7 +109,7 @@ def cart_with_item(db, client_user, product):
 @pytest.mark.django_db
 class TestOrderService:
 
-    @patch("apps.order.services.order_service.escrow_service", create=True)
+    @patch("apps.order.services.order_service.EscrowService", create=True)
     def test_place_order_success(self, mock_escrow, client_user, product, delivery_address, cart_with_item):
         mock_escrow.hold_escrow = MagicMock()
         order = place_order(user=client_user, delivery_address=delivery_address)
@@ -171,7 +171,7 @@ class TestOrderService:
         assert snapshot.product_title_snapshot == product.title
         assert snapshot.product_sku_snapshot == product.sku
 
-    @patch("apps.order.services.order_service.escrow_service", create=True)
+    @patch("apps.order.services.order_service.EscrowService", create=True)
     def test_place_order_clears_cart(self, mock_escrow, client_user, product, delivery_address, cart_with_item):
         mock_escrow.hold_escrow = MagicMock()
         place_order(user=client_user, delivery_address=delivery_address)
@@ -182,7 +182,7 @@ class TestOrderService:
         with pytest.raises(ValueError, match="Cart is empty"):
             place_order(user=client_user, delivery_address=delivery_address)
 
-    @patch("apps.order.services.order_service.escrow_service", create=True)
+    @patch("apps.order.services.order_service.EscrowService", create=True)
     def test_place_order_stock_enforcement(self, mock_escrow, client_user, product, delivery_address):
         """Stock < quantity should raise before any DB write."""
         product.stock_qty = 1
@@ -193,7 +193,7 @@ class TestOrderService:
         with pytest.raises(ValueError, match="only 0 unit"):
             place_order(user=client_user, delivery_address=delivery_address)
 
-    @patch("apps.order.services.order_service.escrow_service", create=True)
+    @patch("apps.order.services.order_service.EscrowService", create=True)
     def test_idempotency_prevents_duplicate_order(self, mock_escrow, client_user, product, delivery_address, cart_with_item):
         mock_escrow.hold_escrow = MagicMock()
         idem_key = "test-idem-key-12345"
@@ -204,13 +204,13 @@ class TestOrderService:
         assert order1.id == order2.id
         assert Order.objects.filter(idempotency_key=idem_key).count() == 1
 
-    @patch("apps.order.services.order_service.escrow_service", create=True)
+    @patch("apps.order.services.order_service.EscrowService", create=True)
     def test_place_order_logs_status_history(self, mock_escrow, client_user, product, delivery_address, cart_with_item):
         mock_escrow.hold_escrow = MagicMock()
         order = place_order(user=client_user, delivery_address=delivery_address)
         assert order.order_status_history.filter(to_status=OrderStatus.PENDING_PAYMENT).exists()
 
-    @patch("apps.order.services.order_service.escrow_service", create=True)
+    @patch("apps.order.services.order_service.EscrowService", create=True)
     def test_commission_snapshot(self, mock_escrow, client_user, product, delivery_address, cart_with_item):
         mock_escrow.hold_escrow = MagicMock()
         order = place_order(user=client_user, delivery_address=delivery_address)
@@ -219,16 +219,29 @@ class TestOrderService:
         # commission_amount = (10/100) * 15000 * 2 = 3000
         assert item.commission_amount == Decimal("3000.00")
 
-    @patch("apps.order.services.order_service.escrow_service", create=True)
+    @patch("apps.order.services.order_service.EscrowService", create=True)
     def test_confirm_payment(self, mock_escrow, client_user, product, delivery_address, cart_with_item):
         mock_escrow.hold_escrow = MagicMock()
+
         order = place_order(user=client_user, delivery_address=delivery_address)
+
+        from apps.payment.models import PaymentIntent, PaymentIntentStatus, PaymentPurpose
+        PaymentIntent.objects.create(
+            user=client_user,
+            purpose=PaymentPurpose.ORDER_PAYMENT,
+            status=PaymentIntentStatus.SUCCEEDED,
+            reference="PS_REF_123",
+            amount=order.total_amount,
+            currency=order.currency,
+            order_id=str(order.pk),
+        )
+
         order = confirm_payment(order=order, payment_reference="PS_REF_123", actor=client_user)
         assert order.status == OrderStatus.PAYMENT_CONFIRMED
         assert order.payment_reference == "PS_REF_123"
         assert order.paid_at is not None
 
-    @patch("apps.order.services.order_service.escrow_service", create=True)
+    @patch("apps.order.services.order_service.EscrowService", create=True)
     def test_confirm_payment_wrong_status_raises(self, mock_escrow, client_user, product, delivery_address, cart_with_item):
         mock_escrow.hold_escrow = MagicMock()
         order = place_order(user=client_user, delivery_address=delivery_address)
@@ -238,10 +251,23 @@ class TestOrderService:
         with pytest.raises(ValueError, match="Cannot confirm payment"):
             confirm_payment(order=order, payment_reference="PS_BAD")
 
-    @patch("apps.order.services.order_service.escrow_service", create=True)
+    @patch("apps.order.services.order_service.EscrowService", create=True)
     def test_transition_status_machine(self, mock_escrow, client_user, product, delivery_address, cart_with_item):
         mock_escrow.hold_escrow = MagicMock()
+
         order = place_order(user=client_user, delivery_address=delivery_address)
+
+        from apps.payment.models import PaymentIntent, PaymentIntentStatus, PaymentPurpose
+        PaymentIntent.objects.create(
+            user=client_user,
+            purpose=PaymentPurpose.ORDER_PAYMENT,
+            status=PaymentIntentStatus.SUCCEEDED,
+            reference="PS_OK",
+            amount=order.total_amount,
+            currency=order.currency,
+            order_id=str(order.pk),
+        )
+
         confirm_payment(order=order, payment_reference="PS_OK")
         order.refresh_from_db()
         order = transition_status(order=order, new_status=OrderStatus.PROCESSING)
@@ -250,7 +276,7 @@ class TestOrderService:
         with pytest.raises(ValueError, match="Invalid transition"):
             transition_status(order=order, new_status=OrderStatus.PENDING_PAYMENT)
 
-    @patch("apps.order.services.order_service.escrow_service", create=True)
+    @patch("apps.order.services.order_service.EscrowService", create=True)
     def test_cancel_order_restores_stock(self, mock_escrow, client_user, product, delivery_address, cart_with_item):
         mock_escrow.hold_escrow = MagicMock()
         order = place_order(user=client_user, delivery_address=delivery_address)
@@ -267,10 +293,15 @@ class TestOrderService:
         call_kwargs = mock_adj.call_args.kwargs
         assert call_kwargs["quantity_delta"] > 0
 
-    @patch("apps.order.services.order_service.escrow_service", create=True)
-    def test_release_escrow_double_release_blocked(self, mock_escrow, client_user, product, delivery_address, cart_with_item):
+    @patch("apps.order.services.order_service._get_active_order_hold")
+    @patch("apps.order.services.order_service.EscrowService", create=True)
+    def test_release_escrow_double_release_blocked(self, mock_escrow, mock_get_hold, client_user, product, delivery_address, cart_with_item):
         mock_escrow.hold_escrow = MagicMock()
         mock_escrow.release_escrow = MagicMock()
+        mock_hold = MagicMock()
+        mock_hold.reference = "HOLD_REF_123"
+        mock_get_hold.return_value = mock_hold
+
         order = place_order(user=client_user, delivery_address=delivery_address)
         # Force order to DELIVERED
         Order.objects.filter(pk=order.pk).update(status=OrderStatus.DELIVERED)
@@ -300,7 +331,7 @@ class TestOrderAPI:
         }, format="json")
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
-    @patch("apps.order.services.order_service.escrow_service", create=True)
+    @patch("apps.order.services.order_service.EscrowService", create=True)
     def test_place_order_via_api(self, mock_escrow, api_client, client_user, product, delivery_address):
         mock_escrow.hold_escrow = MagicMock()
         api_client.force_authenticate(client_user)
@@ -313,7 +344,7 @@ class TestOrderAPI:
         assert data["status"] == "pending_payment"
         assert data["order_number"].startswith("FSN-ORD-")
 
-    @patch("apps.order.services.order_service.escrow_service", create=True)
+    @patch("apps.order.services.order_service.EscrowService", create=True)
     def test_list_user_orders(self, mock_escrow, api_client, client_user, product, delivery_address):
         mock_escrow.hold_escrow = MagicMock()
         add_item(user=client_user, product_slug=product.slug, quantity=1)
@@ -323,7 +354,7 @@ class TestOrderAPI:
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] >= 1
 
-    @patch("apps.order.services.order_service.escrow_service", create=True)
+    @patch("apps.order.services.order_service.EscrowService", create=True)
     def test_cancel_order_via_api(self, mock_escrow, api_client, client_user, product, delivery_address):
         mock_escrow.hold_escrow = MagicMock()
         add_item(user=client_user, product_slug=product.slug, quantity=1)
@@ -335,7 +366,7 @@ class TestOrderAPI:
         assert response.status_code == status.HTTP_200_OK
         assert response.data["data"]["status"] == "cancelled"
 
-    @patch("apps.order.services.order_service.escrow_service", create=True)
+    @patch("apps.order.services.order_service.EscrowService", create=True)
     def test_vendor_order_transition_api(self, mock_escrow, api_client, vendor_user, vendor_profile, client_user, product, delivery_address):
         mock_escrow.hold_escrow = MagicMock()
         add_item(user=client_user, product_slug=product.slug, quantity=1)
