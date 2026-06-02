@@ -23,6 +23,7 @@ from rest_framework.response import Response
 
 from apps.common.permissions import IsVendor
 from apps.common.renderers import CustomJSONRenderer
+from apps.vendor.models import VendorBankAccount
 from apps.vendor.services.vendor_bank_account_service import (
     BankAccountLimitExceeded,
     BankAccountNotFound,
@@ -224,6 +225,7 @@ class VendorBankAccountDeleteView(GenericAPIView):
     """
     permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
+    queryset           = VendorBankAccount.objects.none()
 
     def delete(self, request, pk: str, *args, **kwargs):
         try:
@@ -255,6 +257,7 @@ class VendorBankAccountSetDefaultView(GenericAPIView):
     """
     permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
+    queryset           = VendorBankAccount.objects.none()
 
     def patch(self, request, pk: str, *args, **kwargs):
         try:

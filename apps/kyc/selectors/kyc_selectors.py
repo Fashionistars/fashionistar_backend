@@ -39,7 +39,7 @@ def get_kyc_documents_for_submission(submission) -> QuerySet:
     Traversal:
         ``request.user.kyc_submission.documents`` -> KycDocument rows.
     """
-    return submission.documents.order_by("uploaded_at")
+    return submission.documents.order_by("created_at")
 
 
 async def aget_kyc_submission_for_user(user) -> Optional["KycSubmission"]:  # noqa: F821
@@ -56,7 +56,7 @@ async def aget_kyc_submission_for_user(user) -> Optional["KycSubmission"]:  # no
 
 async def aget_kyc_documents_for_submission(submission) -> list:
     """Async list of documents through ``submission.documents``."""
-    return [doc async for doc in submission.documents.order_by("uploaded_at")]
+    return [doc async for doc in submission.documents.order_by("created_at")]
 
 
 def build_kyc_status_summary(submission, document_count: int = 0) -> dict:
@@ -113,7 +113,7 @@ async def aget_kyc_with_documents(user) -> dict:
                 "document_type": doc.document_type,
                 "secure_url": doc.secure_url,
                 "public_id": doc.public_id,
-                "uploaded_at": doc.uploaded_at.isoformat() if doc.uploaded_at else None,
+                "uploaded_at": doc.created_at.isoformat() if doc.created_at else None,
             }
             for doc in documents
         ],

@@ -1,5 +1,5 @@
 steps:
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'europe-west1-docker.pkg.dev/fashionistar-498122/fashionistar-repo/celery:latest', '-f', 'Dockerfile.celery', '.']
+  args: ['build', '-t', 'europe-west1-docker.pkg.dev/fashionistar-497717/fashionistar-repo/celery:latest', '-f', 'Dockerfile.celery', '.']
 images:
-- 'europe-west1-docker.pkg.dev/fashionistar-498122/fashionistar-repo/celery:latest'
+- 'europe-west1-docker.pkg.dev/fashionistar-497717/fashionistar-repo/celery:latest'
