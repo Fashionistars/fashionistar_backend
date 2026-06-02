@@ -257,9 +257,15 @@ def _homepage_collection_from_dict(row: dict) -> dict:
     """
     image_raw = row.get("image")
     bg_raw = row.get("background_image")
-    # .values() rows contain raw ImageField paths — wrap via safe_media_url helper
-    image_url = f"/media/{image_raw}" if image_raw else ""
-    bg_url = f"/media/{bg_raw}" if bg_raw else ""
+    # CRITICAL FIX: .values() rows contain raw ImageField paths.
+    # Guard against None / "None" / empty string — all produce invalid URLs.
+    def _safe_media(raw) -> str:
+        if not raw or str(raw).strip() in ("", "None", "null", "undefined"):
+            return ""
+        return f"/media/{raw}"
+
+    image_url = _safe_media(image_raw)
+    bg_url = _safe_media(bg_raw)
     return {
         "id": str(row["id"]),
         "name": row.get("title") or "",
@@ -281,7 +287,13 @@ def _homepage_category_from_dict(row: dict) -> dict:
     a serialized category card.
     """
     image_raw = row.get("image")
-    image_url = f"/media/{image_raw}" if image_raw else ""
+    # CRITICAL FIX: guard against None / "None" strings producing /media/None URLs
+    def _safe_media(raw) -> str:
+        if not raw or str(raw).strip() in ("", "None", "null", "undefined"):
+            return ""
+        return f"/media/{raw}"
+
+    image_url = _safe_media(image_raw)
     return {
         "id": str(row["id"]),
         "name": row.get("name") or "",
@@ -822,6 +834,9 @@ async def get_homepage_bundle_v2(
 
     Sections: collections, categories, featured_products, hot_deals, reviews, banners.
     Cache: catalog:homepage:bundle:v2:{params} — 5 min TTL.
+
+    RESILIENT: if CatalogBanner table doesn't exist yet (migration pending),
+    degrades gracefully to empty banners instead of failing the entire endpoint.
     """
     cache_key = (
         f"catalog:homepage:bundle:v2"
@@ -838,6 +853,16 @@ async def get_homepage_bundle_v2(
         aget_homepage_reviews,
     )
 
+    # ── Banners resilience: CatalogBanner table may not exist yet ─────────
+    async def _safe_banners():
+        try:
+            return await CatalogSelector.aget_homepage_banners(slot="hero", limit=banners_limit)
+        except Exception as exc:
+            logger.warning(
+                "[get_homepage_bundle_v2] banners unavailable (table may not exist): %s", exc
+            )
+            return []
+
     (
         raw_collections,
         raw_categories,
@@ -851,7 +876,7 @@ async def get_homepage_bundle_v2(
         aget_homepage_products(limit=products_limit),
         aget_homepage_hot_deals(limit=hot_deals_limit),
         aget_homepage_reviews(limit=reviews_limit),
-        CatalogSelector.aget_homepage_banners(slot="hero", limit=banners_limit),
+        _safe_banners(),
     )
 
     result = {
