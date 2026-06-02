@@ -254,18 +254,39 @@ def _homepage_collection_from_dict(row: dict) -> dict:
     """
     Convert a .values() dict row (from aget_homepage_collections) to
     a serialized collection card — resolves image field to URL.
+
+    CRITICAL: .values() on a CloudinaryField returns a CloudinaryResource object,
+    NOT a plain string. We must cast all image fields to str() before placing them
+    in the response dict, otherwise Ninja's json.dumps() raises:
+        TypeError: Object of type CloudinaryResource is not JSON serializable
     """
     image_raw = row.get("image")
     bg_raw = row.get("background_image")
-    # CRITICAL FIX: .values() rows contain raw ImageField paths.
-    # Guard against None / "None" / empty string — all produce invalid URLs.
-    def _safe_media(raw) -> str:
-        if not raw or str(raw).strip() in ("", "None", "null", "undefined"):
-            return ""
-        return f"/media/{raw}"
 
+    # ── CloudinaryField .values() fix: cast to str or None ──────────────────
+    # CloudinaryResource.__str__() returns the public_id (the stored value).
+    # This is safe: None stays None, "" stays "", and CloudinaryResource → str.
+    def _to_str(raw) -> str | None:
+        if raw is None:
+            return None
+        s = str(raw).strip()
+        return s if s and s not in ("None", "null", "undefined") else None
+
+    def _safe_media(raw) -> str:
+        s = _to_str(raw)
+        if not s:
+            return ""
+        # Already a full URL (Cloudinary or http)
+        if s.startswith("http"):
+            return s
+        # Relative path — prepend /media/
+        return f"/media/{s}"
+
+    image_str = _to_str(image_raw)
+    bg_str = _to_str(bg_raw)
     image_url = _safe_media(image_raw)
     bg_url = _safe_media(bg_raw)
+
     return {
         "id": str(row["id"]),
         "name": row.get("title") or "",
@@ -273,9 +294,10 @@ def _homepage_collection_from_dict(row: dict) -> dict:
         "slug": row.get("slug") or "",
         "sub_title": row.get("sub_title") or "",
         "description": row.get("description") or "",
-        "image": image_raw or None,
+        # image / background_image are plain strings now — never CloudinaryResource
+        "image": image_str,
         "image_url": image_url,
-        "background_image": bg_raw or None,
+        "background_image": bg_str,
         "background_image_url": bg_url,
         "created_at": row.get("created_at").isoformat() if row.get("created_at") else None,
     }
@@ -285,21 +307,38 @@ def _homepage_category_from_dict(row: dict) -> dict:
     """
     Convert a .values() dict row (from aget_homepage_categories) to
     a serialized category card.
+
+    CRITICAL: .values() on a CloudinaryField returns a CloudinaryResource object,
+    NOT a plain string. Cast to str() before putting in the dict to prevent
+        TypeError: Object of type CloudinaryResource is not JSON serializable
     """
     image_raw = row.get("image")
-    # CRITICAL FIX: guard against None / "None" strings producing /media/None URLs
-    def _safe_media(raw) -> str:
-        if not raw or str(raw).strip() in ("", "None", "null", "undefined"):
-            return ""
-        return f"/media/{raw}"
 
+    # ── CloudinaryField .values() fix: cast to str or None ──────────────────
+    def _to_str(raw) -> str | None:
+        if raw is None:
+            return None
+        s = str(raw).strip()
+        return s if s and s not in ("None", "null", "undefined") else None
+
+    def _safe_media(raw) -> str:
+        s = _to_str(raw)
+        if not s:
+            return ""
+        if s.startswith("http"):
+            return s
+        return f"/media/{s}"
+
+    image_str = _to_str(image_raw)
     image_url = _safe_media(image_raw)
+
     return {
         "id": str(row["id"]),
         "name": row.get("name") or "",
         "title": row.get("name") or "",
         "slug": row.get("slug") or "",
-        "image": image_raw or None,
+        # image is a plain string now — never CloudinaryResource
+        "image": image_str,
         "image_url": image_url,
         "active": row.get("active", True),
         "created_at": row.get("created_at").isoformat() if row.get("created_at") else None,
