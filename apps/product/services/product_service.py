@@ -923,6 +923,7 @@ def discard_draft_session(*, draft_session: ProductDraftSession) -> ProductDraft
     draft = ProductDraftSession.objects.select_for_update().get(pk=draft_session.pk)
     draft.status = ProductDraftStatus.DISCARDED
     draft.save(update_fields=["status", "updated_at"])
+    draft.soft_delete()
     return draft
 
 

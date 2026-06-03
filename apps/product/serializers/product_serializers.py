@@ -836,7 +836,6 @@ class ProductDraftSessionSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             "id",
-            "draft_key",
             "status",
             "expires_at",
             "last_synced_at",
