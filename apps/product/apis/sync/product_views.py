@@ -69,6 +69,7 @@ from apps.product.serializers import (
     ProductReviewWriteSerializer,
     ProductWishlistSerializer,
     ProductWriteSerializer,
+    ProductWriteFullSerializer,
     VendorReplySerializer,
 )
 from apps.product.services import (
@@ -263,7 +264,7 @@ class VendorProductListCreateView(APIView):
     def post(self, request):
         # Best-practice #2: rate-limit scope header
         vendor = request.user.vendor_profile
-        serializer = ProductWriteSerializer(
+        serializer = ProductWriteFullSerializer(
             data=request.data, context={"request": request}
         )
         if not serializer.is_valid():
@@ -328,7 +329,7 @@ class VendorProductDetailView(APIView):
             return error_response(
                 message="Product not found.", status=status.HTTP_404_NOT_FOUND
             )
-        serializer = ProductWriteSerializer(
+        serializer = ProductWriteFullSerializer(
             product, data=request.data, partial=True, context={"request": request}
         )
         if not serializer.is_valid():

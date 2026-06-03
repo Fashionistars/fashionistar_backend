@@ -575,7 +575,7 @@ class ProductWriteSerializer(serializers.ModelSerializer):
         source="categories",
         required=True,
         allow_empty=False,
-        help_text="One to five catalog category IDs. Replaces the legacy single category FK.",
+        help_text="One to fifteen catalog category IDs. Replaces the legacy single category FK.",
     )
     sub_category_ids = serializers.PrimaryKeyRelatedField(
         queryset=Category.objects.all(),
@@ -602,6 +602,8 @@ class ProductWriteSerializer(serializers.ModelSerializer):
             "size_ids", "color_ids", "tag_ids",
             "requires_measurement", "is_customisable",
             "hot_deal", "digital", "commission_rate",
+            "weight_kg", "condition", "is_pre_order", "pre_order_date",
+            "meta_title", "meta_description", "age_group", "gender_target",
             "idempotency_key",
         ]
 
@@ -628,14 +630,14 @@ class ProductWriteSerializer(serializers.ModelSerializer):
                 {"stock_qty": "Stock quantity cannot exceed max_stock ceiling."}
             )
         categories = data.get("categories") or []
-        if not (1 <= len(categories) <= 5):
+        if not (1 <= len(categories) <= 15):
             raise serializers.ValidationError(
-                {"category_ids": "Select at least 1 and at most 5 categories."}
+                {"category_ids": "Select at least 1 and at most 15 categories."}
             )
         sub_categories = data.get("sub_categories") or []
-        if len(sub_categories) > 5:
+        if len(sub_categories) > 15:
             raise serializers.ValidationError(
-                {"sub_category_ids": "Select at most 5 sub-categories."}
+                {"sub_category_ids": "Select at most 15 sub-categories."}
             )
         return data
 
@@ -656,7 +658,7 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
 
     Validation rules:
       - Price must be > 0.
-      - categories must contain 1-5 catalog category IDs.
+      - categories must contain 1-15 catalog category IDs.
       - stock_qty ≤ max_stock (when both provided).
       - commission_rate in [0, 100].
       - Each nested variant SKU must be unique within the submission.
@@ -685,7 +687,7 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
         source="categories",
         required=True,
         allow_empty=False,
-        help_text="One to five catalog category IDs. Replaces the legacy single category FK.",
+        help_text="One to fifteen catalog category IDs. Replaces the legacy single category FK.",
     )
     sub_category_ids = serializers.PrimaryKeyRelatedField(
         queryset=Category.objects.all(),
@@ -751,23 +753,14 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
                 {"stock_qty": "Stock quantity cannot exceed max_stock ceiling."}
             )
         categories = data.get("categories") or []
-        if not (1 <= len(categories) <= 5):
+        if not (1 <= len(categories) <= 15):
             raise serializers.ValidationError(
-                {"category_ids": "Select at least 1 and at most 5 categories."}
+                {"category_ids": "Select at least 1 and at most 15 categories."}
             )
         sub_categories = data.get("sub_categories") or []
-        if len(sub_categories) > 5:
+        if len(sub_categories) > 15:
             raise serializers.ValidationError(
-                {"sub_category_ids": "Select at most 5 sub-categories."}
-            )
-        return data
-
-    def validate(self, data):
-        max_stock = data.get("max_stock")
-        stock_qty = data.get("stock_qty", 0)
-        if max_stock is not None and stock_qty > max_stock:
-            raise serializers.ValidationError(
-                {"stock_qty": "Stock quantity cannot exceed max_stock ceiling."}
+                {"sub_category_ids": "Select at most 15 sub-categories."}
             )
         return data
 
