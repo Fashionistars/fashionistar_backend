@@ -553,11 +553,37 @@ CACHES = {
 # =============================================================================
 # CHANNELS (WebSocket / Real-time)
 # =============================================================================
+#
+# Resilience strategy:
+#   • socket_connect_timeout — fail-fast when Redis is unreachable.
+#     Without this, channels_redis hangs for ≥30s (TCP SYN timeout) blocking
+#     the asyncio event loop and cascading into uvicorn worker exhaustion.
+#   • socket_timeout — fail-fast on stalled reads/writes after a connection
+#     is established (e.g. Redis GC pause, network brownout).
+#   • capacity / group_expiry — bound memory and avoid stale group entries
+#     after client disconnects that don't cleanly unsubscribe.
+#
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
             "hosts": [env("REDIS_URL", default="redis://127.0.0.1:6379/0")],
+            # Fail-fast timeouts (seconds) — critical for Cloud Run + VPC Redis.
+            # A missing/misconfigured REDIS_URL would otherwise stall all WS
+            # connects for the full TCP timeout (~30s) blocking uvicorn workers.
+            "socket_connect_timeout": 2,
+            "socket_timeout": 3,
+            # Per-channel message buffer capacity (default: 100).
+            # 500 handles bursts of real-time events without dropping messages.
+            "capacity": 500,
+            # Group membership expiry in seconds (default: 86400 = 24h).
+            # 3600 (1h) prevents ghost group entries from stale connections.
+            "group_expiry": 3600,
+            # Symmetric encryption off for internal VPC traffic — avoids the
+            # ~0.5ms per-message overhead on high-throughput notification streams.
+            # Enable when channels_redis version supports it and inter-node
+            # traffic crosses a public network segment.
+            # "symmetric_encryption_keys": [],
         },
     },
 }
