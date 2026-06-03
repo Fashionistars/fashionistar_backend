@@ -477,13 +477,13 @@ class ProductWriteIn(Schema):
 
 class ProductDraftSessionOut(Schema):
     model_config = {"from_attributes": True}
-    id: str
-    draft_key: str
-    idempotency_key: str | None = None
+    id: UUID
+    draft_key: UUID
+    idempotency_key: UUID | None = None
     payload: dict
     current_step: int
     status: str
-    linked_product_id: str | None = None
+    linked_product_id: UUID | None = None
     expires_at: datetime
     last_synced_at: datetime
 
