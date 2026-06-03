@@ -51,6 +51,7 @@ from apps.product.models import (
     ProductTag,
     ProductVariant,
     ProductWishlist,
+    ProductDraftSession,
 )
 
 
@@ -813,3 +814,31 @@ class ProductWishlistSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductWishlist
         fields = ["id", "product", "created_at"]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DRAFT SESSION SERIALIZER
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ProductDraftSessionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductDraftSession
+        fields = [
+            "id",
+            "draft_key",
+            "idempotency_key",
+            "payload",
+            "current_step",
+            "status",
+            "linked_product",
+            "expires_at",
+            "last_synced_at",
+        ]
+        read_only_fields = [
+            "id",
+            "draft_key",
+            "status",
+            "expires_at",
+            "last_synced_at",
+        ]
+

@@ -46,11 +46,14 @@ from apps.product.models.product import (
     ProductShippingProfile,
     ProductPriceHistory,
     ProductViewLog,
+    ProductDraftStatus,
+    ProductDraftSession,
 )
 
 __all__ = [
     # Choices
     "ProductStatus",
+    "ProductDraftStatus",
     # Taxonomy
     "ProductTag",
     "ProductSizeType",
@@ -62,6 +65,7 @@ __all__ = [
     # Core
     "Product",
     "ProductGalleryMedia",
+    "ProductDraftSession",
     # Variants & inventory
     "ProductVariant",
     "ProductInventoryLog",

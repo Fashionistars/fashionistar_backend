@@ -52,6 +52,7 @@ from apps.product.schemas.product_schemas import (
     ProductReviewWriteIn,
     WishlistBulkStatusOut,
     WishlistToggleOut,
+    ProductDraftSessionOut,
 )
 from apps.product.selectors import (
     aget_product_detail_bundle,
@@ -871,3 +872,31 @@ async def record_product_view(
     except Exception as exc:
         logger.warning("ViewLog write failed for slug=%s: %s", slug, exc, exc_info=False)
         return {"logged": False, "reason": "write_error"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# VENDOR — Draft Sessions
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/vendor/drafts/", response=list[ProductDraftSessionOut], summary="List active vendor drafts")
+async def list_vendor_drafts(request):
+    profile = await _require_vendor(request)
+    from apps.product.models import ProductDraftSession
+
+    drafts = []
+    async for draft in ProductDraftSession.objects.filter(vendor=profile, status="active").order_by("-updated_at"):
+        drafts.append(draft)
+    return drafts
+
+
+@router.get("/vendor/drafts/{draft_key}/", response=ProductDraftSessionOut, summary="Get vendor draft detail")
+async def get_vendor_draft_detail(request, draft_key: str):
+    profile = await _require_vendor(request)
+    from apps.product.models import ProductDraftSession
+
+    try:
+        draft = await ProductDraftSession.objects.aget(draft_key=draft_key, vendor=profile)
+    except ProductDraftSession.DoesNotExist:
+        raise HttpError(404, "Draft session not found.")
+    return draft
+

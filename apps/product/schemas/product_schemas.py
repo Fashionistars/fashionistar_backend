@@ -429,6 +429,20 @@ class CouponValidateOut(Schema):
 # PRODUCT WRITE (Ninja input)
 # ─────────────────────────────────────────────────────────────────────────────
 
+class ProductVariantWriteIn(Schema):
+    sku: str | None = None
+    size_id: str | None = None
+    color_id: str | None = None
+    price_override: Decimal | None = None
+    stock_qty: int = 0
+    is_active: bool = True
+    is_default: bool = False
+    barcode: str = ""
+    weight_kg: Decimal | None = None
+    dimensions_cm: dict | None = None
+    notes: str = ""
+
+
 class ProductWriteIn(Schema):
     title: str = Field(..., min_length=3, max_length=255)
     description: str = Field(..., min_length=20)
@@ -439,8 +453,8 @@ class ProductWriteIn(Schema):
     shipping_amount: Decimal = Decimal("0")
     stock_qty: int = Field(0, ge=0)
     max_stock: int | None = None
-    category_ids: list[str] = Field(..., min_length=1, max_length=5)
-    sub_category_ids: list[str] = Field(default_factory=list, max_length=5)
+    category_ids: list[str] = Field(..., min_length=1, max_length=15)
+    sub_category_ids: list[str] = Field(default_factory=list, max_length=15)
     size_ids: list[str] = []
     color_ids: list[str] = []
     tag_ids: list[str] = []
@@ -450,6 +464,28 @@ class ProductWriteIn(Schema):
     digital: bool = False
     commission_rate: Decimal = Decimal("10.00")
     idempotency_key: UUID | None = None
+    weight_kg: Decimal | None = None
+    condition: str = "new"
+    is_pre_order: bool = False
+    pre_order_date: datetime | None = None
+    meta_title: str = ""
+    meta_description: str = ""
+    age_group: str = ""
+    gender_target: str = ""
+    variants: list[ProductVariantWriteIn] = []
+
+
+class ProductDraftSessionOut(Schema):
+    model_config = {"from_attributes": True}
+    id: str
+    draft_key: str
+    idempotency_key: str | None = None
+    payload: dict
+    current_step: int
+    status: str
+    linked_product_id: str | None = None
+    expires_at: datetime
+    last_synced_at: datetime
 
 
 class InventoryAdjustIn(Schema):

@@ -43,6 +43,8 @@ from apps.product.models import (
     ProductStatus,
     ProductWishlist,
     ProductVariant,
+    ProductDraftStatus,
+    ProductDraftSession,
 )
 from apps.product.selectors import (
     get_coupon_by_code,
@@ -838,3 +840,135 @@ def validate_coupon(*, code: str, order_subtotal: Decimal) -> dict:
         "discount_amount": discount,
         "reason": None,
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DRAFT SESSIONS
+# ─────────────────────────────────────────────────────────────────────────────
+
+@transaction.atomic
+def create_draft_session(
+    *,
+    vendor: Any,
+    draft_key: Any = None,
+    idempotency_key: Any = None,
+    payload: dict,
+    current_step: int = 1,
+) -> ProductDraftSession:
+    """
+    Create a new product draft session for the vendor.
+    """
+    import uuid
+    from django.utils.timezone import now
+
+    if idempotency_key:
+        existing = ProductDraftSession.objects.filter(
+            vendor=vendor,
+            idempotency_key=idempotency_key,
+        ).first()
+        if existing:
+            return existing
+
+    if not draft_key:
+        draft_key = uuid.uuid4()
+
+    draft = ProductDraftSession.objects.create(
+        vendor=vendor,
+        draft_key=draft_key,
+        idempotency_key=idempotency_key,
+        payload=payload,
+        current_step=current_step,
+        status=ProductDraftStatus.ACTIVE,
+        last_synced_at=now(),
+    )
+    return draft
+
+
+@transaction.atomic
+def update_draft_session(
+    *,
+    draft_session: ProductDraftSession,
+    payload: dict,
+    current_step: int | None = None,
+    idempotency_key: Any = None,
+) -> ProductDraftSession:
+    """
+    Update a draft session with payload and step changes.
+    Applies row locking (select_for_update) to prevent collisions.
+    """
+    from django.utils.timezone import now
+
+    # Apply row-level lock
+    draft = ProductDraftSession.objects.select_for_update().get(pk=draft_session.pk)
+
+    if draft.status != ProductDraftStatus.ACTIVE:
+        raise ValueError("Cannot update a draft session that is not active.")
+
+    draft.payload = payload
+    if current_step is not None:
+        draft.current_step = current_step
+    if idempotency_key:
+        draft.idempotency_key = idempotency_key
+
+    draft.last_synced_at = now()
+    draft.save()
+    return draft
+
+
+@transaction.atomic
+def discard_draft_session(*, draft_session: ProductDraftSession) -> ProductDraftSession:
+    """
+    Mark a draft session as discarded (soft delete).
+    """
+    draft = ProductDraftSession.objects.select_for_update().get(pk=draft_session.pk)
+    draft.status = ProductDraftStatus.DISCARDED
+    draft.save(update_fields=["status", "updated_at"])
+    return draft
+
+
+@transaction.atomic
+def commit_draft_session(
+    *,
+    draft_session: ProductDraftSession,
+    request: Any = None,
+) -> Product:
+    """
+    Validate the draft session payload using ProductWriteFullSerializer,
+    and create or update the canonical Product.
+    """
+    from rest_framework.exceptions import ValidationError
+    from apps.product.serializers.product_serializers import ProductWriteFullSerializer
+
+    draft = ProductDraftSession.objects.select_for_update().get(pk=draft_session.pk)
+    if draft.status != ProductDraftStatus.ACTIVE:
+        raise ValueError("Cannot commit a draft session that is not active.")
+
+    # Validate payload
+    serializer = ProductWriteFullSerializer(data=draft.payload)
+    if not serializer.is_valid():
+        raise ValidationError(serializer.errors)
+
+    validated_data = serializer.validated_data
+
+    # Decide whether to create or update product
+    product = draft.linked_product
+    if product:
+        product = update_product(
+            product=product,
+            validated_data=validated_data,
+            actor=draft.vendor.user if hasattr(draft.vendor, "user") else None,
+            request=request,
+        )
+    else:
+        product = create_product(
+            vendor=draft.vendor,
+            validated_data=validated_data,
+            idempotency_key=draft.idempotency_key or str(draft.draft_key),
+            request=request,
+        )
+        draft.linked_product = product
+
+    draft.status = ProductDraftStatus.COMMITTED
+    draft.save(update_fields=["status", "linked_product", "updated_at"])
+    return product
+
