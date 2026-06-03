@@ -16,6 +16,8 @@ enterprise-grade modular architecture with:
 
 import logging
 import uuid6
+import datetime
+from django.utils.timezone import now
 
 from django.contrib.auth import get_user_model
 from django.contrib.postgres.indexes import GinIndex
@@ -25,7 +27,7 @@ from django.db import models
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 
-from apps.common.models import TimeStampedModel, SoftDeleteModel
+from apps.common.models import TimeStampedModel, SoftDeleteModel, HardDeleteMixin
 from apps.order.models import CashPaymentMode
 
 try:
@@ -1587,3 +1589,66 @@ class ProductViewLog(TimeStampedModel):
     def __str__(self):
         actor = self.user.email if self.user else f"anon:{self.session_key[:8]}"
         return f"{self.product.title} viewed by {actor}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 19. PRODUCT DRAFT SESSION  (2026+)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class ProductDraftStatus(models.TextChoices):
+    ACTIVE = "active", _("Active")
+    COMMITTED = "committed", _("Committed")
+    DISCARDED = "discarded", _("Discarded")
+    EXPIRED = "expired", _("Expired")
+
+
+class ProductDraftSession(HardDeleteMixin, SoftDeleteModel, TimeStampedModel):
+    """
+    Vendor product builder draft persistence session.
+    Keeps unfinished product data resumable for 30 days.
+    """
+
+    vendor = models.ForeignKey(
+        "vendor.VendorProfile",
+        on_delete=models.CASCADE,
+        related_name="draft_sessions",
+        help_text="Vendor who owns this draft.",
+    )
+    draft_key = models.UUIDField(db_index=True, unique=True, default=uuid.uuid4)
+    idempotency_key = models.UUIDField(db_index=True, null=True, blank=True)
+    payload = models.JSONField(help_text="Partial JSON data of the product builder")
+    current_step = models.PositiveSmallIntegerField(default=1)
+    status = models.CharField(
+        max_length=20,
+        choices=ProductDraftStatus.choices,
+        default=ProductDraftStatus.ACTIVE,
+        db_index=True,
+    )
+    linked_product = models.ForeignKey(
+        "product.Product",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="draft_sessions",
+        help_text="Populated once the draft is committed to a final Product",
+    )
+    expires_at = models.DateTimeField(db_index=True)
+    last_synced_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("Product Draft Session")
+        verbose_name_plural = _("Product Draft Sessions")
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return f"Draft {self.draft_key} ({self.status}) for {self.vendor}"
+
+    def check_ownership(self, user) -> bool:
+        """Ownership check for HardDeleteMixin."""
+        return getattr(user, "vendor_profile", None) == self.vendor
+
+    def save(self, *args, **kwargs):
+        if not self.expires_at:
+            self.expires_at = now() + datetime.timedelta(days=30)
+        super().save(*args, **kwargs)

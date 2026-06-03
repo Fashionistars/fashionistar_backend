@@ -46,6 +46,9 @@ from apps.product.apis.sync.product_views import (
     WishlistListView,
     WishlistMergeView,
     WishlistToggleView,
+    VendorProductDraftListView,
+    VendorProductDraftDetailView,
+    VendorProductDraftCommitView,
 )
 
 app_name = "product"
@@ -74,6 +77,11 @@ urlpatterns = [
     path("vendor/<slug:slug>/media/<uuid:gid>/", VendorProductGalleryDeleteView.as_view(), name="vendor-product-gallery-delete"),
     path("vendor/<slug:slug>/inventory/", VendorInventoryLogView.as_view(), name="vendor-inventory"),
     path("vendor/reviews/<uuid:review_id>/reply/", VendorReviewReplyView.as_view(), name="vendor-review-reply"),
+
+    # ── Vendor Drafts ────────────────────────────────────────────────────────
+    path("vendor/drafts/", VendorProductDraftListView.as_view(), name="vendor-product-draft-list"),
+    path("vendor/drafts/<uuid:draft_key>/", VendorProductDraftDetailView.as_view(), name="vendor-product-draft-detail"),
+    path("vendor/drafts/<uuid:draft_key>/commit/", VendorProductDraftCommitView.as_view(), name="vendor-product-draft-commit"),
 
     # ── Reviews (per-product) ─────────────────────────────────────────────────
     path("<slug:product_slug>/reviews/", ProductReviewListCreateView.as_view(), name="product-reviews-list"),
