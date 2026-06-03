@@ -42,6 +42,7 @@ from apps.product.models import (
     ProductReview,
     ProductStatus,
     ProductWishlist,
+    ProductVariant,
 )
 from apps.product.selectors import (
     get_coupon_by_code,
@@ -182,20 +183,20 @@ def _sync_product_m2m(product: Product, relations: dict[str, Any], *, partial: b
     Apply M2M relations and enforce the product taxonomy cap at service level.
 
     Args:
-        product: Persisted Product row.
-        relations: M2M payload extracted from the serializer.
-        partial: True for PATCH updates; omitted keys are left untouched.
+      product: Persisted Product row.
+      relations: M2M payload extracted from the serializer.
+      partial: True for PATCH updates; omitted keys are left untouched.
     """
     if "categories" in relations:
         categories = relations["categories"]
-        if not (1 <= len(categories) <= 5):
-            raise ValueError("Product requires 1 to 5 categories.")
+        if not (1 <= len(categories) <= 15):
+            raise ValueError("Product requires 1 to 15 categories.")
         product.categories.set(categories)
 
     if "sub_categories" in relations:
         sub_categories = relations["sub_categories"]
-        if len(sub_categories) > 5:
-            raise ValueError("Product supports at most 5 sub-categories.")
+        if len(sub_categories) > 15:
+            raise ValueError("Product supports at most 15 sub-categories.")
         product.sub_categories.set(sub_categories)
 
     for relation_name in ("sizes", "colors", "tags"):
@@ -204,6 +205,61 @@ def _sync_product_m2m(product: Product, relations: dict[str, Any], *, partial: b
         values = relations[relation_name]
         if values or not partial:
             getattr(product, relation_name).set(values)
+
+
+def _sync_product_variants(product: Product, variants_data: list[dict]) -> None:
+    """
+    Reconcile the product's variants.
+    - If variant already exists with target SKU, update it.
+    - If SKU is new, create it.
+    - If existing variant SKU not submitted, soft-delete it.
+    """
+    existing_variants = {v.sku: v for v in product.product_variants.filter(is_deleted=False)}
+    submitted_skus = set()
+
+    for vdata in variants_data:
+        sku = vdata.get("sku")
+        if sku:
+            sku = sku.strip().upper()
+            vdata["sku"] = sku
+
+        size = vdata.get("size")
+        color = vdata.get("color")
+
+        variant_fields = {
+            "size": size,
+            "color": color,
+            "price_override": vdata.get("price_override"),
+            "stock_qty": vdata.get("stock_qty", 0),
+            "is_active": vdata.get("is_active", True),
+            "is_default": vdata.get("is_default", False),
+            "barcode": vdata.get("barcode", ""),
+            "weight_kg": vdata.get("weight_kg"),
+            "dimensions_cm": vdata.get("dimensions_cm"),
+            "notes": vdata.get("notes", ""),
+        }
+
+        if sku and sku in existing_variants:
+            variant = existing_variants[sku]
+            for attr, val in variant_fields.items():
+                setattr(variant, attr, val)
+            variant.save()
+            submitted_skus.add(sku)
+        else:
+            if not sku:
+                import uuid
+                sku = f"VAR-{str(uuid.uuid4()).upper()[:10]}"
+            variant = ProductVariant(
+                product=product,
+                sku=sku,
+                **variant_fields
+            )
+            variant.save()
+            submitted_skus.add(sku)
+
+    for sku, variant in existing_variants.items():
+        if sku not in submitted_skus:
+            variant.soft_delete()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -241,6 +297,7 @@ def create_product(
             )
             return existing
 
+    variants_data = validated_data.pop("variants", None)
     relations = _pop_product_m2m(validated_data)
 
     product = Product.objects.create(
@@ -250,6 +307,9 @@ def create_product(
         **validated_data,
     )
     _sync_product_m2m(product, relations, partial=False)
+
+    if variants_data is not None:
+        _sync_product_variants(product, variants_data)
 
     # Dispatch audit via on_commit hook for atomic integrity
     _emit_audit(
@@ -271,6 +331,7 @@ def update_product(
     request: Any = None,
 ) -> Product:
     """Update product fields. Vendor-owned products only."""
+    variants_data = validated_data.pop("variants", None)
     relations = {
         key: validated_data.pop(key)
         for key in ("categories", "sub_categories", "sizes", "colors", "tags")
@@ -282,6 +343,9 @@ def update_product(
     product.save()
 
     _sync_product_m2m(product, relations, partial=True)
+
+    if variants_data is not None:
+        _sync_product_variants(product, variants_data)
 
     _emit_audit("product.updated", product, actor=actor, request=request)
     return product
