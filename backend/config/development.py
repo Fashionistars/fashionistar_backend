@@ -216,9 +216,13 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": ["redis://127.0.0.1:6379/0"],
-            "socket_connect_timeout": 2,
-            "socket_timeout": 3,
+            "hosts": [
+                {
+                    "address": "redis://127.0.0.1:6379/0",
+                    "socket_connect_timeout": 2,
+                    "socket_timeout": 3,
+                }
+            ],
             "capacity": 500,
             "group_expiry": 3600,
         },
