@@ -272,20 +272,10 @@ def _homepage_collection_from_dict(row: dict) -> dict:
         s = str(raw).strip()
         return s if s and s not in ("None", "null", "undefined") else None
 
-    def _safe_media(raw) -> str:
-        s = _to_str(raw)
-        if not s:
-            return ""
-        # Already a full URL (Cloudinary or http)
-        if s.startswith("http"):
-            return s
-        # Relative path — prepend /media/
-        return f"/media/{s}"
-
     image_str = _to_str(image_raw)
     bg_str = _to_str(bg_raw)
-    image_url = _safe_media(image_raw)
-    bg_url = _safe_media(bg_raw)
+    image_url = safe_media_url(row, "image")
+    bg_url = safe_media_url(row, "background_image")
 
     return {
         "id": str(row["id"]),
@@ -321,16 +311,8 @@ def _homepage_category_from_dict(row: dict) -> dict:
         s = str(raw).strip()
         return s if s and s not in ("None", "null", "undefined") else None
 
-    def _safe_media(raw) -> str:
-        s = _to_str(raw)
-        if not s:
-            return ""
-        if s.startswith("http"):
-            return s
-        return f"/media/{s}"
-
     image_str = _to_str(image_raw)
-    image_url = _safe_media(image_raw)
+    image_url = safe_media_url(row, "image")
 
     return {
         "id": str(row["id"]),

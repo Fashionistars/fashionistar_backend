@@ -10,28 +10,42 @@ CATEGORY_IMAGE_FALLBACKS = {
 
 def safe_media_url(obj, *field_names: str) -> str:
     for field_name in field_names:
-        value = getattr(obj, field_name, None)
+        if isinstance(obj, dict):
+            value = obj.get(field_name, None)
+        else:
+            value = getattr(obj, field_name, None)
+            
         if not value:
             continue
+            
         if isinstance(value, str):
             url = value
         else:
             try:
                 url = value.url
             except (AttributeError, ValueError):
-                continue
+                url = str(value)
+                
         if url:
+            url_str = url.strip()
+            if not url_str or url_str in ("None", "null", "undefined"):
+                continue
+                
+            # Prepend /media/ if relative and doesn't start with http or /
+            if not url_str.startswith("http") and not url_str.startswith("/"):
+                url_str = f"/media/{url_str}"
+                
             # Check for known category image fallbacks first
             for key, fallback in CATEGORY_IMAGE_FALLBACKS.items():
-                if key in url:
+                if key in url_str:
                     return fallback
             
             # Map local relative/media paths to a high-quality placeholder in production
-            if (url.startswith("/media/") or "catalog/categories/" in url) and not getattr(settings, "DEBUG", False):
+            if (url_str.startswith("/media/") or "catalog/categories/" in url_str) and not getattr(settings, "DEBUG", False):
                 return "https://images.unsplash.com/photo-1483985988355-763728e1935b?w=600&auto=format&fit=crop&q=80"
 
             # Auto-inject Cloudinary optimal transformations (q_auto, f_auto)
-            if "res.cloudinary.com" in url and "/upload/" in url:
-                return url.replace("/upload/", "/upload/f_auto,q_auto/")
-            return url
+            if "res.cloudinary.com" in url_str and "/upload/" in url_str:
+                return url_str.replace("/upload/", "/upload/f_auto,q_auto/")
+            return url_str
     return ""
