@@ -567,12 +567,16 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [env("REDIS_URL", default="redis://127.0.0.1:6379/0")],
-            # Fail-fast timeouts (seconds) — critical for Cloud Run + VPC Redis.
-            # A missing/misconfigured REDIS_URL would otherwise stall all WS
-            # connects for the full TCP timeout (~30s) blocking uvicorn workers.
-            "socket_connect_timeout": 2,
-            "socket_timeout": 3,
+            "hosts": [
+                {
+                    "address": env("REDIS_URL", default="redis://127.0.0.1:6379/0"),
+                    # Fail-fast timeouts (seconds) — critical for Cloud Run + VPC Redis.
+                    # A missing/misconfigured REDIS_URL would otherwise stall all WS
+                    # connects for the full TCP timeout (~30s) blocking uvicorn workers.
+                    "socket_connect_timeout": 2,
+                    "socket_timeout": 3,
+                }
+            ],
             # Per-channel message buffer capacity (default: 100).
             # 500 handles bursts of real-time events without dropping messages.
             "capacity": 500,
