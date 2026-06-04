@@ -189,7 +189,7 @@ LOGGING = build_logging_config(
 # =============================================================================
 # PRODUCTION CHECKLIST GUARD
 # =============================================================================
-# This will raise on startuo if any critical settings are misconfigured.
+# This will raise on startup if any critical settings are misconfigured.
 import sys
 
 _required_env_vars = [
