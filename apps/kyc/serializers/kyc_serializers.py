@@ -32,7 +32,7 @@ class KycDocumentSerializer(serializers.ModelSerializer):
             "public_id",
             "provider_verified",
             "provider_response",
-            "uploaded_at",
+            "created_at",
         ]
         read_only_fields = fields
 
