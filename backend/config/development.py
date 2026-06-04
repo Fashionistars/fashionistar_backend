@@ -180,3 +180,52 @@ GOOGLE_CLIENT_SECRET = env("GOOGLE_CLIENT_SECRET", default="")  # noqa: F405
 CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = True
 
+# Force local Redis for Celery worker & caching in development mode
+CELERY_BROKER_URL = "redis://127.0.0.1:6379/0"
+CELERY_RESULT_BACKEND = "redis://127.0.0.1:6379/1"
+
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": "redis://127.0.0.1:6379/0",
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "IGNORE_EXCEPTIONS": True,
+            "SOCKET_TIMEOUT": 0.5,
+            "SOCKET_CONNECT_TIMEOUT": 0.5,
+        },
+    },
+    "schema": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "fashionistar-schema-cache",
+    },
+    "idempotency": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": "redis://127.0.0.1:6379/1",
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "IGNORE_EXCEPTIONS": True,
+            "SOCKET_TIMEOUT": 1.0,
+            "SOCKET_CONNECT_TIMEOUT": 1.0,
+        },
+        "TIMEOUT": 86400,
+    },
+}
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [
+                {
+                    "address": "redis://127.0.0.1:6379/0",
+                    "socket_connect_timeout": 2,
+                    "socket_timeout": 3,
+                }
+            ],
+            "capacity": 500,
+            "group_expiry": 3600,
+        },
+    },
+}
+

@@ -49,9 +49,9 @@ class OnboardingStatusFilter(admin.SimpleListFilter):
 
     def queryset(self, request, queryset: QuerySet) -> QuerySet:
         if self.value() == "complete":
-            return queryset.filter(setup_state__onboarding_done=True)
+            return queryset.filter(vendor_setup_state__onboarding_done=True)
         if self.value() == "incomplete":
-            return queryset.filter(setup_state__onboarding_done=False)
+            return queryset.filter(vendor_setup_state__onboarding_done=False)
         return queryset
 
 
@@ -68,9 +68,9 @@ class HasPayoutProfileFilter(admin.SimpleListFilter):
 
     def queryset(self, request, queryset: QuerySet) -> QuerySet:
         if self.value() == "yes":
-            return queryset.filter(payout_profile__isnull=False)
+            return queryset.filter(vendor_payout_profile__isnull=False)
         if self.value() == "no":
-            return queryset.filter(payout_profile__isnull=True)
+            return queryset.filter(vendor_payout_profile__isnull=True)
         return queryset
 
 
@@ -301,7 +301,7 @@ class VendorProfileAdmin(SoftDeleteAdminMixin, CloudinaryUploadAdminMixin, admin
         """
         return (
             super().get_queryset(request)
-            .select_related("user", "setup_state", "payout_profile")
+            .select_related("user", "vendor_setup_state", "vendor_payout_profile")
             .prefetch_related("collections")
         )
 
@@ -318,7 +318,7 @@ class VendorProfileAdmin(SoftDeleteAdminMixin, CloudinaryUploadAdminMixin, admin
         Reads from the pre-fetched setup_state reverse OneToOne.
         """
         try:
-            state = obj.setup_state
+            state = obj.vendor_setup_state
             pct   = state.completion_percentage
             if state.onboarding_done:
                 return format_html(

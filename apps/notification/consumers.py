@@ -35,10 +35,15 @@ Resilience:
   - channel_layer may be None (Redis down) — close gracefully with 1011.
   - All ORM calls use native Django 6 async ORM (zero sync_to_async).
   - mark_read is fully atomic (uses service layer not raw queryset update).
+  - Every Redis interaction (group_add, group_send, group_discard) is wrapped
+    in a try/except that catches OSError, asyncio.TimeoutError,
+    channels_redis ConnectionError and redis TimeoutError so a transient
+    Redis blip never crashes the WebSocket coroutine or the uvicorn worker.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 
@@ -47,6 +52,29 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from apps.notification.selectors import aget_unread_count
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Exception bucket that covers all Redis / channels_redis / network errors
+# we need to handle gracefully.  Imported lazily inside _try_* helpers so
+# that missing optional deps don't crash settings import.
+# ---------------------------------------------------------------------------
+_REDIS_ERRORS = (
+    OSError,           # socket-level: ECONNREFUSED, ETIMEDOUT, etc.
+    TimeoutError,      # Python built-in (subclass of OSError on Py3.11+)
+    asyncio.TimeoutError,  # raised by asyncio.wait_for wrappers
+)
+
+try:
+    from redis.exceptions import TimeoutError as RedisTimeoutError
+    from redis.exceptions import ConnectionError as RedisConnectionError
+    _REDIS_ERRORS = _REDIS_ERRORS + (RedisTimeoutError, RedisConnectionError)
+except ImportError:
+    pass
+
+try:
+    from channels_redis.core import ChannelFull  # noqa: F401 — import for awareness
+except ImportError:
+    pass
 
 
 class NotificationBadgeConsumer(AsyncJsonWebsocketConsumer):
@@ -58,7 +86,22 @@ class NotificationBadgeConsumer(AsyncJsonWebsocketConsumer):
       - Forward group events to the browser (badge, new notification, read sync).
       - Handle client-initiated mark_read commands with atomic DB update.
       - Gracefully degrade when Redis/channel_layer is unavailable.
+
+    Redis failure strategy:
+      - connect():      If group_add raises, log and continue without group
+                        membership. Badge still delivered from DB. Consumer
+                        sets self._channel_layer_ok = False so group_send
+                        calls are skipped for this session.
+      - disconnect():   group_discard errors are swallowed — they are best-
+                        effort cleanup and must not propagate.
+      - _handle_mark_read(): group_send errors are caught — the mark_read DB
+                        write still completes and the badge is re-pushed to
+                        the initiating socket.
     """
+
+    # Set to False when the channel layer raises during connect() so all
+    # subsequent group operations are skipped gracefully for this session.
+    _channel_layer_ok: bool = True
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -78,30 +121,38 @@ class NotificationBadgeConsumer(AsyncJsonWebsocketConsumer):
 
         channel_layer = self.channel_layer
         if channel_layer is None:
-            # Redis unavailable — still accept so badge polling works via REST.
+            # channels_redis backend not configured at all — still accept so
+            # badge polling works via REST.
             logger.warning(
-                "NotificationBadgeConsumer: channel_layer is None (Redis down?), "
+                "NotificationBadgeConsumer: channel_layer is None (Redis not configured?), "
                 "accepting without group membership for user=%s",
                 self.user_id,
             )
+            self._channel_layer_ok = False
             await self.accept()
             await self._send_badge()
             return
 
-        await channel_layer.group_add(self.group_name, self.channel_name)
+        # Attempt group registration; degrade gracefully on Redis failure.
+        self._channel_layer_ok = await self._try_group_add(channel_layer)
+
         await self.accept()
 
         # Immediately push the current unread count so the UI badge is accurate
         # before the first poll interval fires.
         await self._send_badge()
-        logger.debug("NotificationBadgeConsumer: connected user=%s", self.user_id)
+        logger.debug(
+            "NotificationBadgeConsumer: connected user=%s layer_ok=%s",
+            self.user_id,
+            self._channel_layer_ok,
+        )
 
     async def disconnect(self, close_code):
         """Leave the user badge group and clean up channel layer membership."""
-        if hasattr(self, "group_name"):
+        if hasattr(self, "group_name") and self._channel_layer_ok:
             channel_layer = self.channel_layer
             if channel_layer is not None:
-                await channel_layer.group_discard(self.group_name, self.channel_name)
+                await self._try_group_discard(channel_layer)
         logger.debug(
             "NotificationBadgeConsumer: disconnected user=%s code=%s",
             getattr(self, "user_id", "?"),
@@ -122,7 +173,10 @@ class NotificationBadgeConsumer(AsyncJsonWebsocketConsumer):
         try:
             payload = json.loads(text_data)
         except (json.JSONDecodeError, ValueError):
-            logger.debug("NotificationBadgeConsumer: invalid JSON from user=%s", getattr(self, "user_id", "?"))
+            logger.debug(
+                "NotificationBadgeConsumer: invalid JSON from user=%s",
+                getattr(self, "user_id", "?"),
+            )
             return
 
         msg_type = payload.get("type", "")
@@ -235,15 +289,17 @@ class NotificationBadgeConsumer(AsyncJsonWebsocketConsumer):
             await self._send_badge()
 
             # Fan-out read-sync to other open tabs of the same user.
-            channel_layer = self.channel_layer
-            if channel_layer is not None and updated:
-                await channel_layer.group_send(
-                    self.group_name,
-                    {
-                        "type": "notification.read_sync",
-                        "payload": {"marked": 1, "notification_id": notification_id},
-                    },
-                )
+            if self._channel_layer_ok and updated:
+                channel_layer = self.channel_layer
+                if channel_layer is not None:
+                    await self._try_group_send(
+                        channel_layer,
+                        self.group_name,
+                        {
+                            "type": "notification.read_sync",
+                            "payload": {"marked": 1, "notification_id": notification_id},
+                        },
+                    )
         except Exception as exc:
             logger.warning(
                 "_handle_mark_read: failed for notification_id=%s user=%s: %s",
@@ -251,3 +307,88 @@ class NotificationBadgeConsumer(AsyncJsonWebsocketConsumer):
                 self.user_id,
                 exc,
             )
+
+    # ── Redis resilience wrappers ─────────────────────────────────────────────
+    #
+    # All three wrappers return bool (True = success, False = Redis error).
+    # They never raise — the calling code decides how to degrade.
+
+    async def _try_group_add(self, channel_layer) -> bool:
+        """
+        Attempt group_add; return False and log on any Redis/network error.
+
+        Failure here means this WebSocket session will NOT receive server-push
+        events, but it can still serve the initial badge count from the DB and
+        respond to mark_read commands.
+        """
+        try:
+            await channel_layer.group_add(self.group_name, self.channel_name)
+            return True
+        except _REDIS_ERRORS as exc:
+            logger.error(
+                "NotificationBadgeConsumer: Redis group_add failed for user=%s "
+                "group=%s — WebSocket degraded (no real-time push). Error: %s",
+                self.user_id,
+                self.group_name,
+                exc,
+            )
+            return False
+        except Exception as exc:
+            logger.error(
+                "NotificationBadgeConsumer: unexpected error in group_add for user=%s: %s",
+                self.user_id,
+                exc,
+            )
+            return False
+
+    async def _try_group_discard(self, channel_layer) -> None:
+        """
+        Attempt group_discard; swallow any Redis/network error on disconnect.
+
+        Stale group membership entries expire after ``group_expiry`` seconds
+        (configured in CHANNEL_LAYERS) so a failed discard is self-healing.
+        """
+        try:
+            await channel_layer.group_discard(self.group_name, self.channel_name)
+        except _REDIS_ERRORS as exc:
+            logger.warning(
+                "NotificationBadgeConsumer: Redis group_discard failed for user=%s "
+                "(stale entry will expire). Error: %s",
+                self.user_id,
+                exc,
+            )
+        except Exception as exc:
+            logger.warning(
+                "NotificationBadgeConsumer: unexpected error in group_discard for user=%s: %s",
+                self.user_id,
+                exc,
+            )
+
+    async def _try_group_send(self, channel_layer, group: str, message: dict) -> bool:
+        """
+        Attempt group_send; return False and log on any Redis/network error.
+
+        A failed group_send is non-fatal — the initiating socket's badge has
+        already been updated via _send_badge().  Other tabs will re-sync on
+        their next badge poll.
+        """
+        try:
+            await channel_layer.group_send(group, message)
+            return True
+        except _REDIS_ERRORS as exc:
+            logger.warning(
+                "NotificationBadgeConsumer: Redis group_send failed for user=%s "
+                "group=%s message_type=%s. Error: %s",
+                self.user_id,
+                group,
+                message.get("type"),
+                exc,
+            )
+            return False
+        except Exception as exc:
+            logger.warning(
+                "NotificationBadgeConsumer: unexpected error in group_send for user=%s: %s",
+                self.user_id,
+                exc,
+            )
+            return False
