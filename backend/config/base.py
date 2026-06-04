@@ -495,6 +495,39 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # CACHING (Redis)
 # =============================================================================
 
+def normalize_redis_ssl_url(url: str) -> str:
+    """Detects if a Redis URL uses TLS (rediss://) and appends ?ssl_cert_reqs=none if missing."""
+    if not url:
+        return url
+    if url.startswith("rediss://") and "ssl_cert_reqs" not in url:
+        separator = "&" if "?" in url else "?"
+        url = f"{url}{separator}ssl_cert_reqs=none"
+    return url
+
+
+def change_redis_db(url: str, db_num: int) -> str:
+    """Updates the Redis database index (e.g. /0 to /1) while keeping query params."""
+    if not url:
+        return url
+    parts = url.split("?", 1)
+    base_part = parts[0]
+    query_part = f"?{parts[1]}" if len(parts) > 1 else ""
+    
+    scheme_separator = "://"
+    if scheme_separator in base_part:
+        scheme, remainder = base_part.split(scheme_separator, 1)
+        if "/" in remainder:
+            host_port, db = remainder.rsplit("/", 1)
+            new_remainder = f"{host_port}/{db_num}"
+        else:
+            new_remainder = f"{remainder}/{db_num}"
+        base_part = f"{scheme}{scheme_separator}{new_remainder}"
+    return f"{base_part}{query_part}"
+
+
+# Single-source normalized Redis base URL (default DB 0)
+_RAW_REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/0")
+REDIS_URL = normalize_redis_ssl_url(_RAW_REDIS_URL)
 
 # Configure Django's CACHES
 # - 'default': Redis (sessions, throttling, app-level caching)
@@ -504,7 +537,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": env("REDIS_URL", default="redis://127.0.0.1:6379/0"),
+        "LOCATION": REDIS_URL,
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
             # Silently return None on cache misses when Redis is unreachable.
@@ -538,7 +571,7 @@ CACHES = {
     # In tests: overridden to LocMemCache via @override_settings(CACHES=...).
     "idempotency": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": env("REDIS_URL", default="redis://127.0.0.1:6379/1"),
+        "LOCATION": change_redis_db(REDIS_URL, 1),
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
             "IGNORE_EXCEPTIONS": True,
@@ -860,10 +893,11 @@ ZOHO_ZEPTOMAIL_HOSTED_REGION = env(
 #   backend/celery.py   ← Queue topology, task routes, beat schedule  ← YOU
 #   backend/config/base.py ← Broker URL, serialiser, reliability flags ← THIS FILE
 
-REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/1")
-
 CELERY_BROKER_URL = env("CELERY_BROKER_URL", default=REDIS_URL)
-CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default=REDIS_URL)
+CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default=change_redis_db(REDIS_URL, 1))
+
+CELERY_BROKER_URL = normalize_redis_ssl_url(CELERY_BROKER_URL)
+CELERY_RESULT_BACKEND = normalize_redis_ssl_url(CELERY_RESULT_BACKEND)
 
 # Fast-fail: 1s timeouts so dead Redis fails immediately, not after 60s
 CELERY_BROKER_TRANSPORT_OPTIONS = {
