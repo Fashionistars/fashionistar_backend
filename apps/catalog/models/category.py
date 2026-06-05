@@ -83,6 +83,39 @@ class Category(TimeStampedModel, SoftDeleteModel):
         help_text="Cached product count. Refreshed by update_category_product_count Celery task.",
     )
 
+    # ── Phase 12: 2026+ Scale Fields ─────────────────────────────────────────
+    # Hierarchy materialization (avoids recursive queries for depth/path)
+    depth = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Hierarchy depth. 0 = root category. Updated on save.",
+    )
+    full_path = models.CharField(
+        max_length=500, blank=True, db_index=True,
+        help_text="Materialized full slug path: 'fashion/women/dresses'. Updated on save.",
+    )
+    is_leaf_node = models.BooleanField(
+        default=True, db_index=True,
+        help_text="True if this category has no children. Updated by Celery beat.",
+    )
+
+    # AI & Discovery
+    ai_trend_score = models.FloatField(
+        default=0.0, db_index=True,
+        help_text="AI-computed trend score (0.0 – 100.0). Refreshed every 6 hours.",
+    )
+    season_relevance = models.JSONField(
+        default=dict, blank=True,
+        help_text='Season-to-relevance score: {"SS": 0.9, "AW": 0.3}.',
+    )
+    gender_tags = models.JSONField(
+        default=list, blank=True,
+        help_text='Target gender list: ["female", "male", "unisex", "children"].',
+    )
+    embedding_vector = models.JSONField(
+        null=True, blank=True,
+        help_text="768-dim embedding for category similarity matching.",
+    )
+
     class Meta:
         managed = True
         verbose_name = "Catalog Category"
@@ -93,7 +126,10 @@ class Category(TimeStampedModel, SoftDeleteModel):
             models.Index(fields=["slug"], name="category_slug_idx"),
             models.Index(fields=["parent", "sort_order"], name="category_parent_sort_idx"),
             models.Index(fields=["active", "sort_order"], name="category_active_sort_idx"),
+            models.Index(fields=["is_leaf_node", "active"], name="category_leaf_active_idx"),
+            models.Index(fields=["ai_trend_score"], name="category_trend_score_idx"),
         ]
+
 
     # ── Admin helpers ─────────────────────────────────────────────────────
     def category_image(self):
