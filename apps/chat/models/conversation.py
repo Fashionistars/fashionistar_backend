@@ -150,6 +150,12 @@ class Message(TimeStampedModel, SoftDeleteModel):
     """
     A single message within a Conversation.
     Author is determined by FK — application enforces buyer/vendor restriction.
+
+    Phase 6 addition:
+        measurement_share_token — when a client shares their measurements
+        in a chat, this FK points to the scoped MeasurementShareToken granting
+        the vendor read access to specific measurement fields.
+        The token carries its own expiry and revocation state.
     """
 
     conversation = models.ForeignKey(
@@ -171,6 +177,19 @@ class Message(TimeStampedModel, SoftDeleteModel):
     body = models.TextField(blank=True)
     is_read_by_buyer = models.BooleanField(default=False)
     is_read_by_vendor = models.BooleanField(default=False)
+
+    # Phase 6: Measurement-gated chat — optional share token attached to this message
+    measurement_share_token = models.ForeignKey(
+        "measurements.MeasurementShareToken",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="chat_messages",
+        help_text=(
+            "Set when a client shares measurements in chat. "
+            "Grants the vendor scoped, revocable access to measurement fields."
+        ),
+    )
 
     class Meta:
         db_table = "chat_messages"
