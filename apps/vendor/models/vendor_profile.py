@@ -171,6 +171,75 @@ class VendorProfile(TimeStampedModel, SoftDeleteModel):
     is_active = models.BooleanField(default=True, db_index=True)
     is_featured = models.BooleanField(default=False, db_index=True)
 
+    # ── Phase 12: 2026+ Scale Fields ────────────────────────────────────────
+    # Subscription & Monetisation
+    TIER_FREE = "free"
+    TIER_PRO = "pro"
+    TIER_ELITE = "elite"
+    TIER_CHOICES = [(TIER_FREE, "Free"), (TIER_PRO, "Pro"), (TIER_ELITE, "Elite")]
+
+    subscription_tier = models.CharField(
+        max_length=10, choices=TIER_CHOICES, default=TIER_FREE, db_index=True,
+        help_text="Vendor subscription tier. Controls feature access and product limits.",
+    )
+    commission_rate = models.DecimalField(
+        max_digits=5, decimal_places=4, default=Decimal("0.10"),
+        help_text="Platform commission rate (0.10 = 10%). Overrides global default.",
+    )
+    max_product_count = models.PositiveIntegerField(
+        default=50,
+        help_text="Maximum active product listings. 0 = unlimited (Elite only).",
+    )
+
+    # Business Identity
+    business_type = models.CharField(
+        max_length=30, blank=True,
+        choices=[
+            ("sole_trader", "Sole Trader"),
+            ("registered_business", "Registered Business"),
+            ("fashion_house", "Fashion House"),
+            ("tailor", "Independent Tailor"),
+            ("designer", "Fashion Designer"),
+        ],
+        help_text="Legal/operational business classification.",
+    )
+    tax_id = models.CharField(
+        max_length=50, blank=True,
+        help_text="Tax Identification Number (TIN) — stored encrypted.",
+    )
+    custom_domain = models.CharField(
+        max_length=255, blank=True, unique=True, null=True,
+        help_text="Custom storefront domain (e.g. brand.fashionistar.com).",
+    )
+    verified_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Timestamp when the vendor was manually verified by staff.",
+    )
+
+    # AI & Advanced Features
+    ai_features_enabled = models.BooleanField(
+        default=False,
+        help_text="Enables AI product description generation, trend scoring, size recommendations.",
+    )
+    ai_style_embedding = models.JSONField(
+        null=True, blank=True,
+        help_text="768-dim style embedding vector for vendor similarity matching.",
+    )
+
+    # Performance
+    avg_fulfillment_days = models.FloatField(
+        null=True, blank=True,
+        help_text="Rolling 30-day average order fulfillment time in days.",
+    )
+    return_rate = models.FloatField(
+        default=0.0,
+        help_text="Return rate as a fraction (0.0 – 1.0). Updated by Celery beat.",
+    )
+    dispute_rate = models.FloatField(
+        default=0.0,
+        help_text="Dispute rate as a fraction (0.0 – 1.0). Monitored for platform health.",
+    )
+
     class Meta:
         verbose_name = "Vendor Profile"
         verbose_name_plural = "Vendor Profiles"
@@ -181,7 +250,10 @@ class VendorProfile(TimeStampedModel, SoftDeleteModel):
             models.Index(fields=["is_verified"], name="vendor_profile_verified_idx"),
             models.Index(fields=["country"], name="vendor_profile_country_idx"),
             models.Index(fields=["is_active"], name="vendor_profile_active_idx"),
+            models.Index(fields=["subscription_tier", "is_active"], name="vendor_profile_tier_active_idx"),
+            models.Index(fields=["is_featured", "is_active"], name="vendor_profile_featured_idx"),
         ]
+
 
     def __str__(self) -> str:
         return f"VendorProfile({self.store_name or self.pk})"

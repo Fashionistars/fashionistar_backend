@@ -307,6 +307,50 @@ class UnifiedUser(HardDeleteMixin, AbstractUser, TimeStampedModel, SoftDeleteMod
         ),
     )
 
+    # ── Phase 12: 2026+ Scale Fields ─────────────────────────────────────
+    preferred_language = models.CharField(
+        max_length=10, blank=True, default="en",
+        help_text="IETF language tag, e.g. 'en', 'yo', 'ha', 'ig'.",
+    )
+    timezone = models.CharField(
+        max_length=50, blank=True, default="Africa/Lagos",
+        help_text="IANA timezone string, e.g. 'Africa/Lagos'.",
+    )
+    # 2FA — TOTP / backup codes
+    two_factor_enabled = models.BooleanField(default=False, db_index=True)
+    two_factor_secret = models.CharField(max_length=64, blank=True)
+    two_factor_backup_codes = models.JSONField(default=list, blank=True)
+    # Login analytics
+    login_count = models.PositiveIntegerField(default=0)
+    last_login_ip = models.GenericIPAddressField(null=True, blank=True)
+    last_login_device = models.CharField(max_length=200, blank=True)
+    # Risk & compliance
+    risk_score = models.FloatField(
+        default=0.0, help_text="0.0 (safe) – 1.0 (high risk). Updated on each login.",
+    )
+    is_processing_restricted = models.BooleanField(
+        default=False, help_text="GDPR Article 18 — processing restriction flag.",
+    )
+    processing_restriction_reason = models.CharField(max_length=500, blank=True)
+    objected_processing_purposes = models.JSONField(
+        default=list, help_text="GDPR Article 21 — list of opted-out processing purposes.",
+    )
+    # Marketing & consent
+    marketing_consent = models.BooleanField(
+        default=False, help_text="Explicit marketing communications consent.",
+    )
+    marketing_consent_at = models.DateTimeField(null=True, blank=True)
+    data_retention_policy = models.CharField(
+        max_length=20, blank=True, default="standard",
+        help_text="'standard' (7yr) | 'minimal' (GDPR erasure requested) | 'legal_hold'.",
+    )
+    # Referral
+    referral_code = models.CharField(max_length=20, blank=True, unique=True, null=True, db_index=True)
+    referred_by = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="referrals", help_text="User who referred this account.",
+    )
+
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["phone"]
 

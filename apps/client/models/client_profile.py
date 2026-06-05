@@ -127,6 +127,62 @@ class ClientProfile(TimeStampedModel, SoftDeleteModel):
         help_text="Receive SMS alerts for order updates.",
     )
 
+    # ── Phase 12: 2026+ Scale Fields ────────────────────────────────────────
+    # Loyalty Programme
+    TIER_STANDARD = "standard"
+    TIER_SILVER = "silver"
+    TIER_GOLD = "gold"
+    TIER_PLATINUM = "platinum"
+    LOYALTY_TIER_CHOICES = [
+        (TIER_STANDARD, "Standard"),
+        (TIER_SILVER, "Silver"),
+        (TIER_GOLD, "Gold"),
+        (TIER_PLATINUM, "Platinum"),
+    ]
+    loyalty_tier = models.CharField(
+        max_length=12, choices=LOYALTY_TIER_CHOICES, default=TIER_STANDARD, db_index=True,
+    )
+    loyalty_points = models.PositiveIntegerField(
+        default=0,
+        help_text="Redeemable loyalty points (100 pts = ₦1).",
+    )
+    referral_code = models.CharField(
+        max_length=20, blank=True, null=True, unique=True, db_index=True,
+        help_text="Client's unique referral code for inviting friends.",
+    )
+    referral_count = models.PositiveIntegerField(default=0)
+
+    # AI & Personalisation
+    ai_style_embedding = models.JSONField(
+        null=True, blank=True,
+        help_text="768-dim style embedding vector for personalised product recommendations.",
+    )
+    occasion_preferences = models.JSONField(
+        default=list, blank=True,
+        help_text='Occasion tags: ["wedding", "casual", "office", "traditional"].',
+    )
+    body_type = models.CharField(
+        max_length=30, blank=True,
+        choices=[
+            ("slim", "Slim"), ("athletic", "Athletic"), ("curvy", "Curvy"),
+            ("plus_size", "Plus Size"), ("petite", "Petite"), ("tall", "Tall"),
+        ],
+        help_text="Body type for fit-based AI recommendations.",
+    )
+
+    # Measurements Integration
+    default_measurement_profile = models.ForeignKey(
+        "measurements.MeasurementProfile", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="default_for_clients",
+        help_text="The client's active measurement profile for size recommendations.",
+    )
+
+    # GDPR & Data Portability
+    data_portability_requested_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="GDPR Article 20 — timestamp of last data portability export request.",
+    )
+
     class Meta:
         verbose_name = "Client Profile"
         verbose_name_plural = "Client Profiles"
@@ -134,6 +190,8 @@ class ClientProfile(TimeStampedModel, SoftDeleteModel):
         indexes = [
             models.Index(fields=["user"], name="client_profile_user_idx"),
             models.Index(fields=["country"], name="client_profile_country_idx"),
+            models.Index(fields=["loyalty_tier"], name="client_profile_loyalty_tier_idx"),
+            models.Index(fields=["referral_code"], name="client_profile_referral_idx"),
         ]
 
     def __str__(self) -> str:
