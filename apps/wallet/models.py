@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from datetime import timedelta
 from decimal import Decimal
@@ -422,3 +422,140 @@ class WalletHold(TimeStampedModel):
     @property
     def remaining_amount(self) -> Decimal:
         return self.amount - self.released_amount - self.refunded_amount
+
+
+# =============================================================================
+# PHASE 4 (2026): DOUBLE-ENTRY LEDGER + PAYOUT REQUEST
+# =============================================================================
+
+import uuid as _uuid
+
+
+class WalletTransaction(TimeStampedModel):
+    """
+    Immutable double-entry ledger entry for the platform wallet system.
+
+    NEVER updated or deleted after creation. Every balance mutation creates
+    one record. Balance invariant maintained atomically via select_for_update.
+    """
+
+    class TransactionType(models.TextChoices):
+        PAYMENT_RECEIVED = "payment_received", "Payment Received"
+        ESCROW_HOLD = "escrow_hold", "Escrow Hold (Pending)"
+        ESCROW_RELEASE = "escrow_release", "Escrow Released to Available"
+        REFUND_RECEIVED = "refund_received", "Refund Received"
+        BONUS_CREDIT = "bonus_credit", "Platform Bonus Credit"
+        REVERSAL_CREDIT = "reversal_credit", "Reversal Credit"
+        PAYOUT_DEBIT = "payout_debit", "Payout to Bank Account"
+        PLATFORM_FEE = "platform_fee", "Platform Commission Fee"
+        REFUND_DEBIT = "refund_debit", "Refund Issued to Buyer"
+        ESCROW_DEBIT = "escrow_debit", "Escrow Returned to Buyer"
+        ADJUSTMENT_DEBIT = "adjustment_debit", "Manual Adjustment Debit"
+
+    class EntryType(models.TextChoices):
+        CREDIT = "credit", "Credit"
+        DEBIT = "debit", "Debit"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending (Escrow)"
+        CLEARED = "cleared", "Cleared (Available)"
+        FAILED = "failed", "Failed"
+        REVERSED = "reversed", "Reversed"
+
+    wallet = models.ForeignKey(
+        Wallet, on_delete=models.CASCADE, related_name="ledger_entries", verbose_name="Wallet"
+    )
+    transaction_type = models.CharField(
+        max_length=20, choices=TransactionType.choices, db_index=True, verbose_name="Type"
+    )
+    entry_type = models.CharField(
+        max_length=6, choices=EntryType.choices, db_index=True, verbose_name="Entry"
+    )
+    amount = models.DecimalField(max_digits=14, decimal_places=2, verbose_name="Amount (NGN)")
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.PENDING, db_index=True
+    )
+    reference = models.CharField(
+        max_length=200, db_index=True, verbose_name="Reference",
+        help_text="Idempotency key: order_id, payment_id, payout_id, etc.",
+    )
+    description = models.CharField(max_length=300, verbose_name="Description")
+    order = models.ForeignKey(
+        "order.Order", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="wallet_ledger_entries", verbose_name="Order",
+    )
+    metadata = models.JSONField(default=dict, blank=True)
+    balance_snapshot = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True,
+        verbose_name="Balance Snapshot",
+        help_text="Available balance AFTER this transaction.",
+    )
+
+    class Meta:
+        verbose_name = "Wallet Transaction"
+        verbose_name_plural = "Wallet Transactions"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["wallet", "created_at"], name="wt2_wallet_created_idx"),
+            models.Index(fields=["wallet", "status", "entry_type"], name="wt2_wallet_status_idx"),
+            models.Index(fields=["reference"], name="wt2_reference_idx"),
+            models.Index(fields=["transaction_type", "status"], name="wt2_type_status_idx"),
+        ]
+
+    def __str__(self) -> str:
+        sign = "+" if self.entry_type == self.EntryType.CREDIT else "-"
+        return f"[{self.transaction_type}] {sign}N{self.amount} [{self.status}]"
+
+
+class PayoutRequest(TimeStampedModel):
+    """
+    Vendor-initiated bank withdrawal request.
+    PENDING -> APPROVED -> PROCESSING -> COMPLETED / REJECTED / FAILED.
+    All transitions in WalletService inside transaction.atomic() + select_for_update().
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending Review"
+        APPROVED = "approved", "Approved"
+        PROCESSING = "processing", "Processing at Bank"
+        COMPLETED = "completed", "Completed"
+        REJECTED = "rejected", "Rejected"
+        FAILED = "failed", "Failed at Bank"
+
+    vendor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="payout_requests", verbose_name="Vendor",
+    )
+    amount = models.DecimalField(max_digits=14, decimal_places=2, verbose_name="Amount (NGN)")
+    bank_account_name = models.CharField(max_length=150, verbose_name="Account Name")
+    bank_account_number = models.CharField(max_length=20, verbose_name="Account Number")
+    bank_code = models.CharField(max_length=10, verbose_name="Bank Code (CBN)")
+    bank_name = models.CharField(max_length=100, verbose_name="Bank Name")
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.PENDING, db_index=True
+    )
+    processed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="processed_payout_requests", verbose_name="Processed By",
+    )
+    provider_reference = models.CharField(max_length=200, blank=True, db_index=True)
+    provider_response = models.JSONField(default=dict, blank=True)
+    failure_reason = models.TextField(blank=True)
+    idempotency_key = models.UUIDField(
+        unique=True, default=_uuid.uuid4, editable=False, verbose_name="Idempotency Key"
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    failed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Payout Request"
+        verbose_name_plural = "Payout Requests"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["vendor", "status"], name="pr_vendor_status_idx"),
+            models.Index(fields=["status", "created_at"], name="pr_status_created_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Payout[{self.status}] N{self.amount} -> {self.vendor}"
