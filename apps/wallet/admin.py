@@ -405,3 +405,158 @@ def _register_payout_admin():
 
 # Run at Django startup (admin autodiscover calls this module)
 _register_payout_admin()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PHASE 4 (2026): WALLET TRANSACTION LEDGER + PAYOUT REQUEST
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@admin.register(__import__("apps.wallet.models", fromlist=["WalletTransaction"]).WalletTransaction)
+class WalletTransactionAdmin(admin.ModelAdmin):
+    """
+    Read-only admin for WalletTransaction — immutable double-entry ledger.
+    No add / change / delete permitted. Created only by WalletService.
+    """
+
+    list_display = [
+        "id_short", "wallet_owner", "entry_type", "transaction_type",
+        "amount_display", "status", "reference_short", "created_at",
+    ]
+    list_filter = ["status", "entry_type", "transaction_type"]
+    search_fields = ["wallet__user__email", "reference", "description"]
+    date_hierarchy = "created_at"
+    ordering = ["-created_at"]
+    list_per_page = 50
+    list_select_related = ["wallet", "wallet__user"]
+    readonly_fields = [
+        "wallet", "transaction_type", "entry_type", "amount", "status",
+        "reference", "description", "order", "metadata", "balance_snapshot",
+        "created_at", "updated_at",
+    ]
+
+    def id_short(self, obj):
+        return str(obj.pk)[:8] + "…"
+    id_short.short_description = "ID"
+
+    def wallet_owner(self, obj):
+        return getattr(getattr(obj.wallet, "user", None), "email", "—")
+    wallet_owner.short_description = "Wallet Owner"
+
+    def amount_display(self, obj):
+        from django.utils.html import format_html
+        sign = "+" if obj.entry_type == "credit" else "-"
+        colour = "#10b981" if obj.entry_type == "credit" else "#ef4444"
+        return format_html(
+            '<strong style="color:{}">{}{:,.2f}</strong>', colour, sign, obj.amount
+        )
+    amount_display.short_description = "Amount (₦)"
+
+    def reference_short(self, obj):
+        ref = obj.reference or ""
+        return ref[:30] + ("…" if len(ref) > 30 else "")
+    reference_short.short_description = "Reference"
+
+    def has_add_permission(self, request): return False
+    def has_change_permission(self, request, obj=None): return False
+    def has_delete_permission(self, request, obj=None): return request.user.is_superuser
+
+
+@admin.action(description="✅ Approve selected payout requests")
+def approve_payouts(modeladmin, request, queryset):
+    from apps.wallet.models import PayoutRequest
+    now = timezone.now()
+    queryset.filter(status=PayoutRequest.Status.PENDING).update(
+        status=PayoutRequest.Status.APPROVED,
+        approved_at=now,
+        processed_by=request.user,
+    )
+
+
+@admin.action(description="❌ Reject selected payout requests")
+def reject_payouts_action(modeladmin, request, queryset):
+    from apps.wallet.models import PayoutRequest
+    queryset.filter(
+        status__in=[PayoutRequest.Status.PENDING, PayoutRequest.Status.APPROVED]
+    ).update(
+        status=PayoutRequest.Status.REJECTED,
+        processed_by=request.user,
+    )
+
+
+@admin.register(__import__("apps.wallet.models", fromlist=["PayoutRequest"]).PayoutRequest)
+class PayoutRequestAdmin(admin.ModelAdmin):
+    """
+    Admin for PayoutRequest — vendor bank withdrawal approval workflow.
+
+    Actions:
+      ✅ approve_payouts — PENDING → APPROVED
+      ❌ reject_payouts  — PENDING/APPROVED → REJECTED
+
+    Actual bank transfer is triggered by the async payout Celery task
+    after approval. Admin manages the review/decision only.
+    """
+
+    list_display = [
+        "id_short", "vendor_email", "amount_display", "bank_name",
+        "bank_account_number_masked", "status_badge",
+        "processed_by", "created_at", "approved_at", "completed_at",
+    ]
+    list_filter = ["status", "created_at"]
+    search_fields = ["vendor__email", "bank_account_name", "bank_account_number", "provider_reference"]
+    date_hierarchy = "created_at"
+    ordering = ["-created_at"]
+    list_per_page = 30
+    list_select_related = ["vendor", "processed_by"]
+    readonly_fields = [
+        "vendor", "amount", "bank_account_name", "bank_account_number",
+        "bank_code", "bank_name", "idempotency_key",
+        "provider_reference", "provider_response",
+        "approved_at", "completed_at", "failed_at",
+        "created_at", "updated_at",
+    ]
+    actions = [approve_payouts, reject_payouts_action]
+
+    fieldsets = (
+        ("Request", {"fields": ("vendor", "amount", "status", "processed_by")}),
+        ("Bank Details", {"fields": ("bank_account_name", "bank_account_number", "bank_code", "bank_name")}),
+        ("Provider", {"fields": ("provider_reference", "provider_response", "failure_reason"), "classes": ("collapse",)}),
+        ("Lifecycle", {"fields": ("approved_at", "completed_at", "failed_at"), "classes": ("collapse",)}),
+        ("System", {"fields": ("idempotency_key", "created_at", "updated_at"), "classes": ("collapse",)}),
+    )
+
+    def id_short(self, obj):
+        return str(obj.pk)[:8] + "…"
+    id_short.short_description = "ID"
+
+    def vendor_email(self, obj):
+        return getattr(obj.vendor, "email", "—")
+    vendor_email.short_description = "Vendor"
+
+    def amount_display(self, obj):
+        from django.utils.html import format_html
+        return format_html('<strong>₦{:,.2f}</strong>', obj.amount)
+    amount_display.short_description = "Amount"
+
+    def bank_account_number_masked(self, obj):
+        n = obj.bank_account_number or ""
+        return n[:3] + "*" * max(0, len(n) - 6) + n[-3:] if len(n) > 6 else "***"
+    bank_account_number_masked.short_description = "Account No."
+
+    def status_badge(self, obj):
+        from django.utils.html import format_html
+        colours = {
+            "pending":    ("#f59e0b", "#fff"),
+            "approved":   ("#6366f1", "#fff"),
+            "processing": ("#3b82f6", "#fff"),
+            "completed":  ("#10b981", "#fff"),
+            "rejected":   ("#6b7280", "#fff"),
+            "failed":     ("#ef4444", "#fff"),
+        }
+        bg, fg = colours.get(obj.status, ("#6b7280", "#fff"))
+        return format_html(
+            '<span style="background:{};color:{};padding:2px 10px;'
+            'border-radius:20px;font-size:11px;font-weight:700">{}</span>',
+            bg, fg, obj.status.upper(),
+        )
+    status_badge.short_description = "Status"
