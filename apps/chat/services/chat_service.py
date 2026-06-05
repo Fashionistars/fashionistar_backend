@@ -160,6 +160,7 @@ def send_message(
     _conv_id = str(conversation.id)
     _msg_type = message_type
     _author = author
+
     def _audit_message_sent():
         try:
             from apps.audit_logs.services.chat import chat_audit
@@ -171,6 +172,7 @@ def send_message(
             )
         except Exception:
             logger.warning("chat_audit.log_message_sent failed silently", exc_info=True)
+
     transaction.on_commit(_audit_message_sent)
     return message
 
@@ -375,6 +377,138 @@ def flag_conversation(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# PHASE 6: MEASUREMENT-GATED CHAT
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@transaction.atomic
+def send_measurement_share_message(
+    *,
+    conversation: Conversation,
+    client: "UnifiedUser",
+    measurement_share_token,
+    body: str = "",
+) -> Message:
+    """
+    Phase 6: Client shares a MeasurementShareToken in a conversation.
+
+    Creates a chat message with message_type=TEXT and attaches the
+    MeasurementShareToken FK so the vendor can access the scoped measurement
+    fields while the token remains valid and unrevoked.
+
+    Business rules:
+      - Only the buyer (client) of the conversation may share measurements.
+      - Conversation must be in ACTIVE or ESCALATED status (writable).
+      - The share token must belong to the sending client.
+      - The token must not be revoked or expired.
+      - Fires EventBus 'chat.measurement_shared' after commit.
+      - Notifies the vendor of the shared measurement.
+
+    Args:
+        conversation: The active conversation.
+        client: The authenticated client (buyer) sharing their measurements.
+        measurement_share_token: MeasurementShareToken instance to attach.
+        body: Optional message text (defaults to a system description).
+
+    Returns:
+        The created Message with measurement_share_token attached.
+
+    Raises:
+        PermissionError: If user is not the buyer.
+        PermissionError: If token does not belong to this client.
+        ValueError: If token is revoked or expired.
+        ValueError: If conversation is not writable.
+    """
+    from django.utils import timezone as tz
+
+    _assert_participant(client, conversation)
+    _assert_conversation_writable(conversation)
+
+    # Token ownership validation
+    if str(measurement_share_token.granted_by_id) != str(client.id):
+        raise PermissionError(
+            "Measurement share token does not belong to the sending client."
+        )
+
+    # Token validity validation
+    if measurement_share_token.is_revoked:
+        raise ValueError("Cannot share a revoked measurement token.")
+
+    if measurement_share_token.expires_at < tz.now():
+        raise ValueError("Cannot share an expired measurement token.")
+
+    default_body = (
+        body or
+        f"📏 I've shared my measurements with you. "
+        f"You have access to: {', '.join(measurement_share_token.fields_allowed or ['all fields'])}. "
+        f"Token expires: {measurement_share_token.expires_at.strftime('%Y-%m-%d %H:%M UTC')}."
+    )
+
+    message = Message.objects.create(
+        conversation=conversation,
+        author=client,
+        message_type=MessageType.TEXT,
+        body=default_body,
+        is_read_by_buyer=True,
+        is_read_by_vendor=False,
+        measurement_share_token=measurement_share_token,
+    )
+
+    _update_conversation_after_message(conversation, client)
+
+    logger.info(
+        "Measurement share message sent: msg=%s conv=%s client=%s token=%s",
+        message.id,
+        conversation.id,
+        client.id,
+        measurement_share_token.token,
+    )
+
+    # Notify vendor
+    if create_notification:
+        try:
+            vendor = conversation.vendor
+            if vendor:
+                create_notification(
+                    recipient=vendor,
+                    notification_type="measurement_requested",
+                    title="Client Shared Measurements",
+                    body=(
+                        f"{client.get_full_name() or client.email} has shared their "
+                        f"measurements with you in a conversation."
+                    ),
+                    metadata={
+                        "action_url": f"/vendor/messages/{conversation.id}/",
+                        "share_token": str(measurement_share_token.token),
+                    },
+                )
+        except Exception as exc:
+            logger.warning("Notification failed for measurement share: %s", exc)
+
+    # EventBus: chat.measurement_shared
+    _conv_id = str(conversation.id)
+    _token = str(measurement_share_token.token)
+    _client_id = str(client.id)
+    _msg_id = str(message.id)
+
+    def _emit_measurement_shared():
+        try:
+            from apps.common.events import event_bus
+            event_bus.emit("chat.measurement_shared", {
+                "conversation_id": _conv_id,
+                "client_id": _client_id,
+                "share_token": _token,
+                "message_id": _msg_id,
+            })
+        except Exception:
+            logger.warning("EventBus chat.measurement_shared failed silently", exc_info=True)
+
+    transaction.on_commit(_emit_measurement_shared)
+    transaction.on_commit(lambda: broadcast_message_created(message.id))
+    return message
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # PRIVATE HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -404,8 +538,6 @@ def _update_conversation_after_message(
     Uses F-expressions to avoid race conditions.
     """
     from django.db.models import F
-
-    update_fields = {"last_message_at": timezone.now()}
 
     if author.id == conversation.buyer_id:
         # Buyer sent → increment vendor unread

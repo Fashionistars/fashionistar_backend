@@ -177,14 +177,14 @@ def deactivate_codes(modeladmin, request, queryset):
 class DiscountCodeAdmin(AuditedModelAdmin, admin.ModelAdmin):
     """
     Admin for DiscountCode — platform and vendor promo management.
-    Tracks usage_count vs max_uses in real time.
+    Tracks current_uses vs max_uses atomically in real time.
     """
 
     list_display = [
         "code",
         "discount_type",
         "discount_value",
-        "usage_count",
+        "current_uses",
         "max_uses",
         "is_active",
         "vendor",
@@ -194,16 +194,16 @@ class DiscountCodeAdmin(AuditedModelAdmin, admin.ModelAdmin):
     ]
     list_filter = ["discount_type", "is_active", "valid_from", "valid_until"]
     list_editable = ["is_active"]
-    search_fields = ["code", "vendor__business_name", "description"]
-    prepopulated_fields = {}  # code is intentionally not auto-generated
-    readonly_fields = ["usage_count", "created_at", "updated_at"]
+    search_fields = ["code", "description"]
+    readonly_fields = ["current_uses", "created_at", "updated_at"]
     actions = [activate_codes, deactivate_codes]
 
     fieldsets = (
         (_("Code"), {"fields": ("code", "description")}),
-        (_("Discount"), {"fields": ("discount_type", "discount_value", "max_discount_amount", "min_order_amount")}),
-        (_("Validity"), {"fields": ("is_active", "valid_from", "valid_until")}),
-        (_("Usage"), {"fields": ("max_uses", "usage_count")}),
-        (_("Scope"), {"fields": ("vendor", "applicable_categories", "applicable_products"), "classes": ("collapse",)}),
+        (_("Discount"), {"fields": ("discount_type", "discount_value", "max_discount_amount", "minimum_order_value")}),
+        (_("Validity"), {"fields": ("is_active", "is_first_order_only", "valid_from", "valid_until")}),
+        (_("Usage"), {"fields": ("max_uses", "max_uses_per_user", "current_uses")}),
+        (_("Scope"), {"fields": ("vendor", "created_by"), "classes": ("collapse",)}),
+        (_("Metadata"), {"fields": ("metadata",), "classes": ("collapse",)}),
         (_("Timestamps"), {"fields": ("created_at", "updated_at"), "classes": ("collapse",)}),
     )
