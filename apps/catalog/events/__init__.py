@@ -58,6 +58,20 @@ CATALOG_BLOG_UNPUBLISHED = "catalog.blog.unpublished"
 CATALOG_TAG_CREATED = "catalog.tag.created"
 CATALOG_TAG_TRENDING_UPDATED = "catalog.tag.trending_updated"
 
+# 2026 — Style Guide lifecycle
+CATALOG_STYLE_GUIDE_CREATED = "catalog.style_guide.created"
+CATALOG_STYLE_GUIDE_PUBLISHED = "catalog.style_guide.published"
+CATALOG_STYLE_GUIDE_UNPUBLISHED = "catalog.style_guide.unpublished"
+
+# 2026 — Lookbook lifecycle
+CATALOG_LOOKBOOK_PUBLISHED = "catalog.lookbook.published"
+CATALOG_LOOKBOOK_UNPUBLISHED = "catalog.lookbook.unpublished"
+
+# 2026 — Trending
+CATALOG_TRENDING_REFRESHED = "catalog.trending.refreshed"
+CATALOG_FASHION_TREND_CREATED = "catalog.fashion_trend.created"
+CATALOG_FASHION_TREND_UPDATED = "catalog.fashion_trend.updated"
+
 
 # ── Default Event Handlers ─────────────────────────────────────────────────────
 
