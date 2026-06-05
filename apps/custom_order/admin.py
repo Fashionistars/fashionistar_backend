@@ -24,6 +24,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from django.contrib import messages
+from django.utils.safestring import mark_safe
 
 from apps.common.admin_mixins import SoftDeleteAdminMixin
 from apps.custom_order.models import CustomOrder, CustomOrderMilestone
@@ -187,7 +188,7 @@ class CustomOrderAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
             )
         if len(images) > 3:
             html_elements.append(f'<span style="font-size:11px;color:#64748b;font-weight:600;">+{len(images)-3}</span>')
-        return format_html("".join(html_elements))
+        return mark_safe("".join(html_elements))
 
     # ── Admin actions ────────────────────────────────────────────────────────
 

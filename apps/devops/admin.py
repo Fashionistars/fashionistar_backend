@@ -97,10 +97,10 @@ class SecretConfigAdmin(admin.ModelAdmin):
     def is_expired_display(self, obj):
         """نمایش وضعیت انقضا"""
         if obj.expires_at is None:
-            return format_html('<span style="color: gray;">بدون انقضا</span>')
+            return format_html('<span style="color: gray;">{}</span>', "بدون انقضا")
         
         if obj.is_expired:
-            return format_html('<span style="color: red;">منقضی شده</span>')
+            return format_html('<span style="color: red;">{}</span>', "منقضی شده")
         else:
             days_left = (obj.expires_at - timezone.now()).days
             color = 'orange' if days_left <= 7 else 'green'
@@ -293,7 +293,7 @@ class ServiceMonitoringAdmin(admin.ModelAdmin):
                 latest_check.get_status_display(),
                 latest_check.checked_at.strftime('%H:%M')
             )
-        return format_html('<span style="color: gray;">هنوز بررسی نشده</span>')
+        return format_html('<span style="color: gray;">{}</span>', "هنوز بررسی نشده")
     last_check_status.short_description = 'آخرین بررسی'
     
     def get_queryset(self, request):
