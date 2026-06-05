@@ -180,14 +180,19 @@ GOOGLE_CLIENT_SECRET = env("GOOGLE_CLIENT_SECRET", default="")  # noqa: F405
 CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = True
 
-# Force environment-configured Redis (falling back to local default)
-CELERY_BROKER_URL = CELERY_BROKER_URL
-CELERY_RESULT_BACKEND = CELERY_RESULT_BACKEND
+# Force local Redis for Celery worker & caching in development mode
+import os
+os.environ["REDIS_URL"] = "redis://127.0.0.1:6379/0"
+os.environ["CELERY_BROKER_URL"] = "redis://127.0.0.1:6379/0"
+os.environ["CELERY_RESULT_BACKEND"] = "redis://127.0.0.1:6379/1"
+
+CELERY_BROKER_URL = "redis://127.0.0.1:6379/0"
+CELERY_RESULT_BACKEND = "redis://127.0.0.1:6379/1"
 
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": REDIS_URL,
+        "LOCATION": "redis://127.0.0.1:6379/0",
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
             "IGNORE_EXCEPTIONS": True,
@@ -201,7 +206,7 @@ CACHES = {
     },
     "idempotency": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": change_redis_db(REDIS_URL, 1),
+        "LOCATION": "redis://127.0.0.1:6379/1",
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
             "IGNORE_EXCEPTIONS": True,
@@ -218,9 +223,8 @@ CHANNEL_LAYERS = {
         "CONFIG": {
             "hosts": [
                 {
-                    "address": REDIS_URL,
+                    "address": "redis://127.0.0.1:6379/0",
                     "socket_connect_timeout": 2,
-                    "socket_timeout": 3,
                 }
             ],
             "capacity": 500,

@@ -529,6 +529,7 @@ def change_redis_db(url: str, db_num: int) -> str:
 _RAW_REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/0")
 REDIS_URL = normalize_redis_ssl_url(_RAW_REDIS_URL)
 
+
 # Configure Django's CACHES
 # - 'default': Redis (sessions, throttling, app-level caching)
 # - 'schema':  LocMemCache — OpenAPI/Swagger schema caching (drf-yasg)
@@ -602,12 +603,12 @@ CHANNEL_LAYERS = {
         "CONFIG": {
             "hosts": [
                 {
-                    "address": env("REDIS_URL", default="redis://127.0.0.1:6379/0"),
+                    "address": REDIS_URL,
                     # Fail-fast timeouts (seconds) — critical for Cloud Run + VPC Redis.
                     # A missing/misconfigured REDIS_URL would otherwise stall all WS
                     # connects for the full TCP timeout (~30s) blocking uvicorn workers.
                     "socket_connect_timeout": 2,
-                    "socket_timeout": 3,
+                    "socket_timeout": 30,
                 }
             ],
             # Per-channel message buffer capacity (default: 100).
@@ -893,11 +894,10 @@ ZOHO_ZEPTOMAIL_HOSTED_REGION = env(
 #   backend/celery.py   ← Queue topology, task routes, beat schedule  ← YOU
 #   backend/config/base.py ← Broker URL, serialiser, reliability flags ← THIS FILE
 
-CELERY_BROKER_URL = env("CELERY_BROKER_URL", default=REDIS_URL)
-CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default=change_redis_db(REDIS_URL, 1))
+REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/1")
 
-CELERY_BROKER_URL = normalize_redis_ssl_url(CELERY_BROKER_URL)
-CELERY_RESULT_BACKEND = normalize_redis_ssl_url(CELERY_RESULT_BACKEND)
+CELERY_BROKER_URL = env("CELERY_BROKER_URL", default=REDIS_URL)
+CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default=REDIS_URL)
 
 # Fast-fail: 1s timeouts so dead Redis fails immediately, not after 60s
 CELERY_BROKER_TRANSPORT_OPTIONS = {
