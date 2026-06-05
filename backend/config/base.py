@@ -495,6 +495,40 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # CACHING (Redis)
 # =============================================================================
 
+def normalize_redis_ssl_url(url: str) -> str:
+    """Detects if a Redis URL uses TLS (rediss://) and appends ?ssl_cert_reqs=none if missing."""
+    if not url:
+        return url
+    if url.startswith("rediss://") and "ssl_cert_reqs" not in url:
+        separator = "&" if "?" in url else "?"
+        url = f"{url}{separator}ssl_cert_reqs=none"
+    return url
+
+
+def change_redis_db(url: str, db_num: int) -> str:
+    """Updates the Redis database index (e.g. /0 to /1) while keeping query params."""
+    if not url:
+        return url
+    parts = url.split("?", 1)
+    base_part = parts[0]
+    query_part = f"?{parts[1]}" if len(parts) > 1 else ""
+    
+    scheme_separator = "://"
+    if scheme_separator in base_part:
+        scheme, remainder = base_part.split(scheme_separator, 1)
+        if "/" in remainder:
+            host_port, db = remainder.rsplit("/", 1)
+            new_remainder = f"{host_port}/{db_num}"
+        else:
+            new_remainder = f"{remainder}/{db_num}"
+        base_part = f"{scheme}{scheme_separator}{new_remainder}"
+    return f"{base_part}{query_part}"
+
+
+# Single-source normalized Redis base URL (default DB 0)
+_RAW_REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/0")
+REDIS_URL = normalize_redis_ssl_url(_RAW_REDIS_URL)
+
 
 # Configure Django's CACHES
 # - 'default': Redis (sessions, throttling, app-level caching)
@@ -504,7 +538,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": env("REDIS_URL", default="redis://127.0.0.1:6379/0"),
+        "LOCATION": REDIS_URL,
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
             # Silently return None on cache misses when Redis is unreachable.
@@ -538,7 +572,7 @@ CACHES = {
     # In tests: overridden to LocMemCache via @override_settings(CACHES=...).
     "idempotency": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": env("REDIS_URL", default="redis://127.0.0.1:6379/1"),
+        "LOCATION": change_redis_db(REDIS_URL, 1),
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
             "IGNORE_EXCEPTIONS": True,
@@ -569,12 +603,12 @@ CHANNEL_LAYERS = {
         "CONFIG": {
             "hosts": [
                 {
-                    "address": env("REDIS_URL", default="redis://127.0.0.1:6379/0"),
+                    "address": REDIS_URL,
                     # Fail-fast timeouts (seconds) — critical for Cloud Run + VPC Redis.
                     # A missing/misconfigured REDIS_URL would otherwise stall all WS
                     # connects for the full TCP timeout (~30s) blocking uvicorn workers.
                     "socket_connect_timeout": 2,
-                    "socket_timeout": 3,
+                    "socket_timeout": 30,
                 }
             ],
             # Per-channel message buffer capacity (default: 100).

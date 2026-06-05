@@ -181,6 +181,11 @@ CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = True
 
 # Force local Redis for Celery worker & caching in development mode
+import os
+os.environ["REDIS_URL"] = "redis://127.0.0.1:6379/0"
+os.environ["CELERY_BROKER_URL"] = "redis://127.0.0.1:6379/0"
+os.environ["CELERY_RESULT_BACKEND"] = "redis://127.0.0.1:6379/1"
+
 CELERY_BROKER_URL = "redis://127.0.0.1:6379/0"
 CELERY_RESULT_BACKEND = "redis://127.0.0.1:6379/1"
 
@@ -220,7 +225,6 @@ CHANNEL_LAYERS = {
                 {
                     "address": "redis://127.0.0.1:6379/0",
                     "socket_connect_timeout": 2,
-                    "socket_timeout": 3,
                 }
             ],
             "capacity": 500,
