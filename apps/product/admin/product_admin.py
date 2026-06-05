@@ -400,8 +400,8 @@ class ProductReviewAdmin(admin.ModelAdmin):
         """Displays whether the vendor has replied."""
         reply = getattr(obj, "vendor_reply", None) or getattr(obj, "reply_text", None)
         if reply:
-            return format_html('<span style="color:#22c55e">✓ Yes</span>')
-        return format_html('<span style="color:#6b7280">—</span>')
+            return format_html('<span style="color:#22c55e">{}</span>', "✓ Yes")
+        return format_html('<span style="color:#6b7280">{}</span>', "—")
     has_vendor_reply.short_description = "Vendor Reply"
 
     @admin.action(description="✅ Mark selected reviews as moderated")
@@ -759,7 +759,7 @@ class ProductPriceHistoryAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
     def price_change_display(self, obj):
         """Colour-codes price changes: green = drop, red = increase."""
         if obj.old_price is None:
-            return format_html('<span style="color:#6b7280">Initial listing</span>')
+            return format_html('<span style="color:#6b7280">{}</span>', "Initial listing")
         delta = obj.new_price - obj.old_price
         color = "#22c55e" if delta < 0 else "#ef4444"
         sign = "▼" if delta < 0 else "▲"

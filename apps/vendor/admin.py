@@ -15,6 +15,7 @@ Features:
 """
 import logging
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.contrib import admin, messages
 from django.db.models import Avg, Count, Sum, QuerySet
 from django.utils.html import format_html
@@ -328,9 +329,9 @@ class VendorProfileAdmin(SoftDeleteAdminMixin, CloudinaryUploadAdminMixin, admin
                 '<span class="fsn-badge badge-pending">Step {}/4 ({}%)</span>',
                 state.current_step, pct
             )
-        except VendorSetupState.DoesNotExist:
+        except ObjectDoesNotExist:
             return format_html(
-                '<span class="fsn-badge badge-failed">Not Started</span>'
+                '<span class="fsn-badge badge-failed">{}</span>', "Not Started"
             )
     onboarding_status_badge.allow_tags = True  # Django admin legacy support
 

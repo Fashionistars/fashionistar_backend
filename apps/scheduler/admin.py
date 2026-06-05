@@ -159,8 +159,8 @@ class ScheduledTaskAdmin(admin.ModelAdmin):
         """وضعیت عقب‌افتادگی"""
         if obj.next_run_at and obj.status == 'active':
             if obj.next_run_at < timezone.now():
-                return format_html('<span style="color: red;">✗ عقب‌افتاده</span>')
-        return format_html('<span style="color: green;">✓ به موقع</span>')
+                return format_html('<span style="color: red;">{}</span>', "✗ عقب‌افتاده")
+        return format_html('<span style="color: green;">{}</span>', "✓ به موقع")
     is_overdue.short_description = 'وضعیت اجرا'
     
     def activate_tasks(self, request, queryset):
@@ -444,8 +444,8 @@ class TaskAlertAdmin(admin.ModelAdmin):
     def is_resolved_badge(self, obj):
         """وضعیت حل"""
         if obj.is_resolved:
-            return format_html('<span style="color: green;">✓ حل شده</span>')
-        return format_html('<span style="color: red;">✗ حل نشده</span>')
+            return format_html('<span style="color: green;">{}</span>', "✓ حل شده")
+        return format_html('<span style="color: red;">{}</span>', "✗ حل نشده")
     is_resolved_badge.short_description = 'وضعیت'
     
     def resolve_alerts(self, request, queryset):

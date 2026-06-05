@@ -109,11 +109,13 @@ class MeasurementProfileAdmin(admin.ModelAdmin):
         if obj.is_verified:
             return format_html(
                 '<span style="background:#dcfce7;color:#166534;padding:2px 8px;'
-                'border-radius:20px;font-size:11px;font-weight:600">✓ Verified</span>'
+                'border-radius:20px;font-size:11px;font-weight:600">{}</span>',
+                "✓ Verified"
             )
         return format_html(
             '<span style="background:#fef3c7;color:#92400e;padding:2px 8px;'
-            'border-radius:20px;font-size:11px;font-weight:600">⏳ Pending</span>'
+            'border-radius:20px;font-size:11px;font-weight:600">{}</span>',
+            "⏳ Pending"
         )
 
     @admin.display(description="Core Measurements")
