@@ -42,7 +42,7 @@ def user(db):
         email=f"race_{uuid.uuid4().hex[:6]}@test.com",
         password="RaceTest!2026",
         is_active=True,
-        is_email_verified=True,
+        is_verified=True,
     )
 
 
