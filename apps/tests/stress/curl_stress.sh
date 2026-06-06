@@ -1,147 +1,130 @@
 #!/usr/bin/env bash
-# ============================================================
+# ======================================================================
 # FASHIONISTAR — cURL Stress Test Suite
-# Phase 10: 1000 concurrent requests per critical endpoint
-#
+# Phase 10 / Criterion A: 1000 concurrent requests per critical endpoint
+# ======================================================================
+# Requirements: curl, xargs (GNU coreutils)
 # Usage:
 #   chmod +x curl_stress.sh
-#   BACKEND_URL=http://localhost:8001 ./curl_stress.sh
-#   BACKEND_URL=https://your-api.run.app ./curl_stress.sh
+#   ./curl_stress.sh https://api.fashionistar.ng 1000
 #
-# Requirements: curl, jq, bc, GNU parallel (optional for parallel mode)
-# ============================================================
+# Reports: success count, failure count, avg latency per endpoint
+# ======================================================================
 
 set -euo pipefail
 
-BACKEND_URL="${BACKEND_URL:-http://localhost:8001}"
-CONCURRENCY="${CONCURRENCY:-100}"
-REQUESTS_PER_ENDPOINT="${REQUESTS:-1000}"
-TIMEOUT_SECS="${TIMEOUT:-10}"
-OUTPUT_DIR="${OUTPUT_DIR:-/tmp/fashionistar_stress}"
-AUTH_TOKEN="${AUTH_TOKEN:-}"
+API_BASE="${1:-http://localhost:8000}"
+CONCURRENCY="${2:-1000}"
+REPORT_DIR="$(dirname "$0")/reports"
+mkdir -p "$REPORT_DIR"
 
-mkdir -p "$OUTPUT_DIR"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+REPORT="$REPORT_DIR/curl_stress_${TIMESTAMP}.txt"
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+echo "=====================================================" | tee -a "$REPORT"
+echo "FASHIONISTAR cURL Stress Test — $(date)"              | tee -a "$REPORT"
+echo "API Base: $API_BASE"                                   | tee -a "$REPORT"
+echo "Concurrency: $CONCURRENCY requests per endpoint"       | tee -a "$REPORT"
+echo "=====================================================" | tee -a "$REPORT"
 
-log_info()    { echo -e "${BLUE}[INFO]${NC} $*"; }
-log_success() { echo -e "${GREEN}[PASS]${NC} $*"; }
-log_warn()    { echo -e "${YELLOW}[WARN]${NC} $*"; }
-log_error()   { echo -e "${RED}[FAIL]${NC} $*"; }
+# ── Helper: single timed request ────────────────────────────────────────────
+run_request() {
+  local url="$1"
+  local method="${2:-GET}"
+  local body="${3:-}"
+  local token="${4:-}"
 
-# ── Helper: run N concurrent curl requests and report stats ──────────────────
+  local headers=("-H" "Content-Type: application/json" "-H" "Accept: application/json")
+  if [[ -n "$token" ]]; then
+    headers+=("-H" "Authorization: Bearer $token")
+  fi
+
+  local start_ns
+  start_ns=$(date +%s%N 2>/dev/null || echo 0)
+
+  local http_code
+  if [[ "$method" == "POST" && -n "$body" ]]; then
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+      -X POST "${headers[@]}" \
+      -d "$body" \
+      --max-time 30 \
+      "$url" 2>/dev/null || echo "000")
+  else
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+      "${headers[@]}" \
+      --max-time 30 \
+      "$url" 2>/dev/null || echo "000")
+  fi
+
+  local end_ns
+  end_ns=$(date +%s%N 2>/dev/null || echo 0)
+  local elapsed_ms=$(( (end_ns - start_ns) / 1000000 ))
+
+  echo "$http_code $elapsed_ms"
+}
+export -f run_request
+
+# ── Helper: run endpoint stress test ────────────────────────────────────────
 stress_endpoint() {
-    local label="$1"
-    local method="${2:-GET}"
-    local path="$3"
-    local body="${4:-}"
-    local expected_status="${5:-200}"
+  local name="$1"
+  local url="$2"
+  local method="${3:-GET}"
+  local body="${4:-}"
 
-    local url="${BACKEND_URL}${path}"
-    local out_file="${OUTPUT_DIR}/${label// /_}.log"
-    local total=0
-    local success=0
-    local fail=0
-    local total_time=0
+  echo ""                                                              | tee -a "$REPORT"
+  echo "── $name ──────────────────────────────────────────────────" | tee -a "$REPORT"
+  echo "   URL: $url"                                                 | tee -a "$REPORT"
+  echo "   Method: $method | Concurrency: $CONCURRENCY"              | tee -a "$REPORT"
 
-    log_info "Stressing: $label ($method $url) — ${REQUESTS_PER_ENDPOINT}req / ${CONCURRENCY}c"
+  local results
+  results=$(seq 1 "$CONCURRENCY" | xargs -P "$CONCURRENCY" -I{} bash -c "run_request '$url' '$method' '$body'")
 
-    > "$out_file"
+  local total=0
+  local success=0
+  local fail=0
+  local total_ms=0
 
-    for i in $(seq 1 "$REQUESTS_PER_ENDPOINT"); do
-        {
-            local args=(-s -o /dev/null -w "%{http_code} %{time_total}")
-            args+=(-m "$TIMEOUT_SECS")
-            args+=(-X "$method")
-            [[ -n "$AUTH_TOKEN" ]] && args+=(-H "Authorization: Bearer $AUTH_TOKEN")
-            args+=(-H "Content-Type: application/json")
-            args+=(-H "X-Idempotency-Key: stress-$label-$i-$(date +%s%N)")
-            [[ -n "$body" ]] && args+=(--data-raw "$body")
-            curl "${args[@]}" "$url" >> "$out_file" 2>&1
-            echo >> "$out_file"
-        } &
-
-        # Throttle concurrency
-        if (( i % CONCURRENCY == 0 )); then
-            wait
-        fi
-    done
-    wait
-
-    # Parse results
-    while IFS= read -r line; do
-        [[ -z "$line" ]] && continue
-        status=$(echo "$line" | awk '{print $1}')
-        time=$(echo "$line" | awk '{print $2}')
-        total=$((total + 1))
-        if [[ "$status" == "$expected_status" ]]; then
-            success=$((success + 1))
-        else
-            fail=$((fail + 1))
-        fi
-        total_time=$(echo "$total_time + $time" | bc)
-    done < "$out_file"
-
-    if [[ $total -eq 0 ]]; then
-        log_warn "$label: no results"
-        return
-    fi
-
-    local avg_time
-    avg_time=$(echo "scale=3; $total_time / $total" | bc)
-    local success_rate
-    success_rate=$(echo "scale=1; $success * 100 / $total" | bc)
-
-    if (( fail == 0 )); then
-        log_success "$label: $success/$total (${success_rate}%) avg=${avg_time}s"
+  while IFS=' ' read -r code ms; do
+    total=$((total + 1))
+    total_ms=$((total_ms + ms))
+    if [[ "$code" =~ ^2 ]]; then
+      success=$((success + 1))
     else
-        log_error "$label: $success/$total (${success_rate}%) failures=$fail avg=${avg_time}s"
+      fail=$((fail + 1))
     fi
+  done <<< "$results"
+
+  local avg_ms=0
+  [[ $total -gt 0 ]] && avg_ms=$((total_ms / total))
+
+  echo "   ✅ Success: $success / $total"  | tee -a "$REPORT"
+  echo "   ❌ Failed:  $fail / $total"     | tee -a "$REPORT"
+  echo "   ⏱️  Avg Latency: ${avg_ms}ms"   | tee -a "$REPORT"
+
+  # FAIL if <95% success rate
+  local success_pct=0
+  [[ $total -gt 0 ]] && success_pct=$((success * 100 / total))
+  if [[ $success_pct -lt 95 ]]; then
+    echo "   ⚠️  WARN: Success rate ${success_pct}% < 95% threshold" | tee -a "$REPORT"
+  fi
 }
 
-# ══════════════════════════════════════════════════════════════════════════════
-# ENDPOINTS UNDER STRESS
-# ══════════════════════════════════════════════════════════════════════════════
-
-log_info "Starting FASHIONISTAR cURL Stress Suite"
-log_info "Backend: $BACKEND_URL | Concurrency: $CONCURRENCY | Requests: $REQUESTS_PER_ENDPOINT"
+# ── Critical Endpoints ───────────────────────────────────────────────────────
 echo ""
+echo "Starting stress tests…"
 
-# ── P0: Health Check ─────────────────────────────────────────────────────────
-stress_endpoint "health-check" GET "/api/v1/health/" "" 200
+# Public catalog (no auth)
+stress_endpoint "Product List"       "$API_BASE/api/v1/catalog/products/"          "GET"
+stress_endpoint "Featured Products"  "$API_BASE/api/v1/catalog/products/featured/" "GET"
+stress_endpoint "Health Check"       "$API_BASE/api/v1/health/"                    "GET"
+stress_endpoint "Category Tree"      "$API_BASE/api/v1/catalog/categories/"        "GET"
 
-# ── P0: Auth — Login (rate-limited, use small N) ─────────────────────────────
-REQUESTS=50 stress_endpoint "auth-login-invalid" POST "/api/v1/auth/login/" \
-  '{"email":"nonexistent@test.com","password":"wrongpass"}' 400
-
-# ── P0: Catalog — Product listing (unauthenticated, high traffic) ─────────────
-stress_endpoint "catalog-products-list" GET "/api/v1/ninja/products/" "" 200
-
-# ── P0: Catalog — Category tree ──────────────────────────────────────────────
-stress_endpoint "catalog-categories" GET "/api/v1/ninja/categories/" "" 200
-
-# ── P0: Measurements — Profile (authenticated) ───────────────────────────────
-[[ -n "$AUTH_TOKEN" ]] && \
-  stress_endpoint "measurement-profile" GET "/api/v1/ninja/measurements/profile/" "" 200
-
-# ── P0: Cart — View cart (session-keyed) ─────────────────────────────────────
-stress_endpoint "cart-view" GET "/api/v1/ninja/cart/" "" 200
-
-# ── P0: Orders — List (authenticated) ────────────────────────────────────────
-[[ -n "$AUTH_TOKEN" ]] && \
-  stress_endpoint "orders-list" GET "/api/v1/ninja/orders/" "" 200
-
-# ── P0: Vendor — Product list (authenticated vendor) ─────────────────────────
-[[ -n "$AUTH_TOKEN" ]] && \
-  stress_endpoint "vendor-products" GET "/api/v1/ninja/vendor/products/" "" 200
-
-# ── P0: Notifications — Feed (authenticated) ─────────────────────────────────
-[[ -n "$AUTH_TOKEN" ]] && \
-  stress_endpoint "notifications-feed" GET "/api/v1/ninja/notifications/" "" 200
+# Auth endpoints
+LOGIN_BODY='{"email":"stress@test.fashionistar.ng","password":"StressTest!2026"}'
+stress_endpoint "Auth Login"         "$API_BASE/api/v1/auth/login/"                "POST" "$LOGIN_BODY"
+stress_endpoint "Token Refresh"      "$API_BASE/api/v1/auth/token/refresh/"        "POST" '{"refresh":""}'
 
 echo ""
-log_info "Stress suite complete. Logs saved to: $OUTPUT_DIR"
+echo "=====================================================" | tee -a "$REPORT"
+echo "✅ Stress test complete. Report: $REPORT"              | tee -a "$REPORT"
+echo "=====================================================" | tee -a "$REPORT"

@@ -209,7 +209,7 @@ class VendorProfile(TimeStampedModel, SoftDeleteModel):
     )
     custom_domain = models.CharField(
         max_length=255, blank=True, unique=True, null=True,
-        help_text="Custom storefront domain (e.g. brand.fashionistar.com).",
+        help_text="Custom storefront domain (e.g. brand.fashionistar.net).",
     )
     verified_at = models.DateTimeField(
         null=True, blank=True,

@@ -1,4 +1,4 @@
-# apps/order/models/order.py
+    # apps/order/models/order.py
 """
 Order domain models.
 
@@ -367,6 +367,33 @@ class Order(TimeStampedModel):
     )
     tracking_number = models.CharField(max_length=200, blank=True)
     estimated_delivery = models.DateField(null=True, blank=True)
+
+    # ── 2026+ Scale Fields ────────────────────────────────────────────────
+    courier_service = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Courier company name (e.g. 'DHL', 'GIG Logistics', 'Kwik'). Shown to customer.",
+    )
+    estimated_delivery_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Precise delivery timestamp (replaces date-only estimated_delivery). "
+                  "Used for real-time delivery countdown on order detail page.",
+    )
+    is_gift = models.BooleanField(
+        default=False,
+        help_text="Customer flagged this order as a gift. Suppresses price on packing slip.",
+    )
+    gift_message = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="Message printed on the gift note. Only used when is_gift=True.",
+    )
+    carbon_offset_purchased = models.BooleanField(
+        default=False,
+        help_text="Customer opted into carbon offset at checkout. "
+                  "₦200 surcharge routed to sustainability fund.",
+    )
     delivery_mode = models.CharField(
         max_length=30,
         choices=OrderDeliveryMode.choices,
