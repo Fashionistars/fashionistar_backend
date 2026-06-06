@@ -190,8 +190,8 @@ class ClientProfile(TimeStampedModel, SoftDeleteModel):
         indexes = [
             models.Index(fields=["user"], name="client_profile_user_idx"),
             models.Index(fields=["country"], name="client_profile_country_idx"),
-            models.Index(fields=["loyalty_tier"], name="client_profile_loyalty_tier_idx"),
-            models.Index(fields=["referral_code"], name="client_profile_referral_idx"),
+            models.Index(fields=["loyalty_tier"], name="cp_loyalty_tier_idx"),
+            models.Index(fields=["referral_code"], name="cp_referral_idx"),
         ]
 
     def __str__(self) -> str:

@@ -585,3 +585,94 @@ def require_verification(func):
         return func(self, request, *args, **kwargs)
 
     return wrapper
+
+# =============================================================================
+# Phase 7: Object-Level Permission — OWASP API3:2023 BOLA/IDOR Prevention
+# =============================================================================
+
+
+class IsOwnerOrAdmin(BasePermission):
+    """
+    Object-level permission: owner or admin/staff can access.
+
+    Prevents Broken Object Level Authorization (BOLA/IDOR) per OWASP API3:2023.
+
+    Usage (on a ViewSet):
+        class MyViewSet(OwnershipViewSetMixin, ModelViewSet):
+            permission_classes = [IsAuthenticatedAndActive, IsOwnerOrAdmin]
+            owner_field = "user"
+
+    The view must also inherit OwnershipViewSetMixin to auto-invoke
+    check_object_permissions on every detail action.
+    """
+
+    message = "You do not have permission to access this resource."
+    owner_field: str = "user"
+
+    def has_permission(self, request, view) -> bool:
+        """Request-level: must be authenticated and active."""
+        user = _get_user(request)
+        return _is_authenticated_user(user)
+
+    def has_object_permission(self, request, view, obj) -> bool:
+        """
+        Object-level: owner or admin/staff.
+
+        Resolves owner via view.owner_field (default 'user').
+        Supports FK chains: 'vendor__user', 'profile__user', etc.
+        """
+        user = _get_user(request)
+        if not _is_authenticated_user(user):
+            return False
+
+        role = _get_role(user)
+        if is_admin_role(role) or is_staff_role(role):
+            return True
+
+        field = getattr(view, "owner_field", self.owner_field)
+        try:
+            owner = obj
+            for part in field.split("__"):
+                owner = getattr(owner, part, None)
+                if owner is None:
+                    break
+        except Exception:
+            owner = None
+
+        granted = owner is not None and owner == user
+        if not granted:
+            permission_logger.warning(
+                "IsOwnerOrAdmin DENIED: user=%s on %s pk=%s action=%s",
+                getattr(user, "id", "?"),
+                type(obj).__name__,
+                getattr(obj, "pk", "?"),
+                getattr(view, "action", "?"),
+            )
+        return granted
+
+
+class OwnershipViewSetMixin:
+    """
+    ViewSet mixin: auto-calls check_object_permissions on all detail actions.
+
+    Eliminates the risk of forgetting to enforce object-level permissions in
+    custom retrieve/update/destroy methods.
+
+    Inherit BEFORE ModelViewSet:
+        class ProductViewSet(OwnershipViewSetMixin, ModelViewSet):
+            permission_classes = [IsAuthenticatedAndActive, IsOwnerOrAdmin]
+            owner_field = "vendor__user"
+    """
+
+    _DETAIL_ACTIONS: frozenset = frozenset({
+        "retrieve", "update", "partial_update", "destroy",
+        "download", "revoke", "cancel", "approve", "reject",
+    })
+
+    def get_object(self):
+        """Guarantees check_object_permissions for every detail action."""
+        obj = super().get_object()
+        action = getattr(self, "action", None)
+        if action in self._DETAIL_ACTIONS:
+            self.check_object_permissions(self.request, obj)
+        return obj
