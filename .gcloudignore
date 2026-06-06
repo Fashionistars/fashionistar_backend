@@ -3,6 +3,8 @@
 .github
 .venv
 .venv/
+.git_disabled/
+.agents/
 __pycache__/
 *.pyc
 .pytest_cache/
@@ -14,3 +16,4 @@ db.sqlite3
 media/
 static/
 staticfiles/
+
