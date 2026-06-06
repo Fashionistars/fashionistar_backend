@@ -61,10 +61,10 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name='clientprofile',
-            index=models.Index(fields=['loyalty_tier'], name='client_profile_loyalty_tier_idx'),
+            index=models.Index(fields=['loyalty_tier'], name='cp_loyalty_tier_idx'),
         ),
         migrations.AddIndex(
             model_name='clientprofile',
-            index=models.Index(fields=['referral_code'], name='client_profile_referral_idx'),
+            index=models.Index(fields=['referral_code'], name='cp_referral_idx'),
         ),
     ]
