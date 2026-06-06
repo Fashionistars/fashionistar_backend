@@ -40,7 +40,7 @@ def superadmin_user(db):
         is_active=True,
         is_staff=True,
         is_superuser=True,
-        is_email_verified=True,
+        is_verified=True,
     )
 
 
@@ -51,7 +51,7 @@ def staff_user(db):
         password="Staff!2026",
         is_active=True,
         is_staff=True,
-        is_email_verified=True,
+        is_verified=True,
     )
     return u
 
@@ -62,7 +62,7 @@ def vendor_user(db):
         email="vendor@fashionistar.ng",
         password="Vendor!2026",
         is_active=True,
-        is_email_verified=True,
+        is_verified=True,
         role="vendor",
     )
 
@@ -73,7 +73,7 @@ def client_user(db):
         email="client@fashionistar.ng",
         password="Client!2026",
         is_active=True,
-        is_email_verified=True,
+        is_verified=True,
         role="client",
     )
 

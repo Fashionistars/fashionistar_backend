@@ -37,7 +37,7 @@ def user(db):
         email=f"idem_{uuid.uuid4().hex[:8]}@fashionistar.ng",
         password="Idempotent!2026",
         is_active=True,
-        is_email_verified=True,
+        is_verified=True,
     )
 
 
