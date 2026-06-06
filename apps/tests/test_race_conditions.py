@@ -33,25 +33,20 @@ User = get_user_model()
 pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.race_conditions]
 
 
-# ── Fixtures ────────────────────────────────────────────────────────────────
+# ── Fixtures delegated to conftest.py (make_user, make_wallet) ──────────────
 
 
 @pytest.fixture
-def user(db):
-    return User.objects.create_user(
-        email=f"race_{uuid.uuid4().hex[:6]}@test.com",
-        password="RaceTest!2026",
-        is_active=True,
-        is_verified=True,
-    )
+def user(make_user):
+    """Race condition test user — role=client with correct defaults."""
+    return make_user(role="client")
 
 
 @pytest.fixture
-def funded_wallet(user, db):
-    wallet, _ = Wallet.objects.get_or_create(user=user)
-    wallet.balance = Decimal("10000.00")
-    wallet.save(update_fields=["balance"])
-    return wallet
+def funded_wallet(make_user, make_wallet):
+    """Create a wallet with ₦10,000 available balance."""
+    user = make_user(role="vendor")
+    return make_wallet(user, balance=Decimal("10000.00"))
 
 
 # ── Helper: run N threads ────────────────────────────────────────────────────
@@ -106,10 +101,10 @@ class TestWalletConcurrentDebit:
             try:
                 with transaction.atomic():
                     wallet = Wallet.objects.select_for_update().get(pk=funded_wallet.pk)
-                    if wallet.balance < DEBIT_AMOUNT:
+                    if wallet.available_balance < DEBIT_AMOUNT:
                         raise ValueError("Insufficient balance")
-                    wallet.balance -= DEBIT_AMOUNT
-                    wallet.save(update_fields=["balance"])
+                    wallet.available_balance -= DEBIT_AMOUNT
+                    wallet.save(update_fields=["available_balance"])
                     with lock:
                         successes.append(idx)
             except (ValueError, Exception):
@@ -125,13 +120,13 @@ class TestWalletConcurrentDebit:
         funded_wallet.refresh_from_db()
 
         # Final balance must be non-negative
-        assert funded_wallet.balance >= Decimal("0.00"), (
-            f"Overdraft detected! Balance: {funded_wallet.balance}"
+        assert funded_wallet.available_balance >= Decimal("0.00"), (
+            f"Overdraft detected! Balance: {funded_wallet.available_balance}"
         )
         # Total debited must equal successes × DEBIT_AMOUNT
         expected_balance = Decimal("10000.00") - (len(successes) * DEBIT_AMOUNT)
-        assert funded_wallet.balance == expected_balance, (
-            f"Balance mismatch. Expected {expected_balance}, got {funded_wallet.balance}"
+        assert funded_wallet.available_balance == expected_balance, (
+            f"Balance mismatch. Expected {expected_balance}, got {funded_wallet.available_balance}"
         )
 
 
@@ -186,18 +181,17 @@ class TestOrderIdempotency:
 class TestTransactionAtomicRollback:
     """Verify that a mid-transaction error rolls back all DB changes atomically."""
 
-    def test_rollback_on_payment_failure(self, funded_wallet, db):
-        initial_balance = funded_wallet.balance
+    def test_rollback_on_payment_failure(self, funded_wallet):
+        initial_balance = funded_wallet.available_balance
 
         with pytest.raises(Exception, match="Simulated payment failure"):
             with transaction.atomic():
                 wallet = Wallet.objects.select_for_update().get(pk=funded_wallet.pk)
-                wallet.balance -= Decimal("2000.00")
-                wallet.save(update_fields=["balance"])
-                # Simulate a payment provider failure mid-transaction
+                wallet.available_balance -= Decimal("2000.00")
+                wallet.save(update_fields=["available_balance"])
                 raise Exception("Simulated payment failure")
 
         funded_wallet.refresh_from_db()
-        assert funded_wallet.balance == initial_balance, (
-            f"Rollback failed! Balance changed from {initial_balance} to {funded_wallet.balance}"
+        assert funded_wallet.available_balance == initial_balance, (
+            f"Rollback failed! Balance changed from {initial_balance} to {funded_wallet.available_balance}"
         )
