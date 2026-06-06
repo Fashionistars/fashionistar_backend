@@ -173,7 +173,7 @@ class ClientProfile(TimeStampedModel, SoftDeleteModel):
     # Measurements Integration
     default_measurement_profile = models.ForeignKey(
         "measurements.MeasurementProfile", null=True, blank=True,
-        on_delete=models.SET_NULL, related_name="default_for_clients",
+        on_delete=models.SET_NULL, related_name="default_measurement_for_clients",
         help_text="The client's active measurement profile for size recommendations.",
     )
 

@@ -86,5 +86,18 @@ class CommonConfig(AppConfig):
             logger = logging.getLogger(__name__)
             logger.error("Failed to initialize Cloudinary configuration on startup: %s", exc)
 
+        # 4. OpenTelemetry instrumentation — Phase 9 Observability
+        # Must run AFTER logging config (BackendConfig) and BEFORE requests.
+        # Gracefully degrades if opentelemetry packages are not installed.
+        try:
+            from apps.common.telemetry import bootstrap_telemetry
+            bootstrap_telemetry()
+        except ImportError:
+            pass  # OTel packages optional in development
+        except Exception as exc:
+            import logging
+            _logger = logging.getLogger(__name__)
+            _logger.warning("OpenTelemetry bootstrap failed (non-fatal): %s", exc)
+
 
 logger = logging.getLogger(__name__)

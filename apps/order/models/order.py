@@ -1,4 +1,4 @@
-    # apps/order/models/order.py
+# apps/order/models/order.py
 """
 Order domain models.
 
