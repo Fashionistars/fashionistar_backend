@@ -204,35 +204,81 @@ async def _acheck_storage() -> dict[str, Any]:
 
 
 async def _acheck_email() -> dict[str, Any]:
-    """Identify the configured email backend/provider (Non-blocking)."""
-    def _resolve_provider() -> dict[str, Any]:
+    """
+    Phase 1.3: Live SMTP health probe for all configured providers.
+
+    For DatabaseConfiguredEmailBackend: opens a real SMTP connection
+    (EHLO handshake, 3s timeout) and reports latency_ms + healthy status.
+    Falls back to provider-name-only for other backends.
+    """
+
+    def _probe_smtp() -> dict[str, Any]:
+        import smtplib
+
+        t0 = time.monotonic()
         try:
             from apps.providers.SMTP import get_email_backend_label
 
             email_backend = getattr(settings, "EMAIL_BACKEND", "")
+
             if email_backend.endswith("DatabaseConfiguredEmailBackend"):
                 from apps.providers.models import EmailProviderConfig
 
-                config = EmailProviderConfig.objects.only("email_backend").first()
-                if config:
+                config = EmailProviderConfig.objects.only(
+                    "email_backend", "email_host", "email_port",
+                    "email_use_tls", "email_use_ssl",
+                ).first()
+
+                if not config:
+                    return {"status": "warning", "provider": "database-configured (unset)"}
+
+                slug = get_email_backend_label(config.email_backend)
+                host = getattr(config, "email_host", "") or getattr(settings, "EMAIL_HOST", "")
+                port = getattr(config, "email_port", None) or getattr(settings, "EMAIL_PORT", 587)
+                use_ssl = getattr(config, "email_use_ssl", False)
+
+                if not host:
+                    return {"status": "warning", "provider": slug, "note": "EMAIL_HOST not configured"}
+
+                # Live SMTP EHLO probe (3-second hard timeout)
+                try:
+                    cls = smtplib.SMTP_SSL if use_ssl else smtplib.SMTP
+                    with cls(host=host, port=int(port), timeout=3) as conn:
+                        conn.ehlo()
+                    latency_ms = round((time.monotonic() - t0) * 1000, 2)
                     return {
                         "status": "ok",
-                        "provider": get_email_backend_label(config.email_backend),
+                        "provider": slug,
+                        "healthy": True,
+                        "latency_ms": latency_ms,
+                        "host": host,
                     }
-                return {"status": "warning", "provider": "database-configured (unset)"}
+                except OSError as smtp_exc:
+                    latency_ms = round((time.monotonic() - t0) * 1000, 2)
+                    logger.warning("Health check — SMTP probe failed (%s:%s): %s", host, port, smtp_exc)
+                    return {
+                        "status": "warning",
+                        "provider": slug,
+                        "healthy": False,
+                        "latency_ms": latency_ms,
+                        "message": str(smtp_exc),
+                    }
 
             if "anymail" in email_backend.lower():
+                from apps.providers.SMTP import get_email_backend_label
                 provider = getattr(settings, "ANYMAIL", {}).get("ESP_NAME")
                 return {"status": "ok", "provider": provider or get_email_backend_label(email_backend)}
 
             if "console" in email_backend.lower():
                 return {"status": "ok", "provider": "console (dev mode)"}
 
+            from apps.providers.SMTP import get_email_backend_label
             return {"status": "ok", "provider": get_email_backend_label(email_backend)}
+
         except Exception as exc:  # noqa: BLE001
             return {"status": "warning", "error": str(exc)}
 
-    return await asyncio.to_thread(_resolve_provider)
+    return await asyncio.to_thread(_probe_smtp)
 
 
 # ---------------------------------------------------------------------------
