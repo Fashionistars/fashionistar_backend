@@ -505,6 +505,48 @@ class Product(TimeStampedModel, SoftDeleteModel):
     # ── Full-text search ──────────────────────────────────────────────────
     search_vector = SearchVectorField(null=True, blank=True)
 
+    # ── 2026+ AI & Sustainability Fields ─────────────────────────────────
+    ai_description = models.TextField(
+        blank=True,
+        help_text="AI-generated product description. Auto-populated by catalog AI pipeline.",
+    )
+    style_tags = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="AI-inferred style labels e.g. ['casual','boho','formal']. Used for recommendation engine.",
+    )
+    occasion_tags = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="AI-inferred occasion labels e.g. ['wedding','everyday','office'].",
+    )
+    body_type_fit = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Body types this product is recommended for e.g. ['slim','curvy','athletic'].",
+    )
+    sustainability_score = models.DecimalField(
+        max_digits=4,
+        decimal_places=1,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        help_text="Sustainability score 0–100. Computed from material, supply chain, and packaging data.",
+    )
+    carbon_footprint_kg = models.DecimalField(
+        max_digits=8,
+        decimal_places=3,
+        null=True,
+        blank=True,
+        help_text="Estimated carbon footprint in kg CO₂ equivalent. Surfaced on product detail page.",
+    )
+    ai_trend_score = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0.00,
+        help_text="Trending score 0–100 from AI pipeline. Used to rank catalog feeds.",
+    )
+
     class Meta:
         verbose_name = _("Product")
         verbose_name_plural = _("Products")
