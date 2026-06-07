@@ -71,6 +71,10 @@ class AdminUserSelector:
         unverified_users = UnifiedUser.objects.filter(is_verified=False).count()
         vendors = UnifiedUser.objects.filter(role="vendor").count()
         clients = UnifiedUser.objects.filter(role="client").count()
+        staff_count = UnifiedUser.objects.filter(role="staff").count()
+        admins_count = UnifiedUser.objects.filter(role="admin").count()
+        editors_count = UnifiedUser.objects.filter(role="editor").count()
+        supports_count = UnifiedUser.objects.filter(role="support").count()
         
         return {
             "total_users": total_users,
@@ -78,6 +82,10 @@ class AdminUserSelector:
             "unverified_users": unverified_users,
             "vendors_count": vendors,
             "clients_count": clients,
+            "staff_count": staff_count,
+            "admins_count": admins_count,
+            "editors_count": editors_count,
+            "supports_count": supports_count,
         }
 
     # --- Async Support ---
@@ -102,11 +110,19 @@ class AdminUserSelector:
         unverified_users = await UnifiedUser.objects.filter(is_verified=False).acount()
         vendors = await UnifiedUser.objects.filter(role="vendor").acount()
         clients = await UnifiedUser.objects.filter(role="client").acount()
-        
+        staff_count = await UnifiedUser.objects.filter(role="staff").acount()
+        admins_count = await UnifiedUser.objects.filter(role="admin").acount()
+        editors_count = await UnifiedUser.objects.filter(role="editor").acount()
+        supports_count = await UnifiedUser.objects.filter(role="support").acount()
+
         return {
             "total_users": total_users,
             "active_users": active_users,
             "unverified_users": unverified_users,
             "vendors_count": vendors,
             "clients_count": clients,
+            "staff_count": staff_count,
+            "admins_count": admins_count,
+            "editors_count": editors_count,
+            "supports_count": supports_count,
         }
