@@ -24,7 +24,8 @@ Router registry  ← SINGLE source-of-truth:
     /api/v1/ninja/products/        → apps/product
     /api/v1/ninja/cart/            → apps/cart
     /api/v1/ninja/orders/                    → apps/order
-    /api/v1/ninja/wallet/                    → apps/wallet
+    /api/v1/ninja/wallet/                    → apps/wallet (GET: dashboard, balance)
+    /api/v1/ninja/wallet/company/payout/     → apps/wallet (POST: company commission payout)
     /api/v1/ninja/transactions/              → apps/transactions
     /api/v1/ninja/payments/                  → apps/payment
     /api/v1/ninja/kyc/                       → apps/kyc
@@ -187,12 +188,23 @@ except Exception as exc:  # pragma: no cover
 
 
 # Wallet domain: /api/v1/ninja/wallet/
+# Read-only dashboard + balance endpoints.
 try:
     from apps.wallet.apis.async_.wallet_views import router as wallet_router
     ninja_api.add_router("/wallet/", wallet_router)
     logger.info("✅ NinjaAPI: wallet router registered at /api/v1/ninja/wallet/")
 except Exception as exc:  # pragma: no cover
     logger.warning("ℹ️ NinjaAPI: wallet router FAILED to register: %s", exc)
+
+
+# Wallet Mutations: /api/v1/ninja/wallet/
+# High-security write endpoints — company commission payout (Double-Door secured).
+try:
+    from apps.wallet.apis.async_.mutation_views import router as wallet_mutation_router
+    ninja_api.add_router("/wallet/", wallet_mutation_router)
+    logger.info("✅ NinjaAPI: wallet mutation router registered (POST /api/v1/ninja/wallet/company/payout/)")
+except Exception as exc:  # pragma: no cover
+    logger.warning("ℹ️ NinjaAPI: wallet mutation router FAILED to register: %s", exc)
 
 
 # Transactions domain: /api/v1/ninja/transactions/
