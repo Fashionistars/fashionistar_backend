@@ -333,7 +333,7 @@ class UnifiedUser(HardDeleteMixin, AbstractUser, TimeStampedModel, SoftDeleteMod
     )
     processing_restriction_reason = models.CharField(max_length=500, blank=True)
     objected_processing_purposes = models.JSONField(
-        default=list, help_text="GDPR Article 21 — list of opted-out processing purposes.",
+        default=list, blank=True, help_text="GDPR Article 21 — list of opted-out processing purposes.",
     )
     # Marketing & consent
     marketing_consent = models.BooleanField(

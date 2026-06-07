@@ -57,3 +57,7 @@ class UserMetricsSchema(Schema):
     unverified_users: int
     vendors_count: int
     clients_count: int
+    staff_count: int
+    admins_count: int
+    editors_count: int
+    supports_count: int

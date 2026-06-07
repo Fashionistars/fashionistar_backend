@@ -1,4 +1,4 @@
-# apps/wallet/services.py
+# apps/wallet/services_legacy.py
 """Wallet domain service layer for the Fashionistar platform.
 
 Architecture:

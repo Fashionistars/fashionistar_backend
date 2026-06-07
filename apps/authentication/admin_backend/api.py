@@ -84,6 +84,16 @@ async def admin_list_users(
             "is_verified": user.is_verified,
             "is_deleted": user.is_deleted,
             "member_id": user.member_id,
+            "avatar": user.avatar.url if user.avatar else None,
+            "city": user.city,
+            "state": user.state,
+            "country": user.country,
+            "bio": user.bio,
+            # Phase 12 fields for card-level display
+            "risk_score": float(getattr(user, "risk_score", 0.0) or 0.0),
+            "two_factor_enabled": getattr(user, "two_factor_enabled", False),
+            "last_login": user.last_login.isoformat() if getattr(user, "last_login", None) else None,
+            "login_count": getattr(user, "login_count", 0),
             "date_joined": user.date_joined.isoformat() if user.date_joined else None,
         }
 
@@ -144,9 +154,35 @@ async def admin_user_detail(request, user_id: str):
         "city": user.city,
         "address": user.address,
         "avatar": user.avatar.url if user.avatar else None,
+        # ── Phase 12: Locale & Preferences ──────────────────────────────────
+        "preferred_language": getattr(user, "preferred_language", "en"),
+        "timezone": getattr(user, "timezone", "UTC"),
+        # ── Phase 12: 2FA ────────────────────────────────────────────────────
+        "two_factor_enabled": getattr(user, "two_factor_enabled", False),
+        # ── Phase 12: Login Analytics ────────────────────────────────────────
+        "login_count": getattr(user, "login_count", 0),
+        "last_login": user.last_login.isoformat() if getattr(user, "last_login", None) else None,
+        "last_login_ip": getattr(user, "last_login_ip", None),
+        "last_login_device": getattr(user, "last_login_device", ""),
+        # ── Phase 12: Risk & GDPR ────────────────────────────────────────────
+        "risk_score": float(getattr(user, "risk_score", 0.0) or 0.0),
+        "is_processing_restricted": getattr(user, "is_processing_restricted", False),
+        "processing_restriction_reason": getattr(user, "processing_restriction_reason", ""),
+        "objected_processing_purposes": getattr(user, "objected_processing_purposes", []) or [],
+        "marketing_consent": getattr(user, "marketing_consent", False),
+        "marketing_consent_at": (
+            user.marketing_consent_at.isoformat()
+            if getattr(user, "marketing_consent_at", None)
+            else None
+        ),
+        "data_retention_policy": getattr(user, "data_retention_policy", "standard"),
+        # ── Phase 12: Referral ───────────────────────────────────────────────
+        "referral_code": getattr(user, "referral_code", None),
+        "referred_by": str(user.referred_by_id) if getattr(user, "referred_by_id", None) else None,
+        # ── Timestamps ───────────────────────────────────────────────────────
         "date_joined": user.date_joined.isoformat(),
         "updated_at": user.updated_at.isoformat(),
-        "deleted_at": getattr(user, "deleted_at", None) and user.deleted_at.isoformat(),
+        "deleted_at": user.deleted_at.isoformat() if getattr(user, "deleted_at", None) else None,
     }
 
 
