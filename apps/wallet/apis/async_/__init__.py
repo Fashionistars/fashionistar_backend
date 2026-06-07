@@ -2,24 +2,42 @@
 """
 Wallet Domain — Django-Ninja Async API Sub-Package.
 
-Exports the async router for registration in the central Ninja API router.
+Exports all async routers for registration in the central Ninja API router.
 
 Mounted at: /api/v1/ninja/wallet/
 
-Endpoints:
-    GET /dashboard/ — Full wallet snapshot (balance + escrow hold aggregates).
-    GET /balance/   — Lightweight balance-only snapshot (single DB query).
+Routers:
+    wallet_async_router  — READ-ONLY dashboard and balance endpoints.
+                           (GET /dashboard/, GET /balance/)
+
+    mutation_router      — HIGH-SECURITY write endpoints.
+                           (POST /company/payout/)
+
+Security Architecture:
+    - Read router (wallet_async_router): authenticated users only.
+    - Mutation router (mutation_router): Double-Door secured company payout.
+      Restricted to the Primary Company Superuser:
+      ``fashionistarclothings@outlook.com``.
+
+Registration (in central Ninja config)::
+
+    from apps.wallet.apis.async_ import wallet_async_router, mutation_router
+
+    api.add_router("/wallet/", wallet_async_router)
+    api.add_router("/wallet/", mutation_router)
 
 Note:
-    All mutation endpoints (PIN set/change, wallet top-up initiation, withdrawal)
-    live on the DRF sync surface at ``/api/v1/wallet/``.  This async namespace
-    is READ-ONLY by design, enforcing the Fashionistar write-sync / read-async
-    architectural boundary.
-
-    The wallet is always provisioned automatically on user creation via
+    The wallet is provisioned automatically on user creation via
     ``WalletProvisioningService``; there is no ``POST /wallet/create/`` endpoint.
+
+    Standard client/vendor withdrawal requests are handled on the DRF sync
+    surface at ``/api/v1/wallet/withdrawal/``.
 """
 
 from apps.wallet.apis.async_.wallet_views import router as wallet_async_router
+from apps.wallet.apis.async_.mutation_views import router as mutation_router
 
-__all__ = ["wallet_async_router"]
+__all__ = [
+    "wallet_async_router",
+    "mutation_router",
+]
