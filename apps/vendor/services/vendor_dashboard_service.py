@@ -119,6 +119,10 @@ class VendorDashboardService:
                 "is_featured":   profile.is_featured,
                 "last_active_at": profile.last_active_at.isoformat() if profile.last_active_at else None,
                 "support_rating": float(profile.support_rating),
+                "subscription_tier": profile.subscription_tier,
+                "avg_fulfillment_days": profile.avg_fulfillment_days,
+                "return_rate":   profile.return_rate,
+                "dispute_rate":  profile.dispute_rate,
             },
             "analytics": {
                 "total_products": profile.total_products,

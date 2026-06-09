@@ -145,6 +145,10 @@ async def get_vendor_profile_async(request):
         is_verified=profile.is_verified,
         is_active=profile.is_active,
         is_featured=profile.is_featured,
+        subscription_tier=profile.subscription_tier,
+        avg_fulfillment_days=profile.avg_fulfillment_days,
+        return_rate=profile.return_rate,
+        dispute_rate=profile.dispute_rate,
         setup_state=(
             SetupStateOut(
                 current_step=setup_state.current_step,

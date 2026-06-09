@@ -126,6 +126,10 @@ class VendorProfileOut(Schema):
     is_featured:   bool
     last_active_at: datetime | None = None
     support_rating: float = 5.00
+    subscription_tier:    str = "free"
+    avg_fulfillment_days: float | None = None
+    return_rate:          float = 0.0
+    dispute_rate:         float = 0.0
     setup_state:   SetupStateOut | None = None
 
 
