@@ -55,6 +55,12 @@ class ProfileOut(Schema):
     sms_notifications_enabled:   bool
     last_active_at:              datetime | None = None
     phone_verified:              bool = False
+    loyalty_tier:                str = "standard"
+    loyalty_points:              int = 0
+    referral_code:               str | None = None
+    referral_count:              int = 0
+    body_type:                   str = ""
+    occasion_preferences:        list[str] = Field(default_factory=list)
     addresses:                   list[AddressOut] = Field(default_factory=list)
 
 
@@ -110,6 +116,8 @@ class ProfileUpdateIn(Schema):
     favourite_colours:           list[str] | None = None
     email_notifications_enabled: bool | None = None
     sms_notifications_enabled:   bool | None = None
+    body_type:                   str | None = None
+    occasion_preferences:        list[str] | None = None
 
 
 class AddressIn(Schema):
