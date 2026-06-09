@@ -53,6 +53,8 @@ class ProfileOut(Schema):
     total_spent_ngn:             Decimal
     email_notifications_enabled: bool
     sms_notifications_enabled:   bool
+    last_active_at:              datetime | None = None
+    phone_verified:              bool = False
     addresses:                   list[AddressOut] = Field(default_factory=list)
 
 

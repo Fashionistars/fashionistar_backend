@@ -10,6 +10,7 @@ Contract rules:
 """
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 from decimal import Decimal
@@ -123,6 +124,8 @@ class VendorProfileOut(Schema):
     is_verified:   bool
     is_active:     bool
     is_featured:   bool
+    last_active_at: datetime | None = None
+    support_rating: float = 5.00
     setup_state:   SetupStateOut | None = None
 
 

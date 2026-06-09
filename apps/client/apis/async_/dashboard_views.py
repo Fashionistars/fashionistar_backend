@@ -91,6 +91,8 @@ async def get_client_profile_async(request):
         total_spent_ngn=profile.total_spent_ngn,
         email_notifications_enabled=profile.email_notifications_enabled,
         sms_notifications_enabled=profile.sms_notifications_enabled,
+        last_active_at=profile.last_active_at,
+        phone_verified=profile.phone_verified,
         addresses=[
             {
                 "id": a.pk,

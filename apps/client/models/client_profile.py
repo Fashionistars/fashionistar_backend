@@ -126,6 +126,14 @@ class ClientProfile(TimeStampedModel, SoftDeleteModel):
         default=False,
         help_text="Receive SMS alerts for order updates.",
     )
+    last_active_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Timestamp of the client's last dashboard activity.",
+    )
+    phone_verified = models.BooleanField(
+        default=False,
+        help_text="True if the client's phone number has been verified via OTP.",
+    )
 
     # ── Phase 12: 2026+ Scale Fields ────────────────────────────────────────
     # Loyalty Programme

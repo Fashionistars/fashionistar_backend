@@ -34,6 +34,8 @@ class ClientProfileListSchema(Schema):
     total_orders: int
     total_spent_ngn: float
     is_profile_complete: bool
+    last_active_at: Optional[datetime] = None
+    phone_verified: bool = False
     created_at: datetime
 
 class ClientProfileDetailSchema(Schema):
@@ -51,6 +53,8 @@ class ClientProfileDetailSchema(Schema):
     is_profile_complete: bool
     email_notifications_enabled: bool
     sms_notifications_enabled: bool
+    last_active_at: Optional[datetime] = None
+    phone_verified: bool = False
     client_addresses: List[ClientAddressSchema]
     created_at: datetime
     updated_at: datetime

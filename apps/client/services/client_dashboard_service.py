@@ -104,6 +104,8 @@ class ClientDashboardService:
                     "sms_notifications_enabled": getattr(
                         profile, "sms_notifications_enabled", True
                     ),
+                    "last_active_at":              profile.last_active_at.isoformat() if profile.last_active_at else None,
+                    "phone_verified":              profile.phone_verified,
 
                     # ── Addresses (detail read; empty on dashboard summary) ───
                     "addresses": [],

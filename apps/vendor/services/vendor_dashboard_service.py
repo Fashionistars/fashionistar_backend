@@ -117,6 +117,8 @@ class VendorDashboardService:
                 "is_verified":   profile.is_verified,
                 "is_active":     profile.is_active,
                 "is_featured":   profile.is_featured,
+                "last_active_at": profile.last_active_at.isoformat() if profile.last_active_at else None,
+                "support_rating": float(profile.support_rating),
             },
             "analytics": {
                 "total_products": profile.total_products,

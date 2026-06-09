@@ -239,6 +239,14 @@ class VendorProfile(TimeStampedModel, SoftDeleteModel):
         default=0.0,
         help_text="Dispute rate as a fraction (0.0 – 1.0). Monitored for platform health.",
     )
+    last_active_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Timestamp of the vendor's last dashboard activity.",
+    )
+    support_rating = models.DecimalField(
+        max_digits=3, decimal_places=2, default=Decimal("5.00"),
+        help_text="Rolling support quality score based on tickets.",
+    )
 
     class Meta:
         verbose_name = "Vendor Profile"
