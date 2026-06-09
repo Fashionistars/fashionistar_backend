@@ -192,3 +192,139 @@ class VendorPinIn(Schema):
 
 class VendorPinVerifyIn(Schema):
     pin: str = Field(..., min_length=4, max_length=4, pattern=r"^\d{4}$")
+
+
+# ── Migrated Analytics & List Output Schemas ──
+
+class AnalyticsSummaryOut(Schema):
+    todays_sales: str
+    this_month_sales: str
+    year_to_date_sales: str
+    average_order_value: str
+    total_customers: int
+    review_count: int
+    average_rating: str
+    active_coupons: int
+    inactive_coupons: int
+    low_stock_count: int
+    total_products: int
+    total_sales: int
+    total_revenue: str
+    wallet_balance: str
+    total_orders: int
+    avg_order_value: float
+    revenue_trend: float
+    conversion_rate: float
+
+
+
+class ChartPointOut(Schema):
+    label: str
+    value: float
+
+
+class ChartResponseOut(Schema):
+    status: str = "success"
+    data: list[ChartPointOut]
+
+
+
+class MonthlyOrderOut(Schema):
+    month: int
+    order_status: str
+    count: int
+
+
+class MonthlyProductOut(Schema):
+    month: int
+    count: int
+
+
+class EarningTrackerOut(Schema):
+    total_revenue: float
+    pending_revenue: float = 0.0
+    monthly_earnings: list[dict[str, Any]]
+
+
+class CustomerBehaviorOut(Schema):
+    hourly_distribution: list[dict[str, Any]]
+    new_customers_this_month: int
+    total_customers: int
+
+
+class CategoryPerformanceOut(Schema):
+    categories__name: str
+    total_revenue: float
+    order_count: int
+
+
+class PaymentDistributionOut(Schema):
+    payment_status: str
+    count: int
+    percentage: float
+
+
+class ProductListItemOut(Schema):
+    id: str
+    pid: str
+    title: str
+    price: float
+    stock_qty: int
+    status: str
+    category__name: str | None = None
+    date: datetime
+
+
+class OrderListItemOut(Schema):
+    id: str
+    total: float
+    payment_status: str
+    order_status: str
+    date: datetime
+    buyer__email: str
+
+
+class OrderDetailOut(Schema):
+    id: str
+    total: str
+    payment_status: str
+    order_status: str
+    date: datetime
+    buyer_email: str
+
+
+class ReviewListItemOut(Schema):
+    review_product__id: str
+    review_product__rating: int
+    review_product__review: str
+    review_product__date: datetime
+    title: str
+
+
+class CouponListItemOut(Schema):
+    id: str
+    code: str
+    discount: int
+    discount_type: str | None = None
+    valid_until: datetime | None = None
+    active: bool
+
+
+class OrderListResponseOut(Schema):
+    status: str = "success"
+    count: int
+    data: list[OrderListItemOut]
+
+
+class ReviewListResponseOut(Schema):
+    status: str = "success"
+    count: int
+    data: list[ReviewListItemOut]
+
+
+class CouponListResponseOut(Schema):
+    status: str = "success"
+    count: int
+    data: list[CouponListItemOut]
+
+

@@ -63,25 +63,6 @@ from apps.vendor.apis.sync.product_views import (
     VendorProductFilterView,
     VendorProductUpdateView,
 )
-from apps.vendor.apis.sync.analytics_views import (
-    VendorAnalyticsSummaryView,
-    VendorCouponListView,
-    VendorCustomerBehaviorView,
-    VendorEarningTrackerView,
-    VendorLowStockView,
-    VendorMonthlyOrderChart,
-    VendorMonthlyProductChart,
-    VendorOrderDetailView,
-    VendorOrderListView,
-    VendorOrderStatusCountsView,
-    VendorPaymentDistributionView,
-    VendorRevenueChart,
-    VendorReviewDetailView,
-    VendorReviewListView,
-    VendorTopCategoriesView,
-    VendorTopSellingProductsView,
-    VendorProductListView,
-)
 from apps.vendor.apis.sync.profile_views import (
     VendorPayoutView,
     VendorProfileView,
@@ -122,39 +103,12 @@ urlpatterns = [
     path("public/",             PublicVendorListView.as_view(),         name="public-list"),
     path("public/<slug:store_slug>/", PublicVendorDetailView.as_view(), name="public-detail"),
 
-
-    # ── Analytics ─────────────────────────────────────────────────
-    path("analytics/",               VendorAnalyticsSummaryView.as_view(),   name="analytics"),
-    path("analytics/revenue/",       VendorRevenueChart.as_view(),           name="analytics-revenue"),
-    path("analytics/orders/",        VendorMonthlyOrderChart.as_view(),      name="analytics-orders"),
-    path("analytics/products/",      VendorMonthlyProductChart.as_view(),    name="analytics-products"),
-    path("analytics/customers/",     VendorCustomerBehaviorView.as_view(),   name="analytics-customers"),
-    path("analytics/categories/",    VendorTopCategoriesView.as_view(),      name="analytics-categories"),
-    path("analytics/distribution/",  VendorPaymentDistributionView.as_view(), name="analytics-distribution"),
-
-    # ── Products ─────────────────────────────────────────────────
-    path("products/",                          VendorProductListView.as_view(),        name="products"),
+    # ── Products Mutations ─────────────────────────────────────────
     path("products/create/",                   VendorProductCreateView.as_view(),      name="product-create"),
     path("products/filter/",                   VendorProductFilterView.as_view(),      name="product-filter"),
-    path("products/low-stock/",                VendorLowStockView.as_view(),           name="products-low-stock"),
-    path("products/top/",                      VendorTopSellingProductsView.as_view(), name="products-top"),
     path("products/<str:product_pid>/edit/",   VendorProductUpdateView.as_view(),      name="product-edit"),
     path("products/<str:product_pid>/delete/", VendorProductDeleteView.as_view(),      name="product-delete"),
 
-    # ── Orders ───────────────────────────────────────────────────
-    path("orders/",                             VendorOrderListView.as_view(),          name="orders"),
-    path("orders/status-counts/",               VendorOrderStatusCountsView.as_view(),  name="orders-status-counts"),
-    path("orders/<int:order_id>/",              VendorOrderDetailView.as_view(),        name="order-detail"),
+    # ── Orders Mutations ───────────────────────────────────────────
     path("orders/<int:order_id>/status/",       VendorOrderStatusUpdateView.as_view(),  name="order-status-update"),
-
-
-    # ── Earnings ─────────────────────────────────────────────────
-    path("earnings/",  VendorEarningTrackerView.as_view(), name="earnings"),
-
-    # ── Reviews ──────────────────────────────────────────────────
-    path("reviews/",                    VendorReviewListView.as_view(),   name="reviews"),
-    path("reviews/<int:review_id>/",    VendorReviewDetailView.as_view(), name="review-detail"),
-
-    # ── Coupons ──────────────────────────────────────────────────
-    path("coupons/",  VendorCouponListView.as_view(), name="coupons"),
 ]

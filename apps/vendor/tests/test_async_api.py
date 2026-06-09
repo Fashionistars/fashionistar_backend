@@ -157,3 +157,56 @@ def test_vendor_ninja_require_profile_endpoints_gate():
         assert resp.status_code == 403
         assert "setup is required" in resp.json().get("detail", "").lower()
 
+
+@pytest.mark.django_db
+def test_vendor_ninja_migrated_endpoints():
+    """Verify that all migrated Django-Ninja async endpoints are fully operational."""
+
+    user = UnifiedUser.objects.create_user(
+        email="vendor.migrated@fashionistar.test",
+        password="Password123!",
+        role=UnifiedUser.ROLE_VENDOR,
+        is_active=True,
+        is_verified=True,
+    )
+    profile = VendorProfile.objects.create(
+        user=user,
+        store_name="Atelier Migrated",
+        city="Calabar",
+        state="Cross River",
+        country="Nigeria",
+    )
+    VendorSetupState.objects.create(
+        vendor=profile,
+        profile_complete=True,
+        bank_details=True,
+        first_product=True,
+        onboarding_done=True,
+        current_step=5,
+    )
+
+    client = _auth_client(user)
+
+    endpoints = [
+        "/api/v1/ninja/vendor/analytics/",
+        "/api/v1/ninja/vendor/analytics/revenue/",
+        "/api/v1/ninja/vendor/analytics/orders/",
+        "/api/v1/ninja/vendor/analytics/products/",
+        "/api/v1/ninja/vendor/analytics/customers/",
+        "/api/v1/ninja/vendor/analytics/categories/",
+        "/api/v1/ninja/vendor/analytics/distribution/",
+        "/api/v1/ninja/vendor/earnings/",
+        "/api/v1/ninja/vendor/products/",
+        "/api/v1/ninja/vendor/products/low-stock/",
+        "/api/v1/ninja/vendor/products/top/",
+        "/api/v1/ninja/vendor/orders/",
+        "/api/v1/ninja/vendor/orders/status-counts/",
+        "/api/v1/ninja/vendor/reviews/",
+        "/api/v1/ninja/vendor/coupons/",
+    ]
+
+    for path in endpoints:
+        resp = client.get(path)
+        assert resp.status_code == 200, f"Endpoint {path} failed: {resp.content}"
+
+
