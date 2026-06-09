@@ -24,6 +24,8 @@ Reverse FK / related-name traversal map for this domain:
 Google-style docstrings required for all non-trivial functions.
 """
 
+from apps.vendor.models import VendorSetupState
+from apps.vendor.models import VendorProfile
 import asyncio
 import logging
 from decimal import Decimal

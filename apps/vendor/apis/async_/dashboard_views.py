@@ -25,6 +25,7 @@ from apps.vendor.types.vendor_schemas import (
     SetupStateOut,
     VendorDashboardOut,
     VendorProfileOut,
+    TopProductOut,
 )
 from apps.common.roles import is_vendor_role
 
@@ -32,12 +33,23 @@ logger = logging.getLogger(__name__)
 
 router = Router(tags=["Vendor — Async Dashboard"])
 
-def _require_vendor_user(request):
-    """Return the authenticated vendor user or raise a 403 error."""
+def _require_vendor_user(request, require_profile: bool = True):
+    """Return the authenticated vendor user or raise a 403 / 404 error."""
 
     user = request.auth.user if hasattr(request.auth, "user") else request.auth
     if user is None or not is_vendor_role(getattr(user, "role", None)):
         raise HttpError(403, "Vendor access is required for this endpoint.")
+    
+    if require_profile:
+        from django.core.exceptions import ObjectDoesNotExist
+        try:
+            profile = getattr(user, "vendor_profile", None)
+        except ObjectDoesNotExist:
+            profile = None
+        
+        if profile is None:
+            raise HttpError(403, "Vendor setup is required before accessing this endpoint.")
+            
     return user
 
 
@@ -52,7 +64,7 @@ async def get_vendor_dashboard(request):
     Full vendor dashboard: profile, analytics, setup state, recent orders,
     products, reviews, coupons, wallet, recent activity.
     """
-    user = _require_vendor_user(request)
+    user = _require_vendor_user(request, require_profile=True)
     try:
         summary = await VendorDashboardService.get_dashboard_summary(user)
         return summary
@@ -75,7 +87,7 @@ async def get_vendor_profile_async(request):
     """
     from apps.vendor.selectors.vendor_selectors import aget_vendor_profile_or_none
 
-    user = _require_vendor_user(request)
+    user = _require_vendor_user(request, require_profile=True)
     profile = await aget_vendor_profile_or_none(user)
     if profile is None:
         raise HttpError(404, "Vendor setup is required before profile access.")
@@ -144,7 +156,7 @@ async def get_vendor_setup_state_async(request):
         aget_vendor_setup_state_data,
     )
 
-    user = _require_vendor_user(request)
+    user = _require_vendor_user(request, require_profile=False)
     try:
         profile = await aget_vendor_profile_or_none(user)
         if profile is None:
@@ -180,7 +192,7 @@ async def get_vendor_analytics(request):
     Full async analytics: revenue trends, top products, order counts, top categories.
     All 4 queries run concurrently via asyncio.gather() in VendorDashboardService.
     """
-    user = _require_vendor_user(request)
+    user = _require_vendor_user(request, require_profile=True)
     try:
         summary = await VendorDashboardService.get_analytics_summary(user)
         return {"status": "success", "data": summary}
@@ -216,7 +228,7 @@ async def get_vendor_audit_logs(
     """
     from apps.audit_logs.models import AuditEventLog
 
-    user = _require_vendor_user(request)
+    user = _require_vendor_user(request, require_profile=True)
     page_size = min(int(page_size), 50)
     offset = (page - 1) * page_size
 
@@ -272,4 +284,20 @@ async def get_vendor_audit_logs(
             getattr(user, "pk", "?"),
         )
         raise HttpError(500, "Audit log fetch failed.")
+
+
+# ── Top Products ───────────────────────────────────────────────────────────
+
+
+@router.get("/top-products/", response=list[TopProductOut])
+async def get_vendor_top_products(request, limit: int = 5):
+    """
+    GET /api/v1/ninja/vendor/top-products/
+
+    Returns the top selling products for this vendor.
+    """
+    from apps.vendor.selectors.vendor_selectors import aget_vendor_top_selling_products, aget_vendor_profile_or_none
+    user = _require_vendor_user(request, require_profile=True)
+    profile = await aget_vendor_profile_or_none(user)
+    return await aget_vendor_top_selling_products(profile, limit=limit)
 

@@ -60,6 +60,37 @@ class CouponStatsOut(Schema):
     inactive: int = 0
 
 
+class TopProductOut(Schema):
+    """
+    Top-selling product entry — returned in both dashboard payload and
+    the standalone /top-products/ endpoint.
+
+    Fields:
+        id:        Product UUID (str).
+        title:     Product title.
+        price:     Unit price (float, NGN).
+        stock_qty: Current stock quantity.
+        total_qty: Total units sold across all orders (None if no orders yet).
+    """
+    id:        str
+    title:     str
+    price:     float = 0.0
+    stock_qty: int   = 0
+    total_qty: int | None = None
+
+
+class RevenueDataPointOut(Schema):
+    """
+    Monthly revenue aggregation for a single calendar month.
+
+    Fields:
+        month:         Calendar month number (1 = Jan … 12 = Dec).
+        total_revenue: Total gross revenue for this month (float, NGN).
+    """
+    month:         int   = 1
+    total_revenue: float = 0.0
+
+
 # ══════════════════════════════════════════════════════════════════
 #  Output Schemas
 # ══════════════════════════════════════════════════════════════════
@@ -96,17 +127,29 @@ class VendorProfileOut(Schema):
 
 
 class VendorDashboardOut(Schema):
+    """
+    Full vendor dashboard payload — single endpoint response.
+
+    All independent data sections are fetched concurrently via asyncio.gather()
+    in VendorDashboardService.get_dashboard_summary() and returned here.
+
+    Added in this revision:
+        top_products:   list[TopProductOut]        — top N by qty sold
+        revenue_trends: list[RevenueDataPointOut]  — 6-month revenue chart
+    """
     profile:             dict[str, Any]
     analytics:           AnalyticsOut
     setup_state:         SetupStateOut
-    payout_profile:      PayoutProfileOut   = Field(default_factory=PayoutProfileOut)
-    recent_orders:       list[Any]          = Field(default_factory=list)
-    products:            list[Any]          = Field(default_factory=list)
-    reviews:             list[Any]          = Field(default_factory=list)
-    coupons:             CouponStatsOut     = Field(default_factory=CouponStatsOut)
-    wallet:              WalletOut          = Field(default_factory=WalletOut)
-    recent_activity:     list[Any]          = Field(default_factory=list)
-    low_stock_alerts:    list[Any]          = Field(default_factory=list)
+    payout_profile:      PayoutProfileOut          = Field(default_factory=PayoutProfileOut)
+    recent_orders:       list[Any]                 = Field(default_factory=list)
+    products:            list[Any]                 = Field(default_factory=list)
+    top_products:        list[TopProductOut]        = Field(default_factory=list)
+    reviews:             list[Any]                 = Field(default_factory=list)
+    coupons:             CouponStatsOut             = Field(default_factory=CouponStatsOut)
+    wallet:              WalletOut                  = Field(default_factory=WalletOut)
+    recent_activity:     list[Any]                 = Field(default_factory=list)
+    low_stock_alerts:    list[Any]                 = Field(default_factory=list)
+    revenue_trends:      list[RevenueDataPointOut]  = Field(default_factory=list)
 
 
 # ══════════════════════════════════════════════════════════════════

@@ -91,3 +91,69 @@ def test_vendor_ninja_setup_allows_vendor_without_profile():
     assert payload["current_step"] == 1
     assert payload["profile_complete"] is False
     assert payload["completion_percentage"] == 0
+
+
+@pytest.mark.django_db
+def test_vendor_ninja_top_products_and_extended_dashboard():
+    """Verify that top-products endpoint and extended dashboard return data for profile owners."""
+
+    user = UnifiedUser.objects.create_user(
+        email="vendor.dashboard@fashionistar.test",
+        password="Password123!",
+        role=UnifiedUser.ROLE_VENDOR,
+        is_active=True,
+        is_verified=True,
+    )
+    profile = VendorProfile.objects.create(
+        user=user,
+        store_name="Atelier Dashboard",
+        city="Lagos",
+        state="Lagos",
+        country="Nigeria",
+    )
+    VendorSetupState.objects.create(
+        vendor=profile,
+        profile_complete=True,
+        bank_details=True,
+        first_product=True,
+        onboarding_done=True,
+        current_step=5,
+    )
+
+    client = _auth_client(user)
+
+    # 1. Standalone top-products endpoint
+    top_products_resp = client.get("/api/v1/ninja/vendor/top-products/")
+    assert top_products_resp.status_code == 200
+    assert isinstance(top_products_resp.json(), list)
+
+    # 2. Extended dashboard payload containing top_products and revenue_trends
+    dashboard_resp = client.get("/api/v1/ninja/vendor/dashboard/")
+    assert dashboard_resp.status_code == 200
+    dashboard_data = dashboard_resp.json()
+    assert "top_products" in dashboard_data
+    assert "revenue_trends" in dashboard_data
+    assert isinstance(dashboard_data["top_products"], list)
+    assert isinstance(dashboard_data["revenue_trends"], list)
+
+
+@pytest.mark.django_db
+def test_vendor_ninja_require_profile_endpoints_gate():
+    """Verify that dashboard, profile, and top-products endpoints gate users without profile."""
+
+    user = UnifiedUser.objects.create_user(
+        email="vendor.noprof.gate@fashionistar.test",
+        password="Password123!",
+        role=UnifiedUser.ROLE_VENDOR,
+        is_active=True,
+        is_verified=True,
+    )
+
+    client = _auth_client(user)
+
+    # These endpoints require a vendor profile and setup completion
+    for path in ["/api/v1/ninja/vendor/dashboard/", "/api/v1/ninja/vendor/profile/", "/api/v1/ninja/vendor/top-products/"]:
+        resp = client.get(path)
+        assert resp.status_code == 403
+        assert "setup is required" in resp.json().get("detail", "").lower()
+

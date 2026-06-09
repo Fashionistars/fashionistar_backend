@@ -9,16 +9,18 @@ Architecture:
   ─ Delegates every DB read to the selectors layer.
 
 Dashboard payload:
-  profile       → store identity, verification, location, social
-  analytics     → denormalized counters (products, sales, revenue, rating)
-  setup_state   → onboarding milestones (KYC excluded from gating)
-  payout_profile → safe bank data (no encrypted fields)
-  recent_orders → latest 10 orders
-  products      → latest 10 products
-  reviews       → latest 5 reviews
-  coupons       → active / inactive counts
-  wallet        → balance + recent transactions
+  profile         → store identity, verification, location, social
+  analytics       → denormalized counters (products, sales, revenue, rating)
+  setup_state     → onboarding milestones (KYC excluded from gating)
+  payout_profile  → safe bank data (no encrypted fields)
+  recent_orders   → latest 10 orders
+  products        → latest 10 products
+  top_products    → top 5 by qty sold (NEW — eliminates separate /top-products/ call)
+  reviews         → latest 5 reviews
+  coupons         → active / inactive counts
+  wallet          → balance + recent transactions
   recent_activity → stub (future activity-stream sprint)
+  revenue_trends  → 6-month monthly revenue chart (NEW)
 """
 import asyncio
 import logging
@@ -53,10 +55,12 @@ class VendorDashboardService:
             aget_vendor_payout_profile_data,
             aget_vendor_recent_orders,
             aget_vendor_products_summary,
+            aget_vendor_top_selling_products,
             aget_vendor_reviews_summary,
             aget_vendor_coupon_stats,
             aget_vendor_wallet_data,
             aget_vendor_low_stock_alerts,
+            aget_vendor_revenue_trends,
         )
 
         profile = await aget_vendor_profile_or_none(user)
@@ -68,25 +72,29 @@ class VendorDashboardService:
             raise ValueError("Vendor profile not found for this user.")
 
         # ── MANDATORY: asyncio.gather() for all independent I/O operations ──
-        # All 7 fetches run concurrently — total latency ≈ slowest single query.
+        # 10 concurrent fetches — total latency ≈ slowest single query (~4–6x speedup).
         (
             setup_data,
             payout_data,
             recent_orders,
             products,
+            top_products,
             reviews,
             coupons,
             wallet,
             low_stock_alerts,
+            revenue_trends,
         ) = await asyncio.gather(
             aget_vendor_setup_state_data(profile),
             aget_vendor_payout_profile_data(profile),
             aget_vendor_recent_orders(profile, limit=10),
             aget_vendor_products_summary(profile, limit=10),
+            aget_vendor_top_selling_products(profile, limit=5),  # NEW
             aget_vendor_reviews_summary(profile, limit=5),
             aget_vendor_coupon_stats(profile),
             aget_vendor_wallet_data(profile),
             aget_vendor_low_stock_alerts(profile, threshold=5),
+            aget_vendor_revenue_trends(profile, months=6),        # NEW
         )
 
         return {
@@ -121,11 +129,13 @@ class VendorDashboardService:
             "payout_profile":  payout_data,
             "recent_orders":   recent_orders,
             "products":        products,
+            "top_products":    top_products,     # NEW — consumed by dashboard widget
             "reviews":         reviews,
             "coupons":         coupons,
             "wallet":          wallet,
             "recent_activity": [],
             "low_stock_alerts": low_stock_alerts,
+            "revenue_trends":  revenue_trends,  # NEW — consumed by dashboard chart
         }
 
     @classmethod
