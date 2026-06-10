@@ -585,7 +585,8 @@ async def get_vendor_products_top_selling(request, limit: int = 5):
     """
     GET /api/v1/ninja/vendor/products/top/
     """
-    vendor_profile = _require_vendor_user(request, require_profile=True)
+    user = _require_vendor_user(request, require_profile=True)
+    vendor_profile = user.vendor_profile
 
     try:
         top_selling = await vendor_profile.aget_top_selling_products(limit=limit)
@@ -619,7 +620,8 @@ async def get_vendor_orders_list(request, payment_status: str = "", order_status
     """
     GET /api/v1/ninja/vendor/orders/
     """
-    vendor_profile = _require_vendor_user(request, require_profile=True)
+    user = _require_vendor_user(request, require_profile=True)
+    vendor_profile = user.vendor_profile
     try:
         qs = vendor_profile.vendor_orders.all()
         if payment_status:
@@ -696,7 +698,8 @@ async def get_vendor_orders_status_counts(request):
     """
     GET /api/v1/ninja/vendor/orders/status-counts/
     """
-    vendor_profile = _require_vendor_user(request, require_profile=True)
+    user = _require_vendor_user(request, require_profile=True)
+    vendor_profile = user.vendor_profile
 
     try:
         counts = await vendor_profile.aget_order_status_counts()
@@ -718,7 +721,8 @@ async def get_vendor_order_detail(request, order_id: str | int):
     """
     GET /api/v1/ninja/vendor/orders/{order_id}/
     """
-    vendor_profile = _require_vendor_user(request, require_profile=True)
+    user = _require_vendor_user(request, require_profile=True)
+    vendor_profile = user.vendor_profile
     try:
         order = await vendor_profile.vendor_orders.select_related("user").aget(pk=order_id)
         buyer_email = order.user.email if order.user else ""
@@ -770,7 +774,8 @@ async def get_vendor_reviews_list(request):
     """
     GET /api/v1/ninja/vendor/reviews/
     """
-    vendor_profile = _require_vendor_user(request, require_profile=True)
+    user = _require_vendor_user(request, require_profile=True)
+    vendor_profile = user.vendor_profile
     try:
         qs = (
             vendor_profile.vendor_products
