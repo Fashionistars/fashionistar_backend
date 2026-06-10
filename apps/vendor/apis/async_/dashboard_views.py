@@ -17,6 +17,7 @@ IMPORTANT:
 """
 import logging
 import asyncio
+from uuid import UUID
 from datetime import timedelta
 from django.utils import timezone
 from django.db.models import Avg, Count, Sum, F, Q
@@ -41,6 +42,7 @@ from apps.vendor.types.vendor_schemas import (
     ProductListItemOut,
     OrderListItemOut,
     OrderDetailOut,
+    VendorOrderItemOut,
     ReviewListItemOut,
     CouponListItemOut,
     OrderListResponseOut,
@@ -54,6 +56,39 @@ logger = logging.getLogger(__name__)
 
 router = Router(tags=["Vendor — Async Dashboard"])
 
+
+def map_order_status(backend_status: str) -> str:
+    mapping = {
+        "pending_payment": "Pending",
+        "awaiting_cash_confirmation": "Pending",
+        "processing": "Processing",
+        "shipped": "Shipped",
+        "out_for_delivery": "Shipped",
+        "delivered": "Fulfilled",
+        "completed": "Fulfilled",
+        "cancelled": "Cancelled",
+        "refund_requested": "Cancelled",
+        "refunded": "Cancelled",
+        "disputed": "Pending",
+    }
+    return mapping.get(backend_status, "Pending")
+
+
+def map_payment_status(backend_status: str) -> str:
+    if backend_status in {
+        "payment_confirmed",
+        "processing",
+        "shipped",
+        "out_for_delivery",
+        "delivered",
+        "completed",
+    }:
+        return "paid"
+    elif backend_status in {"cancelled", "refunded"}:
+        return "failed"
+    else:
+        return "pending"
+
 def _require_vendor_user(request, require_profile: bool = True):
     """Return the authenticated vendor user or raise a 403 / 404 error."""
 
@@ -62,16 +97,11 @@ def _require_vendor_user(request, require_profile: bool = True):
         raise HttpError(403, "Vendor access is required for this endpoint.")
     
     if require_profile:
-        from django.core.exceptions import ObjectDoesNotExist
-        try:
-            profile = getattr(user, "vendor_profile", None)
-        except ObjectDoesNotExist:
-            profile = None
-        
-        if profile is None:
+        if getattr(user, "vendor_profile", None) is None:
             raise HttpError(403, "Vendor setup is required before accessing this endpoint.")
             
     return user
+            
 
 
 # ── Dashboard ──────────────────────────────────────────────────────────────
@@ -555,10 +585,10 @@ async def get_vendor_products_top_selling(request, limit: int = 5):
     """
     GET /api/v1/ninja/vendor/products/top/
     """
-    user = _require_vendor_user(request, require_profile=True)
-    profile = user.vendor_profile
+    vendor_profile = _require_vendor_user(request, require_profile=True)
+
     try:
-        top_selling = await profile.aget_top_selling_products(limit=limit)
+        top_selling = await vendor_profile.aget_top_selling_products(limit=limit)
         products = []
         for p in top_selling:
             category_name = None
@@ -589,25 +619,70 @@ async def get_vendor_orders_list(request, payment_status: str = "", order_status
     """
     GET /api/v1/ninja/vendor/orders/
     """
-    user = _require_vendor_user(request, require_profile=True)
-    profile = user.vendor_profile
+    vendor_profile = _require_vendor_user(request, require_profile=True)
     try:
-        qs = profile.vendor_orders.all()
+        qs = vendor_profile.vendor_orders.all()
         if payment_status:
-            qs = qs.filter(status=payment_status)
+            payment_status_lower = payment_status.lower()
+            if payment_status_lower == "paid":
+                qs = qs.filter(status__in=[
+                    "payment_confirmed",
+                    "processing",
+                    "shipped",
+                    "out_for_delivery",
+                    "delivered",
+                    "completed",
+                ])
+            elif payment_status_lower == "failed":
+                qs = qs.filter(status__in=["cancelled", "refunded"])
+            elif payment_status_lower == "pending":
+                qs = qs.filter(status__in=[
+                    "pending_payment",
+                    "awaiting_cash_confirmation",
+                    "refund_requested",
+                    "disputed",
+                ])
+            else:
+                qs = qs.filter(status=payment_status)
+
         if order_status:
-            qs = qs.filter(order_status=order_status)
+            order_status_lower = order_status.lower()
+            if order_status_lower == "pending":
+                qs = qs.filter(status__in=[
+                    "pending_payment",
+                    "awaiting_cash_confirmation",
+                    "disputed",
+                ])
+            elif order_status_lower == "processing":
+                qs = qs.filter(status="processing")
+            elif order_status_lower == "shipped":
+                qs = qs.filter(status__in=["shipped", "out_for_delivery"])
+            elif order_status_lower == "fulfilled":
+                qs = qs.filter(status__in=["delivered", "completed"])
+            elif order_status_lower == "cancelled":
+                qs = qs.filter(status__in=["cancelled", "refund_requested", "refunded"])
+            else:
+                qs = qs.filter(status=order_status)
 
         orders = []
         async for o in qs.select_related("user").order_by("-created_at"):
+            buyer_email = o.user.email if o.user else ""
+            first_name = o.user.first_name or ""
+            last_name = o.user.last_name or ""
+            buyer_full_name = f"{first_name} {last_name}".strip() if o.user else ""
+            if not buyer_full_name:
+                buyer_full_name = buyer_email or "Guest Customer"
             orders.append(
                 OrderListItemOut(
-                    id=str(o.pk),
+                    id=o.pk,
+                    oid=o.order_number,
+                    buyer_email=buyer_email,
+                    buyer_full_name=buyer_full_name,
+                    order_status=map_order_status(o.status),
+                    payment_status=map_payment_status(o.status),
+                    total_price=float(o.total_amount),
                     total=float(o.total_amount),
-                    payment_status=o.status,
-                    order_status=o.order_status,
                     date=o.created_at,
-                    buyer__email=o.user.email if o.user else "",
                 )
             )
         return OrderListResponseOut(status="success", count=len(orders), data=orders)
@@ -621,10 +696,10 @@ async def get_vendor_orders_status_counts(request):
     """
     GET /api/v1/ninja/vendor/orders/status-counts/
     """
-    user = _require_vendor_user(request, require_profile=True)
-    profile = user.vendor_profile
+    vendor_profile = _require_vendor_user(request, require_profile=True)
+
     try:
-        counts = await profile.aget_order_status_counts()
+        counts = await vendor_profile.aget_order_status_counts()
         return [
             PaymentDistributionOut(
                 payment_status=row.get("status") or "",
@@ -639,21 +714,51 @@ async def get_vendor_orders_status_counts(request):
 
 
 @router.get("/orders/{order_id}/", response=OrderDetailOut)
-async def get_vendor_order_detail(request, order_id: int):
+async def get_vendor_order_detail(request, order_id: str | int):
     """
     GET /api/v1/ninja/vendor/orders/{order_id}/
     """
-    user = _require_vendor_user(request, require_profile=True)
-    profile = user.vendor_profile
+    vendor_profile = _require_vendor_user(request, require_profile=True)
     try:
-        order = await profile.vendor_orders.select_related("user").aget(pk=order_id)
+        order = await vendor_profile.vendor_orders.select_related("user").aget(pk=order_id)
+        buyer_email = order.user.email if order.user else ""
+        first_name = order.user.first_name or ""
+        last_name = order.user.last_name or ""
+        buyer_full_name = f"{first_name} {last_name}".strip() if order.user else ""
+        if not buyer_full_name:
+            buyer_full_name = buyer_email or "Guest Customer"
+
+        items = []
+        async for item in order.cart_order_items.all():
+            items.append(
+                VendorOrderItemOut(
+                    id=item.pk,
+                    product_title=item.product_title_snapshot or "",
+                    product_pid=item.product_sku_snapshot or "",
+                    qty=item.quantity,
+                    price=float(item.unit_price),
+                    subtotal=float(item.line_total),
+                    product_title_snapshot=item.product_title_snapshot,
+                    product_sku_snapshot=item.product_sku_snapshot,
+                    variant_description_snapshot=item.variant_description_snapshot,
+                    quantity=item.quantity,
+                    unit_price=float(item.unit_price),
+                    line_total=float(item.line_total),
+                    measurement_data=item.measurement_data,
+                )
+            )
+
         return OrderDetailOut(
-            id=str(order.pk),
-            total=str(order.total_amount),
-            payment_status=order.status,
-            order_status=order.order_status,
+            id=order.pk,
+            oid=order.order_number,
+            buyer_email=buyer_email,
+            buyer_full_name=buyer_full_name,
+            order_status=map_order_status(order.status),
+            payment_status=map_payment_status(order.status),
+            total_price=float(order.total_amount),
+            total=float(order.total_amount),
             date=order.created_at,
-            buyer_email=order.user.email if order.user else "",
+            items=items,
         )
     except Exception:
         logger.exception("get_vendor_order_detail: order not found order_id=%s", order_id)
@@ -665,11 +770,10 @@ async def get_vendor_reviews_list(request):
     """
     GET /api/v1/ninja/vendor/reviews/
     """
-    user = _require_vendor_user(request, require_profile=True)
-    profile = user.vendor_profile
+    vendor_profile = _require_vendor_user(request, require_profile=True)
     try:
         qs = (
-            profile.vendor_products
+            vendor_profile.vendor_products
             .values(
                 "reviews__id",
                 "reviews__rating",
@@ -700,10 +804,9 @@ async def get_vendor_review_detail(request, review_id: int):
     """
     GET /api/v1/ninja/vendor/reviews/{review_id}/
     """
-    user = _require_vendor_user(request, require_profile=True)
-    profile = user.vendor_profile
+    vendor_profile = _require_vendor_user(request, require_profile=True)
     try:
-        p = await profile.vendor_products.filter(reviews__id=review_id).values(
+        p = await vendor_profile.vendor_products.filter(reviews__id=review_id).values(
             "reviews__id",
             "reviews__rating",
             "reviews__review",
@@ -730,10 +833,9 @@ async def get_vendor_coupons_list(request, active: str = ""):
     """
     GET /api/v1/ninja/vendor/coupons/
     """
-    user = _require_vendor_user(request, require_profile=True)
-    profile = user.vendor_profile
+    vendor_profile = _require_vendor_user(request, require_profile=True)
     try:
-        qs = profile.vendor_platform_wide_coupons.filter(is_deleted=False)
+        qs = vendor_profile.vendor_platform_wide_coupons.filter(is_deleted=False)
         if active == "true":
             qs = qs.filter(active=True)
         elif active == "false":
@@ -783,7 +885,7 @@ async def get_vendor_audit_logs(
     """
     from apps.audit_logs.models import AuditEventLog
 
-    user = _require_vendor_user(request, require_profile=True)
+    user = request.auth
     page_size = min(int(page_size), 50)
     offset = (page - 1) * page_size
 

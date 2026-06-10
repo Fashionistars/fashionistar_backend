@@ -210,3 +210,96 @@ def test_vendor_ninja_migrated_endpoints():
         assert resp.status_code == 200, f"Endpoint {path} failed: {resp.content}"
 
 
+@pytest.mark.django_db
+def test_vendor_ninja_orders_endpoints_with_data():
+    """Verify that vendor orders list and detail endpoints return correct data shapes when orders exist."""
+    from apps.order.models import Order, CartOrderItem, OrderStatus
+
+    # Create vendor user
+    user = UnifiedUser.objects.create_user(
+        email="vendor.orders@fashionistar.test",
+        password="Password123!",
+        role=UnifiedUser.ROLE_VENDOR,
+        is_active=True,
+        is_verified=True,
+    )
+    profile = VendorProfile.objects.create(
+        user=user,
+        store_name="Atelier Orders",
+        city="Umuahia",
+        state="Abia",
+        country="Nigeria",
+    )
+    
+    # Create buyer user
+    buyer = UnifiedUser.objects.create_user(
+        email="buyer.orders@fashionistar.test",
+        password="Password123!",
+        role=UnifiedUser.ROLE_CLIENT,
+        is_active=True,
+        is_verified=True,
+    )
+
+    from decimal import Decimal
+
+    # Create Order
+    order = Order.objects.create(
+        user=buyer,
+        vendor=profile,
+        status=OrderStatus.PROCESSING,
+        subtotal=Decimal("10000.00"),
+        total_amount=Decimal("12000.00"),
+        idempotency_key="test-idem-key-123",
+        payment_reference="pay_ref_123",
+    )
+
+    # Create CartOrderItem
+    item = CartOrderItem.objects.create(
+        order=order,
+        product_title_snapshot="Premium Silk Gown",
+        product_sku_snapshot="SKU-SILK-01",
+        variant_description_snapshot="Red / L",
+        unit_price=Decimal("10000.00"),
+        quantity=1,
+        line_total=Decimal("10000.00"),
+    )
+
+    client = _auth_client(user)
+
+    # 1. Test orders list
+    list_resp = client.get("/api/v1/ninja/vendor/orders/")
+    assert list_resp.status_code == 200
+    list_data = list_resp.json()
+    assert list_data["status"] == "success"
+    assert list_data["count"] == 1
+    assert len(list_data["data"]) == 1
+    
+    order_data = list_data["data"][0]
+    assert order_data["id"] == str(order.pk)
+    assert order_data["buyer_email"] == "buyer.orders@fashionistar.test"
+    assert order_data["buyer_full_name"] == "buyer.orders@fashionistar.test"
+    assert order_data["order_status"] == "Processing"
+    assert order_data["payment_status"] == "paid"
+    assert order_data["total_price"] == 12000.0
+
+    # 2. Test order detail
+    detail_resp = client.get(f"/api/v1/ninja/vendor/orders/{order.pk}/")
+    assert detail_resp.status_code == 200
+    detail_data = detail_resp.json()
+    assert detail_data["id"] == str(order.pk)
+    assert detail_data["buyer_email"] == "buyer.orders@fashionistar.test"
+    assert detail_data["buyer_full_name"] == "buyer.orders@fashionistar.test"
+    assert detail_data["order_status"] == "Processing"
+    assert detail_data["payment_status"] == "paid"
+    assert detail_data["total_price"] == 12000.0
+    
+    assert len(detail_data["items"]) == 1
+    item_data = detail_data["items"][0]
+    assert item_data["id"] == str(item.pk)
+    assert item_data["product_title"] == "Premium Silk Gown"
+    assert item_data["product_pid"] == "SKU-SILK-01"
+    assert item_data["price"] == 10000.0
+    assert item_data["qty"] == 1
+
+
+

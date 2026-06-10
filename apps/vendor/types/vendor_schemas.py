@@ -279,22 +279,45 @@ class ProductListItemOut(Schema):
     date: datetime
 
 
+class VendorOrderItemOut(Schema):
+    id: UUID
+    product_title: str
+    product_pid: str
+    qty: int
+    price: float
+    subtotal: float
+    product_title_snapshot: str | None = None
+    product_sku_snapshot: str | None = None
+    variant_description_snapshot: str | None = None
+    quantity: int | None = None
+    unit_price: float | None = None
+    line_total: float | None = None
+    measurement_data: dict[str, Any] | None = None
+
+
 class OrderListItemOut(Schema):
-    id: str
-    total: float
-    payment_status: str
+    id: UUID
+    oid: str
+    buyer_email: str
+    buyer_full_name: str
     order_status: str
+    payment_status: str
+    total_price: float
     date: datetime
-    buyer__email: str
+    total: float | None = None
 
 
 class OrderDetailOut(Schema):
-    id: str
-    total: str
-    payment_status: str
-    order_status: str
-    date: datetime
+    id: UUID
+    oid: str
     buyer_email: str
+    buyer_full_name: str
+    order_status: str
+    payment_status: str
+    total_price: float
+    date: datetime
+    total: float | None = None
+    items: list[VendorOrderItemOut] = []
 
 
 class ReviewListItemOut(Schema):

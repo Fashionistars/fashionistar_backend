@@ -691,25 +691,68 @@ class VendorProfile(TimeStampedModel, SoftDeleteModel):
         cls, vendor, limit: int = 10
     ) -> list[dict]:
         """
-        Async: most recent N orders for this vendor as list[dict].
+        Async: most recent N orders for this vendor as list[dict] conforming to frontend expectations.
 
         Traversal: vendor.vendor_orders (reverse FK on CartOrder).
-        Uses async iteration over .values() — ZERO sync_to_async.
+        Uses async iteration — ZERO sync_to_async.
 
         Args:
             vendor: VendorProfile instance.
             limit: Max rows to return (default 10).
 
         Returns:
-            list[dict] with id, total_amount, status, created_at, fulfillment_type.
+            list[dict] conforming to VendorDashboardOrderSchema.
         """
         try:
             qs = (
                 vendor.vendor_orders
-                .order_by("-created_at")
-                .values("id", "total_amount", "status", "created_at", "fulfillment_type")[:limit]
+                .select_related("user")
+                .order_by("-created_at")[:limit]
             )
-            return [row async for row in qs]
+
+            def map_order_status(backend_status: str) -> str:
+                mapping = {
+                    "pending_payment": "Pending",
+                    "awaiting_cash_confirmation": "Pending",
+                    "processing": "Processing",
+                    "shipped": "Shipped",
+                    "out_for_delivery": "Shipped",
+                    "delivered": "Fulfilled",
+                    "completed": "Fulfilled",
+                    "cancelled": "Cancelled",
+                    "refund_requested": "Cancelled",
+                    "refunded": "Cancelled",
+                    "disputed": "Pending",
+                }
+                return mapping.get(backend_status, "Pending")
+
+            def map_payment_status(backend_status: str) -> str:
+                if backend_status in {"payment_confirmed", "processing", "shipped", "out_for_delivery", "delivered", "completed"}:
+                    return "paid"
+                elif backend_status in {"cancelled", "refunded"}:
+                    return "failed"
+                else:
+                    return "pending"
+
+            orders = []
+            async for o in qs:
+                buyer_email = (o.user.email or str(o.user.phone) or "") if o.user else ""
+                buyer_full_name = (f"{o.user.first_name} {o.user.last_name}".strip()
+                                   or buyer_email) if o.user else "Guest Customer"
+                
+                orders.append({
+                    "id": o.pk,
+                    "oid": o.order_number,
+                    "buyer_email": buyer_email,
+                    "buyer_full_name": buyer_full_name,
+                    "order_status": map_order_status(o.status),
+                    "payment_status": map_payment_status(o.status),
+                    "total_price": float(o.total_amount),
+                    "total": float(o.total_amount),
+                    "date": o.created_at.isoformat(),
+                    "fulfillment_type": o.fulfillment_type,
+                })
+            return orders
         except Exception as exc:
             logger.error("aget_recent_orders_from_db vendor=%s: %s", vendor.pk, exc)
             return []
@@ -752,14 +795,11 @@ class VendorProfile(TimeStampedModel, SoftDeleteModel):
     def get_wallet_balance(self) -> Decimal:
         """
         Live wallet balance from WalletTransaction.
-        Uses: vendor_wallet_transactions reverse FK.
+        Uses: financial_wallets reverse FK.
         """
         try:
-            from apps.wallet.models import Wallet
-
             wallet = (
-                Wallet.objects.filter(
-                    user_id=self.user_id,
+                self.user.financial_wallets.filter(
                     owner_type="vendor",
                     is_default=True,
                 )
