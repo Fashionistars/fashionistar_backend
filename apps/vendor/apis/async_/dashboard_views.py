@@ -804,7 +804,8 @@ async def get_vendor_review_detail(request, review_id: int):
     """
     GET /api/v1/ninja/vendor/reviews/{review_id}/
     """
-    vendor_profile = _require_vendor_user(request, require_profile=True)
+    user = _require_vendor_user(request, require_profile=True)
+    vendor_profile = user.vendor_profile
     try:
         p = await vendor_profile.vendor_products.filter(reviews__id=review_id).values(
             "reviews__id",
@@ -833,7 +834,8 @@ async def get_vendor_coupons_list(request, active: str = ""):
     """
     GET /api/v1/ninja/vendor/coupons/
     """
-    vendor_profile = _require_vendor_user(request, require_profile=True)
+    user = _require_vendor_user(request, require_profile=True)
+    vendor_profile = user.vendor_profile
     try:
         qs = vendor_profile.vendor_platform_wide_coupons.filter(is_deleted=False)
         if active == "true":
@@ -885,7 +887,7 @@ async def get_vendor_audit_logs(
     """
     from apps.audit_logs.models import AuditEventLog
 
-    user = request.auth
+    user = _require_vendor_user(request, require_profile=False)
     page_size = min(int(page_size), 50)
     offset = (page - 1) * page_size
 
