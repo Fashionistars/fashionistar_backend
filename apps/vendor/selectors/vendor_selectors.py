@@ -325,28 +325,45 @@ async def aget_vendor_reviews_summary(vendor_profile, limit: int = 5) -> list[di
     """
     Async: recent reviews on vendor products.
 
-    Traversal: vendor_products → review_product (Review model).
+    Traversal: vendor_products → reviews (Review model).
 
     Args:
         vendor_profile: VendorProfile instance.
         limit: Max rows to return (default 5).
 
     Returns:
-        list[dict] with review_product__rating, review_product__review,
-        review_product__date, title.
+        list[dict] containing keys: id, product_title, product_pid, buyer_email,
+        rating, review, date.
     """
     try:
         qs = (
             vendor_profile.vendor_products
             .values(
+                "reviews__id",
                 "reviews__rating",
                 "reviews__review",
                 "reviews__created_at",
+                "reviews__reviewer_email",
                 "title",
+                "sku",
             )
-            .order_by("-reviews__created_at")[:limit],           
+            .order_by("-reviews__created_at")
         )
-        return [row async for row in qs]
+        results = []
+        async for row in qs:
+            if row.get("reviews__id") is not None:
+                results.append({
+                    "id": row["reviews__id"],
+                    "product_title": row["title"],
+                    "product_pid": row["sku"],
+                    "buyer_email": row["reviews__reviewer_email"] or "",
+                    "rating": row["reviews__rating"] or 0,
+                    "review": row["reviews__review"] or "",
+                    "date": row["reviews__created_at"].isoformat() if row["reviews__created_at"] else "",
+                })
+                if len(results) >= limit:
+                    break
+        return results
     except Exception as exc:
         logger.error("aget_vendor_reviews_summary vendor=%s: %s", vendor_profile.pk, exc)
         return []
