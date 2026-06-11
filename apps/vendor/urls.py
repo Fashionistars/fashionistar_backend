@@ -4,16 +4,13 @@ Vendor Domain — DRF URL Patterns.
 Mounted at: /api/v1/vendor/
 
 Endpoints — Profile & Setup:
-  GET    /api/v1/vendor/profile/               — retrieve store profile
   PATCH  /api/v1/vendor/profile/               — update profile (includes collections M2M)
-  GET    /api/v1/vendor/setup/                 — get onboarding setup state
   POST   /api/v1/vendor/setup/                 — first-time vendor setup (provision)
   POST   /api/v1/vendor/payout/                — save bank / payout details (legacy OneToOne)
   POST   /api/v1/vendor/pin/set/               — set 4-digit payout confirmation PIN
   POST   /api/v1/vendor/pin/verify/            — verify PIN before payout/transfer
 
 Endpoints — Bank Accounts (Multi-Account Payout Gate):
-  GET    /api/v1/vendor/bank-accounts/                    — list saved bank accounts (max 5)
   POST   /api/v1/vendor/bank-accounts/                    — create & register bank account
   POST   /api/v1/vendor/bank-accounts/resolve/            — resolve account name via Paystack
   DELETE /api/v1/vendor/bank-accounts/<uuid:pk>/          — delete a saved bank account
@@ -22,34 +19,10 @@ Endpoints — Bank Accounts (Multi-Account Payout Gate):
 Endpoints — Payout Request:
   POST   /api/v1/vendor/payout/request/        — request payout to a saved bank account
 
-Endpoints — Analytics:
-  GET    /api/v1/vendor/analytics/             — full analytics snapshot
-  GET    /api/v1/vendor/analytics/revenue/     — monthly revenue chart (6mo)
-  GET    /api/v1/vendor/analytics/orders/      — monthly order chart
-  GET    /api/v1/vendor/analytics/products/    — monthly products chart
-  GET    /api/v1/vendor/analytics/customers/   — customer behaviour
-  GET    /api/v1/vendor/analytics/categories/  — top performing categories
-  GET    /api/v1/vendor/analytics/distribution/— payment method distribution
-
-Endpoints — Products:
-  GET    /api/v1/vendor/products/              — vendor's own product list
-  GET    /api/v1/vendor/products/low-stock/    — products below stock threshold
-  GET    /api/v1/vendor/products/top/          — top selling products
-
-Endpoints — Orders:
-  GET    /api/v1/vendor/orders/                — vendor's order list
-  GET    /api/v1/vendor/orders/status-counts/  — order count by status
-  GET    /api/v1/vendor/orders/<int:order_id>/ — single order detail
-
-Endpoints — Earnings:
-  GET    /api/v1/vendor/earnings/              — comprehensive earning tracker
 
 Endpoints — Reviews:
   GET    /api/v1/vendor/reviews/               — reviews on vendor products
   GET    /api/v1/vendor/reviews/<int:review_id>/ — single review detail
-
-Endpoints — Coupons:
-  GET    /api/v1/vendor/coupons/               — vendor's coupon list
 
 Async endpoints (Ninja) are mounted via the Ninja router in backend/ninja_api.py
 at prefix: /api/v1/ninja/vendor/

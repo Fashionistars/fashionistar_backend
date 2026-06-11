@@ -118,6 +118,14 @@ class ChatConversationConsumer(AsyncJsonWebsocketConsumer):
         self._pong_received = True  # Mark true initially so first cycle doesn't fail
         self._heartbeat_task: asyncio.Task | None = None
 
+        # Accept connection first to prevent Uvicorn ASGI protocol race conditions
+        # if the client disconnects before we finish Redis group registration.
+        try:
+            await self.accept()
+        except Exception as exc:
+            logger.warning("ChatConsumer: accept failed: %s", exc)
+            return
+
         # ── Join group ────────────────────────────────────────────────────────
         try:
             await self.channel_layer.group_add(self.group_name, self.channel_name)
@@ -125,8 +133,6 @@ class ChatConversationConsumer(AsyncJsonWebsocketConsumer):
             logger.error("ChatConsumer: channel_layer.group_add failed: %s", exc)
             await self.close(code=1011)
             return
-
-        await self.accept()
 
         # ── Audit: WebSocket connected ────────────────────────────────────────
         # Run in background thread to avoid blocking the ASGI event loop.

@@ -595,7 +595,7 @@ class Product(TimeStampedModel, SoftDeleteModel):
     @property
     def product_review(self):
         """Explicit reverse-manager alias for Product -> ProductReview."""
-        return self.product_reviews
+        return self.reviews
 
     @property
     def product_wishlist(self):

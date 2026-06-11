@@ -107,7 +107,7 @@ class NotificationBadgeConsumer(AsyncJsonWebsocketConsumer):
 
     async def connect(self):
         """
-        Authenticate → join group → send initial badge count → accept.
+        Authenticate → accept connection → join group → send initial badge count.
         Rejects unauthenticated connections with WS close 4401.
         """
         user = self.scope.get("user")
@@ -119,24 +119,29 @@ class NotificationBadgeConsumer(AsyncJsonWebsocketConsumer):
         self.user_id = str(user.id)
         self.group_name = f"notification_user_{self.user_id}"
 
+        # Accept connection immediately to prevent Uvicorn ASGI protocol race conditions
+        # if the client disconnects before we finish Redis group setup.
+        try:
+            await self.accept()
+        except Exception as exc:
+            logger.warning("NotificationBadgeConsumer: accept failed: %s", exc)
+            return
+
         channel_layer = self.channel_layer
         if channel_layer is None:
             # channels_redis backend not configured at all — still accept so
             # badge polling works via REST.
             logger.warning(
                 "NotificationBadgeConsumer: channel_layer is None (Redis not configured?), "
-                "accepting without group membership for user=%s",
+                "accepted without group membership for user=%s",
                 self.user_id,
             )
             self._channel_layer_ok = False
-            await self.accept()
             await self._send_badge()
             return
 
         # Attempt group registration; degrade gracefully on Redis failure.
         self._channel_layer_ok = await self._try_group_add(channel_layer)
-
-        await self.accept()
 
         # Immediately push the current unread count so the UI badge is accurate
         # before the first poll interval fires.
@@ -182,7 +187,7 @@ class NotificationBadgeConsumer(AsyncJsonWebsocketConsumer):
         msg_type = payload.get("type", "")
 
         if msg_type == "ping":
-            await self.send_json({"type": "pong"})
+            await self._safe_send_json({"type": "pong"})
 
         elif msg_type == "mark_read":
             notification_id = payload.get("id", "").strip()
@@ -206,7 +211,7 @@ class NotificationBadgeConsumer(AsyncJsonWebsocketConsumer):
           - realtime.push_unread_badge_count() after service writes
           - Internal ``_send_badge()`` calls
         """
-        await self.send_json({
+        await self._safe_send_json({
             "type": "notification.badge",
             "payload": event.get("payload", {}),
         })
@@ -230,7 +235,7 @@ class NotificationBadgeConsumer(AsyncJsonWebsocketConsumer):
             "created_at": "ISO-8601"
           }
         """
-        await self.send_json({
+        await self._safe_send_json({
             "type": "notification.new",
             "payload": event.get("payload", {}),
         })
@@ -242,7 +247,7 @@ class NotificationBadgeConsumer(AsyncJsonWebsocketConsumer):
         Allows a second browser tab to instantly clear its badge when the
         first tab marks all notifications read.
         """
-        await self.send_json({
+        await self._safe_send_json({
             "type": "notification.read_sync",
             "payload": event.get("payload", {}),
         })
@@ -256,10 +261,17 @@ class NotificationBadgeConsumer(AsyncJsonWebsocketConsumer):
         except Exception as exc:
             logger.warning("_send_badge: DB error for user=%s: %s", self.user_id, exc)
             unread = 0
-        await self.send_json({
+        await self._safe_send_json({
             "type": "notification.badge",
             "payload": {"unread_count": unread},
         })
+
+    async def _safe_send_json(self, data: dict) -> None:
+        """Send JSON, swallowing channel/socket errors if client disconnected."""
+        try:
+            await self.send_json(data)
+        except Exception as exc:
+            logger.debug("NotificationBadgeConsumer: send_json failed (disconnected?): %s", exc)
 
     async def _handle_mark_read(self, notification_id: str):
         """
