@@ -31,10 +31,10 @@ from django.urls import path
 
 from apps.vendor.apis.sync.product_views import (
     VendorOrderStatusUpdateView,
-    VendorProductCreateView,
-    VendorProductDeleteView,
-    VendorProductFilterView,
-    VendorProductUpdateView,
+)
+from apps.product.apis.sync.product_views import (
+    VendorProductListCreateView,
+    VendorProductDetailView,
 )
 from apps.vendor.apis.sync.profile_views import (
     VendorPayoutView,
@@ -77,10 +77,10 @@ urlpatterns = [
     path("public/<slug:store_slug>/", PublicVendorDetailView.as_view(), name="public-detail"),
 
     # ── Products Mutations ─────────────────────────────────────────
-    path("products/create/",                   VendorProductCreateView.as_view(),      name="product-create"),
-    path("products/filter/",                   VendorProductFilterView.as_view(),      name="product-filter"),
-    path("products/<str:product_pid>/edit/",   VendorProductUpdateView.as_view(),      name="product-edit"),
-    path("products/<str:product_pid>/delete/", VendorProductDeleteView.as_view(),      name="product-delete"),
+    path("products/create/",                   VendorProductListCreateView.as_view(),  name="product-create"),
+    path("products/filter/",                   VendorProductListCreateView.as_view(),  name="product-filter"),
+    path("products/<slug:slug>/edit/",         VendorProductDetailView.as_view(),      name="product-edit"),
+    path("products/<slug:slug>/delete/",       VendorProductDetailView.as_view(),      name="product-delete"),
 
     # ── Orders Mutations ───────────────────────────────────────────
     path("orders/<int:order_id>/status/",       VendorOrderStatusUpdateView.as_view(),  name="order-status-update"),

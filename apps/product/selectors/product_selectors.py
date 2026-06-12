@@ -1208,7 +1208,7 @@ async def aget_homepage_hot_deals(limit: int = 10) -> list:
                 hot_deal=True,
             )
             .select_related("vendor")
-            .prefetch_related("categories", "sub_categories", "sizes", "colors")
+            .prefetch_related("categories", "sub_categories", "sizes", "colors", "product_gallery_media")
             .annotate(
                 computed_review_count=Count("reviews", distinct=True),
                 computed_avg_rating=Avg("reviews__rating"),

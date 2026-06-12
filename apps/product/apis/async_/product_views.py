@@ -898,3 +898,40 @@ async def record_product_view(
         logger.warning("ViewLog write failed for slug=%s: %s", slug, exc, exc_info=False)
         return {"logged": False, "reason": "write_error"}
 
+
+# ── VENDOR — Sizes, Colors, Couriers ──────────────────────────────────────────
+
+@router.get("/sizes/", response=dict, auth=None, summary="List available sizes")
+async def list_sizes(request, page: int = 1, page_size: int = 100):
+    from apps.product.models import ProductSize
+    qs = ProductSize.objects.all().order_by("sort_order", "name")
+    return await _paginated(request, qs, _size_out, page=page, page_size=page_size)
+
+
+@router.get("/colors/", response=dict, auth=None, summary="List available colors")
+async def list_colors(request, page: int = 1, page_size: int = 100):
+    from apps.product.models import ProductColor
+    qs = ProductColor.objects.filter(is_active=True).order_by("name")
+    return await _paginated(request, qs, _color_out, page=page, page_size=page_size)
+
+
+@router.get("/couriers/", response=dict, auth=None, summary="List available couriers")
+async def list_couriers(request, page: int = 1, page_size: int = 50, active: bool | None = None):
+    from apps.product.models import DeliveryCourier
+    qs = DeliveryCourier.objects.all().order_by("name")
+    if active is not None:
+        qs = qs.filter(active=active)
+
+    def _courier_out(c):
+        return {
+            "id": str(c.pk),
+            "name": c.name,
+            "active": c.active,
+            "base_fee": _money(c.base_fee),
+            "estimated_days_min": c.estimated_days_min,
+            "estimated_days_max": c.estimated_days_max,
+            "logo_url": _url(c.logo),
+        }
+
+    return await _paginated(request, qs, _courier_out, page=page, page_size=page_size)
+
