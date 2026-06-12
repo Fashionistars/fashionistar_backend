@@ -40,7 +40,11 @@ import logging
 from typing import Any
 from uuid import UUID
 
-from django.db.models import Avg, Count, Q, Prefetch
+from django.db.models import (
+    Avg, Case, Count, ExpressionWrapper, F, FloatField,
+    IntegerField, Prefetch, Q, Value, When,
+)
+from django.db.models.functions import Round as DbRound
 from django.utils import timezone
 
 from apps.product.models import (
@@ -936,9 +940,6 @@ async def aget_wishlist_status_for_products(
     }
 
 
-# Alias for backwards compatibility
-aget_wishlist_status_bulk = aget_wishlist_status_for_products
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 6. PHASE 3 — NEW ASYNC SELECTORS (asyncio.gather pattern)
@@ -1200,6 +1201,29 @@ async def aget_homepage_hot_deals(limit: int = 10) -> list:
         list[Product] — at most ``limit`` items, ordered by discount descending.
     """
     try:
+        # discount_percentage is a Python @property — it cannot be used in
+        # order_by(). We annotate the equivalent expression at the DB level
+        # so sorting is done entirely in SQL without loading all rows first.
+        #
+        #   SQL equivalent:
+        #     CASE WHEN old_price IS NOT NULL AND old_price > price
+        #          THEN ROUND((1 - CAST(price AS float) / old_price) * 100)
+        #          ELSE 0
+        #     END
+        discount_expr = Case(
+            When(
+                old_price__isnull=False,
+                old_price__gt=F("price"),
+                then=DbRound(
+                    ExpressionWrapper(
+                        (Value(1.0) - F("price") / F("old_price")) * Value(100.0),
+                        output_field=FloatField(),
+                    )
+                ),
+            ),
+            default=Value(0),
+            output_field=IntegerField(),
+        )
         qs = (
             Product.objects
             .filter(
@@ -1212,8 +1236,9 @@ async def aget_homepage_hot_deals(limit: int = 10) -> list:
             .annotate(
                 computed_review_count=Count("reviews", distinct=True),
                 computed_avg_rating=Avg("reviews__rating"),
+                discount_pct=discount_expr,
             )
-            .order_by("-discount_percentage", "-created_at")
+            .order_by("-discount_pct", "-created_at")
         )
         return [p async for p in qs[:limit]]
     except Exception as exc:
