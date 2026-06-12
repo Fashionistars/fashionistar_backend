@@ -163,8 +163,8 @@ except Exception as exc:  # pragma: no cover
 # Product domain: /api/v1/ninja/products/ and /api/v1/ninja/product/
 try:
     from apps.product.apis.async_.product_views import router as product_router
-    ninja_api.add_router("/products/", product_router)
-    ninja_api.add_router("/product/", product_router)
+    ninja_api.add_router("/products/", product_router, url_name_prefix="products")
+    ninja_api.add_router("/product/", product_router, url_name_prefix="product")
     logger.info("✅ NinjaAPI: product router registered at /api/v1/ninja/products/ and /api/v1/ninja/product/")
 except Exception as exc:  # pragma: no cover
     logger.warning("ℹ️ NinjaAPI: product router FAILED to register: %s", exc)
