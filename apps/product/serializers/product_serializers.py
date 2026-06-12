@@ -821,6 +821,8 @@ class ProductWishlistSerializer(serializers.ModelSerializer):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class ProductDraftSessionSerializer(serializers.ModelSerializer):
+    draft_key = serializers.UUIDField(required=False, validators=[])
+
     class Meta:
         model = ProductDraftSession
         fields = [

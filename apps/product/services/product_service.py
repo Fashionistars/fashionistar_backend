@@ -869,7 +869,20 @@ def create_draft_session(
         if existing:
             return existing
 
-    if not draft_key:
+    if draft_key:
+        existing_by_key = ProductDraftSession.objects.filter(draft_key=draft_key).first()
+        if existing_by_key:
+            if existing_by_key.vendor == vendor:
+                existing_by_key.payload = payload
+                existing_by_key.current_step = current_step
+                existing_by_key.status = ProductDraftStatus.ACTIVE
+                existing_by_key.idempotency_key = idempotency_key
+                existing_by_key.last_synced_at = now()
+                existing_by_key.save()
+                return existing_by_key
+            else:
+                raise ValueError("Draft session key already exists for another vendor.")
+    else:
         draft_key = uuid.uuid4()
 
     draft = ProductDraftSession.objects.create(

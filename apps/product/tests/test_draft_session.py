@@ -34,6 +34,23 @@ def vendor_user(db):
     return user
 
 @pytest.fixture
+def other_vendor_user(db):
+    user = User.objects.create_user(
+        email="other_vendor@fashionistar.com",
+        password="VendorPassword123!",
+        role="vendor",
+        is_verified=True,
+        is_active=True,
+    )
+    from apps.vendor.models import VendorProfile
+    VendorProfile.objects.create(
+        user=user,
+        store_name="Other Shop",
+        store_slug="other-shop",
+    )
+    return user
+
+@pytest.fixture
 def category(db):
     from apps.catalog.models import Category
     return Category.objects.create(name="Accessories", slug="accessories")
@@ -149,3 +166,41 @@ class TestProductDraftSessionAPI:
         draft_session = ProductDraftSession.all_objects.get(draft_key=draft_key)
         assert draft_session.status == ProductDraftStatus.DISCARDED
         assert draft_session.is_deleted is True  # SoftDeleteModel field is_deleted
+
+    def test_draft_key_collision(self, api_client, vendor_user, other_vendor_user, category):
+        # 1. Create a draft as first vendor
+        api_client.force_authenticate(user=vendor_user)
+        url_list = reverse("product:vendor-product-draft-list")
+        draft_key = str(uuid.uuid4())
+        payload = {
+            "title": "Vendor 1 Draft",
+            "description": "Short but valid description 20 chars",
+            "price": "10000.00",
+            "category_ids": [str(category.id)],
+        }
+        response = api_client.post(
+            url_list,
+            {"draft_key": draft_key, "payload": payload},
+            format="json"
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        
+        # 2. Try to create a draft with same key as first vendor (should update/reuse and return 201)
+        payload["title"] = "Vendor 1 Draft Updated"
+        response2 = api_client.post(
+            url_list,
+            {"draft_key": draft_key, "payload": payload},
+            format="json"
+        )
+        assert response2.status_code == status.HTTP_201_CREATED
+        assert response2.json()["data"]["payload"]["title"] == "Vendor 1 Draft Updated"
+        
+        # 3. Authenticate as other vendor and try to use same key (should fail with 400)
+        api_client.force_authenticate(user=other_vendor_user)
+        response3 = api_client.post(
+            url_list,
+            {"draft_key": draft_key, "payload": payload},
+            format="json"
+        )
+        assert response3.status_code == status.HTTP_400_BAD_REQUEST
+        assert "already exists for another vendor" in response3.json()["message"]
