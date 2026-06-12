@@ -568,7 +568,16 @@ class VendorProfile(TimeStampedModel, SoftDeleteModel):
                 .order_by("-created_at")
                 .values("id", "title", "price", "stock_qty", "status")[:limit]
             )
-            return [row async for row in qs]
+            results = []
+            async for row in qs:
+                results.append({
+                    "id": str(row["id"]),          # UUID → str (products field is list[Any])
+                    "title": row["title"] or "",
+                    "price": float(row["price"] or 0),  # Decimal → float (JSON-safe)
+                    "stock_qty": row["stock_qty"] or 0,
+                    "status": row["status"] or "",
+                })
+            return results
         except Exception as exc:
             logger.error("aget_product_summary_from_db vendor=%s: %s", vendor.pk, exc)
             return []
@@ -659,7 +668,16 @@ class VendorProfile(TimeStampedModel, SoftDeleteModel):
                 .order_by("-total_qty")
                 .values("id", "title", "price", "stock_qty", "total_qty")[:limit]
             )
-            return [row async for row in qs]
+            results = []
+            async for row in qs:
+                results.append({
+                    "id": row["id"],                # UUID — TopProductOut.id: UUID accepts this directly
+                    "title": row["title"] or "",
+                    "price": float(row["price"] or 0),   # Decimal → float (JSON-safe)
+                    "stock_qty": row["stock_qty"] or 0,
+                    "total_qty": row["total_qty"],
+                })
+            return results
         except Exception as exc:
             logger.error("aget_top_selling_products_from_db vendor=%s: %s", vendor.pk, exc)
             return []
@@ -741,7 +759,7 @@ class VendorProfile(TimeStampedModel, SoftDeleteModel):
                                    or buyer_email) if o.user else "Guest Customer"
                 
                 orders.append({
-                    "id": o.pk,
+                    "id": str(o.pk),              # UUID → str (JSON-serializable)
                     "oid": o.order_number,
                     "buyer_email": buyer_email,
                     "buyer_full_name": buyer_full_name,

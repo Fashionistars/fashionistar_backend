@@ -67,13 +67,13 @@ class TopProductOut(Schema):
     the standalone /top-products/ endpoint.
 
     Fields:
-        id:        Product UUID (str).
+        id:        Product UUID (serialised to str in JSON by Ninja).
         title:     Product title.
         price:     Unit price (float, NGN).
         stock_qty: Current stock quantity.
         total_qty: Total units sold across all orders (None if no orders yet).
     """
-    id:        str
+    id:        UUID          # UUID object → Ninja serialises to str in JSON
     title:     str
     price:     float = 0.0
     stock_qty: int   = 0
