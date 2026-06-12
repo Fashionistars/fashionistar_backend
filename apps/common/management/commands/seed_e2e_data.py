@@ -258,7 +258,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING(f"  ⚠ KYC skip: {exc}"))
 
         # ── Step 5: Products ───────────────────────────────────────────────
-        # Product fields: title, slug, sku, description, short_description,
+        # Product fields: title, slug, sku, description,
         # vendor, price, old_price, stock_qty, in_stock, status
         self.stdout.write(self.style.MIGRATE_HEADING("\n[STEP 5] Creating demo products..."))
         product_list = [
@@ -266,7 +266,6 @@ class Command(BaseCommand):
                 "title": "Ankara Wrap Dress",
                 "slug": "ankara-wrap-dress",
                 "description": "Bold, vibrant Ankara print wrap dress with adjustable tie waist.",
-                "short_description": "Vibrant Ankara wrap dress",
                 "price": Decimal("29500.00"),
                 "old_price": Decimal("35000.00"),
                 "sku": "FAD-001-ANK",
@@ -278,7 +277,6 @@ class Command(BaseCommand):
                 "title": "Lace Bodycon Gown",
                 "slug": "lace-bodycon-gown",
                 "description": "Elegant stretch lace bodycon gown for special occasions.",
-                "short_description": "Stretch lace bodycon gown",
                 "price": Decimal("45000.00"),
                 "old_price": Decimal("55000.00"),
                 "sku": "FAD-002-LBC",
@@ -290,7 +288,6 @@ class Command(BaseCommand):
                 "title": "Kaftan Co-Ord Set",
                 "slug": "kaftan-coord-set",
                 "description": "Modern kaftan co-ord set in premium adire fabric.",
-                "short_description": "Premium adire kaftan co-ord",
                 "price": Decimal("18500.00"),
                 "old_price": Decimal("22000.00"),
                 "sku": "FAD-003-KCS",

@@ -285,7 +285,6 @@ class ProductDetailOut(Schema):
     slug: str
     sku: str
     description: str
-    short_description: str = ""
     price: Decimal
     old_price: Decimal | None = None
     discount_percentage: int = 0
@@ -445,8 +444,7 @@ class ProductVariantWriteIn(Schema):
 
 class ProductWriteIn(Schema):
     title: str = Field(..., min_length=3, max_length=255)
-    description: str = Field(..., min_length=20)
-    short_description: str = Field("", max_length=500)
+    description: str = Field(..., min_length=100)
     price: Decimal = Field(..., gt=0)
     old_price: Decimal | None = None
     currency: str = "NGN"

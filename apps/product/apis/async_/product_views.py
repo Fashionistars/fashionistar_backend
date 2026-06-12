@@ -327,7 +327,6 @@ def _product_detail_out(product) -> dict:
     card.update(
         {
             "description": product.description or "",
-            "short_description": getattr(product, "short_description", "") or "",
             "shipping_amount": _money(product.shipping_amount),
             "cover_image_url": card.get("image_url"),
             "gallery": [

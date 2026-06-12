@@ -483,7 +483,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         model = Product
         fields = [
             "id", "title", "slug", "sku",
-            "description", "short_description",
+            "description",
             "price", "old_price", "discount_percentage", "currency",
             "shipping_amount",
             "image_url", "cover_image_url", "gallery",
@@ -596,7 +596,7 @@ class ProductWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = [
-            "title", "description", "short_description",
+            "title", "description",
             "price", "old_price", "currency", "shipping_amount",
             "stock_qty", "max_stock",
             "category_ids", "sub_category_ids",
@@ -709,7 +709,7 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = [
-            "title", "description", "short_description",
+            "title", "description",
             "price", "old_price", "currency", "shipping_amount",
             "stock_qty", "max_stock",
             "category_ids", "sub_category_ids",

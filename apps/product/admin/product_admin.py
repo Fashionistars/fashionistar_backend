@@ -227,7 +227,7 @@ class ProductAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
     ]
     fieldsets = (
         (_("Identity"), {
-            "fields": ("id", "title", "slug", "sku", "description", "short_description"),
+            "fields": ("id", "title", "slug", "sku", "description"),
         }),
         (_("Taxonomy"), {
             "fields": ("vendor", "categories", "sub_categories", "tags", "sizes", "colors"),

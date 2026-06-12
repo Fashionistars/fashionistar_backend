@@ -332,7 +332,6 @@ class Product(TimeStampedModel, SoftDeleteModel):
         help_text="Auto-generated SKU. Unique across platform.",
     )
     description = models.TextField()
-    short_description = models.CharField(max_length=500, blank=True)
 
     # ── Taxonomy ──────────────────────────────────────────────────────────
     vendor = models.ForeignKey(
