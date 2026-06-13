@@ -112,6 +112,11 @@ class TestOrderService:
     @patch("apps.order.services.order_service.EscrowService", create=True)
     def test_place_order_success(self, mock_escrow, client_user, product, delivery_address, cart_with_item):
         mock_escrow.hold_escrow = MagicMock()
+        from apps.product.models import ProductShippingProfile
+        ProductShippingProfile.objects.create(
+            product=product,
+            free_shipping_threshold=Decimal("20000.00"),
+        )
         order = place_order(user=client_user, delivery_address=delivery_address)
         assert order.status == OrderStatus.PENDING_PAYMENT
         assert order.order_number.startswith("FSN-ORD-")
