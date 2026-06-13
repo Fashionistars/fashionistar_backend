@@ -42,7 +42,7 @@ from apps.product.models.product import (
     # ── Phase 1 enterprise expansions (2026) ────────────────────────────────
     ProductFabric,
     ProductMeasurementGuide,
-    ProductCertification,
+    # ProductCertification,
     ProductShippingProfile,
     ProductPriceHistory,
     ProductViewLog,

@@ -1357,66 +1357,66 @@ class ProductMeasurementGuide(TimeStampedModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class ProductCertification(TimeStampedModel):
-    """
-    Sustainability, safety, or quality certification badge for a product.
+# class ProductCertification(TimeStampedModel):
+#     """
+#     Sustainability, safety, or quality certification badge for a product.
 
-    Rendered as trust badges on the PDP and catalog listing cards.
-    Verified certifications can be toggled by admin.
-    """
+#     Rendered as trust badges on the PDP and catalog listing cards.
+#     Verified certifications can be toggled by admin.
+#     """
 
-    CERTIFICATION_TYPES = [
-        ("organic", _("Organic")),
-        ("fair_trade", _("Fair Trade")),
-        ("recycled", _("Recycled Materials")),
-        ("handmade", _("Handmade")),
-        ("quality", _("Quality Assured")),
-        ("safety", _("Safety Tested")),
-        ("vegan", _("Vegan")),
-        ("cruelty_free", _("Cruelty-Free")),
-        ("local", _("Locally Made")),
-        ("nafdac", _("NAFDAC Certified")),
-        ("son", _("SON Certified")),
-        ("custom", _("Custom")),
-    ]
+#     CERTIFICATION_TYPES = [
+#         ("organic", _("Organic")),
+#         ("fair_trade", _("Fair Trade")),
+#         ("recycled", _("Recycled Materials")),
+#         ("handmade", _("Handmade")),
+#         ("quality", _("Quality Assured")),
+#         ("safety", _("Safety Tested")),
+#         ("vegan", _("Vegan")),
+#         ("cruelty_free", _("Cruelty-Free")),
+#         ("local", _("Locally Made")),
+#         ("nafdac", _("NAFDAC Certified")),
+#         ("son", _("SON Certified")),
+#         ("custom", _("Custom")),
+#     ]
 
-    product = models.ForeignKey(
-        Product,
-        on_delete=models.CASCADE,
-        related_name="product_certifications",
-    )
-    certification_type = models.CharField(
-        max_length=20,
-        choices=CERTIFICATION_TYPES,
-        default="custom",
-    )
-    name = models.CharField(
-        max_length=120,
-        help_text="Display name of the certification e.g. 'GOTS Certified Organic'.",
-    )
-    issuing_body = models.CharField(max_length=200, blank=True)
-    certificate_number = models.CharField(max_length=100, blank=True)
-    valid_from = models.DateField(null=True, blank=True)
-    valid_to = models.DateField(null=True, blank=True)
-    is_verified = models.BooleanField(
-        default=False,
-        help_text="Set by platform admin after document verification.",
-    )
-    badge_image = CloudinaryField(
-        "badge_image",
-        folder="fashionistar/certifications/",
-        blank=True,
-        null=True,
-        help_text="Official certification badge image displayed on PDP.",
-    )
+#     product = models.ForeignKey(
+#         Product,
+#         on_delete=models.CASCADE,
+#         related_name="product_certifications",
+#     )
+#     certification_type = models.CharField(
+#         max_length=20,
+#         choices=CERTIFICATION_TYPES,
+#         default="custom",
+#     )
+#     name = models.CharField(
+#         max_length=120,
+#         help_text="Display name of the certification e.g. 'GOTS Certified Organic'.",
+#     )
+#     issuing_body = models.CharField(max_length=200, blank=True)
+#     certificate_number = models.CharField(max_length=100, blank=True)
+#     valid_from = models.DateField(null=True, blank=True)
+#     valid_to = models.DateField(null=True, blank=True)
+#     is_verified = models.BooleanField(
+#         default=False,
+#         help_text="Set by platform admin after document verification.",
+#     )
+#     badge_image = CloudinaryField(
+#         "badge_image",
+#         folder="fashionistar/certifications/",
+#         blank=True,
+#         null=True,
+#         help_text="Official certification badge image displayed on PDP.",
+#     )
 
-    class Meta:
-        verbose_name = _("Product Certification")
-        verbose_name_plural = _("Product Certifications")
-        ordering = ["-is_verified", "name"]
+#     class Meta:
+#         verbose_name = _("Product Certification")
+#         verbose_name_plural = _("Product Certifications")
+#         ordering = ["-is_verified", "name"]
 
-    def __str__(self):
-        return f"{self.product.title} — {self.name}"
+#     def __str__(self):
+#         return f"{self.product.title} — {self.name}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1462,6 +1462,8 @@ class ProductShippingProfile(TimeStampedModel):
         blank=True,
         related_name="preferred_for_custom_shipping_products",
         help_text="Couriers the vendor prefers for this product.",
+        default="DHL,FedEx",
+
     )
     free_shipping_threshold = models.DecimalField(
         max_digits=12,
