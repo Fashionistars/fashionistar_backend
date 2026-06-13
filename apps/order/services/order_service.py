@@ -599,7 +599,7 @@ def place_order(
     # services while preserving the same SELECT ... FOR UPDATE protection.
     products_map = {
         product.id: product
-        for product in product_model.objects.select_for_update().filter(id__in=product_ids)
+        for product in product_model.objects.select_for_update().select_related("product_custom_shipping_profile").filter(id__in=product_ids)
     }
 
     # ── Step 4: Stock validation ─────────────────────────────────────────
@@ -616,10 +616,31 @@ def place_order(
 
     # ── Step 5: Calculate order totals ───────────────────────────────────
     subtotal = cart.subtotal
-    shipping = sum(
-        (products_map[item.product_id].shipping_amount for item in active_items),
-        Decimal("0"),
-    )
+
+    # Resolve platform default free shipping threshold
+    from apps.global_platform_settings.cache import get_platform_settings
+    platform_settings = get_platform_settings()
+    default_threshold = getattr(platform_settings, "default_free_shipping_threshold", Decimal("50000.00"))
+
+    shipping = Decimal("0")
+    for item in active_items:
+        prod = products_map[item.product_id]
+        profile = getattr(prod, "product_custom_shipping_profile", None)
+
+        threshold = None
+        if profile:
+            threshold = profile.free_shipping_threshold
+
+        if threshold is None:
+            threshold = default_threshold
+
+        if subtotal >= threshold:
+            item_shipping = Decimal("0.00")
+        else:
+            item_shipping = prod.shipping_amount
+
+        shipping += item_shipping
+
     discount = cart.coupon_discount
     total = max(Decimal("0"), subtotal + shipping - discount)
 

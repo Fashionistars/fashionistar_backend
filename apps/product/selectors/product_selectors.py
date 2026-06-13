@@ -570,7 +570,8 @@ async def aget_product_detail(slug: str) -> Product | None:
     Phase 1 expansion: prefetches all Phase 1 reverse FK relations so
     serializers and Ninja schemas receive pre-loaded data with zero extra
     DB queries:
-      - product_fabrics     (ProductFabric)
+      - product_fabric       (ProductFabric via select_related)
+      - product_custom_shipping_profile (ProductShippingProfile via select_related)
       - measurement_guides  (ProductMeasurementGuide, ordered by sort_order)
       - product_certifications (ProductCertification)
     """
@@ -583,7 +584,7 @@ async def aget_product_detail(slug: str) -> Product | None:
                 slug=slug,
             )
             .select_related(
-                "vendor", "vendor__user",
+                "vendor", "vendor__user", "product_fabric", "product_custom_shipping_profile",
             )
             .prefetch_related(
                 "categories", "sub_categories",
@@ -604,10 +605,6 @@ async def aget_product_detail(slug: str) -> Product | None:
                 "product_specifications",
                 "product_faqs",
                 # Phase 1 reverse FK prefetches
-                Prefetch(
-                    "product_fabric",
-                    queryset=ProductFabric.objects.all(),
-                ),
                 Prefetch(
                     "product_measurement_guide",
                     queryset=ProductMeasurementGuide.objects.order_by("sort_order"),
@@ -746,13 +743,14 @@ async def aget_vendor_product(vendor_id: Any, slug: str) -> Product | None:
             Product.objects
             .filter(vendor_id=vendor_id, slug=slug, is_deleted=False)
             .select_related(
-                "vendor", "vendor__user",
+                "vendor", "vendor__user", "product_fabric", "product_custom_shipping_profile",
             )
             .prefetch_related(
                 "categories", "sub_categories",
                 "sizes", "colors", "tags",
                 "product_gallery_media", "product_variants__size", "product_variants__color",
                 "product_specifications", "product_faqs",
+                "product_measurement_guide",
             )
             .aget()
         )

@@ -45,6 +45,9 @@ from apps.product.models import (
     ProductVariant,
     ProductDraftStatus,
     ProductDraftSession,
+    ProductFabric,
+    ProductMeasurementGuide,
+    ProductShippingProfile,
 )
 from apps.product.selectors import (
     get_coupon_by_code,
@@ -264,6 +267,38 @@ def _sync_product_variants(product: Product, variants_data: list[dict]) -> None:
             variant.soft_delete()
 
 
+def _sync_measurement_guide_from_template(product: Product) -> None:
+    """
+    If the product has a measurement_template, copy all its rows to ProductMeasurementGuide.
+    Clear any existing guides for this product first.
+    """
+    if not product.measurement_template:
+        return
+
+    # Clear existing guide rows
+    product.product_measurement_guide.all().delete()
+
+    # Copy from template rows
+    from apps.product.models import ProductMeasurementGuide
+    template_rows = product.measurement_template.template_rows.all()
+    for row in template_rows:
+        ProductMeasurementGuide.objects.create(
+            product=product,
+            template=product.measurement_template,
+            size=row.size,
+            size_label=row.size_label,
+            chest_cm=row.chest_cm,
+            waist_cm=row.waist_cm,
+            hip_cm=row.hip_cm,
+            length_cm=row.length_cm,
+            shoulder_cm=row.shoulder_cm,
+            sleeve_cm=row.sleeve_cm,
+            inseam_cm=row.inseam_cm,
+            foot_length_cm=row.foot_length_cm,
+            sort_order=row.sort_order
+        )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # PRODUCT CRUD
 # ─────────────────────────────────────────────────────────────────────────────
@@ -300,6 +335,9 @@ def create_product(
             return existing
 
     variants_data = validated_data.pop("variants", None)
+    fabric_data = validated_data.pop("fabric", None)
+    guide_data = validated_data.pop("measurement_guide", [])
+    shipping_data = validated_data.pop("shipping_profile", None)
     relations = _pop_product_m2m(validated_data)
 
     product = Product.objects.create(
@@ -309,6 +347,21 @@ def create_product(
         **validated_data,
     )
     _sync_product_m2m(product, relations, partial=False)
+
+    if fabric_data:
+        from apps.product.models import ProductFabric
+        ProductFabric.objects.create(product=product, **fabric_data)
+
+    if shipping_data:
+        from apps.product.models import ProductShippingProfile
+        ProductShippingProfile.objects.create(product=product, **shipping_data)
+
+    if guide_data:
+        from apps.product.models import ProductMeasurementGuide
+        for row in guide_data:
+            ProductMeasurementGuide.objects.create(product=product, **row)
+    elif product.measurement_template:
+        _sync_measurement_guide_from_template(product)
 
     if variants_data is not None:
         _sync_product_variants(product, variants_data)
@@ -334,17 +387,41 @@ def update_product(
 ) -> Product:
     """Update product fields. Vendor-owned products only."""
     variants_data = validated_data.pop("variants", None)
+    fabric_data = validated_data.pop("fabric", None)
+    guide_data = validated_data.pop("measurement_guide", None)
+    shipping_data = validated_data.pop("shipping_profile", None)
     relations = {
         key: validated_data.pop(key)
         for key in ("categories", "sub_categories", "sizes", "colors", "tags")
         if key in validated_data
     }
 
+    old_template = product.measurement_template
+
     for attr, value in validated_data.items():
         setattr(product, attr, value)
     product.save()
 
     _sync_product_m2m(product, relations, partial=True)
+
+    if fabric_data is not None:
+        if fabric_data:
+            ProductFabric.objects.update_or_create(product=product, defaults=fabric_data)
+        else:
+            ProductFabric.objects.filter(product=product).delete()
+
+    if shipping_data is not None:
+        if shipping_data:
+            ProductShippingProfile.objects.update_or_create(product=product, defaults=shipping_data)
+        else:
+            ProductShippingProfile.objects.filter(product=product).delete()
+
+    if guide_data is not None:
+        product.product_measurement_guide.all().delete()
+        for row in guide_data:
+            ProductMeasurementGuide.objects.create(product=product, **row)
+    elif "measurement_template" in validated_data and product.measurement_template != old_template:
+        _sync_measurement_guide_from_template(product)
 
     if variants_data is not None:
         _sync_product_variants(product, variants_data)
@@ -429,6 +506,8 @@ def attach_gallery_media(
     media_file: Any,
     media_type: str = "image",
     alt_text: str = "",
+    variant: Any = None,
+    color: Any = None,
     actor: Any = None,
     request: Any = None,
 ) -> ProductGalleryMedia:
@@ -441,6 +520,8 @@ def attach_gallery_media(
         media_type=media_type,
         alt_text=alt_text,
         ordering=ordering,
+        variant=variant,
+        color=color,
     )
     _emit_audit(
         "product.media.attached",

@@ -380,6 +380,14 @@ class Product(TimeStampedModel, SoftDeleteModel):
         default=False,
         help_text="If True, client must share measurement profile before checkout.",
     )
+    measurement_template = models.ForeignKey(
+        "VendorMeasurementTemplate",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="products",
+        help_text="Optional measurement template applied to this product to populate size chart.",
+    )
     is_customisable = models.BooleanField(
         default=False,
         help_text="Custom orders — triggers ChatOffer flow.",
@@ -772,6 +780,22 @@ class ProductGalleryMedia(TimeStampedModel, SoftDeleteModel):
         null=True,
         blank=True,
         help_text="Duration in seconds for video media items.",
+    )
+    variant = models.ForeignKey(
+        "ProductVariant",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="gallery_media",
+        help_text="Optional variant link to display specific color/size media.",
+    )
+    color = models.ForeignKey(
+        "ProductColor",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="gallery_media",
+        help_text="Optional color link to show this media when a color is selected.",
     )
 
     class Meta:
@@ -1308,6 +1332,14 @@ class ProductMeasurementGuide(TimeStampedModel):
         related_name="product_measurement_guide",
         help_text="Size guide rows for this product.",
     )
+    template = models.ForeignKey(
+        "VendorMeasurementTemplate",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="linked_guides",
+        help_text="Optional template this guide row was copied/referenced from.",
+    )
     size = models.ForeignKey(
         ProductSize,
         null=True,
@@ -1695,3 +1727,76 @@ class ProductDraftSession(HardDeleteMixin, SoftDeleteModel, TimeStampedModel):
         if not self.expires_at:
             self.expires_at = now() + datetime.timedelta(days=30)
         super().save(*args, **kwargs)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 20. VENDOR MEASUREMENT TEMPLATES  (2026+)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class VendorMeasurementTemplate(TimeStampedModel):
+    """
+    Reusable size-guide template defined by a vendor (tailor/brand).
+    Allows applying a standardized set of measurements (e.g. Senator fit, Kaftan slim fit)
+    to a product without manual row-by-row data entry on every upload.
+    """
+
+    vendor = models.ForeignKey(
+        "vendor.VendorProfile",
+        on_delete=models.CASCADE,
+        related_name="measurement_templates",
+        help_text="Vendor who owns this reusable sizing template."
+    )
+    name = models.CharField(max_length=120, help_text="e.g. 'Men's Slim Senator', 'Standard Kaftan'")
+    description = models.TextField(blank=True, help_text="Optional description of this measurement profile.")
+
+    class Meta:
+        verbose_name = _("Vendor Measurement Template")
+        verbose_name_plural = _("Vendor Measurement Templates")
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.vendor.store_name if self.vendor else 'Unknown'} — {self.name}"
+
+
+class VendorMeasurementTemplateRow(models.Model):
+    """
+    Individual size row inside a VendorMeasurementTemplate.
+    Defines body dimensions for S, M, L, etc.
+    """
+
+    template = models.ForeignKey(
+        VendorMeasurementTemplate,
+        on_delete=models.CASCADE,
+        related_name="template_rows"
+    )
+    size = models.ForeignKey(
+        ProductSize,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="template_size_rows",
+    )
+    size_label = models.CharField(
+        max_length=30,
+        help_text="Display label e.g. 'S', 'M', '44', '38-40'.",
+    )
+    chest_cm = models.CharField(max_length=20, blank=True)
+    waist_cm = models.CharField(max_length=20, blank=True)
+    hip_cm = models.CharField(max_length=20, blank=True)
+    length_cm = models.CharField(max_length=20, blank=True)
+    shoulder_cm = models.CharField(max_length=20, blank=True)
+    sleeve_cm = models.CharField(max_length=20, blank=True)
+    inseam_cm = models.CharField(max_length=20, blank=True)
+    foot_length_cm = models.CharField(max_length=20, blank=True)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        verbose_name = _("Template Row")
+        verbose_name_plural = _("Template Rows")
+        ordering = ["sort_order"]
+        unique_together = [("template", "size_label")]
+
+    def __str__(self):
+        return f"{self.template.name} — {self.size_label}"
+

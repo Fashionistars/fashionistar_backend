@@ -126,11 +126,23 @@ class ProductFabricOut(Schema):
     """Fabric type with care/sustainability metadata — Phase 1."""
     model_config = {"from_attributes": True}
     id: str
-    fabric_name: str
-    composition_percentage: int = 100
-    care_instructions: str = ""
-    is_sustainable: bool = False
-    sustainability_notes: str = ""
+    fabric_type: str
+    composition: dict | list | None = None
+    care_instructions: str = "machine_wash"
+    care_notes: str = ""
+    is_organic: bool = False
+    is_vegan: bool = False
+    country_of_origin: str = ""
+
+
+class ProductFabricIn(Schema):
+    fabric_type: str
+    composition: dict | list | None = None
+    care_instructions: str = "machine_wash"
+    care_notes: str = ""
+    is_organic: bool = False
+    is_vegan: bool = False
+    country_of_origin: str = ""
 
 
 class ProductMeasurementGuideOut(Schema):
@@ -138,13 +150,80 @@ class ProductMeasurementGuideOut(Schema):
     model_config = {"from_attributes": True}
     id: str
     size_label: str
-    chest_cm: Decimal | None = None
-    waist_cm: Decimal | None = None
-    hip_cm: Decimal | None = None
-    shoulder_cm: Decimal | None = None
-    length_cm: Decimal | None = None
-    inseam_cm: Decimal | None = None
+    chest_cm: str = ""
+    waist_cm: str = ""
+    hip_cm: str = ""
+    shoulder_cm: str = ""
+    sleeve_cm: str = ""
+    length_cm: str = ""
+    inseam_cm: str = ""
+    foot_length_cm: str = ""
     sort_order: int = 0
+
+
+class ProductMeasurementGuideIn(Schema):
+    size_label: str
+    chest_cm: str = ""
+    waist_cm: str = ""
+    hip_cm: str = ""
+    shoulder_cm: str = ""
+    sleeve_cm: str = ""
+    length_cm: str = ""
+    inseam_cm: str = ""
+    foot_length_cm: str = ""
+    sort_order: int = 0
+
+
+class ProductShippingProfileOut(Schema):
+    model_config = {"from_attributes": True}
+    id: str
+    weight_kg: Decimal = Decimal("0.0")
+    length_cm: Decimal = Decimal("0.0")
+    width_cm: Decimal = Decimal("0.0")
+    height_cm: Decimal = Decimal("0.0")
+    is_fragile: bool = False
+    requires_signature: bool = False
+    restricted_countries: list[str] = []
+    free_shipping_threshold: Decimal | None = None
+    processing_days: int = 1
+
+
+class ProductShippingProfileIn(Schema):
+    weight_kg: Decimal = Decimal("0.0")
+    length_cm: Decimal = Decimal("0.0")
+    width_cm: Decimal = Decimal("0.0")
+    height_cm: Decimal = Decimal("0.0")
+    is_fragile: bool = False
+    requires_signature: bool = False
+    restricted_countries: list[str] = []
+    free_shipping_threshold: Decimal | None = None
+    processing_days: int = 1
+    template_id: str | None = None
+
+
+class VendorMeasurementTemplateRowOut(Schema):
+    model_config = {"from_attributes": True}
+    id: str
+    size_id: str | None = None
+    size_label: str
+    chest_cm: str = ""
+    waist_cm: str = ""
+    hip_cm: str = ""
+    length_cm: str = ""
+    shoulder_cm: str = ""
+    sleeve_cm: str = ""
+    inseam_cm: str = ""
+    foot_length_cm: str = ""
+    sort_order: int = 0
+
+
+class VendorMeasurementTemplateOut(Schema):
+    model_config = {"from_attributes": True}
+    id: str
+    vendor_id: str
+    name: str
+    description: str = ""
+    template_rows: list[VendorMeasurementTemplateRowOut] = []
 
 
 class ProductCertificationOut(Schema):
@@ -191,6 +270,8 @@ class ProductGalleryMediaOut(Schema):
     ordering: int
     is_primary: bool = False
     duration_sec: int | None = None
+    variant_id: str | None = None
+    color_id: str | None = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -212,7 +293,7 @@ class ProductVariantOut(Schema):
     barcode: str = ""
     is_default: bool = False
     weight_kg: Decimal | None = None
-    dimensions_cm: str = ""
+    dimensions_cm: dict | None = None
     notes: str = ""
 
 
@@ -313,9 +394,10 @@ class ProductDetailOut(Schema):
     specifications: list[ProductSpecificationOut] = []
     faqs: list[ProductFaqOut] = []
     variants: list[ProductVariantOut] = []
-    # Phase 1 embed lists
-    fabrics: list[ProductFabricOut] = []
+    # Phase 1 embeds
+    fabric: ProductFabricOut | None = None
     measurement_guide: list[ProductMeasurementGuideOut] = []
+    shipping_profile: ProductShippingProfileOut | None = None
     # certifications: list[ProductCertificationOut] = []
     status: str
     category_name: str | None = None
@@ -337,6 +419,7 @@ class ProductDetailOut(Schema):
     meta_description: str = ""
     age_group: str = ""
     gender_target: str = ""
+    measurement_template_id: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -457,6 +540,7 @@ class ProductWriteIn(Schema):
     color_ids: list[str] = []
     tag_ids: list[str] = []
     requires_measurement: bool = False
+    measurement_template_id: UUID | None = None
     is_customisable: bool = False
     hot_deal: bool = False
     digital: bool = False
@@ -470,6 +554,9 @@ class ProductWriteIn(Schema):
     meta_description: str = ""
     age_group: str = ""
     gender_target: str = ""
+    fabric: ProductFabricIn | None = None
+    shipping_profile: ProductShippingProfileIn | None = None
+    measurement_guide: list[ProductMeasurementGuideIn] = []
     variants: list[ProductVariantWriteIn] = []
 
 

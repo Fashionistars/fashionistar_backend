@@ -435,18 +435,46 @@ class VendorProductGalleryView(APIView):
             return error_response(
                 message="No media file provided.", status=status.HTTP_400_BAD_REQUEST
             )
+
+        variant_id = request.data.get("variant_id")
+        color_id = request.data.get("color_id")
+
+        variant = None
+        if variant_id:
+            from apps.product.models import ProductVariant
+            try:
+                variant = ProductVariant.objects.get(id=variant_id, product=product)
+            except (ProductVariant.DoesNotExist, ValueError):
+                return error_response(
+                    message="Variant not found or does not belong to this product.",
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        color = None
+        if color_id:
+            from apps.product.models import ProductColor
+            try:
+                color = ProductColor.objects.get(id=color_id)
+            except (ProductColor.DoesNotExist, ValueError):
+                return error_response(
+                    message="Color not found.",
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
         try:
             item = attach_gallery_media(
                 product=product,
                 media_file=media_file,
                 media_type=request.data.get("media_type", "image"),
                 alt_text=request.data.get("alt_text", ""),
+                variant=variant,
+                color=color,
                 actor=request.user,
             )
         except Exception as exc:
             return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)
         return success_response(
-            data=ProductGalleryMediaSerializer(item).data,
+            data=ProductGalleryMediaSerializer(item, context={"request": request}).data,
             message="Media attached.",
             status=status.HTTP_201_CREATED,
         )

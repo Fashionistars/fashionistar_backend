@@ -52,6 +52,9 @@ from apps.product.models import (
     ProductVariant,
     ProductWishlist,
     ProductDraftSession,
+    VendorMeasurementTemplate,
+    VendorMeasurementTemplateRow,
+    ProductShippingProfile,
 )
 
 
@@ -108,29 +111,72 @@ class ProductFabricSerializer(serializers.ModelSerializer):
         model = ProductFabric
         fields = [
             "id",
-            "fabric_name",
-            "composition_percentage",
+            "fabric_type",
+            "composition",
             "care_instructions",
-            "is_sustainable",
-            "sustainability_notes",
+            "care_notes",
+            "is_organic",
+            "is_vegan",
+            "country_of_origin",
         ]
 
 
 class ProductMeasurementGuideSerializer(serializers.ModelSerializer):
-    """One size-chart row (e.g. Size S → chest 34–36 in) — Phase 1."""
+    """One size-chart row (e.g. Size S → chest 34–36 cm) — Phase 1."""
     class Meta:
         model = ProductMeasurementGuide
         fields = [
             "id",
+            "size",
             "size_label",
             "chest_cm",
             "waist_cm",
             "hip_cm",
             "shoulder_cm",
+            "sleeve_cm",
             "length_cm",
             "inseam_cm",
+            "foot_length_cm",
             "sort_order",
+            "template",
         ]
+
+
+class ProductShippingProfileSerializer(serializers.ModelSerializer):
+    """Per-product shipping configuration — Phase 1."""
+    class Meta:
+        model = ProductShippingProfile
+        fields = [
+            "id",
+            "weight_kg",
+            "length_cm",
+            "width_cm",
+            "height_cm",
+            "is_fragile",
+            "requires_signature",
+            "restricted_countries",
+            "free_shipping_threshold",
+            "processing_days",
+        ]
+
+
+class VendorMeasurementTemplateRowSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VendorMeasurementTemplateRow
+        fields = [
+            "id", "size", "size_label", "chest_cm", "waist_cm", "hip_cm",
+            "length_cm", "shoulder_cm", "sleeve_cm", "inseam_cm", "foot_length_cm",
+            "sort_order"
+        ]
+
+
+class VendorMeasurementTemplateSerializer(serializers.ModelSerializer):
+    template_rows = VendorMeasurementTemplateRowSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = VendorMeasurementTemplate
+        fields = ["id", "vendor", "name", "description", "template_rows"]
+        read_only_fields = ["id", "vendor"]
 
 
 # class ProductCertificationSerializer(serializers.ModelSerializer):
@@ -214,6 +260,7 @@ class ProductGalleryMediaSerializer(serializers.ModelSerializer):
             "media_type", "alt_text", "ordering",
             # Phase 1 expansions
             "is_primary", "video_thumbnail_url", "duration_sec",
+            "variant", "color",
         ]
 
     def get_media_url(self, obj):
@@ -468,11 +515,15 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         source="product_variants",
     )
     # Phase 1 reverse FK embeds
-    fabrics = ProductFabricSerializer(read_only=True, source="product_fabric")
+    fabric = ProductFabricSerializer(read_only=True, source="product_fabric")
     measurement_guide = ProductMeasurementGuideSerializer(
         many=True,
         read_only=True,
         source="product_measurement_guide",
+    )
+    shipping_profile = ProductShippingProfileSerializer(
+        read_only=True,
+        source="product_custom_shipping_profile",
     )
     # certifications = ProductCertificationSerializer(many=True, read_only=True, source="product_certifications")
     category_name = serializers.SerializerMethodField()
@@ -501,7 +552,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             "sizes", "colors", "tags",
             "specifications", "faqs", "variants",
             # Phase 1 embeds
-            "fabrics", "measurement_guide",
+            "fabric", "measurement_guide", "shipping_profile",
             "status",
             "category_name", "category_slug", "sub_category_name",
             "brand_name", "brand_slug",
@@ -510,6 +561,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             # Phase 1 Product fields
             "weight_kg", "condition", "is_pre_order", "pre_order_date",
             "meta_title", "meta_description", "age_group", "gender_target",
+            "measurement_template",
             "created_at", "updated_at",
         ]
 
@@ -597,6 +649,12 @@ class ProductWriteSerializer(serializers.ModelSerializer):
         write_only=True,
         help_text="Client UUID for safe network retry. Server returns same product on duplicate key.",
     )
+    measurement_template = serializers.PrimaryKeyRelatedField(
+        queryset=VendorMeasurementTemplate.objects.all(),
+        required=False,
+        allow_null=True,
+        help_text="Optional reusable measurement template to apply.",
+    )
 
     class Meta:
         model = Product
@@ -610,6 +668,7 @@ class ProductWriteSerializer(serializers.ModelSerializer):
             "hot_deal", "digital", "commission_rate",
             "weight_kg", "condition", "is_pre_order", "pre_order_date",
             "meta_title", "meta_description", "age_group", "gender_target",
+            "measurement_template",
             "idempotency_key",
         ]
 
@@ -709,11 +768,20 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
         help_text="Optional deeper category IDs for discovery facets.",
     )
     variants = ProductVariantWriteSerializer(many=True, required=False)
+    fabric = ProductFabricSerializer(required=False, allow_null=True)
+    measurement_guide = ProductMeasurementGuideSerializer(many=True, required=False)
+    shipping_profile = ProductShippingProfileSerializer(required=False, allow_null=True)
     idempotency_key = serializers.UUIDField(
         required=False,
         allow_null=True,
         write_only=True,
         help_text="Safe network-retry UUID. Server returns same product on duplicate.",
+    )
+    measurement_template = serializers.PrimaryKeyRelatedField(
+        queryset=VendorMeasurementTemplate.objects.all(),
+        required=False,
+        allow_null=True,
+        help_text="Optional reusable measurement template to apply.",
     )
 
     class Meta:
@@ -729,8 +797,9 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
             # Phase 1 write fields
             "weight_kg", "condition", "is_pre_order", "pre_order_date",
             "meta_title", "meta_description", "age_group", "gender_target",
+            "measurement_template",
             # Nested write
-            "variants",
+            "variants", "fabric", "measurement_guide", "shipping_profile",
             "idempotency_key",
         ]
 

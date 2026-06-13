@@ -53,6 +53,7 @@ from apps.product.schemas.product_schemas import (
     WishlistBulkStatusOut,
     WishlistToggleOut,
     ProductDraftSessionOut,
+    VendorMeasurementTemplateOut,
 )
 from apps.product.selectors import (
     aget_product_detail_bundle,
@@ -202,6 +203,8 @@ def _gallery_item_out(media) -> dict:
         "media_type": media.media_type,
         "alt_text": media.alt_text or "",
         "ordering": media.ordering,
+        "variant_id": str(media.variant_id) if media.variant_id else None,
+        "color_id": str(media.color_id) if media.color_id else None,
     }
 
 
@@ -324,6 +327,64 @@ def _product_detail_out(product) -> dict:
     card = _product_card_out(product)
     prefetched_cache = getattr(product, "_prefetched_objects_cache", {}) or {}
     prefetched_variants = list(prefetched_cache.get("product_variants", []))
+
+    try:
+        fabric_obj = product.product_fabric
+    except ObjectDoesNotExist:
+        fabric_obj = None
+
+    try:
+        shipping_obj = product.product_custom_shipping_profile
+    except ObjectDoesNotExist:
+        shipping_obj = None
+
+    fabric_data = None
+    if fabric_obj:
+        fabric_data = {
+            "id": str(fabric_obj.pk),
+            "fabric_type": fabric_obj.fabric_type,
+            "composition": fabric_obj.composition or {},
+            "care_instructions": fabric_obj.care_instructions,
+            "care_notes": fabric_obj.care_notes or "",
+            "is_organic": fabric_obj.is_organic,
+            "is_vegan": fabric_obj.is_vegan,
+            "country_of_origin": fabric_obj.country_of_origin or "",
+        }
+
+    shipping_data = None
+    if shipping_obj:
+        shipping_data = {
+            "id": str(shipping_obj.pk),
+            "weight_kg": shipping_obj.weight_kg,
+            "length_cm": shipping_obj.length_cm,
+            "width_cm": shipping_obj.width_cm,
+            "height_cm": shipping_obj.height_cm,
+            "is_fragile": shipping_obj.is_fragile,
+            "requires_signature": shipping_obj.requires_signature,
+            "restricted_countries": shipping_obj.restricted_countries or [],
+            "free_shipping_threshold": shipping_obj.free_shipping_threshold,
+            "processing_days": shipping_obj.processing_days,
+        }
+
+    guide_rows = []
+    try:
+        for row in product.product_measurement_guide.all():
+            guide_rows.append({
+                "id": str(row.pk),
+                "size_label": row.size_label,
+                "chest_cm": row.chest_cm or "",
+                "waist_cm": row.waist_cm or "",
+                "hip_cm": row.hip_cm or "",
+                "shoulder_cm": row.shoulder_cm or "",
+                "sleeve_cm": row.sleeve_cm or "",
+                "length_cm": row.length_cm or "",
+                "inseam_cm": row.inseam_cm or "",
+                "foot_length_cm": row.foot_length_cm or "",
+                "sort_order": row.sort_order,
+            })
+    except Exception:
+        pass
+
     card.update(
         {
             "description": product.description or "",
@@ -367,6 +428,18 @@ def _product_detail_out(product) -> dict:
             "vendor_slug": _vendor_out(product.vendor)["slug"],
             "vendor_is_verified": _vendor_out(product.vendor)["is_verified"],
             "commission_rate": _money(product.commission_rate),
+            "measurement_template_id": str(product.measurement_template_id) if product.measurement_template_id else None,
+            "weight_kg": product.weight_kg,
+            "condition": product.condition,
+            "is_pre_order": product.is_pre_order,
+            "pre_order_date": product.pre_order_date,
+            "meta_title": product.meta_title or "",
+            "meta_description": product.meta_description or "",
+            "age_group": product.age_group or "",
+            "gender_target": product.gender_target or "",
+            "fabric": fabric_data,
+            "measurement_guide": guide_rows,
+            "shipping_profile": shipping_data,
             "updated_at": product.updated_at,
         }
     )
@@ -545,6 +618,44 @@ async def list_couriers(request, page: int = 1, page_size: int = 50, active: boo
 
 
 # ── VENDOR — Draft Sessions ──────────────────────────────────────────────────
+
+def _get_templates_sync(profile):
+    from apps.product.models import VendorMeasurementTemplate
+    templates = VendorMeasurementTemplate.objects.filter(vendor=profile).prefetch_related("template_rows")
+    results = []
+    for t in templates:
+        rows = []
+        for r in t.template_rows.all():
+            rows.append({
+                "id": str(r.pk),
+                "size_id": str(r.size_id) if r.size_id else None,
+                "size_label": r.size_label,
+                "chest_cm": r.chest_cm or "",
+                "waist_cm": r.waist_cm or "",
+                "hip_cm": r.hip_cm or "",
+                "length_cm": r.length_cm or "",
+                "shoulder_cm": r.shoulder_cm or "",
+                "sleeve_cm": r.sleeve_cm or "",
+                "inseam_cm": r.inseam_cm or "",
+                "foot_length_cm": r.foot_length_cm or "",
+                "sort_order": r.sort_order,
+            })
+        results.append({
+            "id": str(t.pk),
+            "vendor_id": str(t.vendor_id),
+            "name": t.name,
+            "description": t.description or "",
+            "template_rows": rows,
+        })
+    return results
+
+
+@router.get("/vendor/measurement-templates/", response=list[VendorMeasurementTemplateOut], summary="List vendor's reusable measurement templates")
+async def list_measurement_templates(request):
+    from asgiref.sync import sync_to_async
+    profile = await _require_vendor(request)
+    return await sync_to_async(_get_templates_sync)(profile)
+
 
 @router.get("/vendor/drafts/", response=list[ProductDraftSessionOut], summary="List active vendor drafts")
 async def list_vendor_drafts(request):

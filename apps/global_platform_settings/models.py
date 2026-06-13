@@ -132,6 +132,16 @@ class PlatformSettings(TimeStampedModel):
         verbose_name=_("Vendor Advertisement Fee (₦)"),
         help_text=_("Amount charged to vendors for a standard promoted listing slot."),
     )
+    default_free_shipping_threshold = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("50000.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+        verbose_name=_("Default Free Shipping Threshold (₦)"),
+        help_text=_(
+            "Fallback free shipping threshold in NGN. Overridden per product in shipping profiles."
+        ),
+    )
 
     # ── Wallet Limits ─────────────────────────────────────────────────────────
     min_wallet_topup_ngn = models.DecimalField(
