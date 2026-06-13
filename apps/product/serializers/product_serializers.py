@@ -37,7 +37,7 @@ from apps.product.models import (
     Coupon,
     DeliveryCourier,
     Product,
-    ProductCertification,
+    # ProductCertification,
     ProductColor,
     ProductFabric,
     ProductFaq,
@@ -133,27 +133,27 @@ class ProductMeasurementGuideSerializer(serializers.ModelSerializer):
         ]
 
 
-class ProductCertificationSerializer(serializers.ModelSerializer):
-    """Sustainability/quality certification badge — Phase 1."""
-    badge_image_url = serializers.SerializerMethodField()
+# class ProductCertificationSerializer(serializers.ModelSerializer):
+#     """Sustainability/quality certification badge — Phase 1."""
+#     badge_image_url = serializers.SerializerMethodField()
 
-    class Meta:
-        model = ProductCertification
-        fields = [
-            "id",
-            "name",
-            "issued_by",
-            "cert_type",
-            "certificate_number",
-            "issued_date",
-            "expiry_date",
-            "is_verified",
-            "badge_image_url",
-        ]
+#     class Meta:
+#         model = ProductCertification
+#         fields = [
+#             "id",
+#             "name",
+#             "issued_by",
+#             "cert_type",
+#             "certificate_number",
+#             "issued_date",
+#             "expiry_date",
+#             "is_verified",
+#             "badge_image_url",
+#         ]
 
-    def get_badge_image_url(self, obj):
-        badge = getattr(obj, "badge_image", None)
-        return str(badge.url) if badge else None
+#     def get_badge_image_url(self, obj):
+#         badge = getattr(obj, "badge_image", None)
+#         return str(badge.url) if badge else None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -474,7 +474,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         read_only=True,
         source="product_measurement_guide",
     )
-    certifications = ProductCertificationSerializer(many=True, read_only=True, source="product_certifications")
+    # certifications = ProductCertificationSerializer(many=True, read_only=True, source="product_certifications")
     category_name = serializers.SerializerMethodField()
     category_slug = serializers.SerializerMethodField()
     sub_category_name = serializers.SerializerMethodField()
@@ -501,7 +501,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             "sizes", "colors", "tags",
             "specifications", "faqs", "variants",
             # Phase 1 embeds
-            "fabrics", "measurement_guide", "certifications",
+            "fabrics", "measurement_guide",
             "status",
             "category_name", "category_slug", "sub_category_name",
             "brand_name", "brand_slug",

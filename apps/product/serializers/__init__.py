@@ -12,7 +12,7 @@ from .product_serializers import (
     ProductVariantWriteSerializer,
     ProductFabricSerializer,
     ProductMeasurementGuideSerializer,
-    ProductCertificationSerializer,
+    # ProductCertificationSerializer,
     ProductListSerializer,
     ProductDetailSerializer,
     ProductWriteSerializer,
@@ -48,7 +48,7 @@ __all__ = [
     # Phase 2 new taxonomy
     "ProductFabricSerializer",
     "ProductMeasurementGuideSerializer",
-    "ProductCertificationSerializer",
+    # "ProductCertificationSerializer",
     # Product CRUD
     "ProductListSerializer",
     "ProductDetailSerializer",

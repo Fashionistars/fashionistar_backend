@@ -80,7 +80,7 @@ __all__ = [
     # Phase 1 enterprise expansions
     "ProductFabric",
     "ProductMeasurementGuide",
-    "ProductCertification",
+    # "ProductCertification",
     "ProductShippingProfile",
     "ProductPriceHistory",
     "ProductViewLog",

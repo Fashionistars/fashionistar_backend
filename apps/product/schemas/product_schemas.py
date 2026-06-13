@@ -316,7 +316,7 @@ class ProductDetailOut(Schema):
     # Phase 1 embed lists
     fabrics: list[ProductFabricOut] = []
     measurement_guide: list[ProductMeasurementGuideOut] = []
-    certifications: list[ProductCertificationOut] = []
+    # certifications: list[ProductCertificationOut] = []
     status: str
     category_name: str | None = None
     category_slug: str | None = None

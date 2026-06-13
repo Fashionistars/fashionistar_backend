@@ -18,7 +18,7 @@ from apps.product.admin.product_admin import (  # noqa: F401
     ProductVariantAdmin,
     ProductFabricAdmin,
     ProductMeasurementGuideAdmin,
-    ProductCertificationAdmin,
+    # ProductCertificationAdmin,
     ProductShippingProfileAdmin,
     ProductPriceHistoryAdmin,
     ProductViewLogAdmin,

@@ -44,7 +44,7 @@ from apps.product.models import (
     ProductSizeType,
     ProductFabric,
     ProductMeasurementGuide,
-    ProductCertification,
+    # ProductCertification,
     ProductShippingProfile,
     ProductPriceHistory,
     ProductViewLog,
@@ -664,44 +664,44 @@ class ProductMeasurementGuideAdmin(admin.ModelAdmin):
     ordering = ["product", "sort_order"]
 
 
-@admin.register(ProductCertification)
-class ProductCertificationAdmin(admin.ModelAdmin):
-    """
-    Trust badges — sustainability, NAFDAC, SON, handmade, organic, fair trade.
-    Admin verifies certifications after document upload from vendor.
-    """
+# @admin.register(ProductCertification)
+# class ProductCertificationAdmin(admin.ModelAdmin):
+#     """
+#     Trust badges — sustainability, NAFDAC, SON, handmade, organic, fair trade.
+#     Admin verifies certifications after document upload from vendor.
+#     """
 
-    list_display = [
-        "product", "certification_type", "name",
-        "issuing_body", "is_verified", "valid_from", "valid_to",
-    ]
-    list_filter = ["certification_type", "is_verified"]
-    search_fields = ["product__title", "name", "issuing_body", "certificate_number"]
-    raw_id_fields = ["product"]
-    readonly_fields = ["created_at", "updated_at"]
-    actions = ["verify_selected", "unverify_selected"]
+#     list_display = [
+#         "product", "certification_type", "name",
+#         "issuing_body", "is_verified", "valid_from", "valid_to",
+#     ]
+#     list_filter = ["certification_type", "is_verified"]
+#     search_fields = ["product__title", "name", "issuing_body", "certificate_number"]
+#     raw_id_fields = ["product"]
+#     readonly_fields = ["created_at", "updated_at"]
+#     actions = ["verify_selected", "unverify_selected"]
 
-    @admin.action(description="✅ Mark selected certifications as verified")
-    def verify_selected(self, request, queryset):
-        updated = queryset.update(is_verified=True)
-        self.message_user(request, f"✅ {updated} certification(s) verified.")
+#     @admin.action(description="✅ Mark selected certifications as verified")
+#     def verify_selected(self, request, queryset):
+#         updated = queryset.update(is_verified=True)
+#         self.message_user(request, f"✅ {updated} certification(s) verified.")
 
-    @admin.action(description="❌ Unverify selected certifications")
-    def unverify_selected(self, request, queryset):
-        updated = queryset.update(is_verified=False)
-        self.message_user(request, f"❌ {updated} certification(s) unverified.")
+#     @admin.action(description="❌ Unverify selected certifications")
+#     def unverify_selected(self, request, queryset):
+#         updated = queryset.update(is_verified=False)
+#         self.message_user(request, f"❌ {updated} certification(s) unverified.")
 
-    def badge_preview(self, obj):
-        if obj.badge_image:
-            try:
-                return format_html(
-                    '<img src="{}" height="40" style="border-radius:4px;" />',
-                    obj.badge_image.url,
-                )
-            except Exception:
-                return "—"
-        return "—"
-    badge_preview.short_description = "Badge"
+#     def badge_preview(self, obj):
+#         if obj.badge_image:
+#             try:
+#                 return format_html(
+#                     '<img src="{}" height="40" style="border-radius:4px;" />',
+#                     obj.badge_image.url,
+#                 )
+#             except Exception:
+#                 return "—"
+#         return "—"
+#     badge_preview.short_description = "Badge"
 
 
 @admin.register(ProductShippingProfile)

@@ -50,7 +50,7 @@ from django.utils import timezone
 from apps.product.models import (
     Coupon,
     Product,
-    ProductCertification,
+    # ProductCertification,
     ProductColor,
     ProductFabric,
     ProductGalleryMedia,
@@ -611,10 +611,6 @@ async def aget_product_detail(slug: str) -> Product | None:
                 Prefetch(
                     "product_measurement_guide",
                     queryset=ProductMeasurementGuide.objects.order_by("sort_order"),
-                ),
-                Prefetch(
-                    "product_certifications",
-                    queryset=ProductCertification.objects.filter(is_verified=True),
                 ),
             )
             .annotate(
