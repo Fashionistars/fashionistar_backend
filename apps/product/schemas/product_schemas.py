@@ -289,7 +289,7 @@ class ProductDetailOut(Schema):
     old_price: Decimal | None = None
     discount_percentage: int = 0
     currency: str = "NGN"
-    shipping_amount: Decimal = Decimal("0")
+    shipping_amount: Decimal = Decimal("1000")
     image_url: str | None = None
     cover_image_url: str | None = None
     gallery: list[ProductGalleryMediaOut] = []
@@ -432,7 +432,7 @@ class ProductVariantWriteIn(Schema):
     sku: str | None = None
     size_id: str | None = None
     color_id: str | None = None
-    price_override: Decimal | None = None
+    price_override: Decimal | None = Field(default=None, ge=5000)
     stock_qty: int = 0
     is_active: bool = True
     is_default: bool = False
@@ -445,10 +445,10 @@ class ProductVariantWriteIn(Schema):
 class ProductWriteIn(Schema):
     title: str = Field(..., min_length=3, max_length=255)
     description: str = Field(..., min_length=100)
-    price: Decimal = Field(..., gt=0)
-    old_price: Decimal | None = None
+    price: Decimal = Field(..., ge=5000)
+    old_price: Decimal | None = Field(default=None, ge=5000)
     currency: str = "NGN"
-    shipping_amount: Decimal = Decimal("0")
+    shipping_amount: Decimal = Decimal("2500")
     stock_qty: int = Field(0, ge=0)
     max_stock: int | None = None
     category_ids: list[str] = Field(..., min_length=1, max_length=15)

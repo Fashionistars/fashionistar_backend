@@ -335,6 +335,11 @@ class ProductVariantWriteSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Stock quantity cannot be negative.")
         return value
 
+    def validate_price_override(self, value):
+        if value is not None and value < 5000:
+            raise serializers.ValidationError("Price override must be at least ₦5,000.00.")
+        return value
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PRODUCT LIST  (catalog / search — card view, fast)
@@ -609,8 +614,13 @@ class ProductWriteSerializer(serializers.ModelSerializer):
         ]
 
     def validate_price(self, value):
-        if value <= 0:
-            raise serializers.ValidationError("Price must be greater than zero.")
+        if value < 5000:
+            raise serializers.ValidationError("Price must be at least ₦5,000.00.")
+        return value
+
+    def validate_old_price(self, value):
+        if value is not None and value < 5000:
+            raise serializers.ValidationError("Old price must be at least ₦5,000.00.")
         return value
 
     def validate_stock_qty(self, value):
@@ -725,8 +735,13 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
         ]
 
     def validate_price(self, value):
-        if value <= 0:
-            raise serializers.ValidationError("Price must be greater than zero.")
+        if value < 5000:
+            raise serializers.ValidationError("Price must be at least ₦5,000.00.")
+        return value
+
+    def validate_old_price(self, value):
+        if value is not None and value < 5000:
+            raise serializers.ValidationError("Old price must be at least ₦5,000.00.")
         return value
 
     def validate_stock_qty(self, value):
