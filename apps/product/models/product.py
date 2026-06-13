@@ -366,7 +366,7 @@ class Product(TimeStampedModel, SoftDeleteModel):
         max_digits=12, decimal_places=2, null=True, blank=True
     )
     currency = models.CharField(max_length=3, default="NGN")
-    shipping_amount = models.DecimalField(max_digits=10, decimal_places=2, default=1000)
+    shipping_amount = models.DecimalField(max_digits=10, decimal_places=2, default=2500)
 
     # ── Inventory ─────────────────────────────────────────────────────────
     stock_qty = models.PositiveIntegerField(default=0)
