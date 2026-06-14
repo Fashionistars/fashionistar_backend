@@ -49,7 +49,6 @@ from apps.product.models.product import (
     ProductDraftStatus,
     ProductDraftSession,
     VendorMeasurementTemplate,
-    VendorMeasurementTemplateRow,
 )
 
 __all__ = [
@@ -88,5 +87,4 @@ __all__ = [
     "ProductViewLog",
     # Vendor Measurement Templates
     "VendorMeasurementTemplate",
-    "VendorMeasurementTemplateRow",
 ]

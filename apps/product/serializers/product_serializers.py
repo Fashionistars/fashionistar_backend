@@ -53,7 +53,6 @@ from apps.product.models import (
     ProductWishlist,
     ProductDraftSession,
     VendorMeasurementTemplate,
-    VendorMeasurementTemplateRow,
     ProductShippingProfile,
 )
 
@@ -160,18 +159,8 @@ class ProductShippingProfileSerializer(serializers.ModelSerializer):
         ]
 
 
-class VendorMeasurementTemplateRowSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = VendorMeasurementTemplateRow
-        fields = [
-            "id", "size", "size_label", "chest_cm", "waist_cm", "hip_cm",
-            "length_cm", "shoulder_cm", "sleeve_cm", "inseam_cm", "foot_length_cm",
-            "sort_order"
-        ]
-
-
 class VendorMeasurementTemplateSerializer(serializers.ModelSerializer):
-    template_rows = VendorMeasurementTemplateRowSerializer(many=True, read_only=True)
+    template_rows = ProductMeasurementGuideSerializer(many=True, read_only=True)
 
     class Meta:
         model = VendorMeasurementTemplate
@@ -802,6 +791,18 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
             "variants", "fabric", "measurement_guide", "shipping_profile",
             "idempotency_key",
         ]
+
+    def to_internal_value(self, data):
+        # Normalize gender_target for client compatibility
+        if "gender_target" in data and isinstance(data["gender_target"], str):
+            gender = data["gender_target"].lower().strip()
+            if gender == "male":
+                data = data.copy()
+                data["gender_target"] = "men"
+            elif gender == "female":
+                data = data.copy()
+                data["gender_target"] = "women"
+        return super().to_internal_value(data)
 
     def validate_price(self, value):
         if value < 5000:

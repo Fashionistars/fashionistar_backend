@@ -366,7 +366,7 @@ class Product(TimeStampedModel, SoftDeleteModel):
         max_digits=12, decimal_places=2, null=True, blank=True
     )
     currency = models.CharField(max_length=3, default="NGN")
-    shipping_amount = models.DecimalField(max_digits=10, decimal_places=2, default=2500)
+    shipping_amount = models.DecimalField(max_digits=12, decimal_places=2, default=2500)
 
     # ── Inventory ─────────────────────────────────────────────────────────
     stock_qty = models.PositiveIntegerField(default=0)
@@ -1319,15 +1319,13 @@ class ProductMeasurementGuide(TimeStampedModel):
     """
     Size chart row linking a size label to body measurement ranges.
 
-    One row per size per product. Together they form the product's
-    size guide table displayed on the PDP.
-
-    Example row:
-        product=<Kaftan>, size=M, chest_cm=90-100, waist_cm=75-85, ...
+    One row per size per product (or template). Together they form the size guide table.
     """
 
     product = models.ForeignKey(
         Product,
+        null=True,
+        blank=True,
         on_delete=models.CASCADE,
         related_name="product_measurement_guide",
         help_text="Size guide rows for this product.",
@@ -1336,9 +1334,9 @@ class ProductMeasurementGuide(TimeStampedModel):
         "VendorMeasurementTemplate",
         null=True,
         blank=True,
-        on_delete=models.SET_NULL,
-        related_name="linked_guides",
-        help_text="Optional template this guide row was copied/referenced from.",
+        on_delete=models.CASCADE,
+        related_name="template_rows",
+        help_text="Template this guide row belongs to (or was copied/referenced from).",
     )
     size = models.ForeignKey(
         ProductSize,
@@ -1349,8 +1347,7 @@ class ProductMeasurementGuide(TimeStampedModel):
     )
     size_label = models.CharField(
         max_length=30,
-        help_text="Display label e.g. 'S', 'M', '44', '38-40'. "
-        "Used when size FK is not selected.",
+        help_text="Display label e.g. 'S', 'M', '44', '38-40'. Used when size FK is not selected.",
     )
     chest_cm = models.CharField(
         max_length=20, blank=True, help_text="Chest range e.g. '90-100'."
@@ -1378,10 +1375,22 @@ class ProductMeasurementGuide(TimeStampedModel):
         verbose_name = _("Measurement Guide Row")
         verbose_name_plural = _("Measurement Guide Rows")
         ordering = ["sort_order"]
-        unique_together = [("product", "size_label")]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["product", "size_label"],
+                condition=models.Q(product__isnull=False),
+                name="unique_product_size_label",
+            ),
+            models.UniqueConstraint(
+                fields=["template", "size_label"],
+                condition=models.Q(template__isnull=False, product__isnull=True),
+                name="unique_template_size_label",
+            ),
+        ]
 
     def __str__(self):
-        return f"{self.product.title} — {self.size_label}"
+        owner = self.product.title if self.product else (self.template.name if self.template else "Orphan")
+        return f"{owner} — {self.size_label}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1772,45 +1781,4 @@ class VendorMeasurementTemplate(TimeStampedModel):
     def __str__(self):
         return f"{self.vendor.store_name if self.vendor else 'Unknown'} — {self.name}"
 
-
-class VendorMeasurementTemplateRow(models.Model):
-    """
-    Individual size row inside a VendorMeasurementTemplate.
-    Defines body dimensions for S, M, L, etc.
-    """
-
-    template = models.ForeignKey(
-        VendorMeasurementTemplate,
-        on_delete=models.CASCADE,
-        related_name="template_rows"
-    )
-    size = models.ForeignKey(
-        ProductSize,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="template_size_rows",
-    )
-    size_label = models.CharField(
-        max_length=30,
-        help_text="Display label e.g. 'S', 'M', '44', '38-40'.",
-    )
-    chest_cm = models.CharField(max_length=20, blank=True)
-    waist_cm = models.CharField(max_length=20, blank=True)
-    hip_cm = models.CharField(max_length=20, blank=True)
-    length_cm = models.CharField(max_length=20, blank=True)
-    shoulder_cm = models.CharField(max_length=20, blank=True)
-    sleeve_cm = models.CharField(max_length=20, blank=True)
-    inseam_cm = models.CharField(max_length=20, blank=True)
-    foot_length_cm = models.CharField(max_length=20, blank=True)
-    sort_order = models.PositiveSmallIntegerField(default=0)
-
-    class Meta:
-        verbose_name = _("Template Row")
-        verbose_name_plural = _("Template Rows")
-        ordering = ["sort_order"]
-        unique_together = [("template", "size_label")]
-
-    def __str__(self):
-        return f"{self.template.name} — {self.size_label}"
 

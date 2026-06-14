@@ -284,7 +284,7 @@ def _sync_measurement_guide_from_template(product: Product) -> None:
     for row in template_rows:
         ProductMeasurementGuide.objects.create(
             product=product,
-            template=product.measurement_template,
+            template=None,
             size=row.size,
             size_label=row.size_label,
             chest_cm=row.chest_cm,
