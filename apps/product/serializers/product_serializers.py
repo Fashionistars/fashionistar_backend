@@ -5,7 +5,7 @@ Enterprise DRF Serializers for the Product domain.
 Serializer hierarchy:
   ProductVendorMiniSerializer   — tiny vendor card embedded in product
   ProductGalleryMediaSerializer — gallery item read
-  ProductSizeSerializer         — flat taxonomy
+  ProductSizeAndMeasurementGuideSerializer         — flat taxonomy
   ProductColorSerializer        — flat taxonomy with hex
   ProductTagSerializer          — flat taxonomy with slug
   ProductSpecificationSerializer
@@ -28,17 +28,14 @@ Rules:
   - All UUIDs serialized as str, not int.
 """
 
-from OLD_PRODUCTS-MODEL-FOR REFRENCE IN THE FUTURE.product.serializers import ProductSizeSerializer
 from __future__ import annotations
 
 from rest_framework import serializers
 
 from apps.catalog.models import Category
 from apps.product.models import (
-    Coupon,
     DeliveryCourier,
     Product,
-    # ProductCertification,
     ProductColor,
     ProductFabric,
     ProductFaq,
@@ -59,14 +56,6 @@ from apps.product.models import (
 # ATOMIC TAXONOMY SERIALIZERS
 # ─────────────────────────────────────────────────────────────────────────────
 
-class ProductSizeAndMeasurementGuideSerializer(serializers.ModelSerializer):
-    """Flat sizing serializer mapping ProductSizeAndMeasurementGuide to output."""
-    name = serializers.CharField(source="size_label", read_only=True)
-    abbreviation = serializers.CharField(source="size_label", read_only=True)
-
-    class Meta:
-        model = ProductSizeAndMeasurementGuide
-        fields = ["id", "name", "size_label", "description", "sort_order"]
 
 class ProductColorSerializer(serializers.ModelSerializer):
     """Expanded with Phase 1 fields: swatch_image_url, is_active."""
@@ -110,14 +99,40 @@ class ProductFabricSerializer(serializers.ModelSerializer):
             "country_of_origin",
         ]
 
+class ProductSizeAndMeasurementGuideSerializer(serializers.ModelSerializer):
+    """Flat sizing serializer mapping ProductSizeAndMeasurementGuide to output."""
+     
+    SIZE_CHOICES = [
+        ("XS", _("XS")),
+        ("S", _("S")),
+        ("M", _("M")),
+        ("L", _("L")),
+        ("XL", _("XL")),
+        ("XXL", _("XXL")),
+        ("Custom", _("Custom")),
+    ]
+    
+    DESCRIPTION_CHOICES = [
+        ("clothing", _("Clothing")),
+        ("footwear", _("Footwear")),
+        ("accessory", _("Accessory")),
+        ("measurement", _("Measurement-Based")),
+        ("custom", _("Custom")),
+    ]
 
-class ProductMeasurementGuideSerializer(serializers.ModelSerializer):
-    """One size-chart row (e.g. Size S → chest 34–36 cm) — Phase 1."""
+    id = serializers.UUIDField(source="id", read_only=True)
+    name = serializers.CharField(source="name")
+    description = serializers.ChoiceField(source="description", choices=DESCRIPTION_CHOICES)
+    size_label = serializers.ChoiceField(source="size_label", choices=SIZE_CHOICES)
+
     class Meta:
         model = ProductSizeAndMeasurementGuide
         fields = [
             "id",
-            "size_label",
+            "vendor",
+            "name",
+            "description", 
+            "size_label", 
             "chest_cm",
             "waist_cm",
             "hip_cm",
@@ -127,6 +142,7 @@ class ProductMeasurementGuideSerializer(serializers.ModelSerializer):
             "inseam_cm",
             "foot_length_cm",
             "sort_order",
+            "save_as_template",
         ]
 
 
@@ -253,13 +269,7 @@ class ProductFaqSerializer(serializers.ModelSerializer):
 class ProductVariantSerializer(serializers.ModelSerializer):
     """Per-SKU variant — expanded with Phase 1 fields: barcode, is_default, weight_kg, notes."""
     color = ProductColorSerializer(read_only=True)
-    size_id = serializers.PrimaryKeyRelatedField(
-        queryset=ProductSizeAndMeasurementGuide.objects.all(),
-        source="size",
-        write_only=True,
-        required=False,
-        allow_null=True,
-    )
+
     color_id = serializers.PrimaryKeyRelatedField(
         queryset=ProductColor.objects.all(),
         source="color",
@@ -293,12 +303,7 @@ class ProductVariantWriteSerializer(serializers.ModelSerializer):
     Used when a vendor creates/updates a product with all its SKUs in one call.
     Persistence is delegated to the service layer — never call .save() directly.
     """
-    size_id = serializers.PrimaryKeyRelatedField(
-        queryset=ProductSizeAndMeasurementGuide.objects.all(),
-        source="size",
-        required=False,
-        allow_null=True,
-    )
+  
     color_id = serializers.PrimaryKeyRelatedField(
         queryset=ProductColor.objects.all(),
         source="color",
@@ -567,7 +572,6 @@ class ProductWriteSerializer(serializers.ModelSerializer):
     specifications = ProductSpecificationSerializer(many=True, required=False)
     gallery = ProductGalleryMediaSerializer(many=True, required=False)
     images = ProductTagSerializer(many=True, required=False)
-    measurement_guide = ProductMeasurementGuideSerializer(many=True, required=False)
     fabric = ProductFabricSerializer(many=True, required=False)
     shipping_profile = ProductShippingProfileSerializer(many=True, required=False)
     
@@ -681,20 +685,19 @@ class ProductWriteSerializer(serializers.ModelSerializer):
 
 class ProductWriteFullSerializer(serializers.ModelSerializer):
     """
-    Enterprise vendor create/update with NESTED variant write.
+        Enterprise vendor create/update with NESTED variant write.
 
-    Accepts a `variants` array so a vendor can submit all SKUs in one
-    HTTP call. Persistence is fully delegated to the service layer —
-    callers MUST use service.create_product_full(validated_data) or
-    service.update_product_full(product, validated_data) rather than
-    serializer.save().
-
-    Validation rules:
-      - Price must be > 0.
-      - categories must contain 1-15 catalog category IDs.
-      - stock_qty ≤ max_stock (when both provided).
-      - commission_rate in [0, 100].
-      - Each nested variant SKU must be unique within the submission.
+        Accepts a `variants` array so a vendor can submit all SKUs in one
+        HTTP call. Persistence is fully delegated to the service layer —
+        callers MUST use service.create_product_full(validated_data) or
+        service.update_product_full(product, validated_data) rather than
+        serializer.save().
+        Validation rules:
+        - Price must be > 0.
+        - categories must contain 1-15 catalog category IDs.
+        - stock_qty ≤ max_stock (when both provided).
+        - commission_rate in [0, 100].
+        - Each nested variant SKU must be unique within the submission.
     """
     size_ids = serializers.PrimaryKeyRelatedField(
         queryset=ProductSizeAndMeasurementGuide.objects.all(),

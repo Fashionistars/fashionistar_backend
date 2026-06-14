@@ -6,10 +6,8 @@ Import from this module in serializers, selectors, services, and admin:
     from apps.product.models import Product, ProductFabric, ...
 
 Phase 1 expansion (2026):
-    - ProductSizeType      — size taxonomy (clothing/footwear/measurement/custom)
     - ProductFabric        — fabric composition, care instructions, organic flags
     - ProductMeasurementGuide — size chart rows per product
-    - ProductCertification — sustainability / NAFDAC / SON trust badges
     - ProductShippingProfile  — per-product shipping rules
     - ProductPriceHistory  — append-only price change audit trail
     - ProductViewLog       — AI recommendation engine analytics events

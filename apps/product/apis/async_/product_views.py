@@ -54,6 +54,7 @@ from apps.product.schemas.product_schemas import (
     WishlistToggleOut,
     ProductDraftSessionOut,
     VendorMeasurementTemplateOut,
+    VendorMeasurementTemplateIn,
 )
 from apps.product.selectors import (
     aget_product_detail_bundle,
@@ -684,7 +685,7 @@ def _get_templates_sync(profile):
             "name": name,
             "description": "Measurement template rows",
             "template_rows": rows_list,
-        })l
+        })
     return results
 
 
@@ -693,6 +694,76 @@ async def list_measurement_templates(request):
     from asgiref.sync import sync_to_async
     profile = await _require_vendor(request)
     return await sync_to_async(_get_templates_sync)(profile)
+
+
+@router.post("/vendor/measurement-templates/", response=VendorMeasurementTemplateOut, summary="Create/update a reusable measurement template")
+async def create_measurement_template(request, payload: VendorMeasurementTemplateIn):
+    profile = await _require_vendor(request)
+    from asgiref.sync import sync_to_async
+    import django.db.transaction
+    from apps.product.models import ProductSizeAndMeasurementGuide
+    
+    def _save_template():
+        with django.db.transaction.atomic():
+            # Delete existing template rows for this vendor & name
+            ProductSizeAndMeasurementGuide.objects.filter(
+                vendor=profile,
+                product__isnull=True,
+                name=payload.name,
+            ).delete()
+            
+            created_rows = []
+            for row in payload.template_rows:
+                created = ProductSizeAndMeasurementGuide.objects.create(
+                    vendor=profile,
+                    name=payload.name,
+                    description=payload.description,
+                    size_label=row.size_label,
+                    chest_cm=row.chest_cm,
+                    waist_cm=row.waist_cm,
+                    hip_cm=row.hip_cm,
+                    length_cm=row.length_cm,
+                    shoulder_cm=row.shoulder_cm,
+                    sleeve_cm=row.sleeve_cm,
+                    inseam_cm=row.inseam_cm,
+                    foot_length_cm=row.foot_length_cm,
+                    sort_order=row.sort_order,
+                )
+                created_rows.append(created)
+            
+            # Deterministic UUID for the template
+            import uuid
+            import hashlib
+            h = hashlib.md5(f"{profile.pk}-{payload.name}".encode("utf-8")).digest()
+            t_uuid = uuid.UUID(bytes=h)
+            
+            rows_list = []
+            for r in created_rows:
+                rows_list.append({
+                    "id": str(r.pk),
+                    "size_id": str(r.pk),
+                    "size_label": r.size_label,
+                    "chest_cm": r.chest_cm or "",
+                    "waist_cm": r.waist_cm or "",
+                    "hip_cm": r.hip_cm or "",
+                    "length_cm": r.length_cm or "",
+                    "shoulder_cm": r.shoulder_cm or "",
+                    "sleeve_cm": r.sleeve_cm or "",
+                    "inseam_cm": r.inseam_cm or "",
+                    "foot_length_cm": r.foot_length_cm or "",
+                    "sort_order": r.sort_order,
+                })
+                
+            return {
+                "id": str(t_uuid),
+                "vendor_id": str(profile.pk),
+                "name": payload.name,
+                "description": payload.description,
+                "template_rows": rows_list,
+            }
+            
+    return await sync_to_async(_save_template)()
+
 
 
 @router.get("/vendor/drafts/", response=list[ProductDraftSessionOut], summary="List active vendor drafts")

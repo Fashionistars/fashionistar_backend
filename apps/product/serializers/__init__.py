@@ -1,6 +1,6 @@
 # apps/product/serializers/__init__.py
 from .product_serializers import (
-    ProductSizeSerializer,
+    ProductSizeAndMeasurementGuideSerializer,
     ProductColorSerializer,
     ProductTagSerializer,
     ProductVendorMiniSerializer,
@@ -10,7 +10,6 @@ from .product_serializers import (
     ProductVariantSerializer,
     ProductVariantWriteSerializer,
     ProductFabricSerializer,
-    ProductMeasurementGuideSerializer,
     ProductListSerializer,
     ProductDetailSerializer,
     ProductWriteSerializer,
@@ -30,7 +29,7 @@ from .coupon_serializers import CouponSerializer
 
 __all__ = [
     # Taxonomy
-    "ProductSizeSerializer",
+    "ProductSizeAndMeasurementGuideSerializer",
     "ProductColorSerializer",
     "ProductTagSerializer",
     "ProductVendorMiniSerializer",

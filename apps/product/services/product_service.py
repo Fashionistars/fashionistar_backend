@@ -25,6 +25,7 @@ Enterprise rules (Django 6.0 LTS):
    audit service never kills the main mutation transaction.
 """
 
+from apps.vendor.models import VendorProfile
 from __future__ import annotations
 
 import logging
@@ -267,28 +268,24 @@ def _sync_product_variants(product: Product, variants_data: list[dict]) -> None:
             variant.soft_delete()
 
 
-def _sync_measurement_guide_from_template(product: Product) -> None:
+def _sync_measurement_guide_from_template(vendor: VendorProfile) -> None:
     """
-    If the product has a measurement_template name, copy all its template rows (where product is NULL)
-    to the product's sizing guide.
+    If the vendor has a measurement_template name, copy all its template rows (where vendor is NULL)
+    to the vendor's sizing guide.
     """
-    if not product.measurement_template:
+    if not vendor.measurement_template:
         return
 
     # Clear existing guide rows
-    product.product_measurement_guide.all().delete()
+    vendor.vendor_measurement_guide.all().delete()
 
     # Query template rows where product is NULL, matches vendor and template name
     template_rows = ProductSizeAndMeasurementGuide.objects.filter(
-        product__isnull=True,
-        vendor=product.vendor,
-        name=product.measurement_template,
+        vendor=vendor,
     )
     for row in template_rows:
         ProductSizeAndMeasurementGuide.objects.create(
-            product=product,
-            vendor=None,
-            name=row.name,
+            vendor=vendor,
             size_label=row.size_label,
             chest_cm=row.chest_cm,
             waist_cm=row.waist_cm,

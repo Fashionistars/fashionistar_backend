@@ -83,7 +83,7 @@ class ProductVendorOut(Schema):
 
 
 
-class ProductSizeOut(Schema):
+class ProductSizeAndMeasurementGuideOut(Schema):
     """Sizing schema mapped from ProductSizeAndMeasurementGuide."""
     model_config = {"from_attributes": True}
     id: str
@@ -229,6 +229,26 @@ class VendorMeasurementTemplateOut(Schema):
     template_rows: list[VendorMeasurementTemplateRowOut] = []
 
 
+class VendorMeasurementTemplateRowIn(Schema):
+    size_label: str
+    chest_cm: str = ""
+    waist_cm: str = ""
+    hip_cm: str = ""
+    length_cm: str = ""
+    shoulder_cm: str = ""
+    sleeve_cm: str = ""
+    inseam_cm: str = ""
+    foot_length_cm: str = ""
+    sort_order: int = 0
+
+
+class VendorMeasurementTemplateIn(Schema):
+    name: str
+    description: str = "custom"
+    template_rows: list[VendorMeasurementTemplateRowIn] = []
+
+
+
 class ProductCertificationOut(Schema):
     """Sustainability/quality certification badge — Phase 1."""
     model_config = {"from_attributes": True}
@@ -286,7 +306,6 @@ class ProductVariantOut(Schema):
     model_config = {"from_attributes": True}
     id: str
     sku: str
-    size: ProductSizeOut | None = None
     color: ProductColorOut | None = None
     price_override: Decimal | None = None
     stock_qty: int
@@ -352,7 +371,7 @@ class ProductListItemOut(Schema):
     brand_slug: str | None = None
     vendor_name: str | None = None
     vendor_slug: str | None = None
-    sizes: list[ProductSizeOut] = []
+    sizes: list[ProductSizeAndMeasurementGuideOut] = []
     colors: list[ProductColorOut] = []
     created_at: datetime
 
@@ -391,7 +410,7 @@ class ProductDetailOut(Schema):
     digital: bool = False
     requires_measurement: bool = False
     is_customisable: bool = False
-    sizes: list[ProductSizeOut] = []
+    sizes: list[ProductSizeAndMeasurementGuideOut] = []
     colors: list[ProductColorOut] = []
     tags: list[ProductTagOut] = []
     specifications: list[ProductSpecificationOut] = []

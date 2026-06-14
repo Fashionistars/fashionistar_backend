@@ -239,11 +239,11 @@ class Product(TimeStampedModel, SoftDeleteModel):
 
     Relationships
     -------------
-    vendor      → apps.vendor.VendorProfile (PROTECT)
-    categories  → apps.catalog.Category     (M2M — one to five product facets)
-    tags        → ProductTag                (M2M)
-    sizes       → ProductSize               (M2M)
-    colors      → ProductColor              (M2M)
+    vendor      → apps.vendor.VendorProfile                                             (PROTECT)
+    categories  → apps.catalog.Category                                                 (M2M — one to five product facets)
+    tags        → ProductTag                                                            (M2M)
+    sizes       → ProductSizeAndMeasurementGuide                                          (M2M)
+    colors      → ProductColor                                                            (M2M)
 
     on_delete rationale
     --------------------
@@ -1249,26 +1249,13 @@ class ProductSizeAndMeasurementGuide(TimeStampedModel):
     Size chart row linking a size label to body measurement ranges.
 
     One row per size per product (or template). Together they form the size guide table.
-    """
     
-    
-    """
     Reusable size-guide template defined by a vendor (tailor/brand).
     Allows applying a standardized set of measurements (e.g. Senator fit, Kaftan slim fit)
     to a product without manual row-by-row data entry on every upload.
       e.g. 'Clothing', 'Footwear', 'Measurement-Based', 'Custom'.
     Allows the platform to render the correct size picker UI.
     """
-
-    product = models.ForeignKey(
-        Product,
-        null=True,
-        blank=True,
-        on_delete=models.CASCADE,
-        related_name="product_measurement_guide",
-        help_text="Size guide rows for this product.",
-    )
-
 
     vendor = models.ForeignKey(
         "vendor.VendorProfile",
@@ -1302,7 +1289,7 @@ class ProductSizeAndMeasurementGuide(TimeStampedModel):
     )
     
     save_as_template = models.BooleanField(
-        default=False,
+        default=True,
         help_text="Save this measurement guide as a reusable template for future use.",
     )
     
@@ -1366,7 +1353,7 @@ class ProductSizeAndMeasurementGuide(TimeStampedModel):
         ]
 
     def __str__(self):
-        owner = self.product.title if self.product else (self.template.name if self.template else "Orphan")
+        owner = self.product.title if self.product else (self.name if self.name else "Orphan")
         return f"{owner} — {self.size_label}"
 
 # ─────────────────────────────────────────────────────────────────────────────

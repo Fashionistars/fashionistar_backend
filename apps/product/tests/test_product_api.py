@@ -52,6 +52,9 @@ def vendor_user(db):
     user = User.objects.create_user(
         email="vendor@fashionistar.com",
         password="Vendor1234!",
+        role="vendor",
+        is_active=True,
+        is_verified=True,
     )
     # Create VendorProfile using the correct model field names:
     # store_name (not business_name), store_slug (not slug)
@@ -72,6 +75,8 @@ def client_user(db):
     return User.objects.create_user(
         email="client@fashionistar.com",
         password="Client1234!",
+        is_active=True,
+        is_verified=True,
     )
 
 
@@ -777,3 +782,57 @@ class TestProductGallery:
 
         count = ProductGalleryMedia.objects.filter(product=product).count()
         assert count == 12
+
+
+class TestMeasurementTemplatesAPI:
+    """Tests for the vendor measurement templates endpoints."""
+
+    def test_create_and_list_templates(self, api_client, vendor_user):
+        from rest_framework_simplejwt.tokens import AccessToken
+        token = str(AccessToken.for_user(vendor_user))
+        payload = {
+            "name": "Men's Senator Fit",
+            "description": "clothing",
+            "template_rows": [
+                {
+                    "size_label": "S",
+                    "chest_cm": "90",
+                    "waist_cm": "80",
+                    "hip_cm": "95",
+                    "sort_order": 1
+                },
+                {
+                    "size_label": "M",
+                    "chest_cm": "95",
+                    "waist_cm": "85",
+                    "hip_cm": "100",
+                    "sort_order": 2
+                }
+            ]
+        }
+        
+        # 1. Create template via POST
+        response = api_client.post(
+            "/api/v1/ninja/products/vendor/measurement-templates/",
+            data=payload,
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {token}"
+        )
+        assert response.status_code == 200, response.content
+        data = response.json()
+        assert data["name"] == "Men's Senator Fit"
+        assert len(data["template_rows"]) == 2
+        assert "id" in data
+        template_id = data["id"]
+        
+        # 2. List templates via GET
+        response = api_client.get(
+            "/api/v1/ninja/products/vendor/measurement-templates/",
+            HTTP_AUTHORIZATION=f"Bearer {token}"
+        )
+        assert response.status_code == 200, response.content
+        templates = response.json()
+        assert any(t["id"] == template_id for t in templates)
+        assert any(t["name"] == "Men's Senator Fit" for t in templates)
+
+
