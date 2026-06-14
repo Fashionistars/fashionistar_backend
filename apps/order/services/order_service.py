@@ -627,12 +627,9 @@ def place_order(
         prod = products_map[item.product_id]
         profile = getattr(prod, "product_custom_shipping_profile", None)
 
-        threshold = None
+        threshold = default_threshold
         if profile:
-            threshold = profile.free_shipping_threshold
-
-        if threshold is None:
-            threshold = default_threshold
+            threshold = profile.effective_free_shipping_threshold
 
         if subtotal >= threshold:
             item_shipping = Decimal("0.00")

@@ -1510,6 +1510,20 @@ class ProductShippingProfile(TimeStampedModel):
         help_text="Number of business days to prepare the item for dispatch.",
     )
 
+    @property
+    def effective_free_shipping_threshold(self) -> Decimal:
+        """
+        Returns the free shipping threshold for this product.
+        Falls back to the PlatformSettings default if not explicitly configured.
+        """
+        if self.free_shipping_threshold is not None:
+            return self.free_shipping_threshold
+        from apps.global_platform_settings.cache import get_platform_settings
+        try:
+            return get_platform_settings().default_free_shipping_threshold
+        except Exception:
+            return Decimal("50000.00")
+
     class Meta:
         verbose_name = _("Product Shipping Profile")
         verbose_name_plural = _("Product Shipping Profiles")
