@@ -670,39 +670,26 @@ class ProductVariantGalleryMedia(TimeStampedModel, SoftDeleteModel):
     product = models.ForeignKey(
         Product,
         on_delete=models.CASCADE,
-        related_name="variants",
+        related_name="product_variants_gallery_media",
     )
-    sku = models.CharField(max_length=80, unique=True, blank=True)
+    sku = models.CharField(
+        max_length=80,
+        unique=True,
+        blank=True,
+        help_text="Auto-generated SKU. Unique across all variants.",
+    )
     size = models.ForeignKey(
         "ProductSizeAndMeasurementGuide",
         null=True,
         blank=True,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
         related_name="product_size_variants",
     )
     color_name = models.CharField(max_length=100, blank=True)
     color_hex = models.CharField(max_length=7, blank=True, help_text="e.g. #FDA600")
-    swatch_image = CloudinaryField(
-        "swatch_image",
-        folder="fashionistar/colors/",
-        blank=True,
-        null=True,
-        help_text="Optional branded swatch image (e.g. fabric texture).",
-    )
-    price_override = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        help_text="If set, overrides the parent product price for this variant.",
-    )
+   
     stock_qty = models.PositiveIntegerField(default=0)
-    image = CloudinaryField(
-        "variant_image",
-        folder="fashionistar/products/variants/",
-        blank=True,
-        null=True,
-    )
+  
     media = CloudinaryField(
         "media",
         folder="fashionistar/products/gallery/",
@@ -730,27 +717,10 @@ class ProductVariantGalleryMedia(TimeStampedModel, SoftDeleteModel):
         blank=True,
         help_text="Duration in seconds for video media items.",
     )
-    is_active = models.BooleanField(default=True)
-    is_default = models.BooleanField(
-        default=False,
-        help_text="If True, this variant is pre-selected on the product detail page.",
-    )
     barcode = models.CharField(
         max_length=100,
         blank=True,
         help_text="EAN-13 / UPC-A / QR barcode for warehouse/logistics integrations.",
-    )
-    weight_kg = models.DecimalField(
-        max_digits=6,
-        decimal_places=3,
-        null=True,
-        blank=True,
-        help_text="Variant weight in kilograms. Used to calculate shipping cost.",
-    )
-    dimensions_cm = models.JSONField(
-        null=True,
-        blank=True,
-        help_text='Packed dimensions in cm. Format: {"length": 30, "width": 20, "height": 10}',
     )
     notes = models.TextField(
         blank=True,
@@ -1290,20 +1260,15 @@ class ProductSizeAndMeasurementGuide(TimeStampedModel):
         ordering = ["sort_order", "name"]
         constraints = [
             models.UniqueConstraint(
-                fields=["product", "size_label"],
-                condition=models.Q(product__isnull=False),
-                name="unique_product_size_label",
-            ),
-            models.UniqueConstraint(
                 fields=["vendor", "name", "size_label"],
-                condition=models.Q(vendor__isnull=False, product__isnull=True),
+                condition=models.Q(vendor__isnull=False),
                 name="unique_vendor_template_size_label",
             ),
         ]
 
     def __str__(self):
-        owner = self.product.title if self.product else (self.name if self.name else "Orphan")
-        return f"{owner} — {self.size_label}"
+        owner = self.vendor.store_name if self.vendor else "Platform"
+        return f"{self.name} [{owner}] — {self.size_label}"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 16. PRODUCT SHIPPING PROFILE  (Phase 1 — 2026)
@@ -1329,6 +1294,11 @@ class ProductShippingProfile(TimeStampedModel):
         decimal_places=3,
         default=0,
         help_text="Packed weight in kilograms used for shipping rate calculation.",
+    )
+    dimensions_cm = models.JSONField(
+        null=True,
+        blank=True,
+        help_text='Packed dimensions in cm. Format: {"length": 30, "width": 20, "height": 10}',
     )
     length_cm = models.DecimalField(max_digits=6, decimal_places=1, default=0)
     width_cm = models.DecimalField(max_digits=6, decimal_places=1, default=0)
