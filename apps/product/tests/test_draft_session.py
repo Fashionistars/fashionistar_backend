@@ -204,3 +204,33 @@ class TestProductDraftSessionAPI:
         )
         assert response3.status_code == status.HTTP_400_BAD_REQUEST
         assert "already exists for another vendor" in response3.json()["message"]
+
+    def test_draft_commit_with_large_shipping_and_gender_alias(self, api_client, vendor_user, category):
+        api_client.force_authenticate(user=vendor_user)
+        url_list = reverse("product:vendor-product-draft-list")
+        draft_key = str(uuid.uuid4())
+        payload = {
+            "title": "Large Shipping & Gender Alias Draft",
+            "description": "Short but valid description 20 chars",
+            "price": "10000.00",
+            "category_ids": [str(category.id)],
+            "gender_target": "male",
+            "shipping_amount": "250000000.00",
+        }
+        response = api_client.post(
+            url_list,
+            {"draft_key": draft_key, "payload": payload},
+            format="json"
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+
+        # Commit draft
+        url_commit = reverse("product:vendor-product-draft-commit", kwargs={"draft_key": draft_key})
+        response_commit = api_client.post(url_commit)
+        assert response_commit.status_code == status.HTTP_200_OK, response_commit.data
+
+        product_slug = response_commit.json()["data"]["slug"]
+        product = Product.objects.get(slug=product_slug)
+        assert product.gender_target == "men"
+        assert product.shipping_amount == Decimal("250000000.00")
+
