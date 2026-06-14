@@ -14,7 +14,7 @@ enterprise-grade modular architecture with:
     ShippingProfile, PriceHistory, ViewLog
 """
 
-from OLD_PRODUCTS-MODEL-FOR REFRENCE IN THE FUTURE.product.models.product import ProductSize
+from decimal import Decimal
 import logging
 import uuid6
 import datetime
@@ -285,7 +285,7 @@ class Product(TimeStampedModel, SoftDeleteModel):
     )
     tags = models.ManyToManyField(ProductTag, blank=True, related_name="tag_products")
     sizes = models.ManyToManyField(
-        ProductSizeAndMeasurementGuide, blank=True, related_name="product_size_and_measurement_guides"
+        "ProductSizeAndMeasurementGuide", blank=True, related_name="product_size_and_measurement_guides"
     )
     colors = models.ManyToManyField(
         ProductColor, blank=True, related_name="color_products"
@@ -311,13 +311,11 @@ class Product(TimeStampedModel, SoftDeleteModel):
         default=False,
         help_text="If True, client must share measurement profile before checkout.",
     )
-    measurement_template = models.ForeignKey(
-        "VendorMeasurementTemplate",
-        null=True,
+    measurement_template = models.CharField(
+        max_length=120,
         blank=True,
-        on_delete=models.SET_NULL,
-        related_name="products",
-        help_text="Optional measurement template applied to this product to populate size chart.",
+        null=True,
+        help_text="Optional measurement template name applied to this product to populate size chart.",
     )
     is_customisable = models.BooleanField(
         default=False,
@@ -757,7 +755,7 @@ class ProductVariant(TimeStampedModel, SoftDeleteModel):
     )
     sku = models.CharField(max_length=80, unique=True, blank=True)
     size = models.ForeignKey(
-        ProductSize,
+        "ProductSizeAndMeasurementGuide",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
@@ -1274,6 +1272,8 @@ class ProductSizeAndMeasurementGuide(TimeStampedModel):
 
     vendor = models.ForeignKey(
         "vendor.VendorProfile",
+        null=True,
+        blank=True,
         on_delete=models.CASCADE,
         related_name="measurement_templates",
         help_text="Vendor who owns this reusable sizing template."
@@ -1306,9 +1306,21 @@ class ProductSizeAndMeasurementGuide(TimeStampedModel):
         help_text="Save this measurement guide as a reusable template for future use.",
     )
     
-    size_label = models.CharField(     # e.g. XS, S, M, L, XL, XXL, Custom
+    SIZE_CHOICES = [
+        ("XS", _("XS")),
+        ("S", _("S")),
+        ("M", _("M")),
+        ("L", _("L")),
+        ("XL", _("XL")),
+        ("XXL", _("XXL")),
+        ("Custom", _("Custom")),
+    ]
+
+    size_label = models.CharField(
         max_length=30,
-        help_text="Display label e.g. 'S', 'M', '44', '38-40'. Short form displayed on product cards and size chips (e.g. 'XS', '44').",
+        choices=SIZE_CHOICES,
+        default="M",
+        help_text="Display label e.g. 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'Custom'.",
     )
 
     chest_cm = models.CharField(
@@ -1347,9 +1359,9 @@ class ProductSizeAndMeasurementGuide(TimeStampedModel):
                 name="unique_product_size_label",
             ),
             models.UniqueConstraint(
-                fields=["template", "size_label"],
-                condition=models.Q(template__isnull=False, product__isnull=True),
-                name="unique_template_size_label",
+                fields=["vendor", "name", "size_label"],
+                condition=models.Q(vendor__isnull=False, product__isnull=True),
+                name="unique_vendor_template_size_label",
             ),
         ]
 

@@ -35,15 +35,13 @@ from apps.product.models import (
     ProductWishlist,
     ProductInventoryLog,
     ProductTag,
-    ProductSize,
     ProductColor,
     Coupon,
     DeliveryCourier,
     ProductCommissionSnapshot,
     # Phase 1 — 2026
-    ProductSizeType,
     ProductFabric,
-    ProductMeasurementGuide,
+    ProductSizeAndMeasurementGuide,
     # ProductCertification,
     ProductShippingProfile,
     ProductPriceHistory,
@@ -480,10 +478,7 @@ class ProductTagAdmin(admin.ModelAdmin):
     list_filter = ["category"]
 
 
-@admin.register(ProductSize)
-class ProductSizeAdmin(admin.ModelAdmin):
-    list_display = ["name"]
-    search_fields = ["name"]
+
 
 
 @admin.register(ProductColor)
@@ -606,20 +601,6 @@ class ProductCommissionSnapshotAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@admin.register(ProductSizeType)
-class ProductSizeTypeAdmin(admin.ModelAdmin):
-    """
-    Size taxonomy — defines the UI picker type (clothing / footwear / measurement).
-    Admin can create 'Footwear EU', 'Clothing International', 'Custom African Sizes' etc.
-    """
-
-    list_display = ["name", "slug", "category", "created_at"]
-    list_filter = ["category"]
-    search_fields = ["name", "slug"]
-    prepopulated_fields = {"slug": ("name",)}
-    ordering = ["name"]
-
-
 @admin.register(ProductFabric)
 class ProductFabricAdmin(admin.ModelAdmin):
     """
@@ -646,15 +627,15 @@ class ProductFabricAdmin(admin.ModelAdmin):
     )
 
 
-@admin.register(ProductMeasurementGuide)
-class ProductMeasurementGuideAdmin(admin.ModelAdmin):
+@admin.register(ProductSizeAndMeasurementGuide)
+class ProductSizeAndMeasurementGuideAdmin(admin.ModelAdmin):
     """
     Size chart rows — one row per size per product.
     Build the full size guide table from here.
     """
 
     list_display = [
-        "product", "size_label", "size", "chest_cm",
+        "product", "size_label", "chest_cm",
         "waist_cm", "hip_cm", "sort_order",
     ]
     list_filter = []
@@ -815,17 +796,7 @@ class ProductViewLogAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
 # EXPANDED SIZE ADMIN — now shows size_type taxonomy
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Unregister & re-register ProductSize with expanded fields
-admin.site.unregister(ProductSize)
 
-
-@admin.register(ProductSize)
-class ProductSizeAdmin(admin.ModelAdmin):
-    list_display = ["name", "abbreviation", "size_type", "sort_order"]
-    list_filter = ["size_type"]
-    search_fields = ["name", "abbreviation"]
-    ordering = ["size_type", "sort_order", "name"]
-    raw_id_fields = []
 
 
 # Unregister & re-register ProductColor with expanded fields

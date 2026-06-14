@@ -28,6 +28,7 @@ Rules:
   - All UUIDs serialized as str, not int.
 """
 
+from OLD_PRODUCTS-MODEL-FOR REFRENCE IN THE FUTURE.product.serializers import ProductSizeSerializer
 from __future__ import annotations
 
 from rest_framework import serializers
@@ -43,16 +44,13 @@ from apps.product.models import (
     ProductFaq,
     ProductGalleryMedia,
     ProductInventoryLog,
-    ProductMeasurementGuide,
+    ProductSizeAndMeasurementGuide,
     ProductReview,
-    ProductSize,
-    ProductSizeType,
     ProductSpecification,
     ProductTag,
     ProductVariant,
     ProductWishlist,
     ProductDraftSession,
-    VendorMeasurementTemplate,
     ProductShippingProfile,
 )
 
@@ -61,21 +59,14 @@ from apps.product.models import (
 # ATOMIC TAXONOMY SERIALIZERS
 # ─────────────────────────────────────────────────────────────────────────────
 
-class ProductSizeTypeSerializer(serializers.ModelSerializer):
-    """Flat taxonomy: Clothing / Shoes / Custom — Phase 1."""
-    class Meta:
-        model = ProductSizeType
-        fields = ["id", "name", "slug", "category"]
-
-
-class ProductSizeSerializer(serializers.ModelSerializer):
-    """Expanded with Phase 1 fields: abbreviation, sort_order, size_type FK embed."""
-    size_type = ProductSizeTypeSerializer(read_only=True)
+class ProductSizeAndMeasurementGuideSerializer(serializers.ModelSerializer):
+    """Flat sizing serializer mapping ProductSizeAndMeasurementGuide to output."""
+    name = serializers.CharField(source="size_label", read_only=True)
+    abbreviation = serializers.CharField(source="size_label", read_only=True)
 
     class Meta:
-        model = ProductSize
-        fields = ["id", "name", "abbreviation", "sort_order", "size_type"]
-
+        model = ProductSizeAndMeasurementGuide
+        fields = ["id", "name", "size_label", "description", "sort_order"]
 
 class ProductColorSerializer(serializers.ModelSerializer):
     """Expanded with Phase 1 fields: swatch_image_url, is_active."""
@@ -123,10 +114,9 @@ class ProductFabricSerializer(serializers.ModelSerializer):
 class ProductMeasurementGuideSerializer(serializers.ModelSerializer):
     """One size-chart row (e.g. Size S → chest 34–36 cm) — Phase 1."""
     class Meta:
-        model = ProductMeasurementGuide
+        model = ProductSizeAndMeasurementGuide
         fields = [
             "id",
-            "size",
             "size_label",
             "chest_cm",
             "waist_cm",
@@ -137,7 +127,6 @@ class ProductMeasurementGuideSerializer(serializers.ModelSerializer):
             "inseam_cm",
             "foot_length_cm",
             "sort_order",
-            "template",
         ]
 
 
@@ -159,36 +148,8 @@ class ProductShippingProfileSerializer(serializers.ModelSerializer):
         ]
 
 
-class VendorMeasurementTemplateSerializer(serializers.ModelSerializer):
-    template_rows = ProductMeasurementGuideSerializer(many=True, read_only=True)
-
-    class Meta:
-        model = VendorMeasurementTemplate
-        fields = ["id", "vendor", "name", "description", "template_rows"]
-        read_only_fields = ["id", "vendor"]
 
 
-# class ProductCertificationSerializer(serializers.ModelSerializer):
-#     """Sustainability/quality certification badge — Phase 1."""
-#     badge_image_url = serializers.SerializerMethodField()
-
-#     class Meta:
-#         model = ProductCertification
-#         fields = [
-#             "id",
-#             "name",
-#             "issued_by",
-#             "cert_type",
-#             "certificate_number",
-#             "issued_date",
-#             "expiry_date",
-#             "is_verified",
-#             "badge_image_url",
-#         ]
-
-#     def get_badge_image_url(self, obj):
-#         badge = getattr(obj, "badge_image", None)
-#         return str(badge.url) if badge else None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -291,10 +252,9 @@ class ProductFaqSerializer(serializers.ModelSerializer):
 
 class ProductVariantSerializer(serializers.ModelSerializer):
     """Per-SKU variant — expanded with Phase 1 fields: barcode, is_default, weight_kg, notes."""
-    size = ProductSizeSerializer(read_only=True)
     color = ProductColorSerializer(read_only=True)
     size_id = serializers.PrimaryKeyRelatedField(
-        queryset=ProductSize.objects.all(),
+        queryset=ProductSizeAndMeasurementGuide.objects.all(),
         source="size",
         write_only=True,
         required=False,
@@ -334,7 +294,7 @@ class ProductVariantWriteSerializer(serializers.ModelSerializer):
     Persistence is delegated to the service layer — never call .save() directly.
     """
     size_id = serializers.PrimaryKeyRelatedField(
-        queryset=ProductSize.objects.all(),
+        queryset=ProductSizeAndMeasurementGuide.objects.all(),
         source="size",
         required=False,
         allow_null=True,
@@ -402,7 +362,7 @@ class ProductListSerializer(serializers.ModelSerializer):
     computed_review_count = serializers.IntegerField(read_only=True, default=0)
     computed_avg_rating = serializers.FloatField(read_only=True, default=0)
     # Sizes/colors for filter chips on cards
-    sizes = ProductSizeSerializer(many=True, read_only=True)
+    sizes = ProductSizeAndMeasurementGuideSerializer(many=True, read_only=True)
     colors = ProductColorSerializer(many=True, read_only=True)
 
     class Meta:
@@ -472,12 +432,13 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     """
     Full product data for the product detail page.
     Paired with get_product_detail() which selects ALL related objects
-    in a single queryset using prefetch/select chains.
+    in a single queryset using prefetch/select chains.  Zero extra queries.
+
 
     Phase 1 expansions:
       - fabric       → ProductFabricSerializer (one-to-many via reverse FK)
       - measurement_guide → ProductMeasurementGuideSerializer (size chart rows)
-      - certifications → ProductCertificationSerializer (badge list)
+        c   
       - Phase 1 Product fields: weight_kg, condition, is_pre_order, pre_order_date,
         meta_title, meta_description, age_group, gender_target
     """
@@ -489,7 +450,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         read_only=True,
         source="product_gallery_media",
     )
-    sizes = ProductSizeSerializer(many=True, read_only=True)
+    sizes = ProductSizeAndMeasurementGuideSerializer(many=True, read_only=True)
     colors = ProductColorSerializer(many=True, read_only=True)
     tags = ProductTagSerializer(many=True, read_only=True)
     specifications = ProductSpecificationSerializer(
@@ -598,8 +559,20 @@ class ProductWriteSerializer(serializers.ModelSerializer):
     The view MUST call service.create_product(validated_data=serializer.validated_data)
     rather than calling serializer.save() directly.
     """
+    sizes = ProductSizeAndMeasurementGuideSerializer(many=True, required=False)
+    colors = ProductColorSerializer(many=True, required=False)
+    tags = ProductTagSerializer(many=True, required=False)
+    variants = ProductVariantSerializer(many=True, required=False)
+    faqs = ProductFaqSerializer(many=True, required=False)
+    specifications = ProductSpecificationSerializer(many=True, required=False)
+    gallery = ProductGalleryMediaSerializer(many=True, required=False)
+    images = ProductTagSerializer(many=True, required=False)
+    measurement_guide = ProductMeasurementGuideSerializer(many=True, required=False)
+    fabric = ProductFabricSerializer(many=True, required=False)
+    shipping_profile = ProductShippingProfileSerializer(many=True, required=False)
+    
     size_ids = serializers.PrimaryKeyRelatedField(
-        queryset=ProductSize.objects.all(),
+        queryset=ProductSizeAndMeasurementGuide.objects.all(),
         many=True,
         source="sizes",
         required=False,
@@ -638,11 +611,12 @@ class ProductWriteSerializer(serializers.ModelSerializer):
         write_only=True,
         help_text="Client UUID for safe network retry. Server returns same product on duplicate key.",
     )
-    measurement_template = serializers.PrimaryKeyRelatedField(
-        queryset=VendorMeasurementTemplate.objects.all(),
+    measurement_template = serializers.CharField(
+        max_length=120,
         required=False,
         allow_null=True,
-        help_text="Optional reusable measurement template to apply.",
+        allow_blank=True,
+        help_text="Optional reusable measurement template name to apply.",
     )
 
     class Meta:
@@ -723,7 +697,7 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
       - Each nested variant SKU must be unique within the submission.
     """
     size_ids = serializers.PrimaryKeyRelatedField(
-        queryset=ProductSize.objects.all(),
+        queryset=ProductSizeAndMeasurementGuide.objects.all(),
         many=True,
         source="sizes",
         required=False,
@@ -766,11 +740,12 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
         write_only=True,
         help_text="Safe network-retry UUID. Server returns same product on duplicate.",
     )
-    measurement_template = serializers.PrimaryKeyRelatedField(
-        queryset=VendorMeasurementTemplate.objects.all(),
+    measurement_template = serializers.CharField(
+        max_length=120,
         required=False,
         allow_null=True,
-        help_text="Optional reusable measurement template to apply.",
+        allow_blank=True,
+        help_text="Optional reusable measurement template name to apply.",
     )
 
     class Meta:

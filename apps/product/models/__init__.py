@@ -19,8 +19,6 @@ from apps.product.models.product import (
     ProductStatus,
     # ── Taxonomy ────────────────────────────────────────────────────────────
     ProductTag,
-    ProductSizeType,
-    ProductSize,
     ProductColor,
     # ── Product content ─────────────────────────────────────────────────────
     ProductSpecification,
@@ -41,14 +39,12 @@ from apps.product.models.product import (
     DeliveryCourier,
     # ── Phase 1 enterprise expansions (2026) ────────────────────────────────
     ProductFabric,
-    ProductMeasurementGuide,
-    # ProductCertification,
+    ProductSizeAndMeasurementGuide,
     ProductShippingProfile,
     ProductPriceHistory,
     ProductViewLog,
     ProductDraftStatus,
     ProductDraftSession,
-    VendorMeasurementTemplate,
 )
 
 __all__ = [
@@ -57,8 +53,6 @@ __all__ = [
     "ProductDraftStatus",
     # Taxonomy
     "ProductTag",
-    "ProductSizeType",
-    "ProductSize",
     "ProductColor",
     # Product content
     "ProductSpecification",
@@ -80,11 +74,8 @@ __all__ = [
     "DeliveryCourier",
     # Phase 1 enterprise expansions
     "ProductFabric",
-    "ProductMeasurementGuide",
-    # "ProductCertification",
+    "ProductSizeAndMeasurementGuide",
     "ProductShippingProfile",
     "ProductPriceHistory",
     "ProductViewLog",
-    # Vendor Measurement Templates
-    "VendorMeasurementTemplate",
 ]

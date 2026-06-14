@@ -54,10 +54,8 @@ from apps.product.models import (
     ProductColor,
     ProductFabric,
     ProductGalleryMedia,
-    ProductMeasurementGuide,
+    ProductSizeAndMeasurementGuide,
     ProductReview,
-    ProductSize,
-    ProductSizeType,
     ProductStatus,
     ProductVariant,
     ProductWishlist,
@@ -145,7 +143,7 @@ def get_published_products_list():
             "sub_categories",
             Prefetch(
                 "sizes",
-                queryset=ProductSize.objects.only("id", "name"),
+                queryset=ProductSizeAndMeasurementGuide.objects.only("id", "size_label"),
                 to_attr="_prefetched_sizes",
             ),
             Prefetch(
@@ -588,7 +586,7 @@ async def aget_product_detail(slug: str) -> Product | None:
             )
             .prefetch_related(
                 "categories", "sub_categories",
-                "sizes", "sizes__size_type",
+                "sizes",
                 "colors",
                 "tags",
                 Prefetch(
@@ -607,7 +605,7 @@ async def aget_product_detail(slug: str) -> Product | None:
                 # Phase 1 reverse FK prefetches
                 Prefetch(
                     "product_measurement_guide",
-                    queryset=ProductMeasurementGuide.objects.order_by("sort_order"),
+                    queryset=ProductSizeAndMeasurementGuide.objects.order_by("sort_order"),
                 ),
             )
             .annotate(
@@ -818,7 +816,7 @@ def get_published_products_list(
         .prefetch_related(
             "categories",
             "sub_categories",
-            Prefetch("sizes", queryset=ProductSize.objects.only("id", "name"), to_attr="_prefetched_sizes"),
+            Prefetch("sizes", queryset=ProductSizeAndMeasurementGuide.objects.only("id", "size_label"), to_attr="_prefetched_sizes"),
             Prefetch("colors", queryset=ProductColor.objects.only("id", "name", "hex_code"), to_attr="_prefetched_colors"),
         )
         .only(

@@ -46,7 +46,7 @@ from apps.product.models import (
     ProductDraftStatus,
     ProductDraftSession,
     ProductFabric,
-    ProductMeasurementGuide,
+    ProductSizeAndMeasurementGuide,
     ProductShippingProfile,
 )
 from apps.product.selectors import (
@@ -269,8 +269,8 @@ def _sync_product_variants(product: Product, variants_data: list[dict]) -> None:
 
 def _sync_measurement_guide_from_template(product: Product) -> None:
     """
-    If the product has a measurement_template, copy all its rows to ProductMeasurementGuide.
-    Clear any existing guides for this product first.
+    If the product has a measurement_template name, copy all its template rows (where product is NULL)
+    to the product's sizing guide.
     """
     if not product.measurement_template:
         return
@@ -278,14 +278,17 @@ def _sync_measurement_guide_from_template(product: Product) -> None:
     # Clear existing guide rows
     product.product_measurement_guide.all().delete()
 
-    # Copy from template rows
-    from apps.product.models import ProductMeasurementGuide
-    template_rows = product.measurement_template.template_rows.all()
+    # Query template rows where product is NULL, matches vendor and template name
+    template_rows = ProductSizeAndMeasurementGuide.objects.filter(
+        product__isnull=True,
+        vendor=product.vendor,
+        name=product.measurement_template,
+    )
     for row in template_rows:
-        ProductMeasurementGuide.objects.create(
+        ProductSizeAndMeasurementGuide.objects.create(
             product=product,
-            template=None,
-            size=row.size,
+            vendor=None,
+            name=row.name,
             size_label=row.size_label,
             chest_cm=row.chest_cm,
             waist_cm=row.waist_cm,
@@ -295,7 +298,7 @@ def _sync_measurement_guide_from_template(product: Product) -> None:
             sleeve_cm=row.sleeve_cm,
             inseam_cm=row.inseam_cm,
             foot_length_cm=row.foot_length_cm,
-            sort_order=row.sort_order
+            sort_order=row.sort_order,
         )
 
 
@@ -357,9 +360,9 @@ def create_product(
         ProductShippingProfile.objects.create(product=product, **shipping_data)
 
     if guide_data:
-        from apps.product.models import ProductMeasurementGuide
+        from apps.product.models import ProductSizeAndMeasurementGuide
         for row in guide_data:
-            ProductMeasurementGuide.objects.create(product=product, **row)
+            ProductSizeAndMeasurementGuide.objects.create(product=product, **row)
     elif product.measurement_template:
         _sync_measurement_guide_from_template(product)
 
@@ -417,9 +420,9 @@ def update_product(
             ProductShippingProfile.objects.filter(product=product).delete()
 
     if guide_data is not None:
-        product.product_measurement_guide.all().delete()
+        # product.product_measurement_guide.all().delete()
         for row in guide_data:
-            ProductMeasurementGuide.objects.create(product=product, **row)
+            ProductSizeAndMeasurementGuide.objects.get_or_create(product=product,vendor=product.vendor **row)
     elif "measurement_template" in validated_data and product.measurement_template != old_template:
         _sync_measurement_guide_from_template(product)
 

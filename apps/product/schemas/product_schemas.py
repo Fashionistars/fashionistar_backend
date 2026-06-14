@@ -33,7 +33,7 @@ from typing import Generic, TypeVar
 from uuid import UUID
 
 from ninja import Schema
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 T = TypeVar("T")
 
@@ -82,23 +82,26 @@ class ProductVendorOut(Schema):
     is_verified: bool = False
 
 
-class ProductSizeTypeOut(Schema):
-    """Phase 1 — clothing/shoes/custom taxonomy node."""
-    model_config = {"from_attributes": True}
-    id: str
-    name: str
-    slug: str
-    category: str = ""
-
 
 class ProductSizeOut(Schema):
-    """Expanded with Phase 1 fields: abbreviation, sort_order, size_type embed."""
+    """Sizing schema mapped from ProductSizeAndMeasurementGuide."""
     model_config = {"from_attributes": True}
     id: str
     name: str
     abbreviation: str = ""
     sort_order: int = 0
-    size_type: ProductSizeTypeOut | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def resolve_from_attributes(cls, data: Any) -> Any:
+        if hasattr(data, "size_label"):
+            return {
+                "id": str(data.id),
+                "name": data.size_label,
+                "abbreviation": data.size_label,
+                "sort_order": data.sort_order,
+            }
+        return data
 
 
 class ProductColorOut(Schema):

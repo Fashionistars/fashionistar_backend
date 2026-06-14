@@ -183,7 +183,7 @@ def _first_related(manager):
 
 
 def _size_out(size) -> dict:
-    return {"id": str(size.pk), "name": size.name}
+    return {"id": str(size.pk), "name": getattr(size, "size_label", "")}
 
 
 def _color_out(color) -> dict:
@@ -428,7 +428,17 @@ def _product_detail_out(product) -> dict:
             "vendor_slug": _vendor_out(product.vendor)["slug"],
             "vendor_is_verified": _vendor_out(product.vendor)["is_verified"],
             "commission_rate": _money(product.commission_rate),
-            "measurement_template_id": str(product.measurement_template_id) if product.measurement_template_id else None,
+            "measurement_template_id": (
+                str(
+                    __import__("uuid").UUID(
+                        bytes=__import__("hashlib").md5(
+                            f"{product.vendor.pk}-{product.measurement_template}".encode("utf-8")
+                        ).digest()
+                    )
+                )
+                if product.measurement_template and product.vendor
+                else None
+            ),
             "weight_kg": product.weight_kg,
             "condition": product.condition,
             "is_pre_order": product.is_pre_order,
@@ -584,9 +594,23 @@ async def search_suggest(request, q: str = ""):
 
 @router.get("/sizes/", response=dict, auth=None, summary="List available sizes")
 async def list_sizes(request, page: int = 1, page_size: int = 100):
-    from apps.product.models import ProductSize
-    qs = ProductSize.objects.all().order_by("sort_order", "name")
-    return await _paginated(request, qs, _size_out, page=page, page_size=page_size)
+    # Static choices matching SIZE_CHOICES for ProductSizeAndMeasurementGuide
+    choices = ["XS", "S", "M", "L", "XL", "XXL", "Custom"]
+    import uuid
+    import hashlib
+    results = []
+    for name in choices:
+        ns_uuid = uuid.UUID(bytes=hashlib.md5(name.encode("utf-8")).digest())
+        results.append({
+            "id": str(ns_uuid),
+            "name": name,
+        })
+    return {
+        "count": len(results),
+        "next": None,
+        "previous": None,
+        "results": results,
+    }
 
 
 @router.get("/colors/", response=dict, auth=None, summary="List available colors")
@@ -620,15 +644,29 @@ async def list_couriers(request, page: int = 1, page_size: int = 50, active: boo
 # ── VENDOR — Draft Sessions ──────────────────────────────────────────────────
 
 def _get_templates_sync(profile):
-    from apps.product.models import VendorMeasurementTemplate
-    templates = VendorMeasurementTemplate.objects.filter(vendor=profile).prefetch_related("template_rows")
+    from apps.product.models import ProductSizeAndMeasurementGuide
+    rows = ProductSizeAndMeasurementGuide.objects.filter(
+        vendor=profile,
+        product__isnull=True,
+    ).order_by("name", "sort_order")
+
+    from collections import defaultdict
+    templates_dict = defaultdict(list)
+    for r in rows:
+        templates_dict[r.name].append(r)
+
     results = []
-    for t in templates:
-        rows = []
-        for r in t.template_rows.all():
-            rows.append({
+    for name, t_rows in templates_dict.items():
+        import uuid
+        import hashlib
+        h = hashlib.md5(f"{profile.pk}-{name}".encode("utf-8")).digest()
+        t_uuid = uuid.UUID(bytes=h)
+
+        rows_list = []
+        for r in t_rows:
+            rows_list.append({
                 "id": str(r.pk),
-                "size_id": str(r.size_id) if r.size_id else None,
+                "size_id": str(r.pk),
                 "size_label": r.size_label,
                 "chest_cm": r.chest_cm or "",
                 "waist_cm": r.waist_cm or "",
@@ -641,12 +679,12 @@ def _get_templates_sync(profile):
                 "sort_order": r.sort_order,
             })
         results.append({
-            "id": str(t.pk),
-            "vendor_id": str(t.vendor_id),
-            "name": t.name,
-            "description": t.description or "",
-            "template_rows": rows,
-        })
+            "id": str(t_uuid),
+            "vendor_id": str(profile.pk),
+            "name": name,
+            "description": "Measurement template rows",
+            "template_rows": rows_list,
+        })l
     return results
 
 
