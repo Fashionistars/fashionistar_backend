@@ -25,7 +25,6 @@ Enterprise rules (Django 6.0 LTS):
    audit service never kills the main mutation transaction.
 """
 
-from apps.vendor.models import VendorProfile
 from __future__ import annotations
 
 import logging
@@ -35,6 +34,7 @@ from typing import Any
 from django.db import transaction
 from django.db.models import Avg, Count, F
 
+from apps.vendor.models import VendorProfile
 from apps.product.models import (
     Coupon,
     Product,

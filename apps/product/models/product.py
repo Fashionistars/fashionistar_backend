@@ -165,35 +165,8 @@ class ProductTag(TimeStampedModel):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3. PRODUCT COLOR / SPECIFICATION
+# 4. PRODUCT SPECIFICATION
 # ─────────────────────────────────────────────────────────────────────────────
-
-
-class ProductColor(models.Model):
-    name = models.CharField(max_length=50)
-    hex_code = models.CharField(max_length=7, blank=True, help_text="e.g. #FDA600")
-    is_active = models.BooleanField(
-        default=True,
-        help_text="Inactive colours are hidden from the product builder colour picker.",
-    )
-    swatch_image = CloudinaryField(
-        "swatch_image",
-        folder="fashionistar/colors/",
-        blank=True,
-        null=True,
-        help_text="Optional branded swatch image (e.g. fabric texture). "
-        "Displayed instead of hex swatch when present.",
-    )
-
-    class Meta:
-        verbose_name = _("Product Color")
-        verbose_name_plural = _("Product Colors")
-        ordering = ["name"]
-
-    def __str__(self):
-        return self.name
-
-
 class ProductSpecification(TimeStampedModel):
     product = models.ForeignKey(
         "Product",
@@ -288,7 +261,7 @@ class Product(TimeStampedModel, SoftDeleteModel):
         "ProductSizeAndMeasurementGuide", blank=True, related_name="product_size_and_measurement_guides"
     )
     colors = models.ManyToManyField(
-        ProductColor, blank=True, related_name="color_products"
+        "ProductColor", blank=True, related_name="color_products"
     )
 
     # ── Pricing ───────────────────────────────────────────────────────────
@@ -665,6 +638,47 @@ class Product(TimeStampedModel, SoftDeleteModel):
         return [product async for product in self.frequently_bought_together(limit)]
 
 
+
+
+
+
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3. PRODUCT COLOR
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class ProductColor(models.Model):
+    name = models.CharField(max_length=50)
+    hex_code = models.CharField(max_length=7, blank=True, help_text="e.g. #FDA600")
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Inactive colours are hidden from the product builder colour picker.",
+    )
+    swatch_image = CloudinaryField(
+        "swatch_image",
+        folder="fashionistar/colors/",
+        blank=True,
+        null=True,
+        help_text="Optional branded swatch image (e.g. fabric texture). "
+        "Displayed instead of hex swatch when present.",
+    )
+
+    class Meta:
+        verbose_name = _("Product Color")
+        verbose_name_plural = _("Product Colors")
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+
+
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 5. PRODUCT GALLERY MEDIA
 # ─────────────────────────────────────────────────────────────────────────────
@@ -754,13 +768,7 @@ class ProductVariant(TimeStampedModel, SoftDeleteModel):
         related_name="product_variants",
     )
     sku = models.CharField(max_length=80, unique=True, blank=True)
-    size = models.ForeignKey(
-        "ProductSizeAndMeasurementGuide",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="product_size_variants",
-    )
+  
     color = models.ForeignKey(
         ProductColor,
         null=True,
@@ -830,6 +838,7 @@ class ProductVariant(TimeStampedModel, SoftDeleteModel):
     @property
     def effective_price(self):
         return self.price_override if self.price_override else self.product.price
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
