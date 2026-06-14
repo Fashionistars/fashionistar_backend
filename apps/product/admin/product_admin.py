@@ -562,19 +562,19 @@ class ProductFabricAdmin(admin.ModelAdmin):
 @admin.register(ProductSizeAndMeasurementGuide)
 class ProductSizeAndMeasurementGuideAdmin(admin.ModelAdmin):
     """
-    Size chart rows — one row per size per product.
-    Build the full size guide table from here.
+    Reusable size-guide templates owned by vendors.
+    Each row defines measurement ranges per size label.
     """
 
     list_display = [
-        "product", "size_label", "chest_cm",
+        "name", "vendor", "size_label", "chest_cm",
         "waist_cm", "hip_cm", "sort_order",
     ]
-    list_filter = []
-    search_fields = ["product__title", "size_label"]
-    raw_id_fields = ["product"]
+    list_filter = ["size_label", "description"]
+    search_fields = ["name", "vendor__store_name", "size_label"]
+    raw_id_fields = ["vendor"]
     readonly_fields = ["created_at", "updated_at"]
-    ordering = ["product", "sort_order"]
+    ordering = ["name", "sort_order"]
 
 
 # @admin.register(ProductCertification)
