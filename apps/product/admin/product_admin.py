@@ -57,9 +57,9 @@ class ProductVariantGalleryMediaInline(admin.TabularInline):
     model = ProductVariantGalleryMedia
     extra = 0
     fields = [
-        "sku", "size", "color_name", "color_hex", "price_override",
+        "sku", "size", "color_name", "color_hex",
         "stock_qty", "media", "media_preview", "media_type", "is_primary",
-        "is_active", "is_default"
+        "ordering", "alt_text", "barcode",
     ]
     readonly_fields = ["media_preview"]
     show_change_link = True
@@ -174,7 +174,7 @@ class ProductAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
             "fields": ("id", "title", "slug", "sku", "description"),
         }),
         (_("Taxonomy"), {
-            "fields": ("vendor", "categories", "sub_categories", "tags", "sizes", "colors"),
+            "fields": ("vendor", "categories", "sub_categories", "tags", "sizes"),
         }),
         (_("Pricing"), {
             "fields": ("price", "old_price", "currency", "shipping_amount", "commission_rate"),
@@ -742,10 +742,10 @@ class ProductVariantGalleryMediaAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
     """
 
     list_display = [
-        "sku", "product", "size", "color_name", "color_hex", "price_override",
-        "stock_qty", "is_active", "is_default", "media_preview", "soft_delete_badge",
+        "sku", "product", "size", "color_name", "color_hex",
+        "stock_qty", "is_primary", "media_type", "media_preview", "soft_delete_badge",
     ]
-    list_filter = ["is_active", "is_default", "size", "media_type"]
+    list_filter = ["is_primary", "media_type", "size"]
     search_fields = ["sku", "product__title", "product__sku", "barcode", "color_name"]
     list_select_related = ["product", "size"]
     raw_id_fields = ["product"]
@@ -761,13 +761,13 @@ class ProductVariantGalleryMediaAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
             "fields": ("id", "sku", "barcode", "product"),
         }),
         (_("Variant Attributes"), {
-            "fields": ("size", "color_name", "color_hex", "swatch_image", "price_override", "stock_qty", "weight_kg", "dimensions_cm", "notes"),
+            "fields": ("size", "color_name", "color_hex", "stock_qty", "barcode", "notes"),
         }),
         (_("Gallery / Media"), {
-            "fields": ("image", "media", "media_preview", "media_type", "alt_text", "ordering", "is_primary", "video_thumbnail", "duration_sec"),
+            "fields": ("media", "media_preview", "media_type", "alt_text", "ordering", "is_primary", "video_thumbnail", "duration_sec"),
         }),
         (_("Status"), {
-            "fields": ("is_active", "is_default", "soft_delete_badge"),
+            "fields": ("soft_delete_badge",),
         }),
         (_("Lifecycle"), {
             "fields": ("created_at", "updated_at", "is_deleted", "deleted_at"),

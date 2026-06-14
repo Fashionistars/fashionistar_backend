@@ -327,17 +327,14 @@ class ProductGalleryMediaOut(Schema):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class ProductVariantOut(Schema):
-    """Expanded consolidated variant schema."""
+    """Consolidated variant + gallery media schema — mirrors ProductVariantGalleryMedia exactly."""
     model_config = {"from_attributes": True}
     id: str
     sku: str
     size: ProductSizeAndMeasurementGuideOut | None = None
     color_name: str = ""
     color_hex: str = ""
-    price_override: Decimal | None = None
-    stock_qty: int
-    is_active: bool
-    image_url: str | None = None
+    stock_qty: int = 0
     media_url: str | None = None
     media_type: str = "image"
     alt_text: str = ""
@@ -346,28 +343,21 @@ class ProductVariantOut(Schema):
     video_thumbnail_url: str | None = None
     duration_sec: int | None = None
     barcode: str = ""
-    is_default: bool = False
-    weight_kg: Decimal | None = None
-    dimensions_cm: dict | None = None
     notes: str = ""
 
     @model_validator(mode="before")
     @classmethod
     def resolve_variant_fields(cls, data: Any) -> Any:
         if hasattr(data, "id"):
-            image_url = str(data.image.url) if getattr(data, "image", None) else None
             media_url = str(data.media.url) if getattr(data, "media", None) else None
             video_thumbnail_url = str(data.video_thumbnail.url) if getattr(data, "video_thumbnail", None) else None
             return {
                 "id": str(data.id),
                 "sku": data.sku,
                 "size": data.size,
-                "color_name": data.color_name,
-                "color_hex": data.color_hex,
-                "price_override": data.price_override,
+                "color_name": data.color_name or "",
+                "color_hex": data.color_hex or "",
                 "stock_qty": data.stock_qty,
-                "is_active": data.is_active,
-                "image_url": image_url,
                 "media_url": media_url,
                 "media_type": data.media_type,
                 "alt_text": data.alt_text or "",
@@ -376,9 +366,6 @@ class ProductVariantOut(Schema):
                 "video_thumbnail_url": video_thumbnail_url,
                 "duration_sec": data.duration_sec,
                 "barcode": data.barcode or "",
-                "is_default": data.is_default,
-                "weight_kg": data.weight_kg,
-                "dimensions_cm": data.dimensions_cm,
                 "notes": data.notes or "",
             }
         return data
@@ -437,7 +424,6 @@ class ProductListItemOut(Schema):
     vendor_name: str | None = None
     vendor_slug: str | None = None
     sizes: list[ProductSizeAndMeasurementGuideOut] = []
-    colors: list[ProductColorOut] = []
     created_at: datetime
 
 
@@ -476,7 +462,6 @@ class ProductDetailOut(Schema):
     requires_measurement: bool = False
     is_customisable: bool = False
     sizes: list[ProductSizeAndMeasurementGuideOut] = []
-    colors: list[ProductColorOut] = []
     tags: list[ProductTagOut] = []
     specifications: list[ProductSpecificationOut] = []
     faqs: list[ProductFaqOut] = []
@@ -599,20 +584,15 @@ class CouponValidateOut(Schema):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class ProductVariantWriteIn(Schema):
+    """Write payload for creating/updating a ProductVariantGalleryMedia row."""
     sku: str | None = None
     size_id: str | None = None
     color_name: str = ""
     color_hex: str = ""
-    price_override: Decimal | None = Field(default=None, ge=5000)
     stock_qty: int = 0
-    is_active: bool = True
-    is_default: bool = False
     barcode: str = ""
-    weight_kg: Decimal | None = None
-    dimensions_cm: dict | None = None
     notes: str = ""
     media: str | None = None
-    image: str | None = None
     media_type: str = "image"
     alt_text: str = ""
     ordering: int = 0
@@ -633,7 +613,7 @@ class ProductWriteIn(Schema):
     category_ids: list[str] = Field(..., min_length=1, max_length=15)
     sub_category_ids: list[str] = Field(default_factory=list, max_length=15)
     size_ids: list[str] = []
-    color_ids: list[str] = []
+    # color_ids removed — colors are now stored directly via color_name/color_hex on variants
     tag_ids: list[str] = []
     requires_measurement: bool = False
     measurement_template_id: UUID | None = None

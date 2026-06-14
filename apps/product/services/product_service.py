@@ -232,20 +232,15 @@ def _sync_product_variants(product: Product, variants_data: list[dict]) -> None:
         color_name = vdata.get("color_name", "")
         color_hex = vdata.get("color_hex", "")
 
+        # Only write fields that actually exist on ProductVariantGalleryMedia
         variant_fields = {
             "size": size,
             "color_name": color_name,
             "color_hex": color_hex,
-            "price_override": vdata.get("price_override"),
             "stock_qty": vdata.get("stock_qty", 0),
-            "is_active": vdata.get("is_active", True),
-            "is_default": vdata.get("is_default", False),
             "barcode": vdata.get("barcode", ""),
-            "weight_kg": vdata.get("weight_kg"),
-            "dimensions_cm": vdata.get("dimensions_cm"),
             "notes": vdata.get("notes", ""),
             "media": vdata.get("media"),
-            "image": vdata.get("image"),
             "media_type": vdata.get("media_type", "image"),
             "alt_text": vdata.get("alt_text", ""),
             "ordering": vdata.get("ordering", 0),
@@ -426,9 +421,10 @@ def update_product(
             ProductShippingProfile.objects.filter(product=product).delete()
 
     if guide_data is not None:
-        # product.product_measurement_guide.all().delete()
         for row in guide_data:
-            ProductSizeAndMeasurementGuide.objects.get_or_create(product=product,vendor=product.vendor **row)
+            ProductSizeAndMeasurementGuide.objects.get_or_create(
+                product=product, vendor=product.vendor, **row
+            )
     elif "measurement_template" in validated_data and product.measurement_template != old_template:
         _sync_measurement_guide_from_template(product)
 
