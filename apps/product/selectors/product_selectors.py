@@ -51,13 +51,11 @@ from apps.product.models import (
     Coupon,
     Product,
     # ProductCertification,
-    ProductColor,
     ProductFabric,
-    ProductGalleryMedia,
     ProductSizeAndMeasurementGuide,
     ProductReview,
     ProductStatus,
-    ProductVariant,
+    ProductVariantGalleryMedia,
     ProductWishlist,
 )
 from apps.common.selectors import BaseSelector
@@ -107,12 +105,10 @@ def get_published_products():
             "categories",       # M2M
             "sub_categories",   # M2M
             "sizes",           # M2M
-            "colors",          # M2M
             "tags",            # M2M
-            # Only the first 3 gallery images for list views (card images)
             Prefetch(
-                "product_gallery_media",
-                queryset=ProductGalleryMedia.objects.filter(
+                "variants",
+                queryset=ProductVariantGalleryMedia.objects.filter(
                     is_deleted=False,
                     media_type="image",
                 ).order_by("ordering")[:3],
@@ -147,9 +143,9 @@ def get_published_products_list():
                 to_attr="_prefetched_sizes",
             ),
             Prefetch(
-                "colors",
-                queryset=ProductColor.objects.only("id", "name", "hex_code"),
-                to_attr="_prefetched_colors",
+                "variants",
+                queryset=ProductVariantGalleryMedia.objects.filter(is_deleted=False).select_related("size"),
+                to_attr="_prefetched_variants",
             ),
         )
         .annotate(
@@ -179,18 +175,12 @@ def get_product_detail(slug: str) -> Product | None:
             )
             .prefetch_related(
                 "categories", "sub_categories",
-                "sizes", "colors", "tags",
+                "sizes", "tags",
                 Prefetch(
-                    "product_gallery_media",
-                    queryset=ProductGalleryMedia.objects.filter(
+                    "variants",
+                    queryset=ProductVariantGalleryMedia.objects.filter(
                         is_deleted=False,
-                    ).order_by("ordering"),
-                ),
-                Prefetch(
-                    "product_variants",
-                    queryset=ProductVariant.objects.filter(
-                        is_deleted=False,
-                    ).select_related("size", "color"),
+                    ).select_related("size").order_by("ordering", "created_at"),
                 ),
                 "product_specifications",
                 "product_faqs",
@@ -247,18 +237,12 @@ def get_vendor_product_or_404(vendor_id: Any, slug: str) -> Product | None:
             )
             .prefetch_related(
                 "categories", "sub_categories",
-                "sizes", "colors", "tags",
+                "sizes", "tags",
                 Prefetch(
-                    "product_gallery_media",
-                    queryset=ProductGalleryMedia.objects.filter(
+                    "variants",
+                    queryset=ProductVariantGalleryMedia.objects.filter(
                         is_deleted=False,
-                    ).order_by("ordering"),
-                ),
-                Prefetch(
-                    "product_variants",
-                    queryset=ProductVariant.objects.filter(
-                        is_deleted=False,
-                    ).select_related("size", "color"),
+                    ).select_related("size").order_by("ordering", "created_at"),
                 ),
                 "product_specifications",
                 "product_faqs",
@@ -461,8 +445,8 @@ def get_wishlist_for_identity(
             # async Ninja context).
             "product__categories",
             Prefetch(
-                "product__product_gallery_media",
-                queryset=ProductGalleryMedia.objects.filter(
+                "product__variants",
+                queryset=ProductVariantGalleryMedia.objects.filter(
                     is_deleted=False, media_type="image",
                 ).order_by("ordering")[:1],
                 to_attr="cover_gallery",
@@ -587,18 +571,13 @@ async def aget_product_detail(slug: str) -> Product | None:
             .prefetch_related(
                 "categories", "sub_categories",
                 "sizes",
-                "colors",
                 "tags",
                 Prefetch(
-                    "product_gallery_media",
-                    queryset=ProductGalleryMedia.objects.order_by("ordering"),
-                ),
-                Prefetch(
-                    "product_variants",
-                    queryset=ProductVariant.objects
+                    "variants",
+                    queryset=ProductVariantGalleryMedia.objects
                     .filter(is_deleted=False)
-                    .select_related("size", "color")
-                    .order_by("-is_default", "sku"),
+                    .select_related("size")
+                    .order_by("-is_default", "ordering", "sku"),
                 ),
                 "product_specifications",
                 "product_faqs",
@@ -817,7 +796,7 @@ def get_published_products_list(
             "categories",
             "sub_categories",
             Prefetch("sizes", queryset=ProductSizeAndMeasurementGuide.objects.only("id", "size_label"), to_attr="_prefetched_sizes"),
-            Prefetch("colors", queryset=ProductColor.objects.only("id", "name", "hex_code"), to_attr="_prefetched_colors"),
+            Prefetch("variants", queryset=ProductVariantGalleryMedia.objects.filter(is_deleted=False).select_related("size"), to_attr="_prefetched_variants"),
         )
         .only(
             "id", "title", "slug", "sku", "price", "old_price", "currency",

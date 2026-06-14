@@ -17,15 +17,13 @@ from apps.product.models.product import (
     ProductStatus,
     # ── Taxonomy ────────────────────────────────────────────────────────────
     ProductTag,
-    ProductColor,
     # ── Product content ─────────────────────────────────────────────────────
     ProductSpecification,
     ProductFaq,
     # ── Core product ────────────────────────────────────────────────────────
     Product,
-    ProductGalleryMedia,
     # ── Variants & inventory ────────────────────────────────────────────────
-    ProductVariant,
+    ProductVariantGalleryMedia,
     ProductInventoryLog,
     # ── Social / engagement ─────────────────────────────────────────────────
     ProductReview,
@@ -51,16 +49,14 @@ __all__ = [
     "ProductDraftStatus",
     # Taxonomy
     "ProductTag",
-    "ProductColor",
     # Product content
     "ProductSpecification",
     "ProductFaq",
     # Core
     "Product",
-    "ProductGalleryMedia",
     "ProductDraftSession",
     # Variants & inventory
-    "ProductVariant",
+    "ProductVariantGalleryMedia",
     "ProductInventoryLog",
     # Social
     "ProductReview",

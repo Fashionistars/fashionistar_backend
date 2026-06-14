@@ -105,13 +105,9 @@ class ProductSizeAndMeasurementGuideOut(Schema):
 
 
 class ProductColorOut(Schema):
-    """Expanded with Phase 1 fields: swatch_image_url, is_active."""
-    model_config = {"from_attributes": True}
     id: str
     name: str
     hex_code: str = ""
-    swatch_image_url: str | None = None
-    is_active: bool = True
 
 
 class ProductTagOut(Schema):
@@ -282,19 +278,48 @@ class CloudinaryMediaOut(Schema):
 
 
 class ProductGalleryMediaOut(Schema):
-    """Expanded with Phase 1 fields: is_primary, video_thumbnail_url, duration_sec."""
+    """Resolved from ProductVariantGalleryMedia."""
     model_config = {"from_attributes": True}
     id: str
     media_url: str | None = None
     thumbnail_url: str | None = None
     video_thumbnail_url: str | None = None
-    media_type: str
+    media_type: str = "image"
     alt_text: str = ""
-    ordering: int
+    ordering: int = 0
     is_primary: bool = False
     duration_sec: int | None = None
     variant_id: str | None = None
-    color_id: str | None = None
+    color_name: str | None = None
+    color_hex: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def resolve_gallery_fields(cls, data: Any) -> Any:
+        if hasattr(data, "id"):
+            variant_id = str(data.id) if getattr(data, "sku", None) else None
+            media_url = str(data.media.url) if getattr(data, "media", None) else None
+            thumbnail_url = media_url
+            if media_url and "res.cloudinary.com" in media_url and "/upload/" in media_url:
+                thumbnail_url = media_url.replace("/upload/", "/upload/w_400,h_400,c_fill,f_auto,q_auto/")
+            
+            video_thumbnail_url = str(data.video_thumbnail.url) if getattr(data, "video_thumbnail", None) else None
+            
+            return {
+                "id": str(data.id),
+                "media_url": media_url,
+                "thumbnail_url": thumbnail_url,
+                "video_thumbnail_url": video_thumbnail_url,
+                "media_type": data.media_type,
+                "alt_text": data.alt_text or "",
+                "ordering": data.ordering,
+                "is_primary": data.is_primary,
+                "duration_sec": data.duration_sec,
+                "variant_id": variant_id,
+                "color_name": data.color_name,
+                "color_hex": data.color_hex,
+            }
+        return data
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -302,21 +327,61 @@ class ProductGalleryMediaOut(Schema):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class ProductVariantOut(Schema):
-    """Expanded with Phase 1 fields: barcode, is_default, weight_kg, dimensions_cm."""
+    """Expanded consolidated variant schema."""
     model_config = {"from_attributes": True}
     id: str
     sku: str
-    color: ProductColorOut | None = None
+    size: ProductSizeAndMeasurementGuideOut | None = None
+    color_name: str = ""
+    color_hex: str = ""
     price_override: Decimal | None = None
     stock_qty: int
     is_active: bool
     image_url: str | None = None
-    # Phase 1 expansions
+    media_url: str | None = None
+    media_type: str = "image"
+    alt_text: str = ""
+    ordering: int = 0
+    is_primary: bool = False
+    video_thumbnail_url: str | None = None
+    duration_sec: int | None = None
     barcode: str = ""
     is_default: bool = False
     weight_kg: Decimal | None = None
     dimensions_cm: dict | None = None
     notes: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def resolve_variant_fields(cls, data: Any) -> Any:
+        if hasattr(data, "id"):
+            image_url = str(data.image.url) if getattr(data, "image", None) else None
+            media_url = str(data.media.url) if getattr(data, "media", None) else None
+            video_thumbnail_url = str(data.video_thumbnail.url) if getattr(data, "video_thumbnail", None) else None
+            return {
+                "id": str(data.id),
+                "sku": data.sku,
+                "size": data.size,
+                "color_name": data.color_name,
+                "color_hex": data.color_hex,
+                "price_override": data.price_override,
+                "stock_qty": data.stock_qty,
+                "is_active": data.is_active,
+                "image_url": image_url,
+                "media_url": media_url,
+                "media_type": data.media_type,
+                "alt_text": data.alt_text or "",
+                "ordering": data.ordering,
+                "is_primary": data.is_primary,
+                "video_thumbnail_url": video_thumbnail_url,
+                "duration_sec": data.duration_sec,
+                "barcode": data.barcode or "",
+                "is_default": data.is_default,
+                "weight_kg": data.weight_kg,
+                "dimensions_cm": data.dimensions_cm,
+                "notes": data.notes or "",
+            }
+        return data
 
 
 class ProductSpecificationOut(Schema):
@@ -536,7 +601,8 @@ class CouponValidateOut(Schema):
 class ProductVariantWriteIn(Schema):
     sku: str | None = None
     size_id: str | None = None
-    color_id: str | None = None
+    color_name: str = ""
+    color_hex: str = ""
     price_override: Decimal | None = Field(default=None, ge=5000)
     stock_qty: int = 0
     is_active: bool = True
@@ -545,6 +611,14 @@ class ProductVariantWriteIn(Schema):
     weight_kg: Decimal | None = None
     dimensions_cm: dict | None = None
     notes: str = ""
+    media: str | None = None
+    image: str | None = None
+    media_type: str = "image"
+    alt_text: str = ""
+    ordering: int = 0
+    is_primary: bool = False
+    video_thumbnail: str | None = None
+    duration_sec: int | None = None
 
 
 class ProductWriteIn(Schema):

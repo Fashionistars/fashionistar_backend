@@ -1,14 +1,13 @@
 # apps/product/serializers/__init__.py
 from .product_serializers import (
     ProductSizeAndMeasurementGuideSerializer,
-    ProductColorSerializer,
+    ProductMeasurementGuideSerializer,
     ProductTagSerializer,
     ProductVendorMiniSerializer,
-    ProductGalleryMediaSerializer,
+    ProductVariantGalleryMediaSerializer,
+    ProductVariantGalleryMediaWriteSerializer,
     ProductSpecificationSerializer,
     ProductFaqSerializer,
-    ProductVariantSerializer,
-    ProductVariantWriteSerializer,
     ProductFabricSerializer,
     ProductListSerializer,
     ProductDetailSerializer,
@@ -30,17 +29,14 @@ from .coupon_serializers import CouponSerializer
 __all__ = [
     # Taxonomy
     "ProductSizeAndMeasurementGuideSerializer",
-    "ProductColorSerializer",
     "ProductTagSerializer",
     "ProductVendorMiniSerializer",
     # Media
-    "ProductGalleryMediaSerializer",
+    "ProductVariantGalleryMediaSerializer",
+    "ProductVariantGalleryMediaWriteSerializer",
     # Content
     "ProductSpecificationSerializer",
     "ProductFaqSerializer",
-    # Variants
-    "ProductVariantSerializer",
-    "ProductVariantWriteSerializer",
     # Phase 2 new taxonomy
     "ProductFabricSerializer",
     "ProductMeasurementGuideSerializer",

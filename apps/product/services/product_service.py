@@ -38,12 +38,11 @@ from apps.vendor.models import VendorProfile
 from apps.product.models import (
     Coupon,
     Product,
-    ProductGalleryMedia,
+    ProductVariantGalleryMedia,
     ProductInventoryLog,
     ProductReview,
     ProductStatus,
     ProductWishlist,
-    ProductVariant,
     ProductDraftStatus,
     ProductDraftSession,
     ProductFabric,
@@ -205,7 +204,7 @@ def _sync_product_m2m(product: Product, relations: dict[str, Any], *, partial: b
             raise ValueError("Product supports at most 15 sub-categories.")
         product.sub_categories.set(sub_categories)
 
-    for relation_name in ("sizes", "colors", "tags"):
+    for relation_name in ("sizes", "tags"):
         if relation_name not in relations:
             continue
         values = relations[relation_name]
@@ -220,7 +219,7 @@ def _sync_product_variants(product: Product, variants_data: list[dict]) -> None:
     - If SKU is new, create it.
     - If existing variant SKU not submitted, soft-delete it.
     """
-    existing_variants = {v.sku: v for v in product.product_variants.filter(is_deleted=False)}
+    existing_variants = {v.sku: v for v in product.variants.filter(is_deleted=False)}
     submitted_skus = set()
 
     for vdata in variants_data:
@@ -230,11 +229,13 @@ def _sync_product_variants(product: Product, variants_data: list[dict]) -> None:
             vdata["sku"] = sku
 
         size = vdata.get("size")
-        color = vdata.get("color")
+        color_name = vdata.get("color_name", "")
+        color_hex = vdata.get("color_hex", "")
 
         variant_fields = {
             "size": size,
-            "color": color,
+            "color_name": color_name,
+            "color_hex": color_hex,
             "price_override": vdata.get("price_override"),
             "stock_qty": vdata.get("stock_qty", 0),
             "is_active": vdata.get("is_active", True),
@@ -243,6 +244,14 @@ def _sync_product_variants(product: Product, variants_data: list[dict]) -> None:
             "weight_kg": vdata.get("weight_kg"),
             "dimensions_cm": vdata.get("dimensions_cm"),
             "notes": vdata.get("notes", ""),
+            "media": vdata.get("media"),
+            "image": vdata.get("image"),
+            "media_type": vdata.get("media_type", "image"),
+            "alt_text": vdata.get("alt_text", ""),
+            "ordering": vdata.get("ordering", 0),
+            "is_primary": vdata.get("is_primary", False),
+            "video_thumbnail": vdata.get("video_thumbnail"),
+            "duration_sec": vdata.get("duration_sec"),
         }
 
         if sku and sku in existing_variants:
@@ -255,7 +264,7 @@ def _sync_product_variants(product: Product, variants_data: list[dict]) -> None:
             if not sku:
                 import uuid
                 sku = f"VAR-{str(uuid.uuid4()).upper()[:10]}"
-            variant = ProductVariant(
+            variant = ProductVariantGalleryMedia(
                 product=product,
                 sku=sku,
                 **variant_fields
@@ -507,21 +516,22 @@ def attach_gallery_media(
     media_type: str = "image",
     alt_text: str = "",
     variant: Any = None,
-    color: Any = None,
+    color_name: str = "",
+    color_hex: str = "",
     actor: Any = None,
     request: Any = None,
-) -> ProductGalleryMedia:
+) -> ProductVariantGalleryMedia:
     """Attach a Cloudinary-uploaded media asset to a product gallery."""
     # Use the canonical reverse relation for ordering in one aggregate query.
-    ordering = product.product_gallery_media.aggregate(n=Count("id"))["n"] + 1
-    gallery_item = ProductGalleryMedia.objects.create(
+    ordering = product.variants.aggregate(n=Count("id"))["n"] + 1
+    gallery_item = ProductVariantGalleryMedia.objects.create(
         product=product,
         media=media_file,
         media_type=media_type,
         alt_text=alt_text,
         ordering=ordering,
-        variant=variant,
-        color=color,
+        color_name=color_name,
+        color_hex=color_hex,
     )
     _emit_audit(
         "product.media.attached",
@@ -543,8 +553,8 @@ def remove_gallery_media(
 ) -> None:
     """Soft-delete a gallery media item by ID."""
     try:
-        item = ProductGalleryMedia.objects.get(id=gallery_id, product=product)
-    except ProductGalleryMedia.DoesNotExist:
+        item = ProductVariantGalleryMedia.objects.get(id=gallery_id, product=product)
+    except ProductVariantGalleryMedia.DoesNotExist:
         raise ValueError(
             f"Gallery media {gallery_id} not found for product {product.slug}."
         )

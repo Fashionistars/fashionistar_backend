@@ -614,12 +614,6 @@ async def list_sizes(request, page: int = 1, page_size: int = 100):
     }
 
 
-@router.get("/colors/", response=dict, auth=None, summary="List available colors")
-async def list_colors(request, page: int = 1, page_size: int = 100):
-    from apps.product.models import ProductColor
-    qs = ProductColor.objects.filter(is_active=True).order_by("name")
-    return await _paginated(request, qs, _color_out, page=page, page_size=page_size)
-
 
 @router.get("/couriers/", response=dict, auth=None, summary="List available couriers")
 async def list_couriers(request, page: int = 1, page_size: int = 50, active: bool | None = None):

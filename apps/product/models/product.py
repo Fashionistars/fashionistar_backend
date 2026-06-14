@@ -260,9 +260,6 @@ class Product(TimeStampedModel, SoftDeleteModel):
     sizes = models.ManyToManyField(
         "ProductSizeAndMeasurementGuide", blank=True, related_name="product_size_and_measurement_guides"
     )
-    colors = models.ManyToManyField(
-        "ProductColor", blank=True, related_name="color_products"
-    )
 
     # ── Pricing ───────────────────────────────────────────────────────────
     price = models.DecimalField(max_digits=12, decimal_places=2)
@@ -598,12 +595,12 @@ class Product(TimeStampedModel, SoftDeleteModel):
         ).acount()
 
     def gallery(self):
-        """Compatibility accessor for product_gallery_media reverse FK."""
-        return self.product_gallery_media.filter(is_deleted=False).order_by(
+        """Compatibility accessor for unified variants gallery media."""
+        return self.variants.filter(is_deleted=False).exclude(media__isnull=True).exclude(media="").order_by(
             "ordering", "created_at"
         )
 
-    async def agallery(self) -> list["ProductGalleryMedia"]:
+    async def agallery(self) -> list["ProductVariantGalleryMedia"]:
         """Async list of non-deleted gallery media."""
         return [media async for media in self.gallery()]
 
@@ -616,8 +613,18 @@ class Product(TimeStampedModel, SoftDeleteModel):
         return [spec async for spec in self.product_specifications.all()]
 
     def color(self):
-        """Compatibility accessor for colors M2M."""
-        return self.colors.all()
+        """Compatibility accessor for colors from variants."""
+        colors_list = []
+        seen = set()
+        for v in self.variants.all():
+            if v.color_name and v.color_name not in seen:
+                seen.add(v.color_name)
+                colors_list.append({
+                    "id": v.id,
+                    "name": v.color_name,
+                    "hex_code": v.color_hex,
+                })
+        return colors_list
 
     def size(self):
         """Compatibility accessor for sizes M2M."""
@@ -646,46 +653,14 @@ class Product(TimeStampedModel, SoftDeleteModel):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3. PRODUCT COLOR
+# 6. PRODUCT VARIANT GALLERY MEDIA  (2026+)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class ProductColor(models.Model):
-    name = models.CharField(max_length=50)
-    hex_code = models.CharField(max_length=7, blank=True, help_text="e.g. #FDA600")
-    is_active = models.BooleanField(
-        default=True,
-        help_text="Inactive colours are hidden from the product builder colour picker.",
-    )
-    swatch_image = CloudinaryField(
-        "swatch_image",
-        folder="fashionistar/colors/",
-        blank=True,
-        null=True,
-        help_text="Optional branded swatch image (e.g. fabric texture). "
-        "Displayed instead of hex swatch when present.",
-    )
-
-    class Meta:
-        verbose_name = _("Product Color")
-        verbose_name_plural = _("Product Colors")
-        ordering = ["name"]
-
-    def __str__(self):
-        return self.name
-
-
-
-
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 5. PRODUCT GALLERY MEDIA
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-class ProductGalleryMedia(TimeStampedModel, SoftDeleteModel):
-    """Multiple media attachments for a product. Replaces legacy Gallery model."""
+class ProductVariantGalleryMedia(TimeStampedModel, SoftDeleteModel):
+    """
+    Consolidated product variant and gallery media model.
+    """
 
     MEDIA_TYPE_CHOICES = [
         ("image", "Image"),
@@ -695,7 +670,38 @@ class ProductGalleryMedia(TimeStampedModel, SoftDeleteModel):
     product = models.ForeignKey(
         Product,
         on_delete=models.CASCADE,
-        related_name="product_gallery_media",
+        related_name="variants",
+    )
+    sku = models.CharField(max_length=80, unique=True, blank=True)
+    size = models.ForeignKey(
+        "ProductSizeAndMeasurementGuide",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="product_size_variants",
+    )
+    color_name = models.CharField(max_length=100, blank=True)
+    color_hex = models.CharField(max_length=7, blank=True, help_text="e.g. #FDA600")
+    swatch_image = CloudinaryField(
+        "swatch_image",
+        folder="fashionistar/colors/",
+        blank=True,
+        null=True,
+        help_text="Optional branded swatch image (e.g. fabric texture).",
+    )
+    price_override = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="If set, overrides the parent product price for this variant.",
+    )
+    stock_qty = models.PositiveIntegerField(default=0)
+    image = CloudinaryField(
+        "variant_image",
+        folder="fashionistar/products/variants/",
+        blank=True,
+        null=True,
     )
     media = CloudinaryField(
         "media",
@@ -723,72 +729,6 @@ class ProductGalleryMedia(TimeStampedModel, SoftDeleteModel):
         null=True,
         blank=True,
         help_text="Duration in seconds for video media items.",
-    )
-    variant = models.ForeignKey(
-        "ProductVariant",
-        null=True,
-        blank=True,
-        on_delete=models.CASCADE,
-        related_name="gallery_media",
-        help_text="Optional variant link to display specific color/size media.",
-    )
-    color = models.ForeignKey(
-        "ProductColor",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="gallery_media",
-        help_text="Optional color link to show this media when a color is selected.",
-    )
-
-    class Meta:
-        verbose_name = _("Product Gallery Media")
-        verbose_name_plural = _("Product Gallery Media")
-        ordering = ["ordering", "created_at"]
-
-    def __str__(self):
-        return f"{self.product.title} — {self.media_type} #{self.ordering}"
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 6. PRODUCT VARIANT  (2026+)
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-class ProductVariant(TimeStampedModel, SoftDeleteModel):
-    """
-    Per-variant SKU with optional price override and separate stock count.
-
-    Supports size+color combinations for fashion items.
-    """
-
-    product = models.ForeignKey(
-        Product,
-        on_delete=models.CASCADE,
-        related_name="product_variants",
-    )
-    sku = models.CharField(max_length=80, unique=True, blank=True)
-  
-    color = models.ForeignKey(
-        ProductColor,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="product_color_variants",
-    )
-    price_override = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        help_text="If set, overrides the parent product price for this variant.",
-    )
-    stock_qty = models.PositiveIntegerField(default=0)
-    image = CloudinaryField(
-        "variant_image",
-        folder="fashionistar/products/variants/",
-        blank=True,
-        null=True,
     )
     is_active = models.BooleanField(default=True)
     is_default = models.BooleanField(
@@ -818,16 +758,16 @@ class ProductVariant(TimeStampedModel, SoftDeleteModel):
     )
 
     class Meta:
-        verbose_name = _("Product Variant")
-        verbose_name_plural = _("Product Variants")
-        unique_together = [("product", "size", "color")]
+        verbose_name = _("Product Variant Gallery Media")
+        verbose_name_plural = _("Product Variant Gallery Media")
+        unique_together = [("product", "size", "color_name")]
 
     def __str__(self):
         parts = [self.product.title]
         if self.size:
-            parts.append(self.size.name)
-        if self.color:
-            parts.append(self.color.name)
+            parts.append(self.size.size_label)
+        if self.color_name:
+            parts.append(self.color_name)
         return " / ".join(parts)
 
     def save(self, *args, **kwargs):
@@ -837,7 +777,7 @@ class ProductVariant(TimeStampedModel, SoftDeleteModel):
 
     @property
     def effective_price(self):
-        return self.price_override if self.price_override else self.product.price
+        return self.price_override if self.price_override is not None else self.product.price
 
 
 
@@ -868,7 +808,7 @@ class ProductInventoryLog(TimeStampedModel):
         related_name="inventory_logs",
     )
     variant = models.ForeignKey(
-        ProductVariant,
+        "ProductVariantGalleryMedia",
         null=True,
         blank=True,
         on_delete=models.CASCADE,

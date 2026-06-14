@@ -642,7 +642,7 @@ class CartOrderItem(TimeStampedModel):
         help_text="SET_NULL: snapshot preserved if product is deleted.",
     )
     variant = models.ForeignKey(
-        "product.ProductVariant",
+        "product.ProductVariantGalleryMedia",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,

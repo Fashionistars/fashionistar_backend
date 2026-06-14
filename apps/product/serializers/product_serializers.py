@@ -31,21 +31,20 @@ Rules:
 from __future__ import annotations
 
 from rest_framework import serializers
+from django.utils.translation import gettext_lazy as _
 
 from apps.catalog.models import Category
 from apps.product.models import (
-    DeliveryCourier,
+    Coupon,
     Product,
-    ProductColor,
     ProductFabric,
-    ProductFaq,
-    ProductGalleryMedia,
-    ProductInventoryLog,
     ProductSizeAndMeasurementGuide,
-    ProductReview,
     ProductSpecification,
+    ProductFaq,
+    ProductVariantGalleryMedia,
     ProductTag,
-    ProductVariant,
+    ProductReview,
+    ProductInventoryLog,
     ProductWishlist,
     ProductDraftSession,
     ProductShippingProfile,
@@ -55,23 +54,6 @@ from apps.product.models import (
 # ─────────────────────────────────────────────────────────────────────────────
 # ATOMIC TAXONOMY SERIALIZERS
 # ─────────────────────────────────────────────────────────────────────────────
-
-
-class ProductColorSerializer(serializers.ModelSerializer):
-    """Expanded with Phase 1 fields: swatch_image_url, is_active."""
-    swatch_image_url = serializers.SerializerMethodField()
-
-    class Meta:
-        model = ProductColor
-        fields = ["id", "name", "hex_code", "swatch_image_url", "is_active"]
-
-    def get_swatch_image_url(self, obj):
-        if not getattr(obj, "swatch_image", None):
-            return None
-        url = str(obj.swatch_image.url)
-        if "res.cloudinary.com" in url:
-            return url.replace("/upload/", "/upload/w_64,h_64,c_fill,f_auto,q_auto/")
-        return url
 
 
 class ProductTagSerializer(serializers.ModelSerializer):
@@ -146,6 +128,9 @@ class ProductSizeAndMeasurementGuideSerializer(serializers.ModelSerializer):
         ]
 
 
+ProductMeasurementGuideSerializer = ProductSizeAndMeasurementGuideSerializer
+
+
 class ProductShippingProfileSerializer(serializers.ModelSerializer):
     """Per-product shipping configuration — Phase 1."""
     class Meta:
@@ -210,43 +195,6 @@ class ProductVendorMiniSerializer(serializers.Serializer):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# GALLERY MEDIA
-# ─────────────────────────────────────────────────────────────────────────────
-
-class ProductGalleryMediaSerializer(serializers.ModelSerializer):
-    """Gallery item — expanded with Phase 1 fields: is_primary, video_thumbnail_url, duration_sec."""
-    media_url = serializers.SerializerMethodField()
-    thumbnail_url = serializers.SerializerMethodField()
-    video_thumbnail_url = serializers.SerializerMethodField()
-
-    class Meta:
-        model = ProductGalleryMedia
-        fields = [
-            "id", "media_url", "thumbnail_url",
-            "media_type", "alt_text", "ordering",
-            # Phase 1 expansions
-            "is_primary", "video_thumbnail_url", "duration_sec",
-            "variant", "color",
-        ]
-
-    def get_media_url(self, obj):
-        return str(obj.media.url) if obj.media else None
-
-    def get_thumbnail_url(self, obj):
-        """Generate a Cloudinary thumbnail transform URL inline."""
-        if not obj.media or obj.media_type != "image":
-            return None
-        url = str(obj.media.url)
-        if "res.cloudinary.com" in url:
-            return url.replace("/upload/", "/upload/w_400,h_400,c_fill,f_auto,q_auto/")
-        return url
-
-    def get_video_thumbnail_url(self, obj):
-        vt = getattr(obj, "video_thumbnail", None)
-        return str(vt.url) if vt else None
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # SPECIFICATION / FAQ
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -263,59 +211,76 @@ class ProductFaqSerializer(serializers.ModelSerializer):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# VARIANT
+# VARIANT GALLERY MEDIA
 # ─────────────────────────────────────────────────────────────────────────────
 
-class ProductVariantSerializer(serializers.ModelSerializer):
-    """Per-SKU variant — expanded with Phase 1 fields: barcode, is_default, weight_kg, notes."""
-    color = ProductColorSerializer(read_only=True)
-
-    color_id = serializers.PrimaryKeyRelatedField(
-        queryset=ProductColor.objects.all(),
-        source="color",
-        write_only=True,
-        required=False,
-        allow_null=True,
-    )
+class ProductVariantGalleryMediaSerializer(serializers.ModelSerializer):
+    """Consolidated variant, color, and media serializer."""
     effective_price = serializers.ReadOnlyField()
     image_url = serializers.SerializerMethodField()
+    media_url = serializers.SerializerMethodField()
+    thumbnail_url = serializers.SerializerMethodField()
+    video_thumbnail_url = serializers.SerializerMethodField()
+    swatch_image_url = serializers.SerializerMethodField()
 
     class Meta:
-        model = ProductVariant
+        model = ProductVariantGalleryMedia
         fields = [
             "id", "sku",
             "size", "size_id",
-            "color", "color_id",
+            "color_name", "color_hex", "swatch_image_url",
             "price_override", "effective_price",
-            "stock_qty", "is_active",
-            "image_url",
-            # Phase 1 expansions
-            "barcode", "is_default", "weight_kg", "dimensions_cm", "notes",
+            "stock_qty", "is_active", "is_default",
+            "barcode", "weight_kg", "dimensions_cm", "notes",
+            "image_url", "media_url", "thumbnail_url",
+            "media_type", "alt_text", "ordering", "is_primary",
+            "video_thumbnail_url", "duration_sec",
         ]
 
     def get_image_url(self, obj):
         return str(obj.image.url) if obj.image else None
 
+    def get_media_url(self, obj):
+        return str(obj.media.url) if obj.media else None
 
-class ProductVariantWriteSerializer(serializers.ModelSerializer):
+    def get_thumbnail_url(self, obj):
+        if not obj.media or obj.media_type != "image":
+            return None
+        url = str(obj.media.url)
+        if "res.cloudinary.com" in url:
+            return url.replace("/upload/", "/upload/w_400,h_400,c_fill,f_auto,q_auto/")
+        return url
+
+    def get_video_thumbnail_url(self, obj):
+        vt = getattr(obj, "video_thumbnail", None)
+        return str(vt.url) if vt else None
+
+    def get_swatch_image_url(self, obj):
+        if not getattr(obj, "swatch_image", None):
+            return None
+        url = str(obj.swatch_image.url)
+        if "res.cloudinary.com" in url:
+            return url.replace("/upload/", "/upload/w_64,h_64,c_fill,f_auto,q_auto/")
+        return url
+
+
+class ProductVariantGalleryMediaWriteSerializer(serializers.ModelSerializer):
     """
-    Write-only nested variant for ProductWriteFullSerializer.
-    Used when a vendor creates/updates a product with all its SKUs in one call.
-    Persistence is delegated to the service layer — never call .save() directly.
+    Write-only nested variant/gallery item for ProductWriteFullSerializer.
     """
-  
-    color_id = serializers.PrimaryKeyRelatedField(
-        queryset=ProductColor.objects.all(),
-        source="color",
+    size_id = serializers.PrimaryKeyRelatedField(
+        queryset=ProductSizeAndMeasurementGuide.objects.all(),
+        source="size",
         required=False,
         allow_null=True,
     )
 
     class Meta:
-        model = ProductVariant
+        model = ProductVariantGalleryMedia
         fields = [
             "sku",
-            "size_id", "color_id",
+            "size_id",
+            "color_name", "color_hex",
             "price_override",
             "stock_qty",
             "is_active",
@@ -324,6 +289,14 @@ class ProductVariantWriteSerializer(serializers.ModelSerializer):
             "weight_kg",
             "dimensions_cm",
             "notes",
+            "media",
+            "image",
+            "media_type",
+            "alt_text",
+            "ordering",
+            "is_primary",
+            "video_thumbnail",
+            "duration_sec",
         ]
 
     def validate_sku(self, value):
@@ -368,7 +341,10 @@ class ProductListSerializer(serializers.ModelSerializer):
     computed_avg_rating = serializers.FloatField(read_only=True, default=0)
     # Sizes/colors for filter chips on cards
     sizes = ProductSizeAndMeasurementGuideSerializer(many=True, read_only=True)
-    colors = ProductColorSerializer(many=True, read_only=True)
+    colors = serializers.SerializerMethodField()
+
+    def get_colors(self, obj):
+        return obj.color()
 
     class Meta:
         model = Product
@@ -449,14 +425,15 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     """
     image_url = serializers.SerializerMethodField()
     cover_image_url = serializers.SerializerMethodField()  # alias for FE consistency
-    discount_percentage = serializers.ReadOnlyField()
-    gallery = ProductGalleryMediaSerializer(
-        many=True,
-        read_only=True,
-        source="product_gallery_media",
-    )
+    gallery = serializers.SerializerMethodField()
+
+    def get_gallery(self, obj):
+        return ProductVariantGalleryMediaSerializer(
+            obj.gallery(),
+            many=True,
+        ).data
     sizes = ProductSizeAndMeasurementGuideSerializer(many=True, read_only=True)
-    colors = ProductColorSerializer(many=True, read_only=True)
+    colors = serializers.SerializerMethodField()
     tags = ProductTagSerializer(many=True, read_only=True)
     specifications = ProductSpecificationSerializer(
         many=True,
@@ -464,11 +441,14 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         source="product_specifications",
     )
     faqs = ProductFaqSerializer(many=True, read_only=True, source="product_faqs")
-    variants = ProductVariantSerializer(
+    variants = ProductVariantGalleryMediaSerializer(
         many=True,
         read_only=True,
-        source="product_variants",
+        source="variants",
     )
+
+    def get_colors(self, obj):
+        return obj.color()
     # Phase 1 reverse FK embeds
     fabric = ProductFabricSerializer(read_only=True, source="product_fabric")
     measurement_guide = ProductMeasurementGuideSerializer(
@@ -565,12 +545,11 @@ class ProductWriteSerializer(serializers.ModelSerializer):
     rather than calling serializer.save() directly.
     """
     sizes = ProductSizeAndMeasurementGuideSerializer(many=True, required=False)
-    colors = ProductColorSerializer(many=True, required=False)
     tags = ProductTagSerializer(many=True, required=False)
-    variants = ProductVariantSerializer(many=True, required=False)
+    variants = ProductVariantGalleryMediaSerializer(many=True, required=False)
     faqs = ProductFaqSerializer(many=True, required=False)
     specifications = ProductSpecificationSerializer(many=True, required=False)
-    gallery = ProductGalleryMediaSerializer(many=True, required=False)
+    gallery = ProductVariantGalleryMediaSerializer(many=True, required=False)
     images = ProductTagSerializer(many=True, required=False)
     fabric = ProductFabricSerializer(many=True, required=False)
     shipping_profile = ProductShippingProfileSerializer(many=True, required=False)
@@ -579,12 +558,6 @@ class ProductWriteSerializer(serializers.ModelSerializer):
         queryset=ProductSizeAndMeasurementGuide.objects.all(),
         many=True,
         source="sizes",
-        required=False,
-    )
-    color_ids = serializers.PrimaryKeyRelatedField(
-        queryset=ProductColor.objects.all(),
-        many=True,
-        source="colors",
         required=False,
     )
     tag_ids = serializers.PrimaryKeyRelatedField(
@@ -630,7 +603,7 @@ class ProductWriteSerializer(serializers.ModelSerializer):
             "price", "old_price", "currency", "shipping_amount",
             "stock_qty", "max_stock",
             "category_ids", "sub_category_ids",
-            "size_ids", "color_ids", "tag_ids",
+            "size_ids", "tag_ids",
             "requires_measurement", "is_customisable",
             "hot_deal", "digital", "commission_rate",
             "weight_kg", "condition", "is_pre_order", "pre_order_date",
@@ -705,12 +678,6 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
         source="sizes",
         required=False,
     )
-    color_ids = serializers.PrimaryKeyRelatedField(
-        queryset=ProductColor.objects.all(),
-        many=True,
-        source="colors",
-        required=False,
-    )
     tag_ids = serializers.PrimaryKeyRelatedField(
         queryset=ProductTag.objects.all(),
         many=True,
@@ -733,7 +700,7 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
         allow_empty=True,
         help_text="Optional deeper category IDs for discovery facets.",
     )
-    variants = ProductVariantWriteSerializer(many=True, required=False)
+    variants = ProductVariantGalleryMediaWriteSerializer(many=True, required=False)
     fabric = ProductFabricSerializer(required=False, allow_null=True)
     measurement_guide = ProductMeasurementGuideSerializer(many=True, required=False)
     shipping_profile = ProductShippingProfileSerializer(required=False, allow_null=True)
@@ -758,7 +725,7 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
             "price", "old_price", "currency", "shipping_amount",
             "stock_qty", "max_stock",
             "category_ids", "sub_category_ids",
-            "size_ids", "color_ids", "tag_ids",
+            "size_ids", "tag_ids",
             "requires_measurement", "is_customisable",
             "hot_deal", "digital", "commission_rate",
             # Phase 1 write fields

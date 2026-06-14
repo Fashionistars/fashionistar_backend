@@ -282,8 +282,8 @@ class Cart(TimeStampedModel, SoftDeleteModel):
             "unit_price",
             "quantity",
             "variant__id",
-            "variant__size__name",
-            "variant__color__name",
+            "variant__size__size_label",
+            "variant__color_name",
         )
         return [row async for row in rows]
 
@@ -327,7 +327,7 @@ class CartItem(TimeStampedModel, SoftDeleteModel):
         related_name="cart_items",
     )
     variant = models.ForeignKey(
-        "product.ProductVariant",
+        "product.ProductVariantGalleryMedia",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,

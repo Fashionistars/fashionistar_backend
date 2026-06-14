@@ -27,25 +27,22 @@ from apps.common.admin_mixins import SoftDeleteAdminMixin, ReadOnlyAdminMixin
 
 from apps.product.models import (
     Product,
-    ProductGalleryMedia,
-    ProductVariant,
     ProductSpecification,
     ProductFaq,
     ProductReview,
     ProductWishlist,
     ProductInventoryLog,
     ProductTag,
-    ProductColor,
     Coupon,
     DeliveryCourier,
     ProductCommissionSnapshot,
     # Phase 1 — 2026
     ProductFabric,
     ProductSizeAndMeasurementGuide,
-    # ProductCertification,
     ProductShippingProfile,
     ProductPriceHistory,
     ProductViewLog,
+    ProductVariantGalleryMedia,
 )
 
 
@@ -54,17 +51,18 @@ from apps.product.models import (
 # INLINES
 # ─────────────────────────────────────────────────────────────────────────────
 
-class ProductGalleryMediaInline(admin.TabularInline):
-    """Inline media manager with Cloudinary image preview."""
+class ProductVariantGalleryMediaInline(admin.TabularInline):
+    """Inline manager for consolidated variant and gallery media rows."""
 
-    model = ProductGalleryMedia
+    model = ProductVariantGalleryMedia
     extra = 0
     fields = [
-        "media", "media_preview", "media_type", "alt_text",
-        "ordering", "is_deleted",
+        "sku", "size", "color_name", "color_hex", "price_override",
+        "stock_qty", "media", "media_preview", "media_type", "is_primary",
+        "is_active", "is_default"
     ]
     readonly_fields = ["media_preview"]
-    show_change_link = False
+    show_change_link = True
 
     def media_preview(self, obj):
         if obj.media:
@@ -77,15 +75,6 @@ class ProductGalleryMediaInline(admin.TabularInline):
                 return "—"
         return "—"
     media_preview.short_description = "Preview"
-
-
-class ProductVariantInline(admin.TabularInline):
-    """SKU-level variant rows with stock and pricing."""
-
-    model = ProductVariant
-    extra = 0
-    fields = ["sku", "size", "color", "price_override", "stock_qty", "is_active"]
-    show_change_link = True
 
 
 class ProductSpecificationInline(admin.TabularInline):
@@ -101,50 +90,7 @@ class ProductFaqInline(admin.TabularInline):
     fields = ["question", "answer"]
 
 
-@admin.register(ProductGalleryMedia)
-class ProductGalleryMediaAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
-    list_display = [
-        "product",
-        "media_type",
-        "ordering",
-        "soft_delete_badge",
-        "media_preview",
-        "created_at",
-    ]
-    list_filter = ["media_type", "is_deleted"]
-    search_fields = ["product__title", "product__sku", "alt_text"]
-    list_select_related = ["product"]
-    raw_id_fields = ["product"]
-    readonly_fields = [
-        "id",
-        "media_preview",
-        "created_at",
-        "updated_at",
-        "is_deleted",
-        "deleted_at",
-        "soft_delete_badge",
-    ]
-    fieldsets = (
-        (_("Identity"), {"fields": ("id", "product", "media_type", "ordering")}),
-        (_("Media"), {"fields": ("media", "media_preview", "alt_text")}),
-        (_("Lifecycle"), {
-            "fields": ("created_at", "updated_at", "is_deleted", "deleted_at", "soft_delete_badge"),
-            "classes": ("collapse",),
-        }),
-    )
-    ordering = ["product", "ordering", "created_at"]
-
-    @admin.display(description=_("Preview"))
-    def media_preview(self, obj):
-        if obj.media:
-            try:
-                return format_html(
-                    '<img src="{}" height="60" style="border-radius:6px;object-fit:cover;" />',
-                    obj.media.url,
-                )
-            except Exception:
-                return "—"
-        return "—"
+# ProductGalleryMedia is removed
 
 
 @admin.register(ProductSpecification)
@@ -254,10 +200,9 @@ class ProductAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
             "classes": ("collapse",),
         }),
     )
-    filter_horizontal = ["tags", "sizes", "colors"]
+    filter_horizontal = ["tags", "sizes"]
     inlines = [
-        ProductGalleryMediaInline,
-        ProductVariantInline,
+        ProductVariantGalleryMediaInline,
         ProductSpecificationInline,
         ProductFaqInline,
         InventoryLogReadOnlyInline,
@@ -481,20 +426,7 @@ class ProductTagAdmin(admin.ModelAdmin):
 
 
 
-@admin.register(ProductColor)
-class ProductColorAdmin(admin.ModelAdmin):
-    list_display = ["name", "hex_code", "colour_swatch"]
-    search_fields = ["name"]
-
-    def colour_swatch(self, obj):
-        if obj.hex_code:
-            return format_html(
-                '<div style="width:24px;height:24px;border-radius:4px;'
-                'background:{};border:1px solid #444;"></div>',
-                obj.hex_code,
-            )
-        return "—"
-    colour_swatch.short_description = "Swatch"
+# ProductColor is removed
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -799,60 +731,40 @@ class ProductViewLogAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
 
 
 
-# Unregister & re-register ProductColor with expanded fields
-admin.site.unregister(ProductColor)
-
-
-@admin.register(ProductColor)
-class ProductColorAdmin(admin.ModelAdmin):
-    list_display = ["name", "hex_code", "is_active", "colour_swatch"]
-    list_filter = ["is_active"]
-    search_fields = ["name"]
-    ordering = ["name"]
-
-    def colour_swatch(self, obj):
-        if obj.hex_code:
-            return format_html(
-                '<div style="width:24px;height:24px;border-radius:4px;'
-                'background:{};border:1px solid #444;"></div>',
-                obj.hex_code,
-            )
-        return "—"
-    colour_swatch.short_description = "Swatch"
-
-
 # ─────────────────────────────────────────────────────────────────────────────
-# PRODUCT VARIANT — STANDALONE ADMIN
+# PRODUCT VARIANT GALLERY MEDIA — STANDALONE ADMIN
 # ─────────────────────────────────────────────────────────────────────────────
 
-@admin.register(ProductVariant)
-class ProductVariantAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
+@admin.register(ProductVariantGalleryMedia)
+class ProductVariantGalleryMediaAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
     """
-    Standalone variant admin for cross-product SKU management.
-    Allows filtering and searching variants without opening each parent product.
+    Standalone admin for cross-product SKU and gallery media management.
     """
 
     list_display = [
-        "sku", "product", "size", "color", "price_override",
-        "stock_qty", "is_active", "is_default", "soft_delete_badge",
+        "sku", "product", "size", "color_name", "color_hex", "price_override",
+        "stock_qty", "is_active", "is_default", "media_preview", "soft_delete_badge",
     ]
-    list_filter = ["is_active", "is_default", "size", "color"]
-    search_fields = ["sku", "product__title", "product__sku", "barcode"]
-    list_select_related = ["product", "size", "color"]
+    list_filter = ["is_active", "is_default", "size", "media_type"]
+    search_fields = ["sku", "product__title", "product__sku", "barcode", "color_name"]
+    list_select_related = ["product", "size"]
     raw_id_fields = ["product"]
     list_per_page = 25
     show_full_result_count = False
     readonly_fields = [
-        "id", "sku", "created_at", "updated_at",
+        "id", "sku", "media_preview", "created_at", "updated_at",
         "is_deleted", "deleted_at", "soft_delete_badge",
     ]
-    ordering = ["product", "size", "color"]
+    ordering = ["product", "size", "color_name"]
     fieldsets = (
         (_("Identity"), {
             "fields": ("id", "sku", "barcode", "product"),
         }),
-        (_("Variant"), {
-            "fields": ("size", "color", "price_override", "stock_qty", "weight_kg"),
+        (_("Variant Attributes"), {
+            "fields": ("size", "color_name", "color_hex", "swatch_image", "price_override", "stock_qty", "weight_kg", "dimensions_cm", "notes"),
+        }),
+        (_("Gallery / Media"), {
+            "fields": ("image", "media", "media_preview", "media_type", "alt_text", "ordering", "is_primary", "video_thumbnail", "duration_sec"),
         }),
         (_("Status"), {
             "fields": ("is_active", "is_default", "soft_delete_badge"),
@@ -863,6 +775,18 @@ class ProductVariantAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
         }),
     )
     empty_value_display = "-N/A-"
+
+    def media_preview(self, obj):
+        if obj.media:
+            try:
+                return format_html(
+                    '<img src="{}" height="60" style="border-radius:6px;object-fit:cover;" />',
+                    obj.media.url,
+                )
+            except Exception:
+                return "—"
+        return "—"
+    media_preview.short_description = "Preview"
 
 
 logger = logging.getLogger(__name__)
