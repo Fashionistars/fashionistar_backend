@@ -14,6 +14,7 @@ enterprise-grade modular architecture with:
     ShippingProfile, PriceHistory, ViewLog
 """
 
+from OLD_PRODUCTS-MODEL-FOR REFRENCE IN THE FUTURE.product.models.product import ProductSize
 import logging
 import uuid6
 import datetime
@@ -164,78 +165,8 @@ class ProductTag(TimeStampedModel):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3. PRODUCT SIZE / COLOR / SPECIFICATION
+# 3. PRODUCT COLOR / SPECIFICATION
 # ─────────────────────────────────────────────────────────────────────────────
-
-
-class ProductSizeType(TimeStampedModel):
-    """
-    Taxonomy for size classification.
-    e.g. 'Clothing', 'Footwear', 'Measurement-Based', 'Custom'.
-    Allows the platform to render the correct size picker UI.
-    """
-
-    CATEGORY_CHOICES = [
-        ("clothing", _("Clothing")),
-        ("footwear", _("Footwear")),
-        ("accessory", _("Accessory")),
-        ("measurement", _("Measurement-Based")),
-        ("custom", _("Custom")),
-    ]
-
-    name = models.CharField(max_length=80, unique=True)
-    slug = models.SlugField(max_length=100, unique=True, blank=True)
-    category = models.CharField(
-        max_length=20,
-        choices=CATEGORY_CHOICES,
-        default="clothing",
-        help_text="UI hint for the product builder size picker.",
-    )
-    description = models.TextField(blank=True)
-
-    class Meta:
-        verbose_name = _("Product Size Type")
-        verbose_name_plural = _("Product Size Types")
-        ordering = ["name"]
-
-    def __str__(self):
-        return f"{self.name} ({self.get_category_display()})"
-
-    def save(self, *args, **kwargs):
-        if not self.slug:
-            self.slug = slugify(self.name)
-        super().save(*args, **kwargs)
-
-
-class ProductSize(models.Model):
-    name = models.CharField(max_length=30)  # e.g. XS, S, M, L, XL, XXL, Custom
-    abbreviation = models.CharField(
-        max_length=10,
-        blank=True,
-        help_text="Short form displayed on product cards and size chips (e.g. 'XS', '44').",
-    )
-    sort_order = models.PositiveSmallIntegerField(
-        default=0,
-        help_text="Lower value = displayed first in the size picker.",
-    )
-    size_type = models.ForeignKey(
-        ProductSizeType,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="product_size_types",
-        help_text="Taxonomy category this size belongs to.",
-    )
-
-    class Meta:
-        verbose_name = _("Product Size")
-        verbose_name_plural = _("Product Sizes")
-        ordering = ["sort_order", "name"]
-
-    def __str__(self):
-        if self.abbreviation:
-            return f"{self.name} ({self.abbreviation})"
-        return self.name
 
 
 class ProductColor(models.Model):
@@ -354,7 +285,7 @@ class Product(TimeStampedModel, SoftDeleteModel):
     )
     tags = models.ManyToManyField(ProductTag, blank=True, related_name="tag_products")
     sizes = models.ManyToManyField(
-        ProductSize, blank=True, related_name="size_products"
+        ProductSizeAndMeasurementGuide, blank=True, related_name="product_size_and_measurement_guides"
     )
     colors = models.ManyToManyField(
         ProductColor, blank=True, related_name="color_products"
@@ -1315,11 +1246,20 @@ class ProductFabric(TimeStampedModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class ProductMeasurementGuide(TimeStampedModel):
+class ProductSizeAndMeasurementGuide(TimeStampedModel):
     """
     Size chart row linking a size label to body measurement ranges.
 
     One row per size per product (or template). Together they form the size guide table.
+    """
+    
+    
+    """
+    Reusable size-guide template defined by a vendor (tailor/brand).
+    Allows applying a standardized set of measurements (e.g. Senator fit, Kaftan slim fit)
+    to a product without manual row-by-row data entry on every upload.
+      e.g. 'Clothing', 'Footwear', 'Measurement-Based', 'Custom'.
+    Allows the platform to render the correct size picker UI.
     """
 
     product = models.ForeignKey(
@@ -1330,25 +1270,47 @@ class ProductMeasurementGuide(TimeStampedModel):
         related_name="product_measurement_guide",
         help_text="Size guide rows for this product.",
     )
-    template = models.ForeignKey(
-        "VendorMeasurementTemplate",
-        null=True,
-        blank=True,
+
+
+    vendor = models.ForeignKey(
+        "vendor.VendorProfile",
         on_delete=models.CASCADE,
-        related_name="template_rows",
-        help_text="Template this guide row belongs to (or was copied/referenced from).",
+        related_name="measurement_templates",
+        help_text="Vendor who owns this reusable sizing template."
     )
-    size = models.ForeignKey(
-        ProductSize,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="product_size_measurement_guides",
+    name = models.CharField(max_length=120, help_text="e.g. 'Men's Slim Senator', 'Standard Kaftan'")
+    
+   
+    DESCRIPTION_CHOICES = [
+        ("clothing", _("Clothing")),
+        ("footwear", _("Footwear")),
+        ("accessory", _("Accessory")),
+        ("measurement", _("Measurement-Based")),
+        ("custom", _("Custom")),
+    ]
+
+    description =  models.CharField(
+        max_length=20,
+        choices=DESCRIPTION_CHOICES,
+        default="custom",
+        help_text="Description of this measurement guide.",
     )
-    size_label = models.CharField(
+    
+    is_default = models.BooleanField(
+        default=False,
+        help_text="This is the default measurement guide for this product.",
+    )
+    
+    save_as_template = models.BooleanField(
+        default=False,
+        help_text="Save this measurement guide as a reusable template for future use.",
+    )
+    
+    size_label = models.CharField(     # e.g. XS, S, M, L, XL, XXL, Custom
         max_length=30,
-        help_text="Display label e.g. 'S', 'M', '44', '38-40'. Used when size FK is not selected.",
+        help_text="Display label e.g. 'S', 'M', '44', '38-40'. Short form displayed on product cards and size chips (e.g. 'XS', '44').",
     )
+
     chest_cm = models.CharField(
         max_length=20, blank=True, help_text="Chest range e.g. '90-100'."
     )
@@ -1369,12 +1331,15 @@ class ProductMeasurementGuide(TimeStampedModel):
         blank=True,
         help_text="For footwear: foot length in cm.",
     )
-    sort_order = models.PositiveSmallIntegerField(default=0)
-
+    sort_order = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Lower value = displayed first in the size picker.",
+    )   
+    
     class Meta:
         verbose_name = _("Measurement Guide Row")
         verbose_name_plural = _("Measurement Guide Rows")
-        ordering = ["sort_order"]
+        ordering = ["sort_order", "name"]
         constraints = [
             models.UniqueConstraint(
                 fields=["product", "size_label"],
@@ -1391,74 +1356,6 @@ class ProductMeasurementGuide(TimeStampedModel):
     def __str__(self):
         owner = self.product.title if self.product else (self.template.name if self.template else "Orphan")
         return f"{owner} — {self.size_label}"
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 15. PRODUCT CERTIFICATION  (Phase 1 — 2026)
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-# class ProductCertification(TimeStampedModel):
-#     """
-#     Sustainability, safety, or quality certification badge for a product.
-
-#     Rendered as trust badges on the PDP and catalog listing cards.
-#     Verified certifications can be toggled by admin.
-#     """
-
-#     CERTIFICATION_TYPES = [
-#         ("organic", _("Organic")),
-#         ("fair_trade", _("Fair Trade")),
-#         ("recycled", _("Recycled Materials")),
-#         ("handmade", _("Handmade")),
-#         ("quality", _("Quality Assured")),
-#         ("safety", _("Safety Tested")),
-#         ("vegan", _("Vegan")),
-#         ("cruelty_free", _("Cruelty-Free")),
-#         ("local", _("Locally Made")),
-#         ("nafdac", _("NAFDAC Certified")),
-#         ("son", _("SON Certified")),
-#         ("custom", _("Custom")),
-#     ]
-
-#     product = models.ForeignKey(
-#         Product,
-#         on_delete=models.CASCADE,
-#         related_name="product_certifications",
-#     )
-#     certification_type = models.CharField(
-#         max_length=20,
-#         choices=CERTIFICATION_TYPES,
-#         default="custom",
-#     )
-#     name = models.CharField(
-#         max_length=120,
-#         help_text="Display name of the certification e.g. 'GOTS Certified Organic'.",
-#     )
-#     issuing_body = models.CharField(max_length=200, blank=True)
-#     certificate_number = models.CharField(max_length=100, blank=True)
-#     valid_from = models.DateField(null=True, blank=True)
-#     valid_to = models.DateField(null=True, blank=True)
-#     is_verified = models.BooleanField(
-#         default=False,
-#         help_text="Set by platform admin after document verification.",
-#     )
-#     badge_image = CloudinaryField(
-#         "badge_image",
-#         folder="fashionistar/certifications/",
-#         blank=True,
-#         null=True,
-#         help_text="Official certification badge image displayed on PDP.",
-#     )
-
-#     class Meta:
-#         verbose_name = _("Product Certification")
-#         verbose_name_plural = _("Product Certifications")
-#         ordering = ["-is_verified", "name"]
-
-#     def __str__(self):
-#         return f"{self.product.title} — {self.name}"
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 16. PRODUCT SHIPPING PROFILE  (Phase 1 — 2026)
@@ -1750,35 +1647,5 @@ class ProductDraftSession(HardDeleteMixin, SoftDeleteModel, TimeStampedModel):
         if not self.expires_at:
             self.expires_at = now() + datetime.timedelta(days=30)
         super().save(*args, **kwargs)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 20. VENDOR MEASUREMENT TEMPLATES  (2026+)
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-class VendorMeasurementTemplate(TimeStampedModel):
-    """
-    Reusable size-guide template defined by a vendor (tailor/brand).
-    Allows applying a standardized set of measurements (e.g. Senator fit, Kaftan slim fit)
-    to a product without manual row-by-row data entry on every upload.
-    """
-
-    vendor = models.ForeignKey(
-        "vendor.VendorProfile",
-        on_delete=models.CASCADE,
-        related_name="measurement_templates",
-        help_text="Vendor who owns this reusable sizing template."
-    )
-    name = models.CharField(max_length=120, help_text="e.g. 'Men's Slim Senator', 'Standard Kaftan'")
-    description = models.TextField(blank=True, help_text="Optional description of this measurement profile.")
-
-    class Meta:
-        verbose_name = _("Vendor Measurement Template")
-        verbose_name_plural = _("Vendor Measurement Templates")
-        ordering = ["name"]
-
-    def __str__(self):
-        return f"{self.vendor.store_name if self.vendor else 'Unknown'} — {self.name}"
 
 
