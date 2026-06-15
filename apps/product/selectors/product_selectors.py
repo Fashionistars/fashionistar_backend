@@ -33,6 +33,7 @@ Architecture rules (Django 6.0 / async-first):
    preventing full-table load into Python memory.
 """
 
+from apps.product.models import ProductInventoryLog
 from __future__ import annotations
 
 import asyncio
@@ -122,33 +123,61 @@ def get_published_products():
     )
 
 
-def get_published_products_list():
-    """
-    Optimised list queryset for catalog / search results.
 
+# ─────────────────────────────────────────────────────────────────────────────
+# ALIASES & ADDITIONAL SELECTORS
+# ─────────────────────────────────────────────────────────────────────────────
+
+def get_published_products_list(
+    *,
+    category_id: Any = None,
+    brand_id: Any = None,
+    vendor_id: Any = None,
+    ordering: str = "-created_at",
+):
+    """
+    Optimized list selector using .only() to avoid loading large text columns.
+    Paired with ProductListSerializer for catalog/card views.   
+    Optimised list queryset for catalog / search results.
     Best-practice #4 (only projection): fetches only card-view fields
     to avoid loading large text columns (description, specifications).
     """
-    return (
+    from django.db.models import Prefetch
+
+    qs = (
         Product.objects
         .filter(status=ProductStatus.PUBLISHED, is_deleted=False)
-        .select_related("vendor__user")
+        .select_related("vendor")
         .prefetch_related(
             "categories",
             "sub_categories",
-            Prefetch(
-                "product_variants_gallery_media",
-                queryset=ProductVariantGalleryMedia.objects.filter(is_deleted=False).select_related("size"),
-                to_attr="_prefetched_variants",
-            ),
+            Prefetch("product_variants_gallery_media", queryset=ProductVariantGalleryMedia.objects.filter(is_deleted=False).select_related("size"), to_attr="_prefetched_variants"),
         )
+        # .only(
+        #     "id", "title", "slug", "sku", "price", "old_price", "currency",
+        #     "in_stock", "stock_qty", "featured", "hot_deal",
+        #     "rating", "review_count", "requires_measurement", "is_customisable",
+        #     "created_at",
+        #     "vendor__id", "vendor__store_name", "vendor__store_slug",
+        #     "vendor__logo_url", "vendor__is_verified",
+        # )
+        .defer("description", "search_vector", "ai_description", "body_type_fit", "occasion_tags", "style_tags")
         .annotate(
             computed_review_count=Count("reviews", distinct=True),
             computed_avg_rating=Avg("reviews__rating"),
         )
-        .defer("description", "search_vector", "ai_description")
         .order_by("-created_at")
     )
+    if category_id:
+        qs = qs.filter(_category_lookup(category_id)).distinct()
+    if brand_id:
+        logger.debug(
+            "Ignoring product brand filter=%s because Brand is not a Product relation.",
+            brand_id,
+        )
+    if vendor_id:
+        qs = qs.filter(vendor_id=vendor_id)
+    return qs.order_by(ordering)
 
 
 def get_product_detail(slug: str) -> Product | None:
@@ -790,58 +819,6 @@ async def aget_wishlist_status_bulk(
 def models_F(field: str):  # noqa: N802
     from django.db.models import F as _F
     return _F(field)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# ALIASES & ADDITIONAL SELECTORS
-# ─────────────────────────────────────────────────────────────────────────────
-
-def get_published_products_list(
-    *,
-    category_id: Any = None,
-    brand_id: Any = None,
-    vendor_id: Any = None,
-    ordering: str = "-created_at",
-):
-    """
-    Optimized list selector using .only() to avoid loading large text columns.
-    Paired with ProductListSerializer for catalog/card views.
-    """
-    from django.db.models import Prefetch
-
-    qs = (
-        Product.objects
-        .filter(status=ProductStatus.PUBLISHED, is_deleted=False)
-        .select_related("vendor")
-        .prefetch_related(
-            "categories",
-            "sub_categories",
-            Prefetch("product_variants_gallery_media", queryset=ProductVariantGalleryMedia.objects.filter(is_deleted=False).select_related("size"), to_attr="_prefetched_variants"),
-        )
-        # .only(
-        #     "id", "title", "slug", "sku", "price", "old_price", "currency",
-        #     "in_stock", "stock_qty", "featured", "hot_deal",
-        #     "rating", "review_count", "requires_measurement", "is_customisable",
-        #     "created_at",
-        #     "vendor__id", "vendor__store_name", "vendor__store_slug",
-        #     "vendor__logo_url", "vendor__is_verified",
-        # )
-        .defer("description", "search_vector", "ai_description", "body_type_fit", "occasion_tags", "style_tags")
-        .annotate(
-            computed_review_count=Count("reviews", distinct=True),
-            computed_avg_rating=Avg("reviews__rating"),
-        )
-    )
-    if category_id:
-        qs = qs.filter(_category_lookup(category_id)).distinct()
-    if brand_id:
-        logger.debug(
-            "Ignoring product brand filter=%s because Brand is not a Product relation.",
-            brand_id,
-        )
-    if vendor_id:
-        qs = qs.filter(vendor_id=vendor_id)
-    return qs.order_by(ordering)
 
 
 
