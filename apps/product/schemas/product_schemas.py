@@ -110,35 +110,24 @@ class ProductColorOut(Schema):
     hex_code: str = ""
 
 
-class ProductTagOut(Schema):
-    model_config = {"from_attributes": True}
-    id: str
-    name: str
-    slug: str
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # PHASE 1 NEW TAXONOMY SCHEMAS
 # ─────────────────────────────────────────────────────────────────────────────
 
-class ProductFabricOut(Schema):
+class ProductFabricSpecificationOut(Schema):
     """Fabric type with care/sustainability metadata — Phase 1."""
     model_config = {"from_attributes": True}
     id: str
     fabric_type: str
-    composition: dict | list | None = None
     care_instructions: str = "machine_wash"
-    care_notes: str = ""
     is_organic: bool = False
     is_vegan: bool = False
     country_of_origin: str = ""
 
 
-class ProductFabricIn(Schema):
+class ProductFabricSpecificationIn(Schema):
     fabric_type: str
-    composition: dict | list | None = None
     care_instructions: str = "machine_wash"
-    care_notes: str = ""
     is_organic: bool = False
     is_vegan: bool = False
     country_of_origin: str = ""
@@ -334,7 +323,6 @@ class ProductVariantOut(Schema):
     size: ProductSizeAndMeasurementGuideOut | None = None
     color_name: str = ""
     color_hex: str = ""
-    stock_qty: int = 0
     media_url: str | None = None
     media_type: str = "image"
     alt_text: str = ""
@@ -343,7 +331,6 @@ class ProductVariantOut(Schema):
     video_thumbnail_url: str | None = None
     duration_sec: int | None = None
     barcode: str = ""
-    notes: str = ""
 
     @model_validator(mode="before")
     @classmethod
@@ -354,10 +341,9 @@ class ProductVariantOut(Schema):
             return {
                 "id": str(data.id),
                 "sku": data.sku,
-                "size": data.size,
+                "size": getattr(data, "size", None),
                 "color_name": data.color_name or "",
                 "color_hex": data.color_hex or "",
-                "stock_qty": data.stock_qty,
                 "media_url": media_url,
                 "media_type": data.media_type,
                 "alt_text": data.alt_text or "",
@@ -366,17 +352,8 @@ class ProductVariantOut(Schema):
                 "video_thumbnail_url": video_thumbnail_url,
                 "duration_sec": data.duration_sec,
                 "barcode": data.barcode or "",
-                "notes": data.notes or "",
             }
         return data
-
-
-class ProductSpecificationOut(Schema):
-    model_config = {"from_attributes": True}
-    id: str
-    title: str
-    content: str
-
 
 class ProductFaqOut(Schema):
     model_config = {"from_attributes": True}
@@ -404,13 +381,15 @@ class ProductListItemOut(Schema):
     price: Decimal
     old_price: Decimal | None = None
     discount_percentage: int = 0
+    is_discounted: bool = False
+    discounted_price: Decimal | None = None
+    cash_payment_mode: str = "payment_before_delivery"
     currency: str = "NGN"
     image_url: str | None = None
     in_stock: bool
     stock_qty: int = 0
     featured: bool = False
     hot_deal: bool = False
-    digital: bool = False
     rating: Decimal = Decimal("0")
     review_count: int = 0
     computed_review_count: int = 0
@@ -423,7 +402,6 @@ class ProductListItemOut(Schema):
     brand_slug: str | None = None
     vendor_name: str | None = None
     vendor_slug: str | None = None
-    sizes: list[ProductSizeAndMeasurementGuideOut] = []
     created_at: datetime
 
 
@@ -442,6 +420,9 @@ class ProductDetailOut(Schema):
     price: Decimal
     old_price: Decimal | None = None
     discount_percentage: int = 0
+    is_discounted: bool = False
+    discounted_price: Decimal | None = None
+    cash_payment_mode: str = "payment_before_delivery"
     currency: str = "NGN"
     shipping_amount: Decimal = Decimal("1000")
     image_url: str | None = None
@@ -458,16 +439,12 @@ class ProductDetailOut(Schema):
     computed_avg_rating: float = 0.0
     featured: bool = False
     hot_deal: bool = False
-    digital: bool = False
     requires_measurement: bool = False
     is_customisable: bool = False
-    sizes: list[ProductSizeAndMeasurementGuideOut] = []
-    tags: list[ProductTagOut] = []
-    specifications: list[ProductSpecificationOut] = []
     faqs: list[ProductFaqOut] = []
     variants: list[ProductVariantOut] = []
     # Phase 1 embeds
-    fabric: ProductFabricOut | None = None
+    fabric: ProductFabricSpecificationOut | None = None
     measurement_guide: list[ProductMeasurementGuideOut] = []
     shipping_profile: ProductShippingProfileOut | None = None
     # certifications: list[ProductCertificationOut] = []
@@ -483,7 +460,6 @@ class ProductDetailOut(Schema):
     vendor_is_verified: bool = False
     commission_rate: Decimal = Decimal("10.00")
     # Phase 1 Product fields
-    weight_kg: Decimal | None = None
     condition: str = "new"
     is_pre_order: bool = False
     pre_order_date: datetime | None = None
@@ -491,7 +467,6 @@ class ProductDetailOut(Schema):
     meta_description: str = ""
     age_group: str = ""
     gender_target: str = ""
-    measurement_template_id: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -606,31 +581,29 @@ class ProductWriteIn(Schema):
     description: str = Field(..., min_length=100)
     price: Decimal = Field(..., ge=5000)
     old_price: Decimal | None = Field(default=None, ge=5000)
+    is_discounted: bool = False
+    discount_percentage: int = 0
+    discounted_price: Decimal | None = None
+    cash_payment_mode: str = "payment_before_delivery"
     currency: str = "NGN"
     shipping_amount: Decimal = Decimal("2500")
     stock_qty: int = Field(0, ge=0)
     max_stock: int | None = None
     category_ids: list[str] = Field(..., min_length=1, max_length=15)
     sub_category_ids: list[str] = Field(default_factory=list, max_length=15)
-    size_ids: list[str] = []
     # color_ids removed — colors are now stored directly via color_name/color_hex on variants
-    tag_ids: list[str] = []
     requires_measurement: bool = False
-    measurement_template_id: UUID | None = None
     is_customisable: bool = False
     hot_deal: bool = False
-    digital: bool = False
     commission_rate: Decimal = Decimal("10.00")
     idempotency_key: UUID | None = None
-    weight_kg: Decimal | None = None
     condition: str = "new"
     is_pre_order: bool = False
     pre_order_date: datetime | None = None
     meta_title: str = ""
     meta_description: str = ""
     age_group: str = ""
-    gender_target: str = ""
-    fabric: ProductFabricIn | None = None
+    gender_target: str = ""fabric: ProductFabricSpecificationIn | None = None
     shipping_profile: ProductShippingProfileIn | None = None
     measurement_guide: list[ProductMeasurementGuideIn] = []
     variants: list[ProductVariantWriteIn] = []

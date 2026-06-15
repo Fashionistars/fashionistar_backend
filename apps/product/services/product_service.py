@@ -219,7 +219,7 @@ def _sync_product_variants(product: Product, variants_data: list[dict]) -> None:
     - If SKU is new, create it.
     - If existing variant SKU not submitted, soft-delete it.
     """
-    existing_variants = {v.sku: v for v in product.variants.filter(is_deleted=False)}
+    existing_variants = {v.sku: v for v in product.product_variants_gallery_media.filter(is_deleted=False)}
     submitted_skus = set()
 
     for vdata in variants_data:
@@ -237,9 +237,7 @@ def _sync_product_variants(product: Product, variants_data: list[dict]) -> None:
             "size": size,
             "color_name": color_name,
             "color_hex": color_hex,
-            "stock_qty": vdata.get("stock_qty", 0),
             "barcode": vdata.get("barcode", ""),
-            "notes": vdata.get("notes", ""),
             "media": vdata.get("media"),
             "media_type": vdata.get("media_type", "image"),
             "alt_text": vdata.get("alt_text", ""),
@@ -258,7 +256,7 @@ def _sync_product_variants(product: Product, variants_data: list[dict]) -> None:
         else:
             if not sku:
                 import uuid
-                sku = f"VAR-{str(uuid.uuid4()).upper()[:10]}"
+                sku = f"FASTAR-{str(uuid.uuid4()).upper()[:10]}"
             variant = ProductVariantGalleryMedia(
                 product=product,
                 sku=sku,

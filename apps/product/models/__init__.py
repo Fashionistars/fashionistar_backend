@@ -17,9 +17,6 @@ from apps.product.models.product import (
     ProductStatus,
     # ── Taxonomy ────────────────────────────────────────────────────────────
     ProductTag,
-    # ── Product content ─────────────────────────────────────────────────────
-    ProductSpecification,
-    ProductFaq,
     # ── Core product ────────────────────────────────────────────────────────
     Product,
     # ── Variants & inventory ────────────────────────────────────────────────
