@@ -215,8 +215,6 @@ class Product(TimeStampedModel, SoftDeleteModel):
     vendor      → apps.vendor.VendorProfile                                             (PROTECT)
     categories  → apps.catalog.Category                                                 (M2M — one to five product facets)
     tags        → ProductTag                                                            (M2M)
-    sizes       → ProductSizeAndMeasurementGuide                                          (M2M)
-    colors      → ProductColor                                                            (M2M)
 
     on_delete rationale
     --------------------
@@ -257,13 +255,17 @@ class Product(TimeStampedModel, SoftDeleteModel):
         help_text="Optional deeper taxonomy facets. Kept separate from required categories.",
     )
     tags = models.ManyToManyField(ProductTag, blank=True, related_name="tag_products")
-    sizes = models.ManyToManyField(
-        "ProductSizeAndMeasurementGuide", blank=True, related_name="product_size_and_measurement_guides"
-    )
 
     # ── Pricing ───────────────────────────────────────────────────────────
     price = models.DecimalField(max_digits=12, decimal_places=2)
     old_price = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True
+    )
+    is_discounted = models.BooleanField(default=False)
+    discount_percentage = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True
+    )
+    discounted_price = models.DecimalField(
         max_digits=12, decimal_places=2, null=True, blank=True
     )
     currency = models.CharField(max_length=3, default="NGN")
@@ -277,34 +279,31 @@ class Product(TimeStampedModel, SoftDeleteModel):
         help_text="Optional stock ceiling. Service enforces this to prevent over-stocking.",
     )
     in_stock = models.BooleanField(default=True)
+
     requires_measurement = models.BooleanField(
         default=False,
         help_text="If True, client must share measurement profile before checkout.",
-    )
-    measurement_template = models.CharField(
-        max_length=120,
-        blank=True,
-        null=True,
-        help_text="Optional measurement template name applied to this product to populate size chart.",
     )
     is_customisable = models.BooleanField(
         default=False,
         help_text="Custom orders — triggers ChatOffer flow.",
     )
+
+    # ── Payment COD / Pay At Shop availability on this product ───────────────────────────────────────────────────────────
     cash_payment_mode = models.CharField(
         max_length=20,
         choices=CashPaymentMode.choices,
         default=CashPaymentMode.DISABLED,
         help_text="Checkout gate for COD / Pay At Shop availability on this product.",
     )
-
-    # ── Media ─────────────────────────────────────────────────────────────
-    image = CloudinaryField(
-        "image",
-        folder="fashionistar/products/",
-        blank=True,
+    is_pre_order = models.BooleanField(
+        default=False,
+        help_text="If True, the product is available for pre-order before stock arrives.",
+    )
+    pre_order_date = models.DateField(
         null=True,
-        help_text="Primary product image. Set via direct-upload presign flow.",
+        blank=True,
+        help_text="Expected dispatch date for pre-order items.",
     )
 
     # ── Status ────────────────────────────────────────────────────────────
@@ -316,7 +315,6 @@ class Product(TimeStampedModel, SoftDeleteModel):
     )
     featured = models.BooleanField(default=False, db_index=True)
     hot_deal = models.BooleanField(default=False)
-    digital = models.BooleanField(default=False)
 
     # ── Metrics ───────────────────────────────────────────────────────────
     views = models.PositiveIntegerField(default=0)
@@ -341,14 +339,6 @@ class Product(TimeStampedModel, SoftDeleteModel):
         help_text="Client-generated UUID for safe network-retry. One product per key.",
     )
 
-    # ── Physical attributes (Phase 1 — 2026) ─────────────────────────────
-    weight_kg = models.DecimalField(
-        max_digits=7,
-        decimal_places=3,
-        null=True,
-        blank=True,
-        help_text="Product weight in kg. Used as fallback when no shipping profile exists.",
-    )
     condition = models.CharField(
         max_length=20,
         choices=[
@@ -358,15 +348,6 @@ class Product(TimeStampedModel, SoftDeleteModel):
         ],
         default="new",
         help_text="Physical condition of the product.",
-    )
-    is_pre_order = models.BooleanField(
-        default=False,
-        help_text="If True, the product is available for pre-order before stock arrives.",
-    )
-    pre_order_date = models.DateField(
-        null=True,
-        blank=True,
-        help_text="Expected dispatch date for pre-order items.",
     )
 
     # ── SEO Overrides (Phase 1 — 2026) ────────────────────────────────────
@@ -483,12 +464,12 @@ class Product(TimeStampedModel, SoftDeleteModel):
 
             # Use random uuid4 suffix to avoid UNIQUE collisions on rapid creation
             for _attempt in range(5):
-                candidate = f"FSN-{_uuid.uuid4().hex[:8].upper()}"
+                candidate = f"FASTAR-{_uuid.uuid4().hex[:8].upper()}"
                 if not Product.objects.filter(sku=candidate).exists():
                     self.sku = candidate
                     break
             else:
-                self.sku = f"FSN-{_uuid.uuid4().hex[:12].upper()}"
+                self.sku = f"FASTAR-{_uuid.uuid4().hex[:12].upper()}"
         self.in_stock = self.stock_qty > 0
         super().save(*args, **kwargs)
 
@@ -595,28 +576,21 @@ class Product(TimeStampedModel, SoftDeleteModel):
         ).acount()
 
     def gallery(self):
-        """Compatibility accessor for unified variants gallery media."""
-        return self.variants.filter(is_deleted=False).exclude(media__isnull=True).exclude(media="").order_by(
+        """Compatibility accessor for unified product_variants_gallery_media queryset."""
+        return self.product_variants_gallery_media.filter(is_deleted=False).exclude(media__isnull=True).exclude(media="").order_by(
             "ordering", "created_at"
         )
 
     async def agallery(self) -> list["ProductVariantGalleryMedia"]:
-        """Async list of non-deleted gallery media."""
+        """Async list of non-deleted product_variants_gallery_media."""
         return [media async for media in self.gallery()]
 
-    def specification(self):
-        """Compatibility accessor for product_specifications reverse FK."""
-        return self.product_specifications.all()
-
-    async def aspecification(self) -> list["ProductSpecification"]:
-        """Async list of specifications through product_specifications."""
-        return [spec async for spec in self.product_specifications.all()]
 
     def color(self):
         """Compatibility accessor for colors from variants."""
         colors_list = []
         seen = set()
-        for v in self.variants.all():
+        for v in self.product_variants_gallery_media.all():
             if v.color_name and v.color_name not in seen:
                 seen.add(v.color_name)
                 colors_list.append({
@@ -625,10 +599,6 @@ class Product(TimeStampedModel, SoftDeleteModel):
                     "hex_code": v.color_hex,
                 })
         return colors_list
-
-    def size(self):
-        """Compatibility accessor for sizes M2M."""
-        return self.sizes.all()
 
     def frequently_bought_together(self, limit: int = 3):
         """Products most often ordered in the same orders as this product."""
@@ -688,8 +658,6 @@ class ProductVariantGalleryMedia(TimeStampedModel, SoftDeleteModel):
     color_name = models.CharField(max_length=100, blank=True)
     color_hex = models.CharField(max_length=7, blank=True, help_text="e.g. #FDA600")
    
-    stock_qty = models.PositiveIntegerField(default=0)
-  
     media = CloudinaryField(
         "media",
         folder="fashionistar/products/gallery/",
@@ -700,6 +668,7 @@ class ProductVariantGalleryMedia(TimeStampedModel, SoftDeleteModel):
         max_length=10, choices=MEDIA_TYPE_CHOICES, default="image"
     )
     alt_text = models.CharField(max_length=200, blank=True)
+
     ordering = models.PositiveSmallIntegerField(default=0)
     is_primary = models.BooleanField(
         default=False,
@@ -717,16 +686,13 @@ class ProductVariantGalleryMedia(TimeStampedModel, SoftDeleteModel):
         blank=True,
         help_text="Duration in seconds for video media items.",
     )
+
     barcode = models.CharField(
         max_length=100,
         blank=True,
         help_text="EAN-13 / UPC-A / QR barcode for warehouse/logistics integrations.",
     )
-    notes = models.TextField(
-        blank=True,
-        help_text="Internal vendor notes for this variant (not shown to customers).",
-    )
-
+   
     class Meta:
         verbose_name = _("Product Variant Gallery Media")
         verbose_name_plural = _("Product Variant Gallery Media")
@@ -742,7 +708,7 @@ class ProductVariantGalleryMedia(TimeStampedModel, SoftDeleteModel):
 
     def save(self, *args, **kwargs):
         if not self.sku:
-            self.sku = f"VAR-{str(self.id or uuid6.uuid7()).upper()[:10]}"
+            self.sku = f"FASTAR-{str(self.id or uuid6.uuid7()).upper()[:10]}"
         super().save(*args, **kwargs)
 
     @property
