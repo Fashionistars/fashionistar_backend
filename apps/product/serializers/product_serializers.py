@@ -445,3 +445,399 @@ class ProductDraftSessionWriteSerializer(serializers.ModelSerializer):
             "last_synced_at",
         ]
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# READ-ONLY SERIALIZERS (Phase 1 Realignment)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ProductTagSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductTag
+        fields = ["id", "name", "slug"]
+
+
+class ProductFabricSpecificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductFabricSpecification
+        fields = [
+            "fabric_type",
+            "care_instructions",
+            "is_organic",
+            "is_vegan",
+            "country_of_origin",
+        ]
+
+
+class ProductSizeAndMeasurementGuideSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(read_only=True)
+    description = serializers.ChoiceField(
+        choices=ProductSizeAndMeasurementGuide.DESCRIPTION_CHOICES,
+        default="custom"
+    )
+    size_label = serializers.ChoiceField(
+        choices=ProductSizeAndMeasurementGuide.SIZE_CHOICES,
+        default="M"
+    )
+
+    class Meta:
+        model = ProductSizeAndMeasurementGuide
+        fields = [
+            "id",
+            "vendor",
+            "name",
+            "description",
+            "is_default",
+            "save_as_template",
+            "size_label",
+            "chest_cm",
+            "waist_cm",
+            "hip_cm",
+            "length_cm",
+            "shoulder_cm",
+            "sleeve_cm",
+            "inseam_cm",
+            "foot_length_cm",
+            "sort_order",
+        ]
+
+
+# Alias for compatibility
+ProductMeasurementGuideSerializer = ProductSizeAndMeasurementGuideSerializer
+
+
+class ProductShippingProfileSerializer(serializers.ModelSerializer):
+    effective_free_shipping_threshold = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        read_only=True,
+        source="effective_free_shipping_threshold",
+    )
+
+    class Meta:
+        model = ProductShippingProfile
+        fields = [
+            "id",
+            "weight_kg",
+            "dimensions_cm",
+            "length_cm",
+            "width_cm",
+            "height_cm",
+            "is_fragile",
+            "requires_signature",
+            "restricted_countries",
+            "free_shipping_threshold",
+            "effective_free_shipping_threshold",
+            "processing_days",
+        ]
+
+
+class ProductVendorMiniSerializer(serializers.Serializer):
+    id = serializers.UUIDField(source="vendor.id")
+    store_name = serializers.SerializerMethodField()
+    avatar_url = serializers.SerializerMethodField()
+    slug = serializers.SerializerMethodField()
+    is_verified = serializers.SerializerMethodField()
+
+    def get_store_name(self, obj: Any) -> Optional[str]:
+        vendor = obj.vendor
+        if not vendor:
+            return None
+        return getattr(vendor, "store_name", None) or getattr(vendor, "business_name", None) or str(vendor)
+
+    def get_avatar_url(self, obj: Any) -> Optional[str]:
+        vendor = obj.vendor
+        if not vendor:
+            return None
+        logo = getattr(vendor, "logo", None) or getattr(vendor, "avatar", None)
+        return str(logo.url) if logo else None
+
+    def get_slug(self, obj: Any) -> Optional[str]:
+        vendor = obj.vendor
+        return getattr(vendor, "store_slug", None) if vendor else None
+
+    def get_is_verified(self, obj: Any) -> bool:
+        vendor = obj.vendor
+        return getattr(vendor, "is_verified", False) if vendor else False
+
+
+class ProductFaqSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductFaq
+        fields = ["id", "question", "answer"]
+
+
+class ProductVariantGalleryMediaSerializer(serializers.ModelSerializer):
+    size = ProductSizeAndMeasurementGuideSerializer(read_only=True)
+    media_url = serializers.SerializerMethodField()
+    thumbnail_url = serializers.SerializerMethodField()
+    video_thumbnail_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProductVariantGalleryMedia
+        fields = [
+            "id",
+            "sku",
+            "size",
+            "color_name",
+            "color_hex",
+            "barcode",
+            "media_url",
+            "thumbnail_url",
+            "media_type",
+            "alt_text",
+            "ordering",
+            "is_primary",
+            "video_thumbnail_url",
+            "duration_sec",
+        ]
+
+    def get_media_url(self, obj: ProductVariantGalleryMedia) -> Optional[str]:
+        return str(obj.media.url) if obj.media else None
+
+    def get_thumbnail_url(self, obj: ProductVariantGalleryMedia) -> Optional[str]:
+        if not obj.media or obj.media_type != "image":
+            return None
+        url = str(obj.media.url)
+        if "res.cloudinary.com" in url:
+            return url.replace("/upload/", "/upload/w_400,h_400,c_fill,f_auto,q_auto/")
+        return url
+
+    def get_video_thumbnail_url(self, obj: ProductVariantGalleryMedia) -> Optional[str]:
+        return str(obj.video_thumbnail.url) if obj.video_thumbnail else None
+
+
+class ProductListSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+    discount_percentage = serializers.ReadOnlyField()
+    category_name = serializers.SerializerMethodField()
+    category_slug = serializers.SerializerMethodField()
+    vendor_name = serializers.SerializerMethodField()
+    vendor_slug = serializers.SerializerMethodField()
+    computed_review_count = serializers.IntegerField(read_only=True, default=0)
+    computed_avg_rating = serializers.FloatField(read_only=True, default=0)
+    sizes = serializers.SerializerMethodField()
+    colors = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Product
+        fields = [
+            "id",
+            "title",
+            "slug",
+            "sku",
+            "price",
+            "old_price",
+            "is_discounted",
+            "discount_percentage",
+            "discounted_price",
+            "currency",
+            "image_url",
+            "in_stock",
+            "stock_qty",
+            "featured",
+            "hot_deal",
+            "rating",
+            "review_count",
+            "computed_review_count",
+            "computed_avg_rating",
+            "category_name",
+            "category_slug",
+            "vendor_name",
+            "vendor_slug",
+            "requires_measurement",
+            "is_customisable",
+            "cash_payment_mode",
+            "sizes",
+            "colors",
+            "created_at",
+        ]
+
+    def get_image_url(self, obj: Product) -> Optional[str]:
+        primary_media = obj.product_variants_gallery_media.filter(
+            is_primary=True, is_deleted=False
+        ).first() or obj.product_variants_gallery_media.filter(
+            is_deleted=False
+        ).first()
+
+        if primary_media and primary_media.media:
+            url = str(primary_media.media.url)
+            if "res.cloudinary.com" in url and "/upload/" in url:
+                return url.replace("/upload/", "/upload/w_480,h_480,c_fill,f_auto,q_auto/")
+            return url
+        return None
+
+    def get_vendor_name(self, obj: Product) -> Optional[str]:
+        if not obj.vendor:
+            return None
+        return getattr(obj.vendor, "store_name", None) or getattr(obj.vendor, "business_name", None) or str(obj.vendor)
+
+    def get_vendor_slug(self, obj: Product) -> Optional[str]:
+        return getattr(obj.vendor, "store_slug", None) if obj.vendor else None
+
+    def get_category_name(self, obj: Product) -> Optional[str]:
+        category = obj.primary_category if hasattr(obj, "primary_category") else None
+        return getattr(category, "name", None)
+
+    def get_category_slug(self, obj: Product) -> Optional[str]:
+        category = obj.primary_category if hasattr(obj, "primary_category") else None
+        return getattr(category, "slug", None)
+
+    def get_sizes(self, obj: Product) -> List[Dict[str, Any]]:
+        variants = obj.product_variants_gallery_media.filter(is_deleted=False).select_related("size")
+        sizes_list = []
+        seen_size_ids = set()
+        for variant in variants:
+            if variant.size and variant.size.id not in seen_size_ids:
+                seen_size_ids.add(variant.size.id)
+                sizes_list.append(variant.size)
+        return ProductSizeAndMeasurementGuideSerializer(sizes_list, many=True).data
+
+    def get_colors(self, obj: Product) -> List[Dict[str, Any]]:
+        return obj.color()
+
+
+class ProductDetailSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+    cover_image_url = serializers.SerializerMethodField()
+    gallery = serializers.SerializerMethodField()
+    sizes = serializers.SerializerMethodField()
+    colors = serializers.SerializerMethodField()
+    tags = ProductTagSerializer(many=True, read_only=True)
+    faqs = ProductFaqSerializer(many=True, read_only=True, source="faqs")
+    variants = serializers.SerializerMethodField()
+    fabric = ProductFabricSpecificationSerializer(
+        read_only=True, source="product_fabric_specification"
+    )
+    measurement_guide = serializers.SerializerMethodField()
+    shipping_profile = ProductShippingProfileSerializer(
+        read_only=True, source="shipping_profile"
+    )
+    category_name = serializers.SerializerMethodField()
+    category_slug = serializers.SerializerMethodField()
+    sub_category_name = serializers.SerializerMethodField()
+    vendor = ProductVendorMiniSerializer(source="*", read_only=True)
+    computed_review_count = serializers.IntegerField(read_only=True, default=0)
+    computed_avg_rating = serializers.FloatField(read_only=True, default=0)
+
+    class Meta:
+        model = Product
+        fields = [
+            "id",
+            "title",
+            "slug",
+            "sku",
+            "description",
+            "price",
+            "old_price",
+            "is_discounted",
+            "discount_percentage",
+            "discounted_price",
+            "currency",
+            "shipping_amount",
+            "image_url",
+            "cover_image_url",
+            "gallery",
+            "in_stock",
+            "stock_qty",
+            "max_stock",
+            "views",
+            "orders_count",
+            "rating",
+            "review_count",
+            "computed_review_count",
+            "computed_avg_rating",
+            "featured",
+            "hot_deal",
+            "requires_measurement",
+            "is_customisable",
+            "cash_payment_mode",
+            "sizes",
+            "colors",
+            "tags",
+            "faqs",
+            "variants",
+            "fabric",
+            "measurement_guide",
+            "shipping_profile",
+            "status",
+            "category_name",
+            "category_slug",
+            "sub_category_name",
+            "vendor",
+            "commission_rate",
+            "condition",
+            "is_pre_order",
+            "pre_order_date",
+            "meta_title",
+            "meta_description",
+            "age_group",
+            "gender_target",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_image_url(self, obj: Product) -> Optional[str]:
+        primary_media = obj.product_variants_gallery_media.filter(
+            is_primary=True, is_deleted=False
+        ).first() or obj.product_variants_gallery_media.filter(
+            is_deleted=False
+        ).first()
+
+        if primary_media and primary_media.media:
+            url = str(primary_media.media.url)
+            if "res.cloudinary.com" in url and "/upload/" in url:
+                return url.replace("/upload/", "/upload/f_auto,q_auto/")
+            return url
+        return None
+
+    def get_cover_image_url(self, obj: Product) -> Optional[str]:
+        return self.get_image_url(obj)
+
+    def get_gallery(self, obj: Product) -> List[Dict[str, Any]]:
+        return ProductVariantGalleryMediaSerializer(obj.gallery(), many=True).data
+
+    def get_sizes(self, obj: Product) -> List[Dict[str, Any]]:
+        variants = obj.product_variants_gallery_media.filter(is_deleted=False).select_related("size")
+        sizes_list = []
+        seen_size_ids = set()
+        for variant in variants:
+            if variant.size and variant.size.id not in seen_size_ids:
+                seen_size_ids.add(variant.size.id)
+                sizes_list.append(variant.size)
+        return ProductSizeAndMeasurementGuideSerializer(sizes_list, many=True).data
+
+    def get_colors(self, obj: Product) -> List[Dict[str, Any]]:
+        return obj.color()
+
+    def get_variants(self, obj: Product) -> List[Dict[str, Any]]:
+        return ProductVariantGalleryMediaSerializer(
+            obj.product_variants_gallery_media.filter(is_deleted=False), many=True
+        ).data
+
+    def get_measurement_guide(self, obj: Product) -> List[Dict[str, Any]]:
+        guides = ProductSizeAndMeasurementGuide.objects.filter(
+            vendor=obj.vendor, is_default=True
+        )
+        return ProductSizeAndMeasurementGuideSerializer(guides, many=True).data
+
+    def get_category_name(self, obj: Product) -> Optional[str]:
+        category = obj.primary_category if hasattr(obj, "primary_category") else None
+        return getattr(category, "name", None)
+
+    def get_category_slug(self, obj: Product) -> Optional[str]:
+        category = obj.primary_category if hasattr(obj, "primary_category") else None
+        return getattr(category, "slug", None)
+
+    def get_sub_category_name(self, obj: Product) -> Optional[str]:
+        category = obj.primary_sub_category if hasattr(obj, "primary_sub_category") else None
+        return getattr(category, "name", None)
+
+
+class ProductAdminSerializer(ProductDetailSerializer):
+    status = serializers.ChoiceField(choices=Product.ProductStatus.choices)
+    idempotency_key = serializers.UUIDField(read_only=True)
+
+    class Meta(ProductDetailSerializer.Meta):
+        fields = ProductDetailSerializer.Meta.fields + ["idempotency_key"]
+
+

@@ -51,7 +51,7 @@ from apps.product.models import (
     Coupon,
     Product,
     # ProductCertification,
-    ProductFabric,
+    ProductFabricSpecification,
     ProductSizeAndMeasurementGuide,
     ProductReview,
     ProductStatus,
@@ -104,10 +104,9 @@ def get_published_products():
         .prefetch_related(
             "categories",       # M2M
             "sub_categories",   # M2M
-            "sizes",           # M2M
             "tags",            # M2M
             Prefetch(
-                "variants",
+                "product_variants_gallery_media",
                 queryset=ProductVariantGalleryMedia.objects.filter(
                     is_deleted=False,
                     media_type="image",
@@ -138,12 +137,7 @@ def get_published_products_list():
             "categories",
             "sub_categories",
             Prefetch(
-                "sizes",
-                queryset=ProductSizeAndMeasurementGuide.objects.only("id", "size_label"),
-                to_attr="_prefetched_sizes",
-            ),
-            Prefetch(
-                "variants",
+                "product_variants_gallery_media",
                 queryset=ProductVariantGalleryMedia.objects.filter(is_deleted=False).select_related("size"),
                 to_attr="_prefetched_variants",
             ),
@@ -175,15 +169,14 @@ def get_product_detail(slug: str) -> Product | None:
             )
             .prefetch_related(
                 "categories", "sub_categories",
-                "sizes", "tags",
+                "tags",
                 Prefetch(
-                    "variants",
+                    "product_variants_gallery_media",
                     queryset=ProductVariantGalleryMedia.objects.filter(
                         is_deleted=False,
                     ).select_related("size").order_by("ordering", "created_at"),
                 ),
-                "product_specifications",
-                "product_faqs",
+                "faqs",
             )
             .annotate(
                 computed_review_count=Count("reviews", distinct=True),
@@ -212,7 +205,7 @@ def get_products_by_vendor(vendor_id: Any):
         Product.objects
         .filter(vendor_id=vendor_id, is_deleted=False)
         .select_related("vendor__user")
-        .prefetch_related("categories", "sub_categories", "sizes", "colors", "product_gallery_media")
+        .prefetch_related("categories", "sub_categories", "tags", "product_variants_gallery_media")
         .annotate(
             computed_review_count=Count("reviews", distinct=True),
         )
@@ -237,15 +230,14 @@ def get_vendor_product_or_404(vendor_id: Any, slug: str) -> Product | None:
             )
             .prefetch_related(
                 "categories", "sub_categories",
-                "sizes", "tags",
+                "tags",
                 Prefetch(
-                    "variants",
+                    "product_variants_gallery_media",
                     queryset=ProductVariantGalleryMedia.objects.filter(
                         is_deleted=False,
                     ).select_related("size").order_by("ordering", "created_at"),
                 ),
-                "product_specifications",
-                "product_faqs",
+                "faqs",
             )
             .get()
         )
@@ -343,9 +335,9 @@ def filter_products(
     if hot_deal is not None:
         qs = qs.filter(hot_deal=hot_deal)
     if size_ids:
-        qs = qs.filter(sizes__id__in=size_ids).distinct()
+        qs = qs.filter(product_variants_gallery_media__size__id__in=size_ids).distinct()
     if color_ids:
-        qs = qs.filter(colors__id__in=color_ids).distinct()
+        qs = qs.filter(product_variants_gallery_media__id__in=color_ids).distinct()
 
     return qs.order_by(allowed_ordering.get(ordering, "-created_at"))
 
@@ -445,7 +437,7 @@ def get_wishlist_for_identity(
             # async Ninja context).
             "product__categories",
             Prefetch(
-                "product__variants",
+                "product__product_variants_gallery_media",
                 queryset=ProductVariantGalleryMedia.objects.filter(
                     is_deleted=False, media_type="image",
                 ).order_by("ordering")[:1],
@@ -566,26 +558,19 @@ async def aget_product_detail(slug: str) -> Product | None:
                 slug=slug,
             )
             .select_related(
-                "vendor", "vendor__user", "product_fabric", "product_custom_shipping_profile",
+                "vendor", "vendor__user", "product_fabric_specification", "shipping_profile",
             )
             .prefetch_related(
                 "categories", "sub_categories",
-                "sizes",
                 "tags",
                 Prefetch(
-                    "variants",
+                    "product_variants_gallery_media",
                     queryset=ProductVariantGalleryMedia.objects
                     .filter(is_deleted=False)
                     .select_related("size")
-                    .order_by("-is_default", "ordering", "sku"),
+                    .order_by("ordering", "sku"),
                 ),
-                "product_specifications",
-                "product_faqs",
-                # Phase 1 reverse FK prefetches
-                Prefetch(
-                    "product_measurement_guide",
-                    queryset=ProductSizeAndMeasurementGuide.objects.order_by("sort_order"),
-                ),
+                "faqs",
             )
             .annotate(
                 computed_review_count=Count("reviews", distinct=True),
@@ -720,14 +705,16 @@ async def aget_vendor_product(vendor_id: Any, slug: str) -> Product | None:
             Product.objects
             .filter(vendor_id=vendor_id, slug=slug, is_deleted=False)
             .select_related(
-                "vendor", "vendor__user", "product_fabric", "product_custom_shipping_profile",
+                "vendor", "vendor__user", "product_fabric_specification", "shipping_profile",
             )
             .prefetch_related(
                 "categories", "sub_categories",
-                "sizes", "colors", "tags",
-                "product_gallery_media", "product_variants__size", "product_variants__color",
-                "product_specifications", "product_faqs",
-                "product_measurement_guide",
+                "tags",
+                Prefetch(
+                    "product_variants_gallery_media",
+                    queryset=ProductVariantGalleryMedia.objects.filter(is_deleted=False).select_related("size").order_by("ordering"),
+                ),
+                "faqs",
             )
             .aget()
         )
@@ -795,8 +782,7 @@ def get_published_products_list(
         .prefetch_related(
             "categories",
             "sub_categories",
-            Prefetch("sizes", queryset=ProductSizeAndMeasurementGuide.objects.only("id", "size_label"), to_attr="_prefetched_sizes"),
-            Prefetch("variants", queryset=ProductVariantGalleryMedia.objects.filter(is_deleted=False).select_related("size"), to_attr="_prefetched_variants"),
+            Prefetch("product_variants_gallery_media", queryset=ProductVariantGalleryMedia.objects.filter(is_deleted=False).select_related("size"), to_attr="_prefetched_variants"),
         )
         .only(
             "id", "title", "slug", "sku", "price", "old_price", "currency",

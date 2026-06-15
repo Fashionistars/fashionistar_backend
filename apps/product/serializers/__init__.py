@@ -6,9 +6,8 @@ from .product_serializers import (
     ProductVendorMiniSerializer,
     ProductVariantGalleryMediaSerializer,
     ProductVariantGalleryMediaWriteSerializer,
-    ProductSpecificationSerializer,
     ProductFaqSerializer,
-    ProductFabricSerializer,
+    ProductFabricSpecificationSerializer,
     ProductListSerializer,
     ProductDetailSerializer,
     ProductWriteSerializer,
@@ -35,10 +34,9 @@ __all__ = [
     "ProductVariantGalleryMediaSerializer",
     "ProductVariantGalleryMediaWriteSerializer",
     # Content
-    "ProductSpecificationSerializer",
     "ProductFaqSerializer",
     # Phase 2 new taxonomy
-    "ProductFabricSerializer",
+    "ProductFabricSpecificationSerializer",
     "ProductMeasurementGuideSerializer",
     # "ProductCertificationSerializer",
     # Product CRUD

@@ -57,7 +57,7 @@ class ProductVariantGalleryMediaInline(admin.TabularInline):
     extra = 0
     fields = [
         "sku", "size", "color_name", "color_hex",
-        "stock_qty", "media", "media_preview", "media_type", "is_primary",
+        "media", "media_preview", "media_type", "is_primary",
         "ordering", "alt_text", "barcode",
     ]
     readonly_fields = ["media_preview"]
@@ -725,7 +725,7 @@ class ProductVariantGalleryMediaAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
 
     list_display = [
         "sku", "product", "size", "color_name", "color_hex",
-        "stock_qty", "is_primary", "media_type", "media_preview", "soft_delete_badge",
+        "is_primary", "media_type", "media_preview", "soft_delete_badge",
     ]
     list_filter = ["is_primary", "media_type", "size"]
     search_fields = ["sku", "product__title", "product__sku", "barcode", "color_name"]
@@ -743,7 +743,7 @@ class ProductVariantGalleryMediaAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
             "fields": ("id", "sku", "barcode", "product"),
         }),
         (_("Variant Attributes"), {
-            "fields": ("size", "color_name", "color_hex", "stock_qty", "barcode", "notes"),
+            "fields": ("size", "color_name", "color_hex", "barcode"),
         }),
         (_("Gallery / Media"), {
             "fields": ("media", "media_preview", "media_type", "alt_text", "ordering", "is_primary", "video_thumbnail", "duration_sec"),
