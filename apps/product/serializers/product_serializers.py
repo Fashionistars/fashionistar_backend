@@ -9,8 +9,8 @@ All data queries are routed through backend service layers to prevent race
 conditions [1].
 """
 
-from apps.product.models import ProductWishlist
 from __future__ import annotations
+from apps.product.models import ProductWishlist
 
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
@@ -20,6 +20,7 @@ from django.db import transaction
 from apps.catalog.models import Category
 from apps.product.models import (
     Product,
+    ProductStatus,
     ProductFabricSpecification,
     ProductSizeAndMeasurementGuide,
     ProductFaq,
@@ -340,28 +341,6 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
             )
         return data
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# ─────────────────────────────────────────────────────────────────────────────
-# ─────────────────────────────────────────────────────────────────────────────
-
-    """Enforces validation checks on customer reviews."""
-
-    class Meta:
-        model = ProductReview
-        fields = ["product", "rating", "review", "idempotency_key"]
-
-    def validate_rating(self, value: int) -> int:
-        """Enforces star review scoring limits."""
-        if not (1 <= value <= 5):
-            raise serializers.ValidationError("Scores must stand between 1 and 5 stars.")
-        return value
-
-
-
-    """Enforces parameters for direct inventory adjustments."""
-
-
 class ProductInventoryLogSerializer(serializers.ModelSerializer):
     """Serializer mapping immutable stock ledger entries.
 
@@ -412,6 +391,27 @@ class ProductDraftSessionSerializer(serializers.ModelSerializer):
     """
 
     draft_key = serializers.UUIDField(required=False, validators=[])
+    payload = serializers.JSONField(required=False, default=dict)
+
+    class Meta:
+        model = ProductDraftSession
+        fields = [
+            "id",
+            "draft_key",
+            "idempotency_key",
+            "payload",
+            "current_step",
+            "status",
+            "linked_product",
+            "expires_at",
+            "last_synced_at",
+        ]
+        read_only_fields = [
+            "id",
+            "status",
+            "expires_at",
+            "last_synced_at",
+        ]
 
 
 
@@ -703,15 +703,13 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     sizes = serializers.SerializerMethodField()
     colors = serializers.SerializerMethodField()
     tags = ProductTagSerializer(many=True, read_only=True)
-    faqs = ProductFaqSerializer(many=True, read_only=True, source="faqs")
+    faqs = ProductFaqSerializer(many=True, read_only=True)
     variants = serializers.SerializerMethodField()
     fabric = ProductFabricSpecificationSerializer(
         read_only=True, source="product_fabric_specification"
     )
     measurement_guide = serializers.SerializerMethodField()
-    shipping_profile = ProductShippingProfileSerializer(
-        read_only=True, source="shipping_profile"
-    )
+    shipping_profile = ProductShippingProfileSerializer(read_only=True)
     category_name = serializers.SerializerMethodField()
     category_slug = serializers.SerializerMethodField()
     sub_category_name = serializers.SerializerMethodField()
@@ -834,7 +832,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
 
 
 class ProductAdminSerializer(ProductDetailSerializer):
-    status = serializers.ChoiceField(choices=Product.ProductStatus.choices)
+    status = serializers.ChoiceField(choices=ProductStatus.choices)
     idempotency_key = serializers.UUIDField(read_only=True)
 
     class Meta(ProductDetailSerializer.Meta):

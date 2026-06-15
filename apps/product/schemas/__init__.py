@@ -5,32 +5,24 @@ Used by apps/product/apis/async_/ views.
 """
 from apps.product.schemas.product_schemas import (
     CouponOut,
-    ProductBrandOut,
     ProductCategoryOut,
-    ProductColorOut,
     ProductDetailOut,
-    ProductGalleryMediaOut,
+    ProductVariantGalleryMediaOut,
     ProductListItemOut,
     ProductReviewOut,
     ProductSizeAndMeasurementGuideOut,
-    ProductTagOut,
-    ProductVariantOut,
     ProductVendorOut,
     WishlistItemOut,
 )
 
 __all__ = [
     "CouponOut",
-    "ProductBrandOut",
     "ProductCategoryOut",
-    "ProductColorOut",
     "ProductDetailOut",
-    "ProductGalleryMediaOut",
+    "ProductVariantGalleryMediaOut",
     "ProductListItemOut",
     "ProductReviewOut",
     "ProductSizeAndMeasurementGuideOut",
-    "ProductTagOut",
-    "ProductVariantOut",
     "ProductVendorOut",
     "WishlistItemOut",
 ]

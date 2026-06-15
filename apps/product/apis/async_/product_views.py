@@ -405,17 +405,10 @@ def _product_detail_out(product) -> dict:
                 else None
             ),
             "tags": [_tag_out(t) for t in product.tags.all()],
-            "specifications": [
-                {
-                    "id": str(s.pk),
-                    "title": s.specification_title,
-                    "content": s.specification_value,
-                }
-                for s in product.product_specifications.all()
-            ],
+            "specifications": [],
             "faqs": [
                 {"id": str(f.pk), "question": f.question, "answer": f.answer}
-                for f in product.product_faqs.all()
+                for f in product.faqs.all()
             ],
             "variants": [
                 _variant_out(v)
@@ -642,7 +635,7 @@ def _get_templates_sync(profile):
     from apps.product.models import ProductSizeAndMeasurementGuide
     rows = ProductSizeAndMeasurementGuide.objects.filter(
         vendor=profile,
-        product__isnull=True,
+        save_as_template=True,
     ).order_by("name", "sort_order")
 
     from collections import defaultdict
@@ -702,7 +695,7 @@ async def create_measurement_template(request, payload: VendorMeasurementTemplat
             # Delete existing template rows for this vendor & name
             ProductSizeAndMeasurementGuide.objects.filter(
                 vendor=profile,
-                product__isnull=True,
+                save_as_template=True,
                 name=payload.name,
             ).delete()
             
@@ -722,6 +715,7 @@ async def create_measurement_template(request, payload: VendorMeasurementTemplat
                     inseam_cm=row.inseam_cm,
                     foot_length_cm=row.foot_length_cm,
                     sort_order=row.sort_order,
+                    save_as_template=True,
                 )
                 created_rows.append(created)
             

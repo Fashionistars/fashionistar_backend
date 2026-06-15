@@ -752,20 +752,20 @@ class TestProductGallery:
 
     def test_gallery_ordering_preserved(self, product):
         """Gallery items should be ordered by the `ordering` field."""
-        from apps.product.models import ProductGalleryMedia
+        from apps.product.models import ProductVariantGalleryMedia
 
-        ProductGalleryMedia.objects.create(
+        ProductVariantGalleryMedia.objects.create(
             product=product, ordering=2, media_type="image",
         )
-        ProductGalleryMedia.objects.create(
+        ProductVariantGalleryMedia.objects.create(
             product=product, ordering=0, media_type="image",
         )
-        ProductGalleryMedia.objects.create(
+        ProductVariantGalleryMedia.objects.create(
             product=product, ordering=1, media_type="image",
         )
 
         ordered = list(
-            ProductGalleryMedia.objects.filter(product=product).values_list(
+            ProductVariantGalleryMedia.objects.filter(product=product).values_list(
                 "ordering", flat=True
             )
         )
@@ -773,14 +773,14 @@ class TestProductGallery:
 
     def test_gallery_max_12_constraint(self, product):
         """No hard DB constraint at 12, but service/validator should block >12."""
-        from apps.product.models import ProductGalleryMedia
+        from apps.product.models import ProductVariantGalleryMedia
 
         for i in range(12):
-            ProductGalleryMedia.objects.create(
+            ProductVariantGalleryMedia.objects.create(
                 product=product, ordering=i, media_type="image",
             )
 
-        count = ProductGalleryMedia.objects.filter(product=product).count()
+        count = ProductVariantGalleryMedia.objects.filter(product=product).count()
         assert count == 12
 
 

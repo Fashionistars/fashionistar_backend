@@ -398,11 +398,116 @@ class Product(TimeStampedModel, SoftDeleteModel):
         categories = list(self.sub_categories.all()[:1])
         return categories[0] if categories else None
 
+    @property
+    def image(self):
+        """Returns the primary media object or the first media object in the gallery."""
+        variants = self.product_gallery_media.all()
+        if isinstance(variants, list):
+            primary = next((v.media for v in variants if getattr(v, "is_primary", False) and not getattr(v, "is_deleted", False) and v.media), None)
+            if primary:
+                return primary
+            first = next((v.media for v in variants if not getattr(v, "is_deleted", False) and v.media), None)
+            return first
+        try:
+            primary = variants.filter(is_primary=True, is_deleted=False).first()
+            if primary and primary.media:
+                return primary.media
+            first = variants.filter(is_deleted=False).exclude(media__isnull=True).exclude(media="").first()
+            if first and first.media:
+                return first.media
+        except Exception:
+            pass
+        return None
+
     def gallery(self) -> models.QuerySet:
         """Collects non-deleted variant media assets with valid paths."""
         return self.product_variants_gallery_media.filter(is_deleted=False).exclude(media__isnull=True).exclude(media="").order_by(
             "ordering", "created_at"
         )
+
+    @property
+    def digital(self) -> bool:
+        """Returns False because all fashion/physical product builder items are physical."""
+        return False
+
+    @property
+    def product_gallery_media(self):
+        """Related manager alias that respects prefetch caches."""
+        class PrefetchedManagerAlias:
+            def __init__(self, parent):
+                self.parent = parent
+
+            def all(self):
+                prefetched = getattr(self.parent, "_prefetched_variants", None)
+                if prefetched is not None:
+                    return prefetched
+                prefetch_cache = getattr(self.parent, "_prefetched_objects_cache", {}) or {}
+                if "product_variants_gallery_media" in prefetch_cache:
+                    return prefetch_cache["product_variants_gallery_media"]
+                if "product_gallery_media" in prefetch_cache:
+                    return prefetch_cache["product_gallery_media"]
+                return self.parent.product_variants_gallery_media.all()
+        return PrefetchedManagerAlias(self)
+
+    @property
+    def product_measurement_guide(self):
+        """Returns the measurement guides associated with this product's variants or vendor."""
+        class GuideManagerAlias:
+            def __init__(self, parent):
+                self.parent = parent
+
+            def all(self):
+                prefetched = getattr(self.parent, "_prefetched_measurement_guides", None)
+                if prefetched is not None:
+                    return prefetched
+                prefetch_cache = getattr(self.parent, "_prefetched_objects_cache", {}) or {}
+                if "product_measurement_guide" in prefetch_cache:
+                    return prefetch_cache["product_measurement_guide"]
+                size_ids = self.parent.product_variants_gallery_media.filter(
+                    is_deleted=False
+                ).exclude(size__isnull=True).values_list("size_id", flat=True).distinct()
+                if size_ids:
+                    return ProductSizeAndMeasurementGuide.objects.filter(id__in=size_ids).order_by("sort_order")
+                if self.parent.vendor:
+                    return ProductSizeAndMeasurementGuide.objects.filter(
+                        vendor=self.parent.vendor
+                    ).order_by("sort_order")
+                return ProductSizeAndMeasurementGuide.objects.none()
+        return GuideManagerAlias(self)
+
+    @property
+    def product_fabric(self):
+        """Related object alias for product_fabric_specification."""
+        try:
+            return self.product_fabric_specification
+        except Exception:
+            return None
+
+    @property
+    def product_custom_shipping_profile(self):
+        """Related object alias for shipping_profile."""
+        try:
+            return self.shipping_profile
+        except Exception:
+            return None
+
+    @property
+    def measurement_template(self) -> Optional[str]:
+        """Backward compatibility for deleted measurement_template field."""
+        guide = self.product_measurement_guide.all()
+        if isinstance(guide, list) and guide:
+            return guide[0].name
+        elif hasattr(guide, "first"):
+            first = guide.first()
+            if first:
+                return first.name
+        return None
+
+    @property
+    def weight_kg(self) -> Decimal:
+        """Backward compatibility for deleted weight_kg field."""
+        profile = self.shipping_profile
+        return getattr(profile, "weight_kg", Decimal("0.0"))
 
     def color(self) -> list[dict[str, Any]]:
         """Extracts unique color values across associated product variants."""
@@ -632,6 +737,7 @@ class ProductVariantGalleryMedia(TimeStampedModel, SoftDeleteModel):
         verbose_name = _("Product Variant Gallery Media")
         verbose_name_plural = _("Product Variant Gallery Media")
         unique_together = [("product", "size", "color_name")]
+        ordering = ["ordering", "created_at"]
 
     def __str__(self) -> str:
         parts = [self.product.title]
@@ -644,7 +750,8 @@ class ProductVariantGalleryMedia(TimeStampedModel, SoftDeleteModel):
     def save(self, *args: Any, **kwargs: Any) -> None:
         """Enforces safe auto-generation of unique variant codes."""
         if not self.sku:
-            self.sku = f"FASTAR-{str(self.id or uuid6.uuid7()).upper()[:10]}"
+            import uuid as _uuid
+            self.sku = f"FASTAR-{_uuid.uuid4().hex.upper()[:12]}"
         super().save(*args, **kwargs)
 
 

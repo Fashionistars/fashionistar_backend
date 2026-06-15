@@ -148,7 +148,7 @@ def get_published_products_list():
         )
         .only(
             "id", "slug", "title", "price", "old_price",
-            "image", "in_stock", "rating", "review_count",
+            "in_stock", "rating", "review_count",
             "featured", "created_at",
             "vendor__id", "vendor__store_name", "vendor__store_slug",
             "vendor__logo_url", "vendor__is_verified",
@@ -550,7 +550,7 @@ async def aget_product_detail(slug: str) -> Product | None:
       - product_certifications (ProductCertification)
     """
     try:
-        return await (
+        product = await (
             Product.objects
             .filter(
                 status=ProductStatus.PUBLISHED,
@@ -578,6 +578,19 @@ async def aget_product_detail(slug: str) -> Product | None:
             )
             .aget()
         )
+        if product:
+            size_ids = [v.size_id for v in product.product_variants_gallery_media.all() if v.size_id]
+            if size_ids:
+                product._prefetched_measurement_guides = [
+                    g async for g in ProductSizeAndMeasurementGuide.objects.filter(id__in=size_ids).order_by("sort_order")
+                ]
+            elif product.vendor:
+                product._prefetched_measurement_guides = [
+                    g async for g in ProductSizeAndMeasurementGuide.objects.filter(vendor=product.vendor).order_by("sort_order")
+                ]
+            else:
+                product._prefetched_measurement_guides = []
+        return product
     except Product.DoesNotExist:
         return None
 
@@ -692,7 +705,13 @@ def avendor_products(vendor_id: Any):
         Product.objects
         .filter(vendor_id=vendor_id, is_deleted=False)
         .select_related("vendor__user")
-        .prefetch_related("categories", "sub_categories", "sizes", "colors", "tags", "product_gallery_media")
+        .prefetch_related(
+            "categories",
+            "sub_categories",
+            "tags",
+            "product_variants_gallery_media",
+            "product_variants_gallery_media__size",
+        )
         .annotate(computed_review_count=Count("reviews", distinct=True))
         .order_by("-created_at")
     )
@@ -701,7 +720,7 @@ def avendor_products(vendor_id: Any):
 async def aget_vendor_product(vendor_id: Any, slug: str) -> Product | None:
     """Async: return one product owned by a vendor profile, or None."""
     try:
-        return await (
+        product = await (
             Product.objects
             .filter(vendor_id=vendor_id, slug=slug, is_deleted=False)
             .select_related(
@@ -718,6 +737,19 @@ async def aget_vendor_product(vendor_id: Any, slug: str) -> Product | None:
             )
             .aget()
         )
+        if product:
+            size_ids = [v.size_id for v in product.product_variants_gallery_media.all() if v.size_id]
+            if size_ids:
+                product._prefetched_measurement_guides = [
+                    g async for g in ProductSizeAndMeasurementGuide.objects.filter(id__in=size_ids).order_by("sort_order")
+                ]
+            elif product.vendor:
+                product._prefetched_measurement_guides = [
+                    g async for g in ProductSizeAndMeasurementGuide.objects.filter(vendor=product.vendor).order_by("sort_order")
+                ]
+            else:
+                product._prefetched_measurement_guides = []
+        return product
     except Product.DoesNotExist:
         return None
 
@@ -786,7 +818,7 @@ def get_published_products_list(
         )
         .only(
             "id", "title", "slug", "sku", "price", "old_price", "currency",
-            "image", "in_stock", "stock_qty", "featured", "hot_deal", "digital",
+            "in_stock", "stock_qty", "featured", "hot_deal",
             "rating", "review_count", "requires_measurement", "is_customisable",
             "created_at",
             "vendor__id", "vendor__store_name", "vendor__store_slug",
@@ -936,7 +968,12 @@ async def alist_products(
             is_deleted=False,
         )
         .select_related("vendor")
-        .prefetch_related("categories", "sub_categories", "sizes", "colors")
+        .prefetch_related(
+            "categories",
+            "sub_categories",
+            "product_variants_gallery_media",
+            "product_variants_gallery_media__size",
+        )
         .annotate(
             computed_review_count=Count("reviews", distinct=True),
             computed_avg_rating=Avg("reviews__rating"),
@@ -1050,7 +1087,12 @@ async def aget_featured_products(limit: int = 12) -> list:
                 featured=True,
             )
             .select_related("vendor")
-            .prefetch_related("categories", "sub_categories", "sizes", "colors")
+            .prefetch_related(
+                "categories",
+                "sub_categories",
+                "product_variants_gallery_media",
+                "product_variants_gallery_media__size",
+            )
             .annotate(
                 computed_review_count=Count("reviews", distinct=True),
                 computed_avg_rating=Avg("reviews__rating"),
@@ -1082,7 +1124,12 @@ async def aget_products_by_vendor_async(
             vendor__store_slug=vendor_slug,
         )
         .select_related("vendor")
-        .prefetch_related("categories", "sub_categories", "sizes", "colors")
+        .prefetch_related(
+            "categories",
+            "sub_categories",
+            "product_variants_gallery_media",
+            "product_variants_gallery_media__size",
+        )
         .annotate(
             computed_review_count=Count("reviews", distinct=True),
             computed_avg_rating=Avg("reviews__rating"),
@@ -1189,7 +1236,12 @@ async def aget_homepage_hot_deals(limit: int = 10) -> list:
                 hot_deal=True,
             )
             .select_related("vendor")
-            .prefetch_related("categories", "sub_categories", "sizes", "colors", "product_gallery_media")
+            .prefetch_related(
+                "categories",
+                "sub_categories",
+                "product_variants_gallery_media",
+                "product_variants_gallery_media__size",
+            )
             .annotate(
                 computed_review_count=Count("reviews", distinct=True),
                 computed_avg_rating=Avg("reviews__rating"),

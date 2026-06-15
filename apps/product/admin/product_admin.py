@@ -157,7 +157,7 @@ class ProductAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
             "fields": ("id", "title", "slug", "sku", "description"),
         }),
         (_("Taxonomy"), {
-            "fields": ("vendor", "categories", "sub_categories", "tags", "sizes"),
+            "fields": ("vendor", "categories", "sub_categories", "tags"),
         }),
         (_("Pricing"), {
             "fields": ("price", "old_price", "currency", "shipping_amount", "commission_rate"),
@@ -183,7 +183,7 @@ class ProductAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
             "classes": ("collapse",),
         }),
     )
-    filter_horizontal = ["tags", "sizes"]
+    filter_horizontal = ["tags"]
     inlines = [
         ProductVariantGalleryMediaInline,
         ProductFaqInline,
@@ -611,12 +611,12 @@ class ProductShippingProfileAdmin(admin.ModelAdmin):
         "is_fragile", "requires_signature", "processing_days",
     ]
     list_filter = ["is_fragile", "requires_signature"]
-    search_fields = ["product__title"]
-    raw_id_fields = ["product"]
+    search_fields = ["product_shipping_profiles__title", "vendor__store_name"]
+    raw_id_fields = ["vendor"]
     readonly_fields = ["created_at", "updated_at"]
     filter_horizontal = ["preferred_couriers"]
     fieldsets = (
-        (_("Product"), {"fields": ("product",)}),
+        (_("Vendor"), {"fields": ("vendor",)}),
         (_("Dimensions"), {"fields": ("weight_kg", "length_cm", "width_cm", "height_cm")}),
         (_("Rules"), {"fields": (
             "is_fragile", "requires_signature", "processing_days",
@@ -625,6 +625,13 @@ class ProductShippingProfileAdmin(admin.ModelAdmin):
         (_("Couriers"), {"fields": ("preferred_couriers",)}),
         (_("Timestamps"), {"fields": ("created_at", "updated_at"), "classes": ("collapse",)}),
     )
+
+    def product(self, obj):
+        try:
+            return getattr(obj, "product_shipping_profiles", None)
+        except Exception:
+            return None
+    product.short_description = "Product"
 
 
 @admin.register(ProductPriceHistory)
@@ -743,7 +750,7 @@ class ProductVariantGalleryMediaAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
             "fields": ("id", "sku", "barcode", "product"),
         }),
         (_("Variant Attributes"), {
-            "fields": ("size", "color_name", "color_hex", "barcode"),
+            "fields": ("size", "color_name", "color_hex"),
         }),
         (_("Gallery / Media"), {
             "fields": ("media", "media_preview", "media_type", "alt_text", "ordering", "is_primary", "video_thumbnail", "duration_sec"),

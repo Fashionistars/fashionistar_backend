@@ -367,3 +367,84 @@ class ProductDetailBundleOut(Schema):
     in_wishlist: bool = False
     review_count: int = 0
     avg_rating: float = 0.0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 7: WRITE / INPUT & EXTRA ENDPOINT SCHEMAS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class CouponValidateIn(Schema):
+    code: str
+    order_subtotal: Decimal
+    cart_total: Optional[Decimal] = None
+
+
+class CouponValidateOut(Schema):
+    coupon_id: str
+    code: str
+    discount_type: str
+    discount_amount: Decimal
+
+
+class InventoryAdjustIn(Schema):
+    quantity_delta: int
+    reason: str
+    note: str = ""
+    reference_id: str = ""
+
+
+class ProductReviewWriteIn(Schema):
+    rating: int
+    review: str
+    idempotency_key: Optional[UUID] = None
+
+
+class WishlistBulkStatusOut(Schema):
+    statuses: Dict[str, bool]
+
+
+class WishlistToggleOut(Schema):
+    added: bool
+    message: str
+
+
+class MeasurementTemplateRowIn(Schema):
+    size_label: str
+    chest_cm: str = ""
+    waist_cm: str = ""
+    hip_cm: str = ""
+    length_cm: str = ""
+    shoulder_cm: str = ""
+    sleeve_cm: str = ""
+    inseam_cm: str = ""
+    foot_length_cm: str = ""
+    sort_order: int = 0
+
+
+class MeasurementTemplateRowOut(Schema):
+    id: str
+    size_id: str
+    size_label: str
+    chest_cm: str = ""
+    waist_cm: str = ""
+    hip_cm: str = ""
+    length_cm: str = ""
+    shoulder_cm: str = ""
+    sleeve_cm: str = ""
+    inseam_cm: str = ""
+    foot_length_cm: str = ""
+    sort_order: int = 0
+
+
+class VendorMeasurementTemplateIn(Schema):
+    name: str
+    description: str = ""
+    template_rows: List[MeasurementTemplateRowIn]
+
+
+class VendorMeasurementTemplateOut(Schema):
+    id: str
+    vendor_id: str
+    name: str
+    description: str = ""
+    template_rows: List[MeasurementTemplateRowOut]
