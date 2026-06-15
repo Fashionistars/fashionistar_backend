@@ -33,7 +33,6 @@ Architecture rules (Django 6.0 / async-first):
    preventing full-table load into Python memory.
 """
 
-from apps.product.models import ProductInventoryLog
 from __future__ import annotations
 
 import asyncio
@@ -51,8 +50,7 @@ from django.utils import timezone
 from apps.product.models import (
     Coupon,
     Product,
-    # ProductCertification,
-    ProductFabricSpecification,
+    ProductInventoryLog,
     ProductSizeAndMeasurementGuide,
     ProductReview,
     ProductStatus,

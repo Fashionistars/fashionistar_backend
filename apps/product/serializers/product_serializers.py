@@ -290,14 +290,65 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
 
     def to_internal_value(self, data: Any) -> Dict[str, Any]:
         """Normalizes external variables into internal designations."""
-        if isinstance(data, dict) and "gender_target" in data:
-            gender = str(data["gender_target"]).lower().strip()
-            if gender == "male":
+        if isinstance(data, dict):
+            if "gender_target" in data:
+                gender = str(data["gender_target"]).lower().strip()
+                if gender == "male":
+                    data = data.copy()
+                    data["gender_target"] = "men"
+                elif gender == "female":
+                    data = data.copy()
+                    data["gender_target"] = "women"
+
+            # Parse cover_image and gallery into variants
+            if "cover_image_public_id" in data or "gallery" in data:
                 data = data.copy()
-                data["gender_target"] = "men"
-            elif gender == "female":
-                data = data.copy()
-                data["gender_target"] = "women"
+                variants = []
+
+                # Parse cover image
+                cover_public_id = data.get("cover_image_public_id")
+                if cover_public_id:
+                    cover_var = {
+                        "is_primary": True,
+                        "media": cover_public_id,
+                        "media_type": "image",
+                        "alt_text": data.get("title", "") or "Cover Image",
+                        "ordering": 0,
+                    }
+                    if "cover_image_sku" in data and data["cover_image_sku"]:
+                        cover_var["sku"] = data["cover_image_sku"]
+                    if "cover_image_color_name" in data and data["cover_image_color_name"]:
+                        cover_var["color_name"] = data["cover_image_color_name"]
+                    if "cover_image_color_hex" in data and data["cover_image_color_hex"]:
+                        cover_var["color_hex"] = data["cover_image_color_hex"]
+                    if "cover_image_size_id" in data and data["cover_image_size_id"]:
+                        cover_var["size_id"] = data["cover_image_size_id"]
+                    variants.append(cover_var)
+
+                # Parse gallery
+                gallery = data.get("gallery") or []
+                for idx, item in enumerate(gallery):
+                    pub_id = item.get("public_id")
+                    if pub_id:
+                        g_var = {
+                            "is_primary": False,
+                            "media": pub_id,
+                            "media_type": item.get("media_type", "image"),
+                            "alt_text": item.get("alt_text", "") or data.get("title", "") or f"Gallery Item {idx + 1}",
+                            "ordering": item.get("ordering", idx + 1),
+                        }
+                        if "sku" in item and item["sku"]:
+                            g_var["sku"] = item["sku"]
+                        if "color_name" in item and item["color_name"]:
+                            g_var["color_name"] = item["color_name"]
+                        if "color_hex" in item and item["color_hex"]:
+                            g_var["color_hex"] = item["color_hex"]
+                        if "size_id" in item and item["size_id"]:
+                            g_var["size_id"] = item["size_id"]
+                        variants.append(g_var)
+
+                data["variants"] = variants
+
         return super().to_internal_value(data)
 
     def validate_price(self, value: Decimal) -> Decimal:
