@@ -130,13 +130,6 @@ class ProductStatus(models.TextChoices):
     REJECTED = "rejected", _("Rejected")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 2. TAG
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-
-
 class ProductFaq(TimeStampedModel):
     product = models.ForeignKey(
         "Product",
@@ -207,7 +200,7 @@ class Product(TimeStampedModel, SoftDeleteModel):
         related_name="sub_category_products",
         help_text="Optional deeper taxonomy facets. Kept separate from required categories.",
     )
-    
+
     # ── Pricing ───────────────────────────────────────────────────────────
     price = models.DecimalField(max_digits=12, decimal_places=2)
     old_price = models.DecimalField(

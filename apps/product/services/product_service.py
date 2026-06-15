@@ -177,9 +177,7 @@ def _pop_product_m2m(validated_data: dict) -> dict[str, Any]:
     return {
         "categories": validated_data.pop("categories", []),
         "sub_categories": validated_data.pop("sub_categories", []),
-        "sizes": validated_data.pop("sizes", []),
-        "colors": validated_data.pop("colors", []),
-        "tags": validated_data.pop("tags", []),
+        "productsizeandmeasurementguides": validated_data.pop("productsizeandmeasurementguides", []),
     }
 
 

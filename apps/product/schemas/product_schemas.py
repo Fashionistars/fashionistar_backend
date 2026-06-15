@@ -189,64 +189,6 @@ class ProductShippingProfileIn(Schema):
     template_id: str | None = None
 
 
-class VendorMeasurementTemplateRowOut(Schema):
-    model_config = {"from_attributes": True}
-    id: str
-    size_id: str | None = None
-    size_label: str
-    chest_cm: str = ""
-    waist_cm: str = ""
-    hip_cm: str = ""
-    length_cm: str = ""
-    shoulder_cm: str = ""
-    sleeve_cm: str = ""
-    inseam_cm: str = ""
-    foot_length_cm: str = ""
-    sort_order: int = 0
-
-
-class VendorMeasurementTemplateOut(Schema):
-    model_config = {"from_attributes": True}
-    id: str
-    vendor_id: str
-    name: str
-    description: str = ""
-    template_rows: list[VendorMeasurementTemplateRowOut] = []
-
-
-class VendorMeasurementTemplateRowIn(Schema):
-    size_label: str
-    chest_cm: str = ""
-    waist_cm: str = ""
-    hip_cm: str = ""
-    length_cm: str = ""
-    shoulder_cm: str = ""
-    sleeve_cm: str = ""
-    inseam_cm: str = ""
-    foot_length_cm: str = ""
-    sort_order: int = 0
-
-
-class VendorMeasurementTemplateIn(Schema):
-    name: str
-    description: str = "custom"
-    template_rows: list[VendorMeasurementTemplateRowIn] = []
-
-
-
-class ProductCertificationOut(Schema):
-    """Sustainability/quality certification badge — Phase 1."""
-    model_config = {"from_attributes": True}
-    id: str
-    name: str
-    issued_by: str = ""
-    cert_type: str = ""
-    certificate_number: str = ""
-    issued_date: datetime | None = None
-    expiry_date: datetime | None = None
-    is_verified: bool = False
-    badge_image_url: str | None = None
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CLOUDINARY MEDIA  (Best-practice #3)
@@ -354,6 +296,8 @@ class ProductVariantOut(Schema):
                 "barcode": data.barcode or "",
             }
         return data
+
+
 
 class ProductFaqOut(Schema):
     model_config = {"from_attributes": True}
