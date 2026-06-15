@@ -699,12 +699,16 @@ async def create_measurement_template(request, payload: VendorMeasurementTemplat
                 name=payload.name,
             ).delete()
             
+            db_desc = payload.description
+            if db_desc not in [c[0] for c in ProductSizeAndMeasurementGuide.DESCRIPTION_CHOICES]:
+                db_desc = "custom"
+            
             created_rows = []
             for row in payload.template_rows:
                 created = ProductSizeAndMeasurementGuide.objects.create(
                     vendor=profile,
                     name=payload.name,
-                    description=payload.description,
+                    description=db_desc,
                     size_label=row.size_label,
                     chest_cm=row.chest_cm,
                     waist_cm=row.waist_cm,

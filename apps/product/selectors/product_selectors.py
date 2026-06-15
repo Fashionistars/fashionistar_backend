@@ -800,16 +800,9 @@ async def aget_wishlist_status_bulk(
     owner_filter = _wishlist_owner_filter(user_id=user_id, session_key=session_key)
     if "pk__isnull" in owner_filter:
         return {str(pid): False for pid in product_ids}
-    wishlisted_ids = set(
-        [
-            str(pk)
-            async for pk in (
-                ProductWishlist.objects
-                .filter(product_id__in=product_ids, **owner_filter)
-                .values_list("product_id", flat=True)
-            )
-        ]
-    )
+    wishlisted_ids = set()
+    async for pk in ProductWishlist.objects.filter(product_id__in=product_ids, **owner_filter).values_list("product_id", flat=True):
+        wishlisted_ids.add(str(pk))
     return {str(pid): (str(pid) in wishlisted_ids) for pid in product_ids}
 
 
