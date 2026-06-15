@@ -374,8 +374,11 @@ def get_vendor_review_summary(vendor_id: Any) -> dict:
     """
     Aggregate review stats for all of a vendor's products.
     Returns {avg_rating, total_reviews, product_count}.
+
+    Admin summary: total reviews + average rating across all vendor products.
+    Single-pass aggregate — zero N+1.
     """
-    return (
+    agg = (
         ProductReview.objects
         .filter(product__vendor_id=vendor_id, active=True)
         .aggregate(
@@ -384,6 +387,12 @@ def get_vendor_review_summary(vendor_id: Any) -> dict:
             product_count=Count("product_id", distinct=True),
         )
     )
+    return {
+        "vendor_id": str(vendor_id),
+        "total_reviews": agg["total_reviews"] or 0,
+        "avg_rating": round(agg["avg_rating"] or 0, 2),
+        "product_count": agg["product_count"] or 0,
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -809,14 +818,15 @@ def get_published_products_list(
             "sub_categories",
             Prefetch("product_variants_gallery_media", queryset=ProductVariantGalleryMedia.objects.filter(is_deleted=False).select_related("size"), to_attr="_prefetched_variants"),
         )
-        .only(
-            "id", "title", "slug", "sku", "price", "old_price", "currency",
-            "in_stock", "stock_qty", "featured", "hot_deal",
-            "rating", "review_count", "requires_measurement", "is_customisable",
-            "created_at",
-            "vendor__id", "vendor__store_name", "vendor__store_slug",
-            "vendor__logo_url", "vendor__is_verified",
-        )
+        # .only(
+        #     "id", "title", "slug", "sku", "price", "old_price", "currency",
+        #     "in_stock", "stock_qty", "featured", "hot_deal",
+        #     "rating", "review_count", "requires_measurement", "is_customisable",
+        #     "created_at",
+        #     "vendor__id", "vendor__store_name", "vendor__store_slug",
+        #     "vendor__logo_url", "vendor__is_verified",
+        # )
+        .defer("description", "search_vector", "ai_description", "body_type_fit", "occasion_tags", "style_tags")
         .annotate(
             computed_review_count=Count("reviews", distinct=True),
             computed_avg_rating=Avg("reviews__rating"),
@@ -834,24 +844,6 @@ def get_published_products_list(
     return qs.order_by(ordering)
 
 
-def get_vendor_review_summary(vendor_id: Any) -> dict:
-    """
-    Admin summary: total reviews + average rating across all vendor products.
-    Single-pass aggregate — zero N+1.
-    """
-    agg = (
-        ProductReview.objects
-        .filter(product__vendor_id=vendor_id, active=True)
-        .aggregate(
-            total_reviews=Count("id"),
-            avg_rating=Avg("rating"),
-        )
-    )
-    return {
-        "vendor_id": str(vendor_id),
-        "total_reviews": agg["total_reviews"] or 0,
-        "avg_rating": round(agg["avg_rating"] or 0, 2),
-    }
 
 
 def alist_inventory_logs(product_id: Any):
