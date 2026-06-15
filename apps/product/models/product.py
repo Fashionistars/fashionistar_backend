@@ -135,53 +135,6 @@ class ProductStatus(models.TextChoices):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class ProductTag(TimeStampedModel):
-    """Flat taxonomy tag. Can optionally be linked to a catalog category."""
-
-    name = models.CharField(max_length=80, unique=True, db_index=True)
-    slug = models.SlugField(max_length=100, unique=True, blank=True)
-
-    # Optional link to catalog for faceted navigation
-    category = models.ForeignKey(
-        "catalog.Category",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="category_product_tags",
-    )
-
-    class Meta:
-        verbose_name = _("Product Tag")
-        verbose_name_plural = _("Product Tags")
-        ordering = ["name"]
-
-    def __str__(self):
-        return self.name
-
-    def save(self, *args, **kwargs):
-        if not self.slug:
-            self.slug = slugify(self.name)
-        super().save(*args, **kwargs)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 4. PRODUCT SPECIFICATION
-# ─────────────────────────────────────────────────────────────────────────────
-class ProductSpecification(TimeStampedModel):
-    product = models.ForeignKey(
-        "Product",
-        on_delete=models.CASCADE,
-        related_name="product_specifications",
-    )
-    specification_title = models.CharField(max_length=120)
-    specification_value = models.CharField(max_length=500)
-
-    class Meta:
-        verbose_name = _("Product Specification")
-        verbose_name_plural = _("Product Specifications")
-
-    def __str__(self):
-        return f"{self.product.title} — {self.specification_title}"
 
 
 class ProductFaq(TimeStampedModel):
@@ -254,8 +207,7 @@ class Product(TimeStampedModel, SoftDeleteModel):
         related_name="sub_category_products",
         help_text="Optional deeper taxonomy facets. Kept separate from required categories.",
     )
-    tags = models.ManyToManyField(ProductTag, blank=True, related_name="tag_products")
-
+    
     # ── Pricing ───────────────────────────────────────────────────────────
     price = models.DecimalField(max_digits=12, decimal_places=2)
     old_price = models.DecimalField(
@@ -736,6 +688,7 @@ class ProductInventoryLog(TimeStampedModel):
         ("damage", "Damage / Loss"),
         ("reservation", "Cart Reservation"),
         ("release", "Cart Release (Abandoned)"),
+        ("refund", "Refund"),
     ]
 
     product = models.ForeignKey(
@@ -747,7 +700,7 @@ class ProductInventoryLog(TimeStampedModel):
         "ProductVariantGalleryMedia",
         null=True,
         blank=True,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
         related_name="inventory_logs",
     )
     actor = models.ForeignKey(
@@ -1055,11 +1008,11 @@ class DeliveryCourier(TimeStampedModel):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 13. PRODUCT FABRIC  (Phase 1 — 2026)
+# 13. PRODUCT FABRIC SPECIFICATION  (Phase 1 — 2026)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class ProductFabric(TimeStampedModel):
+class ProductFabricSpecification(TimeStampedModel):
     """
     Fabric type and composition details for a product.
 
@@ -1080,29 +1033,17 @@ class ProductFabric(TimeStampedModel):
     product = models.OneToOneField(
         Product,
         on_delete=models.CASCADE,
-        related_name="product_fabric",
-        help_text="Each product has at most one Fabric record.",
+        related_name="product_fabric_specification",
+        help_text="Each product has at most one Fabric Specification record.",
     )
     fabric_type = models.CharField(
         max_length=120,
         help_text="Primary fabric type e.g. 'Cotton', 'Silk', 'Polyester Blend'.",
     )
-    composition = models.JSONField(
-        default=dict,
-        blank=True,
-        help_text=(
-            "Fabric composition percentages. "
-            'Format: [{"material": "Cotton", "percentage": 80}, {"material": "Polyester", "percentage": 20}]'
-        ),
-    )
     care_instructions = models.CharField(
         max_length=20,
         choices=CARE_CHOICES,
         default="machine_wash",
-    )
-    care_notes = models.TextField(
-        blank=True,
-        help_text="Additional care instructions displayed to the buyer.",
     )
     is_organic = models.BooleanField(
         default=False, help_text="Certified organic fabric."
@@ -1110,18 +1051,18 @@ class ProductFabric(TimeStampedModel):
     is_vegan = models.BooleanField(
         default=False, help_text="Free from animal-derived materials."
     )
+
     country_of_origin = models.CharField(
         max_length=80,
         blank=True,
-        help_text="Country where the fabric was woven / manufactured.",
+        help_text="Country where the fabric was woven / manufactured. eg. MADE IN ABA, MADE IN ITALY, MADE IN LAGOS etc ",
     )
-
     class Meta:
-        verbose_name = _("Product Fabric")
-        verbose_name_plural = _("Product Fabrics")
+        verbose_name = _("Product Fabric Specification")
+        verbose_name_plural = _("Product Fabric Specifications")
 
     def __str__(self):
-        return f"{self.product.title} — {self.fabric_type}"
+        return f"{self.fabric_type} - {self.country_of_origin}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
