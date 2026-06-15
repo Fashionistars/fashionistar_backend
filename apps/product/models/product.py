@@ -251,10 +251,12 @@ class Product(TimeStampedModel, SoftDeleteModel):
         ],
         default="new",
     )
-    # Shipping profile
-    shipping_profiles = models.OneToManyField(
+    # Shipping profile (OneToOne: each product has at most one shipping profile)
+    shipping_profile = models.OneToOneField(
         "product.ProductShippingProfile",
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name="product_shipping_profiles",
     )
 
@@ -296,13 +298,9 @@ class Product(TimeStampedModel, SoftDeleteModel):
         ],
         help_text="Age-segment target for catalog organization.",
     )
-    faq = models.OneToManyField(
-        "product.ProductFaq",
-        on_delete=models.CASCADE,
-        related_name="product_faqs",
-        blank=True,
-        null=True,
-    )
+    # FAQs are accessed via the reverse manager: product.faqs.all()
+    # (ForeignKey is defined on ProductFaq.product below)
+
 
     # ── Full-text search ──────────────────────────────────────────────────
     search_vector = SearchVectorField(null=True, blank=True)
@@ -424,7 +422,13 @@ class Product(TimeStampedModel, SoftDeleteModel):
 class ProductFaq(TimeStampedModel):
     """Auxiliary customer support question/answer configurations."""
 
-    
+    product = models.ForeignKey(
+        "product.Product",
+        on_delete=models.CASCADE,
+        related_name="faqs",
+        null=True,
+        blank=True,
+    )
     question = models.CharField(max_length=300)
     answer = models.TextField()
 
@@ -654,11 +658,12 @@ class ProductShippingProfile(TimeStampedModel):
     Provides shipping calculator inputs and preferred courier listings.
     """
 
-    vendor = models.OneToManyField(
+    vendor = models.ForeignKey(
         "vendor.VendorProfile",
         on_delete=models.CASCADE,
         related_name="vendor_shipping_profiles",
     )
+
     weight_kg = models.DecimalField(
         max_digits=7,
         decimal_places=3,
@@ -698,7 +703,10 @@ class ProductShippingProfile(TimeStampedModel):
         verbose_name_plural = _("Product Shipping Profiles")
 
     def __str__(self) -> str:
-        return f"{self.product.title} — {self.weight_kg}kg"
+        product = getattr(self, "product_shipping_profiles", None)
+        title = product.title if product else "Unlinked Profile"
+        return f"{title} — {self.weight_kg}kg"
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────

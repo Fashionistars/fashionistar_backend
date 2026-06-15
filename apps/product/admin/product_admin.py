@@ -27,7 +27,6 @@ from apps.common.admin_mixins import SoftDeleteAdminMixin, ReadOnlyAdminMixin
 
 from apps.product.models import (
     Product,
-    ProductSpecification,
     ProductFaq,
     ProductReview,
     ProductWishlist,
@@ -37,7 +36,7 @@ from apps.product.models import (
     DeliveryCourier,
     ProductCommissionSnapshot,
     # Phase 1 — 2026
-    ProductFabric,
+    ProductFabricSpecification,
     ProductSizeAndMeasurementGuide,
     ProductShippingProfile,
     ProductPriceHistory,
@@ -77,29 +76,13 @@ class ProductVariantGalleryMediaInline(admin.TabularInline):
     media_preview.short_description = "Preview"
 
 
-class ProductSpecificationInline(admin.TabularInline):
-    model = ProductSpecification
-    extra = 0
-    # Correct field names from the ProductSpecification model:
-    fields = ["specification_title", "specification_value"]
+# ProductSpecification and ProductGalleryMedia are removed
 
 
 class ProductFaqInline(admin.TabularInline):
     model = ProductFaq
     extra = 0
     fields = ["question", "answer"]
-
-
-# ProductGalleryMedia is removed
-
-
-@admin.register(ProductSpecification)
-class ProductSpecificationAdmin(admin.ModelAdmin):
-    list_display = ["product", "specification_title", "specification_value", "created_at"]
-    search_fields = ["product__title", "product__sku", "specification_title", "specification_value"]
-    list_select_related = ["product"]
-    raw_id_fields = ["product"]
-    ordering = ["product", "specification_title"]
 
 
 @admin.register(ProductFaq)
@@ -203,7 +186,6 @@ class ProductAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
     filter_horizontal = ["tags", "sizes"]
     inlines = [
         ProductVariantGalleryMediaInline,
-        ProductSpecificationInline,
         ProductFaqInline,
         InventoryLogReadOnlyInline,
     ]
@@ -533,7 +515,7 @@ class ProductCommissionSnapshotAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@admin.register(ProductFabric)
+@admin.register(ProductFabricSpecification)
 class ProductFabricAdmin(admin.ModelAdmin):
     """
     Fabric composition record linked OneToOne to a Product.
@@ -551,9 +533,9 @@ class ProductFabricAdmin(admin.ModelAdmin):
     fieldsets = (
         (_("Product"), {"fields": ("product",)}),
         (_("Fabric Details"), {"fields": (
-            "fabric_type", "composition", "country_of_origin",
+            "fabric_type", "country_of_origin",
         )}),
-        (_("Care"), {"fields": ("care_instructions", "care_notes")}),
+        (_("Care"), {"fields": ("care_instructions",)}),
         (_("Sustainability"), {"fields": ("is_organic", "is_vegan")}),
         (_("Timestamps"), {"fields": ("created_at", "updated_at"), "classes": ("collapse",)}),
     )

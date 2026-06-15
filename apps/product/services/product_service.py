@@ -45,7 +45,7 @@ from apps.product.models import (
     ProductWishlist,
     ProductDraftStatus,
     ProductDraftSession,
-    ProductFabric,
+    ProductFabricSpecification,
     ProductSizeAndMeasurementGuide,
     ProductShippingProfile,
 )
@@ -349,8 +349,8 @@ def create_product(
     _sync_product_m2m(product, relations, partial=False)
 
     if fabric_data:
-        from apps.product.models import ProductFabric
-        ProductFabric.objects.create(product=product, **fabric_data)
+        from apps.product.models import ProductFabricSpecification
+        ProductFabricSpecification.objects.create(product=product, **fabric_data)
 
     if shipping_data:
         from apps.product.models import ProductShippingProfile
@@ -406,9 +406,9 @@ def update_product(
 
     if fabric_data is not None:
         if fabric_data:
-            ProductFabric.objects.update_or_create(product=product, defaults=fabric_data)
+            ProductFabricSpecification.objects.update_or_create(product=product, defaults=fabric_data)
         else:
-            ProductFabric.objects.filter(product=product).delete()
+            ProductFabricSpecification.objects.filter(product=product).delete()
 
     if shipping_data is not None:
         if shipping_data:

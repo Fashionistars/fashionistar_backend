@@ -7,7 +7,6 @@ from apps.product.admin.product_admin import (  # noqa: F401
     ProductAdmin,
     ProductFaqAdmin,
     ProductReviewAdmin,
-    ProductSpecificationAdmin,
     CouponAdmin,
     DeliveryCourierAdmin,
     ProductTagAdmin,

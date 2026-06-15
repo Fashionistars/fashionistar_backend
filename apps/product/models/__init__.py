@@ -13,31 +13,32 @@ Phase 1 expansion (2026):
     - ProductViewLog       — AI recommendation engine analytics events
 """
 from apps.product.models.product import (
-    # ── Choices ─────────────────────────────────────────────────────────────
+    # Choices
     ProductStatus,
-    # ── Taxonomy ────────────────────────────────────────────────────────────
+    ProductDraftStatus,
+    # Taxonomy
     ProductTag,
-    # ── Core product ────────────────────────────────────────────────────────
+    DeliveryCourier,
+    # Core product
     Product,
-    # ── Variants & inventory ────────────────────────────────────────────────
+    ProductDraftSession,
+    # Content
+    ProductFaq,
+    # Variants & inventory
     ProductVariantGalleryMedia,
     ProductInventoryLog,
-    # ── Social / engagement ─────────────────────────────────────────────────
+    # Social / engagement
     ProductReview,
     ProductWishlist,
-    # ── Financial ───────────────────────────────────────────────────────────
+    # Financial
     ProductCommissionSnapshot,
-    # ── Commerce ────────────────────────────────────────────────────────────
     Coupon,
-    DeliveryCourier,
-    # ── Phase 1 enterprise expansions (2026) ────────────────────────────────
-    ProductFabric,
+    # Phase 1 enterprise expansions (2026)
+    ProductFabricSpecification,
     ProductSizeAndMeasurementGuide,
     ProductShippingProfile,
     ProductPriceHistory,
     ProductViewLog,
-    ProductDraftStatus,
-    ProductDraftSession,
 )
 
 __all__ = [
@@ -47,7 +48,6 @@ __all__ = [
     # Taxonomy
     "ProductTag",
     # Product content
-    "ProductSpecification",
     "ProductFaq",
     # Core
     "Product",
@@ -64,9 +64,10 @@ __all__ = [
     "Coupon",
     "DeliveryCourier",
     # Phase 1 enterprise expansions
-    "ProductFabric",
+    "ProductFabricSpecification",
     "ProductSizeAndMeasurementGuide",
     "ProductShippingProfile",
     "ProductPriceHistory",
     "ProductViewLog",
 ]
+
