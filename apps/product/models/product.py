@@ -1,21 +1,26 @@
 # apps/product/models/product.py
-"""
-Core product models for the Fashionistar platform.
+"""Core product database models for the Fashionistar platform.
 
-Migrated from legacy store/models.py and upgraded to the
-enterprise-grade modular architecture with:
-  - UUID7 primary keys via TimeStampedModel
-  - Soft-delete via SoftDeleteModel
-  - CloudinaryField for all media
-  - Correct on_delete policies (PROTECT on taxonomy, SET_NULL on user refs)
-  - Full-text search vector field
-  - 2026+ variant / inventory / commission / analytics models
-  - Phase 1 expansion: SizeType, Fabric, MeasurementGuide, Certification,
-    ShippingProfile, PriceHistory, ViewLog
+Aligned and optimized to support the high-fashion digital marketplace. Includes
+UUID7-based primary keys, soft-deletion boundaries, and consolidated structures
+for variants, sizing guides, and logistics.
+
+Model Architecture Map:
+  - Section 1: Auxiliary Taxonomy Models (ProductTag, DeliveryCourier)
+  - Section 2: Core Product Model (Product, ProductFaq)
+  - Section 3: Sizing & Fabric Configurations (ProductSizeAndMeasurementGuide, ProductFabricSpecification)
+  - Section 4: Unified Variants & Media (ProductVariantGalleryMedia)
+  - Section 5: Logistics & Shipping Profiles (ProductShippingProfile)
+  - Section 6: Financials & Policy Tracking (ProductCommissionSnapshot, Coupon, ProductPriceHistory)
+  - Section 7: Ledgers & Customer Review Trackers (ProductInventoryLog, ProductReview, ProductViewLog)
+  - Section 8: Persistence & Wishlist Trackers (ProductDraftSession, ProductWishlist)
 """
 
+from typing import Optional
+from typing import Any
 from decimal import Decimal
 import logging
+import uuid
 import uuid6
 import datetime
 from django.utils.timezone import now
@@ -29,7 +34,6 @@ from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 
 from apps.common.models import TimeStampedModel, SoftDeleteModel, HardDeleteMixin
-from apps.order.models import CashPaymentMode
 
 try:
     from cloudinary.models import CloudinaryField
@@ -40,89 +44,73 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
-import shortuuid
-import uuid
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 1: AUXILIARY TAXONOMY MODELS
+# ─────────────────────────────────────────────────────────────────────────────
 
-STATUS = (
-    ("draft", "Draft"),
-    ("disabled", "Disabled"),
-    ("rejected", "Rejected"),
-    ("in_review", "In Review"),
-    ("published", "Published"),
-)
+class ProductTag(TimeStampedModel):
+    """Flat classification tags utilized for catalog search filtering.
 
+    Linked optionally to a Category to allow targeted faceted navigation.
+    """
 
-PAYMENT_STATUS = (
-    ("paid", "Paid"),
-    ("pending", "Pending"),
-    ("processing", "Processing"),
-    ("cancelled", "Cancelled"),
-    ("initiated", "Initiated"),
-    ("failed", "failed"),
-    ("refunding", "refunding"),
-    ("refunded", "refunded"),
-    ("unpaid", "unpaid"),
-    ("expired", "expired"),
-)
+    name = models.CharField(max_length=80, unique=True, db_index=True)
+    slug = models.SlugField(max_length=100, unique=True, blank=True)
+    category = models.ForeignKey(
+        "catalog.Category",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="category_product_tags",
+    )
 
+    class Meta:
+        verbose_name = _("Product Tag")
+        verbose_name_plural = _("Product Tags")
+        ordering = ["name"]
 
-ORDER_STATUS = (
-    ("Pending", "Pending"),
-    ("Fulfilled", "Fulfilled"),
-    ("Partially Fulfilled", "Partially Fulfilled"),
-    ("Cancelled", "Cancelled"),
-)
+    def __str__(self) -> str:
+        return self.name
 
-
-OFFER_STATUS = (
-    ("accepted", "Accepted"),
-    ("rejected", "Rejected"),
-    ("pending", "Pending"),
-)
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Enforces safe slug generation based on user name input."""
+        if not self.slug:
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
 
 
-PRODUCT_CONDITION_RATING = (
-    (1, "1/10"),
-    (2, "2/10"),
-    (3, "3/10"),
-    (4, "4/10"),
-    (5, "5/10"),
-    (6, "6/10"),
-    (7, "7/10"),
-    (8, "8/10"),
-    (9, "9/10"),
-    (10, "10/10"),
-)
+class DeliveryCourier(TimeStampedModel):
+    """Platform-registered logistics courier profiles.
 
+    Powers shipping profile delivery calculations and courier selections.
+    """
 
-DELIVERY_STATUS = (
-    ("On Hold", "On Hold"),
-    ("Shipping Processing", "Shipping Processing"),
-    ("Shipped", "Shipped"),
-    ("Arrived", "Arrived"),
-    ("Returning", "Returning"),
-    ("Returned", "Returned"),
-    ("Awaiting Pickup", "Awaiting Pickup"),
-    ("In Transit", "In Transit"),
-    ("Delivered", "Delivered"),
-)
+    name = models.CharField(max_length=120, unique=True)
+    active = models.BooleanField(default=True)
+    base_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    estimated_days_min = models.PositiveSmallIntegerField(default=1)
+    estimated_days_max = models.PositiveSmallIntegerField(default=7)
+    logo = CloudinaryField(
+        "logo",
+        folder="fashionistar/couriers/",
+        blank=True,
+        null=True,
+    )
 
+    class Meta:
+        verbose_name = _("Delivery Courier")
+        verbose_name_plural = _("Delivery Couriers")
 
-RATING = (
-    (1, "★☆☆☆☆"),
-    (2, "★★☆☆☆"),
-    (3, "★★★☆☆"),
-    (4, "★★★★☆"),
-    (5, "★★★★★"),
-)
+    def __str__(self) -> str:
+        return self.name
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 1. PRODUCT STATUS CHOICES
+# SECTION 2: CORE PRODUCT MODELS
 # ─────────────────────────────────────────────────────────────────────────────
-
 
 class ProductStatus(models.TextChoices):
+    """Workflow state validation choices for listed products."""
     DRAFT = "draft", _("Draft")
     PENDING = "pending", _("Pending Review")
     PUBLISHED = "published", _("Published")
@@ -130,78 +118,46 @@ class ProductStatus(models.TextChoices):
     REJECTED = "rejected", _("Rejected")
 
 
-class ProductFaq(TimeStampedModel):
-    product = models.ForeignKey(
-        "Product",
-        on_delete=models.CASCADE,
-        related_name="product_faqs",
-    )
-    question = models.CharField(max_length=300)
-    answer = models.TextField()
-
-    class Meta:
-        verbose_name = _("Product FAQ")
-        verbose_name_plural = _("Product FAQs")
-
-    def __str__(self):
-        return self.question
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 4. PRODUCT (Core)
-# ─────────────────────────────────────────────────────────────────────────────
-
-
 class Product(TimeStampedModel, SoftDeleteModel):
-    """
-    Canonical product model for Fashionistar.
+    """Canonical model storing core properties of a listed design piece.
 
-    Relationships
-    -------------
-    vendor      → apps.vendor.VendorProfile                                             (PROTECT)
-    categories  → apps.catalog.Category                                                 (M2M — one to five product facets)
-    tags        → ProductTag                                                            (M2M)
-
-    on_delete rationale
-    --------------------
-    PROTECT on vendor: a vendor with live products cannot be deleted — must
-    soft-delete products first. This prevents orphaned storefront listings.
-    Product categories are a capped M2M relationship because one fashion item can
-    sit in multiple discovery facets without creating duplicate product rows.
+    Maintains relationships to categories, pricing fields, metric histories,
+    demographics, SEO metadata, and sustainability/AI properties.
     """
 
-    # ── Identity ──────────────────────────────────────────────────────────
+    # Identity properties
     title = models.CharField(max_length=255, db_index=True)
     slug = models.SlugField(max_length=500, unique=True, blank=True, db_index=True)
     sku = models.CharField(
         max_length=50,
         unique=True,
         blank=True,
-        help_text="Auto-generated SKU. Unique across platform.",
+        help_text="Unique SKU identifier generated automatically upon saving.",
     )
     description = models.TextField()
 
-    # ── Taxonomy ──────────────────────────────────────────────────────────
+    # Ownership & Classification relationships
     vendor = models.ForeignKey(
         "vendor.VendorProfile",
         on_delete=models.PROTECT,
         related_name="vendor_products",
         null=True,
-        help_text="Vendor who owns this product. PROTECT prevents orphan listings.",
+        help_text="The associated designer storefront profile.",
     )
     categories = models.ManyToManyField(
         "catalog.Category",
         related_name="category_products",
-        help_text="Canonical product categories. Service layer enforces 1-5 selections.",
+        help_text="Primary classification groups. Capped at 1 to 15 allocations.",
     )
     sub_categories = models.ManyToManyField(
         "catalog.Category",
         blank=True,
         related_name="sub_category_products",
-        help_text="Optional deeper taxonomy facets. Kept separate from required categories.",
+        help_text="Deep classification groups used for recommendation indices.",
     )
+    tags = models.ManyToManyField(ProductTag, blank=True, related_name="tag_products")
 
-    # ── Pricing ───────────────────────────────────────────────────────────
+    # Financial and pricing attributes
     price = models.DecimalField(max_digits=12, decimal_places=2)
     old_price = models.DecimalField(
         max_digits=12, decimal_places=2, null=True, blank=True
@@ -216,42 +172,47 @@ class Product(TimeStampedModel, SoftDeleteModel):
     currency = models.CharField(max_length=3, default="NGN")
     shipping_amount = models.DecimalField(max_digits=12, decimal_places=2, default=2500)
 
-    # ── Inventory ─────────────────────────────────────────────────────────
+    # Inventory & Policy definitions
     stock_qty = models.PositiveIntegerField(default=0)
     max_stock = models.PositiveIntegerField(
         null=True,
         blank=True,
-        help_text="Optional stock ceiling. Service enforces this to prevent over-stocking.",
+        help_text="Operational threshold to prevent oversell situations.",
     )
     in_stock = models.BooleanField(default=True)
-
     requires_measurement = models.BooleanField(
         default=False,
-        help_text="If True, client must share measurement profile before checkout.",
+        help_text="Forces the buyer to submit exact body sizes prior to checking out.",
     )
     is_customisable = models.BooleanField(
         default=False,
-        help_text="Custom orders — triggers ChatOffer flow.",
+        help_text="Allows customization requests via direct negotiation.",
     )
+    
+    # Payment & Fulfillment configurations
+    class CashPaymentMode(models.TextChoices):
+        DISABLED = "disabled", _("Disabled")
+        COD = "cod", _("Cash On Delivery")
+        PAY_AT_SHOP = "pay_at_shop", _("Pay At Shop")
+        BOTH = "both", _("Both")
 
-    # ── Payment COD / Pay At Shop availability on this product ───────────────────────────────────────────────────────────
     cash_payment_mode = models.CharField(
         max_length=20,
         choices=CashPaymentMode.choices,
         default=CashPaymentMode.DISABLED,
-        help_text="Checkout gate for COD / Pay At Shop availability on this product.",
+        help_text="Enables or disables Cash on Delivery (COD) channels.",
     )
     is_pre_order = models.BooleanField(
         default=False,
-        help_text="If True, the product is available for pre-order before stock arrives.",
+        help_text="Specifies if items can be purchased prior to materials arriving.",
     )
     pre_order_date = models.DateField(
         null=True,
         blank=True,
-        help_text="Expected dispatch date for pre-order items.",
+        help_text="Estimated shipment date for pre-order purchases.",
     )
-
-    # ── Status ────────────────────────────────────────────────────────────
+    
+    # Workflow properties
     status = models.CharField(
         max_length=20,
         choices=ProductStatus.choices,
@@ -261,29 +222,26 @@ class Product(TimeStampedModel, SoftDeleteModel):
     featured = models.BooleanField(default=False, db_index=True)
     hot_deal = models.BooleanField(default=False)
 
-    # ── Metrics ───────────────────────────────────────────────────────────
+    # Metrics & Engagement variables
     views = models.PositiveIntegerField(default=0)
     orders_count = models.PositiveIntegerField(default=0)
     rating = models.DecimalField(max_digits=3, decimal_places=1, default=0)
     review_count = models.PositiveIntegerField(default=0)
-
-    # ── Platform commission ───────────────────────────────────────────────
     commission_rate = models.DecimalField(
         max_digits=5,
         decimal_places=2,
         default=10.00,
-        help_text="Platform commission % at time of listing. Snapshot on OrderItem.",
+        help_text="Calculated platform cut snapshot recorded on item listings.",
     )
 
-    # ── Idempotency (network-retry safe writes) ───────────────────────────
+    # Idempotency token to prevent write collisions
     idempotency_key = models.UUIDField(
         null=True,
         blank=True,
         unique=True,
         db_index=True,
-        help_text="Client-generated UUID for safe network-retry. One product per key.",
+        help_text="Unique key generated on client forms to prevent network duplications.",
     )
-
     condition = models.CharField(
         max_length=20,
         choices=[
@@ -292,10 +250,15 @@ class Product(TimeStampedModel, SoftDeleteModel):
             ("refurbished", _("Refurbished")),
         ],
         default="new",
-        help_text="Physical condition of the product.",
+    )
+    # Shipping profile
+    shipping_profiles = models.OneToManyField(
+        "product.ProductShippingProfile",
+        on_delete=models.CASCADE,
+        related_name="product_shipping_profiles",
     )
 
-    # ── SEO Overrides (Phase 1 — 2026) ────────────────────────────────────
+    # Search and SEO overrides
     meta_title = models.CharField(
         max_length=160,
         blank=True,
@@ -304,7 +267,7 @@ class Product(TimeStampedModel, SoftDeleteModel):
     meta_description = models.CharField(
         max_length=320,
         blank=True,
-        help_text="SEO meta description override. Shown in search-engine snippets.",
+        help_text="SEO description tag override, Optional search snippet descriptive block.",
     )
 
     # ── Demographic targeting (Phase 1 — 2026) ────────────────────────────
@@ -331,32 +294,24 @@ class Product(TimeStampedModel, SoftDeleteModel):
             ("toddler", _("Toddler (1-3)")),
             ("infant", _("Infant (0-12 months)")),
         ],
-        help_text="Age group this product is designed for.",
+        help_text="Age-segment target for catalog organization.",
+    )
+    faq = models.OneToManyField(
+        "product.ProductFaq",
+        on_delete=models.CASCADE,
+        related_name="product_faqs",
+        blank=True,
+        null=True,
     )
 
     # ── Full-text search ──────────────────────────────────────────────────
     search_vector = SearchVectorField(null=True, blank=True)
 
-    # ── 2026+ AI & Sustainability Fields ─────────────────────────────────
-    ai_description = models.TextField(
-        blank=True,
-        help_text="AI-generated product description. Auto-populated by catalog AI pipeline.",
-    )
-    style_tags = models.JSONField(
-        default=list,
-        blank=True,
-        help_text="AI-inferred style labels e.g. ['casual','boho','formal']. Used for recommendation engine.",
-    )
-    occasion_tags = models.JSONField(
-        default=list,
-        blank=True,
-        help_text="AI-inferred occasion labels e.g. ['wedding','everyday','office'].",
-    )
-    body_type_fit = models.JSONField(
-        default=list,
-        blank=True,
-        help_text="Body types this product is recommended for e.g. ['slim','curvy','athletic'].",
-    )
+    # System ML and Analytical features (Private fields)
+    ai_description = models.TextField(blank=True)
+    style_tags = models.JSONField(default=list, blank=True)
+    occasion_tags = models.JSONField(default=list, blank=True)
+    body_type_fit = models.JSONField(default=list, blank=True)
     sustainability_score = models.DecimalField(
         max_digits=4,
         decimal_places=1,
@@ -366,18 +321,15 @@ class Product(TimeStampedModel, SoftDeleteModel):
         help_text="Sustainability score 0–100. Computed from material, supply chain, and packaging data.",
     )
     carbon_footprint_kg = models.DecimalField(
-        max_digits=8,
-        decimal_places=3,
-        null=True,
-        blank=True,
-        help_text="Estimated carbon footprint in kg CO₂ equivalent. Surfaced on product detail page.",
+        max_digits=8, decimal_places=3, null=True, blank=True,
+        help_text="Estimated CO₂e in kilograms per unit, computed from materials, dyeing, and transport legs.",
     )
     ai_trend_score = models.DecimalField(
-        max_digits=5,
-        decimal_places=2,
-        default=0.00,
-        help_text="Trending score 0–100 from AI pipeline. Used to rank catalog feeds.",
+        max_digits=5, decimal_places=2, default=0.00,
+        help_text="Trendiness index (0–100). Computed from trending hashtags, sales velocity, and social buzz.",
     )
+
+    # ── Style and curation ──────────────────────────────────────────────────
 
     class Meta:
         verbose_name = _("Product")
@@ -392,10 +344,11 @@ class Product(TimeStampedModel, SoftDeleteModel):
             GinIndex(fields=["search_vector"], name="idx_product_search_vector"),
         ]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.title
 
-    def save(self, *args, **kwargs):
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Enforces unique slug assignment and random SKU checks upon saving."""
         if not self.slug:
             base = slugify(self.title)
             slug = base
@@ -419,7 +372,8 @@ class Product(TimeStampedModel, SoftDeleteModel):
         super().save(*args, **kwargs)
 
     @property
-    def discount_percentage(self):
+    def discount_percentage_calc(self) -> int:
+        """Calculates current catalog markdown percentages from old_price."""
         if self.old_price and self.old_price > self.price:
             return round((1 - self.price / self.old_price) * 100)
         return 0
@@ -430,151 +384,180 @@ class Product(TimeStampedModel, SoftDeleteModel):
         return self.reviews
 
     @property
-    def product_wishlist(self):
-        """Explicit reverse-manager alias for Product -> ProductWishlist."""
+    def product_wishlist(self) -> models.QuerySet:
+        """Explicit reverse accessor property redirecting to wishlist entries."""
         return self.product_wishlist_entries
 
     @property
-    def primary_category(self):
-        """Return the first prefetched category without serializer-side queries."""
+    def primary_category(self) -> Optional[models.Model]:
+        """Resolves the primary categorization level with zero N+1 overhead."""
         categories = list(self.categories.all()[:1])
         return categories[0] if categories else None
 
     @property
-    def primary_sub_category(self):
-        """Return the first prefetched sub-category when one exists."""
+    def primary_sub_category(self) -> Optional[models.Model]:
+        """Resolves the first sub-categorization level with zero N+1 overhead."""
         categories = list(self.sub_categories.all()[:1])
         return categories[0] if categories else None
 
-    def category_count(self) -> int:
-        """Count published products sharing at least one category with this product."""
-        return (
-            Product.objects.filter(
-                categories__in=self.categories.all(),
-                status=ProductStatus.PUBLISHED,
-                is_deleted=False,
-            )
-            .distinct()
-            .count()
-        )
-
-    async def acategory_count(self) -> int:
-        """Async count of published products sharing at least one category."""
-        return await (
-            Product.objects.filter(
-                categories__in=self.categories.all(),
-                status=ProductStatus.PUBLISHED,
-                is_deleted=False,
-            )
-            .distinct()
-            .acount()
-        )
-
-    def get_percentage(self) -> int:
-        """Return rounded discount percentage from old_price to price."""
-        return int(self.discount_percentage)
-
-    def product_rating(self) -> float:
-        """Average active review rating through product.reviews reverse FK."""
-        row = self.reviews.filter(active=True).aggregate(avg_rating=models.Avg("rating"))
-        return float(row["avg_rating"] or 0)
-
-    async def aproduct_rating(self) -> float:
-        """Async average active review rating through product.reviews reverse FK."""
-        row = await self.reviews.filter(active=True).aaggregate(
-            avg_rating=models.Avg("rating")
-        )
-        return float(row["avg_rating"] or 0)
-
-    def rating_count(self) -> int:
-        """Count active reviews through product.reviews reverse FK."""
-        return self.reviews.filter(active=True).count()
-
-    async def arating_count(self) -> int:
-        """Async count active reviews through product.reviews reverse FK."""
-        return await self.reviews.filter(active=True).acount()
-
-    def order_count(self) -> int:
-        """Count paid/completed order snapshots for this product."""
-        return self.cart_order_product_snapshots.filter(
-            order__status__in=[
-                "payment_confirmed",
-                "processing",
-                "shipped",
-                "out_for_delivery",
-                "delivered",
-                "completed",
-            ]
-        ).count()
-
-    async def aorder_count(self) -> int:
-        """Async count paid/completed order snapshots for this product."""
-        return await self.cart_order_product_snapshots.filter(
-            order__status__in=[
-                "payment_confirmed",
-                "processing",
-                "shipped",
-                "out_for_delivery",
-                "delivered",
-                "completed",
-            ]
-        ).acount()
-
-    def gallery(self):
-        """Compatibility accessor for unified product_variants_gallery_media queryset."""
+    def gallery(self) -> models.QuerySet:
+        """Collects non-deleted variant media assets with valid paths."""
         return self.product_variants_gallery_media.filter(is_deleted=False).exclude(media__isnull=True).exclude(media="").order_by(
             "ordering", "created_at"
         )
 
-    async def agallery(self) -> list["ProductVariantGalleryMedia"]:
-        """Async list of non-deleted product_variants_gallery_media."""
-        return [media async for media in self.gallery()]
-
-
-    def color(self):
-        """Compatibility accessor for colors from variants."""
+    def color(self) -> list[dict[str, Any]]:
+        """Extracts unique color values across associated product variants."""
         colors_list = []
         seen = set()
         for v in self.product_variants_gallery_media.all():
             if v.color_name and v.color_name not in seen:
                 seen.add(v.color_name)
                 colors_list.append({
-                    "id": v.id,
+                    "id": str(v.id),
                     "name": v.color_name,
                     "hex_code": v.color_hex,
                 })
         return colors_list
 
-    def frequently_bought_together(self, limit: int = 3):
-        """Products most often ordered in the same orders as this product."""
-        order_ids = self.cart_order_product_snapshots.values("order_id")
-        return (
-            Product.objects.filter(cart_order_product_snapshots__order_id__in=order_ids)
-            .exclude(pk=self.pk)
-            .annotate(count=models.Count("cart_order_product_snapshots"))
-            .order_by("-count", "-created_at")[:limit]
-        )
 
-    async def afrequently_bought_together(self, limit: int = 3) -> list["Product"]:
-        """Async products most often ordered in the same orders as this product."""
-        return [product async for product in self.frequently_bought_together(limit)]
+class ProductFaq(TimeStampedModel):
+    """Auxiliary customer support question/answer configurations."""
 
+    
+    question = models.CharField(max_length=300)
+    answer = models.TextField()
 
+    class Meta:
+        verbose_name = _("Product FAQ")
+        verbose_name_plural = _("Product FAQs")
 
-
-
-
-
+    def __str__(self) -> str:
+        return self.question
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 6. PRODUCT VARIANT GALLERY MEDIA  (2026+)
+# SECTION 3: SIZING & FABRIC CONFIGURATIONS
 # ─────────────────────────────────────────────────────────────────────────────
 
+class ProductSizeAndMeasurementGuide(TimeStampedModel):
+    """Reusable size-guide configurations and custom-fit ranges.
+
+    Maintains standard size labels alongside raw measurement parameters (chest,
+    waist, hip size metrics etc.) to avoid high manual data entry overhead [1].
+    """
+
+    vendor = models.ForeignKey(
+        "vendor.VendorProfile",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="measurement_templates",
+    )
+    name = models.CharField(max_length=120, help_text="e.g. 'Men Senator Fit Guide'")
+    
+    DESCRIPTION_CHOICES = [
+        ("clothing", _("Clothing")),
+        ("footwear", _("Footwear")),
+        ("accessory", _("Accessory")),
+        ("measurement", _("Measurement-Based")),
+        ("custom", _("Custom")),
+    ]
+    description = models.CharField(
+        max_length=20,
+        choices=DESCRIPTION_CHOICES,
+        default="custom",
+    )
+    is_default = models.BooleanField(default=False)
+    save_as_template = models.BooleanField(default=True)
+    
+    SIZE_CHOICES = [
+        ("XS", _("XS")),
+        ("S", _("S")),
+        ("M", _("M")),
+        ("L", _("L")),
+        ("XL", _("XL")),
+        ("XXL", _("XXL")),
+        ("Custom", _("Custom")),
+    ]
+    size_label = models.CharField(
+        max_length=30,
+        choices=SIZE_CHOICES,
+        default="M",
+    )
+
+    chest_cm = models.CharField(max_length=20, blank=True)
+    waist_cm = models.CharField(max_length=20, blank=True)
+    hip_cm = models.CharField(max_length=20, blank=True)
+    length_cm = models.CharField(max_length=20, blank=True)
+    shoulder_cm = models.CharField(max_length=20, blank=True)
+    sleeve_cm = models.CharField(max_length=20, blank=True)
+    inseam_cm = models.CharField(max_length=20, blank=True)
+    foot_length_cm = models.CharField(max_length=20, blank=True)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        verbose_name = _("Measurement Guide Row")
+        verbose_name_plural = _("Measurement Guide Rows")
+        ordering = ["sort_order", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["vendor", "name", "size_label"],
+                condition=models.Q(vendor__isnull=False),
+                name="unique_vendor_template_size_label",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        owner = self.vendor.store_name if self.vendor else "Platform"
+        return f"{self.name} [{owner}] — {self.size_label}"
+
+
+class ProductFabricSpecification(TimeStampedModel):
+    """Technical fabric configurations and care instructions."""
+
+    CARE_CHOICES = [
+        ("machine_wash", _("Machine Wash")),
+        ("hand_wash", _("Hand Wash")),
+        ("dry_clean", _("Dry Clean Only")),
+        ("do_not_wash", _("Do Not Wash")),
+        ("cold_wash", _("Cold Water Wash")),
+        ("tumble_dry", _("Tumble Dry Low")),
+        ("air_dry", _("Air Dry")),
+    ]
+
+    product = models.OneToOneField(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="product_fabric_specification",
+    )
+    fabric_type = models.CharField(max_length=120, help_text="e.g. Cashmere Blend")
+    care_instructions = models.CharField(
+        max_length=20,
+        choices=CARE_CHOICES,
+        default="machine_wash",
+    )
+    is_organic = models.BooleanField(default=False)
+    is_vegan = models.BooleanField(default=False)
+    country_of_origin = models.CharField(max_length=80, blank=True)
+
+    class Meta:
+        verbose_name = _("Product Fabric Specification")
+        verbose_name_plural = _("Product Fabric Specifications")
+
+    def __str__(self) -> str:
+        return f"{self.fabric_type} - {self.country_of_origin}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 4: UNIFIED PRODUCTS VARIANTS & MEDIA
+# ─────────────────────────────────────────────────────────────────────────────
 
 class ProductVariantGalleryMedia(TimeStampedModel, SoftDeleteModel):
-    """
-    Consolidated product variant and gallery media model.
+    """Consolidated model merging product variants and associated gallery media.
+
+    Saves storage overhead and simplifies UI rendering by pairing sizes, colors,
+    barcodes, and pricing overrides directly with Cloudinary media assets [1].
     """
 
     MEDIA_TYPE_CHOICES = [
@@ -591,18 +574,21 @@ class ProductVariantGalleryMedia(TimeStampedModel, SoftDeleteModel):
         max_length=80,
         unique=True,
         blank=True,
-        help_text="Auto-generated SKU. Unique across all variants.",
+        help_text="Variant-specific Stock Keeping Unit identifier.",
     )
     size = models.ForeignKey(
-        "ProductSizeAndMeasurementGuide",
+        ProductSizeAndMeasurementGuide,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
         related_name="product_size_variants",
     )
     color_name = models.CharField(max_length=100, blank=True)
-    color_hex = models.CharField(max_length=7, blank=True, help_text="e.g. #FDA600")
-   
+    color_hex = models.CharField(
+        max_length=7,
+        blank=True,
+        help_text="Visual swatch hex key. e.g. #FDA600",
+    )
     media = CloudinaryField(
         "media",
         folder="fashionistar/products/gallery/",
@@ -617,7 +603,7 @@ class ProductVariantGalleryMedia(TimeStampedModel, SoftDeleteModel):
     ordering = models.PositiveSmallIntegerField(default=0)
     is_primary = models.BooleanField(
         default=False,
-        help_text="If True, this media item is used as the product cover image on listings.",
+        help_text="Specifies if this asset serves as the primary catalog listing cover.",
     )
     video_thumbnail = CloudinaryField(
         "video_thumbnail",
@@ -643,7 +629,7 @@ class ProductVariantGalleryMedia(TimeStampedModel, SoftDeleteModel):
         verbose_name_plural = _("Product Variant Gallery Media")
         unique_together = [("product", "size", "color_name")]
 
-    def __str__(self):
+    def __str__(self) -> str:
         parts = [self.product.title]
         if self.size:
             parts.append(self.size.size_label)
@@ -651,229 +637,76 @@ class ProductVariantGalleryMedia(TimeStampedModel, SoftDeleteModel):
             parts.append(self.color_name)
         return " / ".join(parts)
 
-    def save(self, *args, **kwargs):
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Enforces safe auto-generation of unique variant codes."""
         if not self.sku:
             self.sku = f"FASTAR-{str(self.id or uuid6.uuid7()).upper()[:10]}"
         super().save(*args, **kwargs)
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 5: LOGISTICS & SHIPPING PROFILES
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ProductShippingProfile(TimeStampedModel):
+    """Volumetric package weight and dimension logistics parameters.
+
+    Provides shipping calculator inputs and preferred courier listings.
+    """
+
+    vendor = models.OneToManyField(
+        "vendor.VendorProfile",
+        on_delete=models.CASCADE,
+        related_name="vendor_shipping_profiles",
+    )
+    weight_kg = models.DecimalField(
+        max_digits=7,
+        decimal_places=3,
+        default=0,
+    )
+    dimensions_cm = models.JSONField(null=True, blank=True)
+    length_cm = models.DecimalField(max_digits=6, decimal_places=1, default=0)
+    width_cm = models.DecimalField(max_digits=6, decimal_places=1, default=0)
+    height_cm = models.DecimalField(max_digits=6, decimal_places=1, default=0)
+    is_fragile = models.BooleanField(default=False)
+    requires_signature = models.BooleanField(default=False)
+    restricted_countries = models.JSONField(default=list, blank=True)
+    preferred_couriers = models.ManyToManyField(
+        DeliveryCourier,
+        blank=True,
+        related_name="preferred_shipping_products",
+    )
+    free_shipping_threshold = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Overrides platform default shipping configuration limits.",
+    )
+    processing_days = models.PositiveSmallIntegerField(default=1)
+
     @property
-    def effective_price(self):
-        return self.price_override if self.price_override is not None else self.product.price
-
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 7. PRODUCT INVENTORY LOG  (2026+)
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-class ProductInventoryLog(TimeStampedModel):
-    """
-    Append-only stock movement audit trail.
-    One row per adjustment — never updated after creation.
-    """
-
-    REASON_CHOICES = [
-        ("sale", "Sale"),
-        ("restock", "Restock"),
-        ("adjustment", "Manual Adjustment"),
-        ("return", "Customer Return"),
-        ("damage", "Damage / Loss"),
-        ("reservation", "Cart Reservation"),
-        ("release", "Cart Release (Abandoned)"),
-        ("refund", "Refund"),
-    ]
-
-    product = models.ForeignKey(
-        Product,
-        on_delete=models.CASCADE,
-        related_name="inventory_logs",
-    )
-    variant = models.ForeignKey(
-        "ProductVariantGalleryMedia",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="inventory_logs",
-    )
-    actor = models.ForeignKey(
-        User,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="inventory_adjustments",
-    )
-    quantity_delta = models.IntegerField(
-        help_text="Positive = stock added. Negative = stock removed.",
-    )
-    quantity_before = models.PositiveIntegerField()
-    quantity_after = models.PositiveIntegerField()
-    reason = models.CharField(max_length=20, choices=REASON_CHOICES)
-    reference_id = models.CharField(
-        max_length=100,
-        blank=True,
-        help_text="Order ID / return ID / manual ref for traceability.",
-    )
-    note = models.TextField(blank=True)
+    def effective_free_shipping_threshold(self) -> Decimal:
+        """Resolves active free shipping parameters with standard model settings."""
+        if self.free_shipping_threshold is not None:
+            return self.free_shipping_threshold
+        # Logical fallback parameters when missing custom limits
+        return Decimal("50000.00")
 
     class Meta:
-        verbose_name = _("Inventory Log")
-        verbose_name_plural = _("Inventory Logs")
-        ordering = ["-created_at"]
+        verbose_name = _("Product Shipping Profile")
+        verbose_name_plural = _("Product Shipping Profiles")
 
-    def __str__(self):
-        return f"{self.product.title} {self.quantity_delta:+d} ({self.reason})"
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 8. PRODUCT REVIEW
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-class ProductReview(TimeStampedModel, SoftDeleteModel):
-    """Client review on a product. User SET_NULL on deletion."""
-
-    product = models.ForeignKey(
-        Product,
-        on_delete=models.CASCADE,
-        related_name="reviews",
-    )
-    user = models.ForeignKey(
-        User,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="product_reviews",
-    )
-    # Snapshot for permanent display even after user deletion
-    reviewer_name = models.CharField(max_length=150, blank=True)
-    reviewer_email = models.EmailField(blank=True)
-
-    rating = models.PositiveSmallIntegerField(
-        validators=[MinValueValidator(1), MaxValueValidator(5)],
-    )
-    review = models.TextField()
-    reply = models.TextField(
-        blank=True,
-        help_text="Vendor reply to this review.",
-    )
-    active = models.BooleanField(default=True)
-    moderated = models.BooleanField(
-        default=False,
-        help_text="Set by moderator after review.",
-    )
-    helpful_votes = models.PositiveIntegerField(default=0)
-    # Idempotency key — prevents double-review on network retry
-    idempotency_key = models.UUIDField(
-        null=True,
-        blank=True,
-        db_index=True,
-        help_text="Client-generated UUID. Prevents duplicate review on retry.",
-    )
-
-    class Meta:
-        verbose_name = _("Product Review")
-        verbose_name_plural = _("Product Reviews")
-        ordering = ["-created_at"]
-        unique_together = [("product", "user")]
-
-    def __str__(self):
-        return f"{self.product.title} — {self.rating}★"
-
-    def save(self, *args, **kwargs):
-        # Snapshot reviewer info
-        if self.user and not self.reviewer_name:
-            self.reviewer_name = (
-                getattr(self.user, "full_name", "") or self.user.email
-                if self.user.email
-                else str(self.user.phone) if self.user.phone else ""
-            )
-        if self.user and not self.reviewer_email:
-            self.reviewer_email = (
-                self.user.email
-                if self.user.email
-                else str(self.user.phone) if self.user.phone else ""
-            )
-        super().save(*args, **kwargs)
+    def __str__(self) -> str:
+        return f"{self.product.title} — {self.weight_kg}kg"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 9. PRODUCT WISHLIST
+# SECTION 6: FINANCIALS & POLICY TRACKING
 # ─────────────────────────────────────────────────────────────────────────────
-
-
-class ProductWishlist(TimeStampedModel):
-    """
-    Client wishlist entry for authenticated and anonymous shoppers.
-
-    Anonymous rows use the same frontend-generated session_key contract as
-    Cart, allowing wishlist hearts to survive browser restarts and later be
-    reconciled into a real account after login or checkout.
-    """
-
-    user = models.ForeignKey(
-        User,
-        null=True,
-        blank=True,
-        on_delete=models.CASCADE,
-        related_name="user_product_wishlists",
-    )
-    session_key = models.CharField(
-        max_length=40,
-        null=True,
-        blank=True,
-        db_index=True,
-        help_text="Frontend-generated anonymous session key. Null for user wishlist.",
-    )
-    product = models.ForeignKey(
-        Product,
-        on_delete=models.CASCADE,
-        related_name="product_wishlist_entries",
-    )
-
-    class Meta:
-        verbose_name = _("Product Wishlist")
-        verbose_name_plural = _("Product Wishlists")
-        constraints = [
-            models.CheckConstraint(
-                condition=(
-                    models.Q(user__isnull=False) | models.Q(session_key__isnull=False)
-                ),
-                name="wishlist_must_have_user_or_session",
-            ),
-            models.CheckConstraint(
-                condition=~(
-                    models.Q(user__isnull=False) & models.Q(session_key__isnull=False)
-                ),
-                name="wishlist_user_session_exclusive",
-            ),
-            models.UniqueConstraint(
-                fields=["user", "product"],
-                condition=models.Q(user__isnull=False),
-                name="uniq_user_product_wishlist",
-            ),
-            models.UniqueConstraint(
-                fields=["session_key", "product"],
-                condition=models.Q(user__isnull=True, session_key__isnull=False),
-                name="uniq_session_product_wishlist",
-            ),
-        ]
-
-    def __str__(self):
-        actor = self.user or f"anon:{self.session_key}"
-        return f"{actor} ♥ {self.product.title}"
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 10. PRODUCT COMMISSION SNAPSHOT  (2026+)
-# ─────────────────────────────────────────────────────────────────────────────
-
 
 class ProductCommissionSnapshot(TimeStampedModel):
-    """
-    Captures the platform commission rate at a specific point in time.
-    Linked to Product and referenced from OrderItem for financial accuracy.
-    """
+    """Administrative commission tracking ledger configurations."""
 
     product = models.ForeignKey(
         Product,
@@ -896,17 +729,12 @@ class ProductCommissionSnapshot(TimeStampedModel):
         verbose_name = _("Commission Snapshot")
         ordering = ["-effective_from"]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.product.title} @ {self.commission_rate}%"
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 11. COUPON
-# ─────────────────────────────────────────────────────────────────────────────
-
-
 class Coupon(TimeStampedModel, SoftDeleteModel):
-    """Discount coupon created by a vendor or platform admin."""
+    """Discount coupon parameter structures."""
 
     DISCOUNT_TYPE = [
         ("percentage", "Percentage"),
@@ -926,11 +754,7 @@ class Coupon(TimeStampedModel, SoftDeleteModel):
         blank=True,
         help_text="Cap for percentage coupons.",
     )
-    usage_limit = models.PositiveIntegerField(
-        null=True,
-        blank=True,
-        help_text="Total number of times this coupon can be used. Null = unlimited.",
-    )
+    usage_limit = models.PositiveIntegerField(null=True, blank=True)
     usage_count = models.PositiveIntegerField(default=0)
     vendor = models.ForeignKey(
         "vendor.VendorProfile",
@@ -938,7 +762,6 @@ class Coupon(TimeStampedModel, SoftDeleteModel):
         blank=True,
         on_delete=models.SET_NULL,
         related_name="vendor_platform_wide_coupons",
-        help_text="Null = platform-wide coupon.",
     )
     product = models.ForeignKey(
         Product,
@@ -946,7 +769,6 @@ class Coupon(TimeStampedModel, SoftDeleteModel):
         blank=True,
         on_delete=models.SET_NULL,
         related_name="product_specific_coupon",
-        help_text="Null = applies to all products from this vendor.",
     )
     active = models.BooleanField(default=True)
     valid_from = models.DateTimeField()
@@ -956,14 +778,13 @@ class Coupon(TimeStampedModel, SoftDeleteModel):
         verbose_name = _("Coupon")
         verbose_name_plural = _("Coupons")
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.code} ({self.discount_type}: {self.discount_value})"
 
-    def is_valid(self):
-        from django.utils import timezone
-
-        now = timezone.now()
-        expired = now > self.valid_to
+    def is_valid(self) -> bool:
+        """Determines active date duration limits and coupon validation rules."""
+        now_time = now()
+        expired = now_time > self.valid_to
         usage_exhausted = (
             self.usage_limit is not None and self.usage_count >= self.usage_limit
         )
@@ -972,307 +793,8 @@ class Coupon(TimeStampedModel, SoftDeleteModel):
         )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 12. DELIVERY COURIER
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-class DeliveryCourier(TimeStampedModel):
-    """Platform-registered delivery carrier."""
-
-    name = models.CharField(max_length=120, unique=True)
-    active = models.BooleanField(default=True)
-    base_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    estimated_days_min = models.PositiveSmallIntegerField(default=1)
-    estimated_days_max = models.PositiveSmallIntegerField(default=7)
-    logo = CloudinaryField(
-        "logo",
-        folder="fashionistar/couriers/",
-        blank=True,
-        null=True,
-    )
-
-    class Meta:
-        verbose_name = _("Delivery Courier")
-        verbose_name_plural = _("Delivery Couriers")
-
-    def __str__(self):
-        return self.name
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 13. PRODUCT FABRIC SPECIFICATION  (Phase 1 — 2026)
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-class ProductFabricSpecification(TimeStampedModel):
-    """
-    Fabric type and composition details for a product.
-
-    Displayed on the PDP in the Specifications section.
-    Enables fabric-based catalog filtering and material compliance tagging.
-    """
-
-    CARE_CHOICES = [
-        ("machine_wash", _("Machine Wash")),
-        ("hand_wash", _("Hand Wash")),
-        ("dry_clean", _("Dry Clean Only")),
-        ("do_not_wash", _("Do Not Wash")),
-        ("cold_wash", _("Cold Water Wash")),
-        ("tumble_dry", _("Tumble Dry Low")),
-        ("air_dry", _("Air Dry")),
-    ]
-
-    product = models.OneToOneField(
-        Product,
-        on_delete=models.CASCADE,
-        related_name="product_fabric_specification",
-        help_text="Each product has at most one Fabric Specification record.",
-    )
-    fabric_type = models.CharField(
-        max_length=120,
-        help_text="Primary fabric type e.g. 'Cotton', 'Silk', 'Polyester Blend'.",
-    )
-    care_instructions = models.CharField(
-        max_length=20,
-        choices=CARE_CHOICES,
-        default="machine_wash",
-    )
-    is_organic = models.BooleanField(
-        default=False, help_text="Certified organic fabric."
-    )
-    is_vegan = models.BooleanField(
-        default=False, help_text="Free from animal-derived materials."
-    )
-
-    country_of_origin = models.CharField(
-        max_length=80,
-        blank=True,
-        help_text="Country where the fabric was woven / manufactured. eg. MADE IN ABA, MADE IN ITALY, MADE IN LAGOS etc ",
-    )
-    class Meta:
-        verbose_name = _("Product Fabric Specification")
-        verbose_name_plural = _("Product Fabric Specifications")
-
-    def __str__(self):
-        return f"{self.fabric_type} - {self.country_of_origin}"
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 14. PRODUCT MEASUREMENT GUIDE  (Phase 1 — 2026)
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-class ProductSizeAndMeasurementGuide(TimeStampedModel):
-    """
-    Size chart row linking a size label to body measurement ranges.
-
-    One row per size per product (or template). Together they form the size guide table.
-    
-    Reusable size-guide template defined by a vendor (tailor/brand).
-    Allows applying a standardized set of measurements (e.g. Senator fit, Kaftan slim fit)
-    to a product without manual row-by-row data entry on every upload.
-      e.g. 'Clothing', 'Footwear', 'Measurement-Based', 'Custom'.
-    Allows the platform to render the correct size picker UI.
-    """
-
-    vendor = models.ForeignKey(
-        "vendor.VendorProfile",
-        null=True,
-        blank=True,
-        on_delete=models.CASCADE,
-        related_name="measurement_templates",
-        help_text="Vendor who owns this reusable sizing template."
-    )
-    name = models.CharField(max_length=120, help_text="e.g. 'Men's Slim Senator', 'Standard Kaftan'")
-    
-   
-    DESCRIPTION_CHOICES = [
-        ("clothing", _("Clothing")),
-        ("footwear", _("Footwear")),
-        ("accessory", _("Accessory")),
-        ("measurement", _("Measurement-Based")),
-        ("custom", _("Custom")),
-    ]
-
-    description =  models.CharField(
-        max_length=20,
-        choices=DESCRIPTION_CHOICES,
-        default="custom",
-        help_text="Description of this measurement guide.",
-    )
-    
-    is_default = models.BooleanField(
-        default=False,
-        help_text="This is the default measurement guide for this product.",
-    )
-    
-    save_as_template = models.BooleanField(
-        default=True,
-        help_text="Save this measurement guide as a reusable template for future use.",
-    )
-    
-    SIZE_CHOICES = [
-        ("XS", _("XS")),
-        ("S", _("S")),
-        ("M", _("M")),
-        ("L", _("L")),
-        ("XL", _("XL")),
-        ("XXL", _("XXL")),
-        ("Custom", _("Custom")),
-    ]
-
-    size_label = models.CharField(
-        max_length=30,
-        choices=SIZE_CHOICES,
-        default="M",
-        help_text="Display label e.g. 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'Custom'.",
-    )
-
-    chest_cm = models.CharField(
-        max_length=20, blank=True, help_text="Chest range e.g. '90-100'."
-    )
-    waist_cm = models.CharField(
-        max_length=20, blank=True, help_text="Waist range e.g. '70-80'."
-    )
-    hip_cm = models.CharField(
-        max_length=20, blank=True, help_text="Hip range e.g. '90-100'."
-    )
-    length_cm = models.CharField(
-        max_length=20, blank=True, help_text="Garment length e.g. '110'."
-    )
-    shoulder_cm = models.CharField(max_length=20, blank=True)
-    sleeve_cm = models.CharField(max_length=20, blank=True)
-    inseam_cm = models.CharField(max_length=20, blank=True)
-    foot_length_cm = models.CharField(
-        max_length=20,
-        blank=True,
-        help_text="For footwear: foot length in cm.",
-    )
-    sort_order = models.PositiveSmallIntegerField(
-        default=0,
-        help_text="Lower value = displayed first in the size picker.",
-    )   
-    
-    class Meta:
-        verbose_name = _("Measurement Guide Row")
-        verbose_name_plural = _("Measurement Guide Rows")
-        ordering = ["sort_order", "name"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["vendor", "name", "size_label"],
-                condition=models.Q(vendor__isnull=False),
-                name="unique_vendor_template_size_label",
-            ),
-        ]
-
-    def __str__(self):
-        owner = self.vendor.store_name if self.vendor else "Platform"
-        return f"{self.name} [{owner}] — {self.size_label}"
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 16. PRODUCT SHIPPING PROFILE  (Phase 1 — 2026)
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-class ProductShippingProfile(TimeStampedModel):
-    """
-    Per-product (or per-variant) shipping configuration.
-
-    Overrides the platform default shipping rules for special items
-    (heavy fabrics, fragile accessories, oversized agbadas etc.)
-    """
-
-    product = models.OneToOneField(
-        Product,
-        on_delete=models.CASCADE,
-        related_name="product_custom_shipping_profile",
-        help_text="Each product has at most one custom shipping profile.",
-    )
-    weight_kg = models.DecimalField(
-        max_digits=7,
-        decimal_places=3,
-        default=0,
-        help_text="Packed weight in kilograms used for shipping rate calculation.",
-    )
-    dimensions_cm = models.JSONField(
-        null=True,
-        blank=True,
-        help_text='Packed dimensions in cm. Format: {"length": 30, "width": 20, "height": 10}',
-    )
-    length_cm = models.DecimalField(max_digits=6, decimal_places=1, default=0)
-    width_cm = models.DecimalField(max_digits=6, decimal_places=1, default=0)
-    height_cm = models.DecimalField(max_digits=6, decimal_places=1, default=0)
-    is_fragile = models.BooleanField(default=False)
-    requires_signature = models.BooleanField(default=False)
-    restricted_countries = models.JSONField(
-        default=list,
-        blank=True,
-        help_text=(
-            "ISO-3166-1 alpha-2 country codes where this product cannot be shipped. "
-            'Format: ["NG", "GH", "ZA"]'
-        ),
-    )
-    preferred_couriers = models.ManyToManyField(
-        DeliveryCourier,
-        blank=True,
-        related_name="preferred_for_custom_shipping_products",
-        help_text="Couriers the vendor prefers for this product.",
-        default="DHL,FedEx",
-
-    )
-    free_shipping_threshold = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        help_text="If order total exceeds this amount, shipping is free. "
-        "Null = use platform default.",
-    )
-    processing_days = models.PositiveSmallIntegerField(
-        default=1,
-        help_text="Number of business days to prepare the item for dispatch.",
-    )
-
-    @property
-    def effective_free_shipping_threshold(self) -> Decimal:
-        """
-        Returns the free shipping threshold for this product.
-        Falls back to the PlatformSettings default if not explicitly configured.
-        """
-        if self.free_shipping_threshold is not None:
-            return self.free_shipping_threshold
-        from apps.global_platform_settings.cache import get_platform_settings
-        try:
-            return get_platform_settings().default_free_shipping_threshold
-        except Exception:
-            return Decimal("50000.00")
-
-    class Meta:
-        verbose_name = _("Product Shipping Profile")
-        verbose_name_plural = _("Product Shipping Profiles")
-
-    def __str__(self):
-        return f"{self.product.title} — {self.weight_kg}kg"
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 17. PRODUCT PRICE HISTORY  (Phase 1 — 2026)
-# ─────────────────────────────────────────────────────────────────────────────
-
-
 class ProductPriceHistory(TimeStampedModel):
-    """
-    Append-only price change audit trail for analytics and trust-building.
-
-    Every time a vendor updates the product price, a new row is appended.
-    Rows are NEVER updated — immutable financial ledger.
-
-    Used for:
-        - Price drop alerts on wishlisted products
-        - Analytics dashboards (pricing trends)
-        - Customer trust indicators ("Price dropped 20% last week")
-    """
+    """Immutable price historical log ledger track mappings."""
 
     CHANGE_REASON_CHOICES = [
         ("initial", _("Initial Listing")),
@@ -1318,30 +840,120 @@ class ProductPriceHistory(TimeStampedModel):
         verbose_name_plural = _("Product Price Histories")
         ordering = ["-created_at"]
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.old_price:
             return f"{self.product.title}: {self.old_price} → {self.new_price} ({self.currency})"
         return f"{self.product.title}: Listed at {self.new_price} ({self.currency})"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 18. PRODUCT VIEW LOG  (Phase 1 — 2026)
+# SECTION 7: LEDGERS & CUSTOMER REVIEW TRACKERS
 # ─────────────────────────────────────────────────────────────────────────────
+
+class ProductInventoryLog(TimeStampedModel):
+    """Immutable transaction-safe stock adjustment metrics ledger logging [1]."""
+
+    REASON_CHOICES = [
+        ("sale", "Sale"),
+        ("restock", "Restock"),
+        ("adjustment", "Manual Adjustment"),
+        ("return", "Customer Return"),
+        ("damage", "Damage / Loss"),
+        ("reservation", "Cart Reservation"),
+        ("release", "Cart Release (Abandoned)"),
+        ("refund", "Refund"),
+    ]
+
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="inventory_logs",
+    )
+    variant = models.ForeignKey(
+        ProductVariantGalleryMedia,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="inventory_logs",
+    )
+    actor = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="inventory_adjustments",
+    )
+    quantity_delta = models.IntegerField()
+    quantity_before = models.PositiveIntegerField()
+    quantity_after = models.PositiveIntegerField()
+    reason = models.CharField(max_length=20, choices=REASON_CHOICES)
+    reference_id = models.CharField(max_length=100, blank=True)
+    note = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = _("Inventory Log")
+        verbose_name_plural = _("Inventory Logs")
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.product.title} {self.quantity_delta:+d} ({self.reason})"
+
+
+class ProductReview(TimeStampedModel, SoftDeleteModel):
+    """Tailor and design assessment review feedback from validated shoppers."""
+
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="reviews",
+    )
+    user = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="product_reviews",
+    )
+    reviewer_name = models.CharField(max_length=150, blank=True)
+    reviewer_email = models.EmailField(blank=True)
+    rating = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+    )
+    review = models.TextField()
+    reply = models.TextField(blank=True)
+    active = models.BooleanField(default=True)
+    moderated = models.BooleanField(default=False)
+    helpful_votes = models.PositiveIntegerField(default=0)
+    idempotency_key = models.UUIDField(null=True, blank=True, db_index=True)
+
+    class Meta:
+        verbose_name = _("Product Review")
+        verbose_name_plural = _("Product Reviews")
+        ordering = ["-created_at"]
+        unique_together = [("product", "user")]
+
+    def __str__(self) -> str:
+        return f"{self.product.title} — {self.rating}★"
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Saves static user identification backups to protect history from account deletes."""
+        if self.user and not self.reviewer_name:
+            self.reviewer_name = (
+                getattr(self.user, "full_name", "") or self.user.email
+                if self.user.email
+                else str(self.user.phone) if self.user.phone else ""
+            )
+        if self.user and not self.reviewer_email:
+            self.reviewer_email = (
+                self.user.email
+                if self.user.email
+                else str(self.user.phone) if self.user.phone else ""
+            )
+        super().save(*args, **kwargs)
 
 
 class ProductViewLog(TimeStampedModel):
-    """
-    Lightweight analytics event for the AI recommendation engine.
-
-    Written asynchronously (Ninja async endpoint) on every PDP view.
-    Stores both authenticated user and anonymous session data to
-    power collaborative-filtering recommendations.
-
-    Privacy:
-        - Anonymous users tracked by session_key only
-        - No IP addresses stored
-        - User FK is SET_NULL on account deletion
-    """
+    """Asynchronous analytical click tracker for dynamic recommendations."""
 
     product = models.ForeignKey(
         Product,
@@ -1354,19 +966,9 @@ class ProductViewLog(TimeStampedModel):
         blank=True,
         on_delete=models.SET_NULL,
         related_name="user_product_views",
-        help_text="Authenticated user who viewed the product. Null for anonymous.",
     )
-    session_key = models.CharField(
-        max_length=40,
-        blank=True,
-        db_index=True,
-        help_text="Django session key for anonymous tracking.",
-    )
-    referrer_url = models.CharField(
-        max_length=500,
-        blank=True,
-        help_text="URL of the page that linked to this PDP (for traffic attribution).",
-    )
+    session_key = models.CharField(max_length=40, blank=True, db_index=True)
+    referrer_url = models.CharField(max_length=500, blank=True)
     device_type = models.CharField(
         max_length=20,
         blank=True,
@@ -1399,13 +1001,13 @@ class ProductViewLog(TimeStampedModel):
             models.Index(fields=["session_key"], name="idx_viewlog_session"),
         ]
 
-    def __str__(self):
+    def __str__(self) -> str:
         actor = self.user.email if self.user else f"anon:{self.session_key[:8]}"
         return f"{self.product.title} viewed by {actor}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 19. PRODUCT DRAFT SESSION  (2026+)
+# SECTION 8: PERSISTENCE & WISHLIST TRACKERS
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -1414,13 +1016,10 @@ class ProductDraftStatus(models.TextChoices):
     COMMITTED = "committed", _("Committed")
     DISCARDED = "discarded", _("Discarded")
     EXPIRED = "expired", _("Expired")
-
+    FAILED = "failed", _("Failed")
 
 class ProductDraftSession(HardDeleteMixin, SoftDeleteModel, TimeStampedModel):
-    """
-    Vendor product builder draft persistence session.
-    Keeps unfinished product data resumable for 30 days.
-    """
+    """Provides client step-saving recovery capabilities for the design wizard."""
 
     vendor = models.ForeignKey(
         "vendor.VendorProfile",
@@ -1430,7 +1029,7 @@ class ProductDraftSession(HardDeleteMixin, SoftDeleteModel, TimeStampedModel):
     )
     draft_key = models.UUIDField(db_index=True, unique=True, default=uuid.uuid4)
     idempotency_key = models.UUIDField(db_index=True, null=True, blank=True)
-    payload = models.JSONField(help_text="Partial JSON data of the product builder")
+    payload = models.JSONField()
     current_step = models.PositiveSmallIntegerField(default=1)
     status = models.CharField(
         max_length=20,
@@ -1439,12 +1038,12 @@ class ProductDraftSession(HardDeleteMixin, SoftDeleteModel, TimeStampedModel):
         db_index=True,
     )
     linked_product = models.ForeignKey(
-        "product.Product",
+        Product,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="draft_sessions",
-        help_text="Populated once the draft is committed to a final Product",
+        help_text="The product that this draft is for, if any.",
     )
     expires_at = models.DateTimeField(db_index=True)
     last_synced_at = models.DateTimeField(auto_now=True)
@@ -1454,16 +1053,70 @@ class ProductDraftSession(HardDeleteMixin, SoftDeleteModel, TimeStampedModel):
         verbose_name_plural = _("Product Draft Sessions")
         ordering = ["-updated_at"]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"Draft {self.draft_key} ({self.status}) for {self.vendor}"
 
-    def check_ownership(self, user) -> bool:
-        """Ownership check for HardDeleteMixin."""
+    def check_ownership(self, user: Any) -> bool:
+        """Confirms the active credentials match ownership parameters."""
         return getattr(user, "vendor_profile", None) == self.vendor
 
-    def save(self, *args, **kwargs):
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Sets safe expiration limits for form tracking caches."""
         if not self.expires_at:
             self.expires_at = now() + datetime.timedelta(days=30)
         super().save(*args, **kwargs)
 
 
+class ProductWishlist(TimeStampedModel):
+    """Anonymous and logged-in client wishlist configurations."""
+
+    user = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="user_product_wishlists",
+    )
+    session_key = models.CharField(
+        max_length=40,
+        null=True,
+        blank=True,
+        db_index=True,
+    )
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="product_wishlist_entries",
+    )
+
+    class Meta:
+        verbose_name = _("Product Wishlist")
+        verbose_name_plural = _("Product Wishlists")
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(user__isnull=False) | models.Q(session_key__isnull=False)
+                ),
+                name="wishlist_must_have_user_or_session",
+            ),
+            models.CheckConstraint(
+                condition=~(
+                    models.Q(user__isnull=False) & models.Q(session_key__isnull=False)
+                ),
+                name="wishlist_user_session_exclusive",
+            ),
+            models.UniqueConstraint(
+                fields=["user", "product"],
+                condition=models.Q(user__isnull=False),
+                name="uniq_user_product_wishlist",
+            ),
+            models.UniqueConstraint(
+                fields=["session_key", "product"],
+                condition=models.Q(user__isnull=True, session_key__isnull=False),
+                name="uniq_session_product_wishlist",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        actor = self.user or f"anon:{self.session_key}"
+        return f"{actor} ♥ {self.product.title}"

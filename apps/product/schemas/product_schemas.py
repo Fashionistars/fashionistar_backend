@@ -1,121 +1,92 @@
 # apps/product/schemas/product_schemas.py
-"""
-Django-Ninja (Pydantic v2) response & input schemas for Product async endpoints.
+"""Asynchronous read-only schemas for the Product domain.
 
-Design:
-  - All UUIDs are str (frontend-safe, no uuid4 JSON serialization issues).
-  - Optional fields use | None with explicit default=None.
-  - Nested schemas mirror the ORM reverse-relation structure so resolvers
-    never need extra queries beyond what the selector already prefetched.
-  - Input schemas (In suffix) validate write payloads for Ninja POST/PATCH.
-  - The "Out" schemas are what Ninja uses to auto-serialize ORM instances.
+Handles serialization structures for asynchronous data requests: GET, LIST,
+and search indexing [1].
 
-────────────────────────────────────────────────────────────────
-5 Additional Enterprise Best-Practice Additions
-────────────────────────────────────────────────────────────────
-1. STRICT MODE: all schemas use model_config = {"from_attributes": True} so
-   Ninja can auto-resolve ORM instance attributes without extra resolvers.
-2. COMPUTED FIELDS: computed_avg_rating / computed_review_count map to the
-   annotated fields produced by the selector's .annotate() call.
-3. CLOUDINARY URL SCHEMA: CloudinaryMediaOut encapsulates both the raw
-   public_id and the transformed secure_url for frontend flexibility.
-4. PAGINATION WRAPPER: PaginatedOut[T] generic wraps any list result with
-   count/next/previous metadata matching the DRF pagination contract.
-5. BUNDLE RESPONSE: ProductDetailBundleOut combines product + reviews +
-   in_wishlist so the Ninja bundle endpoint returns one typed response.
+These schemas are completely isolated from write validations to maximize
+rendering performance [1]. They are optimized to pull data using prefetched
+database queries, completely avoiding N+1 query loops [1]. All AI and system
+internal properties are excluded [1].
 """
 
 from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Generic, TypeVar
+from typing import Generic, List, Optional, TypeVar, Dict, Any
 from uuid import UUID
-
 from ninja import Schema
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, model_validator
 
 T = TypeVar("T")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# GENERIC PAGINATION WRAPPER  (Best-practice #4)
+# SECTION 1: GENERIC PAGINATION SCHEMAS
 # ─────────────────────────────────────────────────────────────────────────────
 
 class PaginatedOut(Schema, Generic[T]):
+    """Standardized wrapper structure for returning paginated query lists."""
     count: int
-    next: str | None = None
-    previous: str | None = None
-    results: list[T]
+    next: Optional[str] = None
+    previous: Optional[str] = None
+    results: List[T]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TAXONOMY SCHEMAS
+# SECTION 2: READ TAXONOMY SCHEMAS
 # ─────────────────────────────────────────────────────────────────────────────
 
 class ProductCategoryOut(Schema):
+    """Serialized classification categories."""
     model_config = {"from_attributes": True}
     id: str
     name: str
     slug: str
-    image_url: str | None = None
+    image_url: Optional[str] = None
 
 
-class ProductBrandOut(Schema):
+class ProductTagOut(Schema):
+    """Serialized catalog search filters."""
     model_config = {"from_attributes": True}
     id: str
     name: str
     slug: str
-    logo_url: str | None = None
 
 
 class ProductVendorOut(Schema):
-    """
-    Best-practice #1: from_attributes=True lets Ninja resolve nested
-    vendor.user.username without a custom resolver.
-    """
+    """Serialized representation of designer profiles."""
     model_config = {"from_attributes": True}
     id: str
     store_name: str
-    slug: str | None = None
-    avatar_url: str | None = None
+    slug: Optional[str] = None
+    avatar_url: Optional[str] = None
     is_verified: bool = False
 
 
-
 class ProductSizeAndMeasurementGuideOut(Schema):
-    """Sizing schema mapped from ProductSizeAndMeasurementGuide."""
+    """Serialized custom size chart values [1]."""
     model_config = {"from_attributes": True}
     id: str
-    name: str
-    abbreviation: str = ""
+    size_label: str
+    chest_cm: str = ""
+    waist_cm: str = ""
+    hip_cm: str = ""
+    length_cm: str = ""
+    shoulder_cm: str = ""
+    sleeve_cm: str = ""
+    inseam_cm: str = ""
+    foot_length_cm: str = ""
     sort_order: int = 0
-
-    @model_validator(mode="before")
-    @classmethod
-    def resolve_from_attributes(cls, data: Any) -> Any:
-        if hasattr(data, "size_label"):
-            return {
-                "id": str(data.id),
-                "name": data.size_label,
-                "abbreviation": data.size_label,
-                "sort_order": data.sort_order,
-            }
-        return data
-
-
-class ProductColorOut(Schema):
-    id: str
-    name: str
-    hex_code: str = ""
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PHASE 1 NEW TAXONOMY SCHEMAS
+# SECTION 3: READ LOGISTICS & FABRIC EMBED SCHEMAS
 # ─────────────────────────────────────────────────────────────────────────────
 
 class ProductFabricSpecificationOut(Schema):
-    """Fabric type with care/sustainability metadata — Phase 1."""
+    """Serialized textile and material care information."""
     model_config = {"from_attributes": True}
     id: str
     fabric_type: str
@@ -123,46 +94,10 @@ class ProductFabricSpecificationOut(Schema):
     is_organic: bool = False
     is_vegan: bool = False
     country_of_origin: str = ""
-
-
-class ProductFabricSpecificationIn(Schema):
-    fabric_type: str
-    care_instructions: str = "machine_wash"
-    is_organic: bool = False
-    is_vegan: bool = False
-    country_of_origin: str = ""
-
-
-class ProductMeasurementGuideOut(Schema):
-    """One size-chart row (e.g. S → chest 34–36 cm) — Phase 1."""
-    model_config = {"from_attributes": True}
-    id: str
-    size_label: str
-    chest_cm: str = ""
-    waist_cm: str = ""
-    hip_cm: str = ""
-    shoulder_cm: str = ""
-    sleeve_cm: str = ""
-    length_cm: str = ""
-    inseam_cm: str = ""
-    foot_length_cm: str = ""
-    sort_order: int = 0
-
-
-class ProductMeasurementGuideIn(Schema):
-    size_label: str
-    chest_cm: str = ""
-    waist_cm: str = ""
-    hip_cm: str = ""
-    shoulder_cm: str = ""
-    sleeve_cm: str = ""
-    length_cm: str = ""
-    inseam_cm: str = ""
-    foot_length_cm: str = ""
-    sort_order: int = 0
 
 
 class ProductShippingProfileOut(Schema):
+    """Serialized logistics and volumetric package dimension rules."""
     model_config = {"from_attributes": True}
     id: str
     weight_kg: Decimal = Decimal("0.0")
@@ -171,73 +106,63 @@ class ProductShippingProfileOut(Schema):
     height_cm: Decimal = Decimal("0.0")
     is_fragile: bool = False
     requires_signature: bool = False
-    restricted_countries: list[str] = []
-    free_shipping_threshold: Decimal | None = None
+    restricted_countries: List[str] = []
+    free_shipping_threshold: Optional[Decimal] = None
     processing_days: int = 1
 
 
-class ProductShippingProfileIn(Schema):
-    weight_kg: Decimal = Decimal("0.0")
-    length_cm: Decimal = Decimal("0.0")
-    width_cm: Decimal = Decimal("0.0")
-    height_cm: Decimal = Decimal("0.0")
-    is_fragile: bool = False
-    requires_signature: bool = False
-    restricted_countries: list[str] = []
-    free_shipping_threshold: Decimal | None = None
-    processing_days: int = 1
-    template_id: str | None = None
-
-
-
 # ─────────────────────────────────────────────────────────────────────────────
-# CLOUDINARY MEDIA  (Best-practice #3)
+# SECTION 4: UNIFIED VARIANTS & MEDIA SCHEMAS
 # ─────────────────────────────────────────────────────────────────────────────
 
-class CloudinaryMediaOut(Schema):
-    """
-    Exposes both raw public_id and the CDN URL so the frontend can
-    construct its own transforms (e.g. for the product builder preview).
-    """
-    model_config = {"from_attributes": True}
-    public_id: str | None = None
-    url: str | None = None
-    thumbnail_url: str | None = None
-    media_type: str = "image"
-    alt_text: str = ""
-    ordering: int = 0
+class ProductVariantGalleryMediaOut(Schema):
+    """Serialized variants and associated Cloudinary gallery resources [1].
 
-
-class ProductGalleryMediaOut(Schema):
-    """Resolved from ProductVariantGalleryMedia."""
+    Optimized to convert Cloudinary resource links directly into relative paths,
+    completely avoiding extra database lookups [1].
+    """
     model_config = {"from_attributes": True}
     id: str
-    media_url: str | None = None
-    thumbnail_url: str | None = None
-    video_thumbnail_url: str | None = None
+    sku: str
+    size: Optional[ProductSizeAndMeasurementGuideOut] = None
+    color_name: str = ""
+    color_hex: str = ""
+    media_url: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    video_thumbnail_url: Optional[str] = None
     media_type: str = "image"
     alt_text: str = ""
     ordering: int = 0
     is_primary: bool = False
-    duration_sec: int | None = None
-    variant_id: str | None = None
-    color_name: str | None = None
-    color_hex: str | None = None
+    duration_sec: Optional[int] = None
+    barcode: str = ""
 
     @model_validator(mode="before")
     @classmethod
-    def resolve_gallery_fields(cls, data: Any) -> Any:
+    def resolve_fields(cls, data: Any) -> Any:
+        """Resolves raw storage properties into functional absolute paths [1]."""
         if hasattr(data, "id"):
-            variant_id = str(data.id) if getattr(data, "sku", None) else None
-            media_url = str(data.media.url) if getattr(data, "media", None) else None
+            media_url = None
+            media_obj = getattr(data, "media", None)
+            if media_obj:
+                media_url = getattr(media_obj, "url", str(media_obj))
+
+            # Generates pre-scaled CDN thumbnail images to accelerate page loads
             thumbnail_url = media_url
             if media_url and "res.cloudinary.com" in media_url and "/upload/" in media_url:
                 thumbnail_url = media_url.replace("/upload/", "/upload/w_400,h_400,c_fill,f_auto,q_auto/")
-            
-            video_thumbnail_url = str(data.video_thumbnail.url) if getattr(data, "video_thumbnail", None) else None
-            
+
+            video_thumbnail_url = None
+            vt_obj = getattr(data, "video_thumbnail", None)
+            if vt_obj:
+                video_thumbnail_url = getattr(vt_obj, "url", str(vt_obj))
+
             return {
                 "id": str(data.id),
+                "sku": data.sku,
+                "size": getattr(data, "size", None),
+                "color_name": data.color_name or "",
+                "color_hex": data.color_hex or "",
                 "media_url": media_url,
                 "thumbnail_url": thumbnail_url,
                 "video_thumbnail_url": video_thumbnail_url,
@@ -246,60 +171,13 @@ class ProductGalleryMediaOut(Schema):
                 "ordering": data.ordering,
                 "is_primary": data.is_primary,
                 "duration_sec": data.duration_sec,
-                "variant_id": variant_id,
-                "color_name": data.color_name,
-                "color_hex": data.color_hex,
-            }
-        return data
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# VARIANT / SPECIFICATION / FAQ
-# ─────────────────────────────────────────────────────────────────────────────
-
-class ProductVariantOut(Schema):
-    """Consolidated variant + gallery media schema — mirrors ProductVariantGalleryMedia exactly."""
-    model_config = {"from_attributes": True}
-    id: str
-    sku: str
-    size: ProductSizeAndMeasurementGuideOut | None = None
-    color_name: str = ""
-    color_hex: str = ""
-    media_url: str | None = None
-    media_type: str = "image"
-    alt_text: str = ""
-    ordering: int = 0
-    is_primary: bool = False
-    video_thumbnail_url: str | None = None
-    duration_sec: int | None = None
-    barcode: str = ""
-
-    @model_validator(mode="before")
-    @classmethod
-    def resolve_variant_fields(cls, data: Any) -> Any:
-        if hasattr(data, "id"):
-            media_url = str(data.media.url) if getattr(data, "media", None) else None
-            video_thumbnail_url = str(data.video_thumbnail.url) if getattr(data, "video_thumbnail", None) else None
-            return {
-                "id": str(data.id),
-                "sku": data.sku,
-                "size": getattr(data, "size", None),
-                "color_name": data.color_name or "",
-                "color_hex": data.color_hex or "",
-                "media_url": media_url,
-                "media_type": data.media_type,
-                "alt_text": data.alt_text or "",
-                "ordering": data.ordering,
-                "is_primary": data.is_primary,
-                "video_thumbnail_url": video_thumbnail_url,
-                "duration_sec": data.duration_sec,
                 "barcode": data.barcode or "",
             }
         return data
 
 
-
 class ProductFaqOut(Schema):
+    """Serialized customer support items."""
     model_config = {"from_attributes": True}
     id: str
     question: str
@@ -307,15 +185,13 @@ class ProductFaqOut(Schema):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PRODUCT LIST ITEM  (catalog card)
+# SECTION 5: CATALOG ITEM & DETAIL SCHEMA
 # ─────────────────────────────────────────────────────────────────────────────
 
-
 class ProductListItemOut(Schema):
-    """
-    Matches the .only() projection from get_published_products_list().
-    Best-practice #2: includes computed_avg_rating / computed_review_count
-    from the .annotate() call in the selector — no extra queries.
+    """Optimized item card representation utilized on search lists.
+
+    Combines rating stats directly from database joins with zero N+1 overhead [1].
     """
     model_config = {"from_attributes": True}
     id: str
@@ -323,13 +199,13 @@ class ProductListItemOut(Schema):
     slug: str
     sku: str
     price: Decimal
-    old_price: Decimal | None = None
+    old_price: Optional[Decimal] = None
     discount_percentage: int = 0
     is_discounted: bool = False
-    discounted_price: Decimal | None = None
-    cash_payment_mode: str = "payment_before_delivery"
+    discounted_price: Optional[Decimal] = None
+    cash_payment_mode: str = "disabled"
     currency: str = "NGN"
-    image_url: str | None = None
+    image_url: Optional[str] = None
     in_stock: bool
     stock_qty: int = 0
     featured: bool = False
@@ -340,21 +216,23 @@ class ProductListItemOut(Schema):
     computed_avg_rating: float = 0.0
     requires_measurement: bool = False
     is_customisable: bool = False
-    category_name: str | None = None
-    category_slug: str | None = None
-    brand_name: str | None = None
-    brand_slug: str | None = None
-    vendor_name: str | None = None
-    vendor_slug: str | None = None
+    category_name: Optional[str] = None
+    category_slug: Optional[str] = None
+    vendor_name: Optional[str] = None
+    vendor_slug: Optional[str] = None
+    sizes: List[ProductSizeAndMeasurementGuideOut] = []
+    colors: List[Dict[str, Any]] = []
     created_at: datetime
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# PRODUCT DETAIL
-# ─────────────────────────────────────────────────────────────────────────────
-
 class ProductDetailOut(Schema):
-    """Full product schema for the PDP — expanded with all Phase 1 fields."""
+    """Full detail read representation of a Product.
+
+    Excludes all system AI attributes (`ai_description`, `style_tags`,
+    `occasion_tags`, `body_type_fit`, `ai_trend_score`, `search_vector`)
+    and carbon/sustainability metrics to secure internal scoring and reduce
+    payload sizes [1].
+    """
     model_config = {"from_attributes": True}
     id: str
     title: str
@@ -362,19 +240,19 @@ class ProductDetailOut(Schema):
     sku: str
     description: str
     price: Decimal
-    old_price: Decimal | None = None
+    old_price: Optional[Decimal] = None
     discount_percentage: int = 0
     is_discounted: bool = False
-    discounted_price: Decimal | None = None
-    cash_payment_mode: str = "payment_before_delivery"
+    discounted_price: Optional[Decimal] = None
+    cash_payment_mode: str = "disabled"
     currency: str = "NGN"
-    shipping_amount: Decimal = Decimal("1000")
-    image_url: str | None = None
-    cover_image_url: str | None = None
-    gallery: list[ProductGalleryMediaOut] = []
+    shipping_amount: Decimal = Decimal("2500")
+    image_url: Optional[str] = None
+    cover_image_url: Optional[str] = None
+    gallery: List[ProductVariantGalleryMediaOut] = []
     in_stock: bool
     stock_qty: int = 0
-    max_stock: int | None = None
+    max_stock: Optional[int] = None
     views: int = 0
     orders_count: int = 0
     rating: Decimal = Decimal("0")
@@ -385,28 +263,20 @@ class ProductDetailOut(Schema):
     hot_deal: bool = False
     requires_measurement: bool = False
     is_customisable: bool = False
-    faqs: list[ProductFaqOut] = []
-    variants: list[ProductVariantOut] = []
-    # Phase 1 embeds
-    fabric: ProductFabricSpecificationOut | None = None
-    measurement_guide: list[ProductMeasurementGuideOut] = []
-    shipping_profile: ProductShippingProfileOut | None = None
-    # certifications: list[ProductCertificationOut] = []
+    faqs: List[ProductFaqOut] = []
+    variants: List[ProductVariantGalleryMediaOut] = []
+    fabric: Optional[ProductFabricSpecificationOut] = None
+    measurement_guide: List[ProductSizeAndMeasurementGuideOut] = []
+    shipping_profile: Optional[ProductShippingProfileOut] = None
     status: str
-    category_name: str | None = None
-    category_slug: str | None = None
-    sub_category_name: str | None = None
-    brand_name: str | None = None
-    brand_slug: str | None = None
-    vendor_id: str | None = None
-    vendor_name: str | None = None
-    vendor_slug: str | None = None
-    vendor_is_verified: bool = False
+    category_name: Optional[str] = None
+    category_slug: Optional[str] = None
+    sub_category_name: Optional[str] = None
+    vendor: Optional[ProductVendorOut] = None
     commission_rate: Decimal = Decimal("10.00")
-    # Phase 1 Product fields
     condition: str = "new"
     is_pre_order: bool = False
-    pre_order_date: datetime | None = None
+    pre_order_date: Optional[datetime] = None
     meta_title: str = ""
     meta_description: str = ""
     age_group: str = ""
@@ -415,17 +285,17 @@ class ProductDetailOut(Schema):
     updated_at: datetime
 
 
-
 # ─────────────────────────────────────────────────────────────────────────────
-# REVIEW
+# SECTION 6: SERVICE-RELATED LEDGER READ SCHEMAS
 # ─────────────────────────────────────────────────────────────────────────────
 
 class ProductReviewOut(Schema):
+    """Serialized consumer feedback parameters."""
     model_config = {"from_attributes": True}
     id: str
-    reviewer_display: str = "Anonymous"
-    reviewer_avatar_url: str | None = None
-    product_title: str | None = None
+    reviewer_name: str = "Anonymous"
+    reviewer_email: str = ""
+    product_title: Optional[str] = None
     rating: int
     review: str
     reply: str = ""
@@ -435,162 +305,32 @@ class ProductReviewOut(Schema):
     created_at: datetime
 
 
-class ProductReviewWriteIn(Schema):
-    rating: int = Field(..., ge=1, le=5)
-    review: str = Field(..., min_length=10, max_length=5000)
-    idempotency_key: UUID | None = None
-
-    @field_validator("review")
-    @classmethod
-    def strip_review(cls, v: str) -> str:
-        return v.strip()
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# WISHLIST
-# ─────────────────────────────────────────────────────────────────────────────
-
 class WishlistItemOut(Schema):
+    """Serialized wishlist values."""
     model_config = {"from_attributes": True}
     id: str
     product: ProductListItemOut
     created_at: datetime
 
 
-class WishlistToggleOut(Schema):
-    added: bool
-    message: str
-
-
-class WishlistBulkStatusOut(Schema):
-    """Map of product_id → is_wishlisted. Used for rendering heart icons in list."""
-    statuses: dict[str, bool]
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# COUPON
-# ─────────────────────────────────────────────────────────────────────────────
-
 class CouponOut(Schema):
+    """Serialized promotional coupon parameter definitions."""
     model_config = {"from_attributes": True}
     id: str
     code: str
     discount_type: str
     discount_value: Decimal
     minimum_order: Decimal = Decimal("0")
-    maximum_discount: Decimal | None = None
-    usage_limit: int | None = None
+    maximum_discount: Optional[Decimal] = None
+    usage_limit: Optional[int] = None
     usage_count: int = 0
     active: bool
     valid_from: datetime
     valid_to: datetime
 
 
-class CouponValidateIn(Schema):
-    code: str = Field(..., min_length=1, max_length=50)
-    order_subtotal: Decimal = Field(..., gt=0)
-
-
-class CouponValidateOut(Schema):
-    coupon_id: str
-    code: str
-    discount_type: str
-    discount_amount: Decimal
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# PRODUCT WRITE (Ninja input)
-# ─────────────────────────────────────────────────────────────────────────────
-
-class ProductVariantWriteIn(Schema):
-    """Write payload for creating/updating a ProductVariantGalleryMedia row."""
-    sku: str | None = None
-    size_id: str | None = None
-    color_name: str = ""
-    color_hex: str = ""
-    stock_qty: int = 0
-    barcode: str = ""
-    notes: str = ""
-    media: str | None = None
-    media_type: str = "image"
-    alt_text: str = ""
-    ordering: int = 0
-    is_primary: bool = False
-    video_thumbnail: str | None = None
-    duration_sec: int | None = None
-
-
-class ProductWriteIn(Schema):
-    title: str = Field(..., min_length=3, max_length=255)
-    description: str = Field(..., min_length=100)
-    price: Decimal = Field(..., ge=5000)
-    old_price: Decimal | None = Field(default=None, ge=5000)
-    is_discounted: bool = False
-    discount_percentage: int = 0
-    discounted_price: Decimal | None = None
-    cash_payment_mode: str = "payment_before_delivery"
-    currency: str = "NGN"
-    shipping_amount: Decimal = Decimal("2500")
-    stock_qty: int = Field(0, ge=0)
-    max_stock: int | None = None
-    category_ids: list[str] = Field(..., min_length=1, max_length=15)
-    sub_category_ids: list[str] = Field(default_factory=list, max_length=15)
-    # color_ids removed — colors are now stored directly via color_name/color_hex on variants
-    requires_measurement: bool = False
-    is_customisable: bool = False
-    hot_deal: bool = False
-    commission_rate: Decimal = Decimal("10.00")
-    idempotency_key: UUID | None = None
-    condition: str = "new"
-    is_pre_order: bool = False
-    pre_order_date: datetime | None = None
-    meta_title: str = ""
-    meta_description: str = ""
-    age_group: str = ""
-    gender_target: str = ""fabric: ProductFabricSpecificationIn | None = None
-    shipping_profile: ProductShippingProfileIn | None = None
-    measurement_guide: list[ProductMeasurementGuideIn] = []
-    variants: list[ProductVariantWriteIn] = []
-
-
-class ProductDraftSessionOut(Schema):
-    model_config = {"from_attributes": True}
-    id: UUID
-    draft_key: UUID
-    idempotency_key: UUID | None = None
-    payload: dict
-    current_step: int
-    status: str
-    linked_product_id: UUID | None = None
-    expires_at: datetime
-    last_synced_at: datetime
-
-
-class InventoryAdjustIn(Schema):
-    quantity_delta: int = Field(..., description="Positive = restock, Negative = deduction")
-    reason: str = Field("adjustment", max_length=20)
-    reference_id: str = ""
-    note: str = ""
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# PRODUCT DETAIL BUNDLE  (Best-practice #5)
-# ─────────────────────────────────────────────────────────────────────────────
-
-class ProductDetailBundleOut(Schema):
-    """
-    Single response that bundles product + reviews + wishlist status.
-    Returned by the Ninja bundle endpoint which uses asyncio.gather
-    to fetch all three in parallel — one HTTP round-trip for the FE.
-    """
-    product: ProductDetailOut | None = None
-    reviews: list[ProductReviewOut] = []
-    in_wishlist: bool = False
-    review_count: int = 0
-    avg_rating: float = 0.0
-
-
 class ProductInventoryLogOut(Schema):
+    """Serialized inventory change records."""
     model_config = {"from_attributes": True}
     id: str
     quantity_delta: int
@@ -599,5 +339,31 @@ class ProductInventoryLogOut(Schema):
     reason: str
     reference_id: str = ""
     note: str = ""
-    actor_name: str = "System"
+    actor_name: str = "System Engine"
     created_at: datetime
+
+
+class ProductDraftSessionOut(Schema):
+    """Serialized recover state parameters."""
+    model_config = {"from_attributes": True}
+    id: UUID
+    draft_key: UUID
+    idempotency_key: Optional[UUID] = None
+    payload: Dict[str, Any]
+    current_step: int
+    status: str
+    expires_at: datetime
+    last_synced_at: datetime
+
+
+class ProductDetailBundleOut(Schema):
+    """Bundled product data representation designed for the PDP layout.
+
+    Allows the frontend to fetch the product specifications, active reviews, and
+    client wishlist status in a single asynchronous request [1].
+    """
+    product: Optional[ProductDetailOut] = None
+    reviews: List[ProductReviewOut] = []
+    in_wishlist: bool = False
+    review_count: int = 0
+    avg_rating: float = 0.0
