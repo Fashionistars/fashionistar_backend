@@ -146,14 +146,7 @@ def get_published_products_list():
             computed_review_count=Count("reviews", distinct=True),
             computed_avg_rating=Avg("reviews__rating"),
         )
-        .only(
-            "id", "slug", "title", "price", "old_price",
-            "in_stock", "rating", "review_count",
-            "featured", "created_at",
-            "vendor__id", "vendor__store_name", "vendor__store_slug",
-            "vendor__logo_url", "vendor__is_verified",
-            "vendor__user__id", "vendor__user__email",
-        )
+        .defer("description", "search_vector", "ai_description")
         .order_by("-created_at")
     )
 

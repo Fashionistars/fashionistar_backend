@@ -939,44 +939,79 @@ def create_draft_session(
     current_step: int = 1,
 ) -> ProductDraftSession:
     """
-    Create a new product draft session for the vendor.
+    Get or create a product draft session for the vendor.
+
+    Resolution priority:
+      1. If ``idempotency_key`` is provided, look up an existing draft that
+         matches *both* the vendor and the idempotency_key first — this is the
+         fast idempotent path that prevents duplicate drafts on network retries.
+      2. If a ``draft_key`` is provided, use ``get_or_create`` keyed on
+         (draft_key, vendor) to atomically find or initialise the session.
+      3. If neither is provided, auto-generate a new UUID draft_key and create
+         the session fresh.
+
+    In all "found" cases the mutable fields (payload, current_step, status,
+    idempotency_key, last_synced_at) are refreshed so the caller always
+    receives an up-to-date, ACTIVE session.
     """
     import uuid
     from django.utils.timezone import now
 
+    timestamp = now()
+
+    # ── 1. Idempotency key fast-path ──────────────────────────────────────────
     if idempotency_key:
-        existing = ProductDraftSession.objects.filter(
-            vendor=vendor,
-            idempotency_key=idempotency_key,
-        ).first()
-        if existing:
+        try:
+            existing = ProductDraftSession.objects.get(
+                vendor=vendor,
+                idempotency_key=idempotency_key,
+            )
+            # Refresh mutable state so the returned object is always current.
+            existing.payload = payload
+            existing.current_step = current_step
+            existing.status = ProductDraftStatus.ACTIVE
+            existing.last_synced_at = timestamp
+            existing.save(update_fields=["payload", "current_step", "status", "last_synced_at", "updated_at"])
             return existing
+        except ProductDraftSession.DoesNotExist:
+            pass  # Fall through to key-based get_or_create
 
-    if draft_key:
-        existing_by_key = ProductDraftSession.objects.filter(draft_key=draft_key).first()
-        if existing_by_key:
-            if existing_by_key.vendor == vendor:
-                existing_by_key.payload = payload
-                existing_by_key.current_step = current_step
-                existing_by_key.status = ProductDraftStatus.ACTIVE
-                existing_by_key.idempotency_key = idempotency_key
-                existing_by_key.last_synced_at = now()
-                existing_by_key.save()
-                return existing_by_key
-            else:
-                raise ValueError("Draft session key already exists for another vendor.")
-    else:
+    # ── 2. draft_key-based get_or_create ─────────────────────────────────────
+    if not draft_key:
         draft_key = uuid.uuid4()
+    else:
+        # Guard: if a *different vendor* already owns this draft_key, reject early.
+        # We must do this before get_or_create to produce a clean ValueError
+        # (rather than a DB-level IntegrityError from the unique constraint).
+        try:
+            existing_owner = ProductDraftSession.objects.get(draft_key=draft_key)
+            if existing_owner.vendor_id != (vendor.pk if hasattr(vendor, "pk") else vendor):
+                raise ValueError("Draft session key already exists for another vendor.")
+        except ProductDraftSession.DoesNotExist:
+            pass  # No prior owner — safe to create
 
-    draft = ProductDraftSession.objects.create(
-        vendor=vendor,
+    draft, created = ProductDraftSession.objects.get_or_create(
         draft_key=draft_key,
-        idempotency_key=idempotency_key,
-        payload=payload,
-        current_step=current_step,
-        status=ProductDraftStatus.ACTIVE,
-        last_synced_at=now(),
+        vendor=vendor,
+        defaults={
+            "idempotency_key": idempotency_key,
+            "payload": payload,
+            "current_step": current_step,
+            "status": ProductDraftStatus.ACTIVE,
+            "last_synced_at": timestamp,
+        },
     )
+
+    if not created:
+        # Session already exists for this vendor+key — refresh mutable state.
+        draft.payload = payload
+        draft.current_step = current_step
+        draft.status = ProductDraftStatus.ACTIVE
+        if idempotency_key:
+            draft.idempotency_key = idempotency_key
+        draft.last_synced_at = timestamp
+        draft.save(update_fields=["payload", "current_step", "status", "idempotency_key", "last_synced_at", "updated_at"])
+
     return draft
 
 
