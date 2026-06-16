@@ -344,9 +344,7 @@ def _product_detail_out(product) -> dict:
         fabric_data = {
             "id": str(fabric_obj.pk),
             "fabric_type": fabric_obj.fabric_type,
-            "composition": fabric_obj.composition or {},
             "care_instructions": fabric_obj.care_instructions,
-            "care_notes": fabric_obj.care_notes or "",
             "is_organic": fabric_obj.is_organic,
             "is_vegan": fabric_obj.is_vegan,
             "country_of_origin": fabric_obj.country_of_origin or "",
