@@ -749,6 +749,14 @@ class ProductListSerializer(serializers.ModelSerializer):
             "cash_payment_mode",
             "sizes",
             "colors",
+            "condition",
+            "gender_target",
+            "age_group",
+            "is_pre_order",
+            "pre_order_date",
+            "sustainability_score",
+            "carbon_footprint_kg",
+            "ai_trend_score",
             "created_at",
         ]
 
@@ -870,6 +878,9 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             "meta_description",
             "age_group",
             "gender_target",
+            "sustainability_score",
+            "carbon_footprint_kg",
+            "ai_trend_score",
             "created_at",
             "updated_at",
         ]

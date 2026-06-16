@@ -222,6 +222,14 @@ class ProductListItemOut(Schema):
     vendor_slug: Optional[str] = None
     sizes: List[ProductSizeAndMeasurementGuideOut] = []
     colors: List[Dict[str, Any]] = []
+    condition: str = "new"
+    gender_target: str = ""
+    age_group: str = ""
+    is_pre_order: bool = False
+    pre_order_date: Optional[datetime] = None
+    sustainability_score: Optional[Decimal] = None
+    carbon_footprint_kg: Optional[Decimal] = None
+    ai_trend_score: Decimal = Decimal("0.0")
     created_at: datetime
 
 
@@ -281,6 +289,9 @@ class ProductDetailOut(Schema):
     meta_description: str = ""
     age_group: str = ""
     gender_target: str = ""
+    sustainability_score: Optional[Decimal] = None
+    carbon_footprint_kg: Optional[Decimal] = None
+    ai_trend_score: Decimal = Decimal("0.0")
     created_at: datetime
     updated_at: datetime
 

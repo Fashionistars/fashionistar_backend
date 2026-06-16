@@ -319,6 +319,14 @@ def _product_card_out(product) -> dict:
         "is_customisable": product.is_customisable,
         "sizes": [_size_out(s) for s in sizes],
         "colors": [_color_out(c) for c in colors],
+        "condition": product.condition,
+        "gender_target": product.gender_target or "",
+        "age_group": product.age_group or "",
+        "is_pre_order": product.is_pre_order,
+        "pre_order_date": product.pre_order_date,
+        "sustainability_score": product.sustainability_score,
+        "carbon_footprint_kg": product.carbon_footprint_kg,
+        "ai_trend_score": product.ai_trend_score,
         "created_at": product.created_at,
     }
 
