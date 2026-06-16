@@ -156,15 +156,15 @@ def update_draft_session(
 
 
 @transaction.atomic
-def discard_draft_session(*, draft_session: ProductDraftSession) -> ProductDraftSession:
+def discard_draft_session(*, draft_session: ProductDraftSession) -> None:
     """
-    Mark a draft session as discarded (soft delete).
+    Hard-delete a draft session (permanently remove from DB).
+
+    ProductDraftSession no longer inherits SoftDeleteModel, so there is no
+    ``is_deleted`` column — discarded drafts are immediately purged.
     """
     draft = ProductDraftSession.objects.select_for_update().get(pk=draft_session.pk)
-    draft.status = ProductDraftStatus.DISCARDED
-    draft.save(update_fields=["status", "updated_at"])
-    draft.soft_delete()
-    return draft
+    draft.delete()
 
 
 @transaction.atomic
@@ -212,7 +212,9 @@ def commit_draft_session(
 
     draft.status = ProductDraftStatus.COMMITTED
     draft.save(update_fields=["status", "linked_product", "updated_at"])
-    draft.soft_delete()
+    # Hard-delete the draft now that it has been promoted to a real Product.
+    # ProductDraftSession has no soft-delete column — the row is permanently purged.
+    draft.delete()
     return product
 
 

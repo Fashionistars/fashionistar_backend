@@ -6,7 +6,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 from django.contrib.auth import get_user_model
-from apps.product.models import ProductDraftSession, ProductDraftStatus, Product
+from apps.product.models import ProductDraftSession, Product
 from rest_framework_simplejwt.tokens import AccessToken
 
 User = get_user_model()
@@ -135,11 +135,10 @@ class TestProductDraftSessionAPI:
         assert product.title == "Updated Draft Agbada"
         assert product.price == Decimal("55000.00")
         assert product.vendor == vendor_user.vendor_profile
-        
-        # Check draft session status is now COMMITTED
-        draft_session = ProductDraftSession.all_objects.get(draft_key=draft_key)
-        assert draft_session.status == ProductDraftStatus.COMMITTED
-        assert draft_session.linked_product == product
+
+        # After commit, the draft session is hard-deleted — it must not exist in DB
+        with pytest.raises(ProductDraftSession.DoesNotExist):
+            ProductDraftSession.objects.get(draft_key=draft_key)
 
     def test_discard_draft(self, api_client, vendor_user, category):
         api_client.force_authenticate(user=vendor_user)
@@ -161,11 +160,10 @@ class TestProductDraftSessionAPI:
         url_detail = reverse("product:vendor-product-draft-detail", kwargs={"draft_key": draft_key})
         response = api_client.delete(url_detail)
         assert response.status_code == status.HTTP_200_OK
-        
-        # Verify database record soft-deleted or status set to discarded
-        draft_session = ProductDraftSession.all_objects.get(draft_key=draft_key)
-        assert draft_session.status == ProductDraftStatus.DISCARDED
-        assert draft_session.is_deleted is True  # SoftDeleteModel field is_deleted
+
+        # After discard, the draft session is hard-deleted — it must not exist in DB
+        with pytest.raises(ProductDraftSession.DoesNotExist):
+            ProductDraftSession.objects.get(draft_key=draft_key)
 
     def test_draft_key_collision(self, api_client, vendor_user, other_vendor_user, category):
         # 1. Create a draft as first vendor

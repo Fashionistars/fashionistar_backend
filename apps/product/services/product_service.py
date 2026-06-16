@@ -41,11 +41,8 @@ from apps.product.models import (
     ProductVariantGalleryMedia,
     ProductInventoryLog,
     ProductReview,
-    ProductStatus,
     ProductWishlist,
-    ProductFabricSpecification,
     ProductSizeAndMeasurementGuide,
-    ProductShippingProfile,
 )
 from apps.product.selectors import (
     get_coupon_by_code,

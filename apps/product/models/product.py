@@ -1128,7 +1128,7 @@ class ProductDraftStatus(models.TextChoices):
     EXPIRED = "expired", _("Expired")
     FAILED = "failed", _("Failed")
 
-class ProductDraftSession(HardDeleteMixin, SoftDeleteModel, TimeStampedModel):
+class ProductDraftSession(TimeStampedModel):
     """Provides client step-saving recovery capabilities for the design wizard."""
 
     vendor = models.ForeignKey(
