@@ -1,5 +1,5 @@
 # apps/product/services/__init__.py
-from apps.product.services.product_service import (
+from apps.product.services.product_crud_service import (
     create_product,
     update_product,
     publish_product,
@@ -8,6 +8,9 @@ from apps.product.services.product_service import (
     archive_product,
     attach_gallery_media,
     remove_gallery_media,
+)
+
+from apps.product.services.product_service import (
     adjust_inventory,
     create_review,
     merge_anonymous_wishlist_session,

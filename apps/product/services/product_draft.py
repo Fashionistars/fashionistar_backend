@@ -179,6 +179,7 @@ def commit_draft_session(
     """
     from rest_framework.exceptions import ValidationError
     from apps.product.serializers.product_serializers import ProductWriteFullSerializer
+    from apps.product.services.product_crud_service import create_product, update_product
 
     draft = ProductDraftSession.objects.select_for_update().get(pk=draft_session.pk)
     if draft.status != ProductDraftStatus.ACTIVE:
