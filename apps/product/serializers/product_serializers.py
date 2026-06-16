@@ -291,18 +291,17 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
     def to_internal_value(self, data: Any) -> Dict[str, Any]:
         """Normalizes external variables into internal designations."""
         if isinstance(data, dict):
+            data = data.copy()
+
             if "gender_target" in data:
                 gender = str(data["gender_target"]).lower().strip()
                 if gender == "male":
-                    data = data.copy()
                     data["gender_target"] = "men"
                 elif gender == "female":
-                    data = data.copy()
                     data["gender_target"] = "women"
 
             # Parse cover_image and gallery into variants
             if "cover_image_public_id" in data or "gallery" in data:
-                data = data.copy()
                 variants = []
 
                 # Parse cover image
@@ -348,6 +347,56 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
                         variants.append(g_var)
 
                 data["variants"] = variants
+
+            # Coerce cash_payment_mode from payment_on_delivery/cod to cod, others to disabled
+            if "cash_payment_mode" in data:
+                cash_mode = data["cash_payment_mode"]
+                if cash_mode == "payment_on_delivery":
+                    data["cash_payment_mode"] = "cod"
+                elif cash_mode not in ["disabled", "cod", "pay_at_shop", "both"]:
+                    data["cash_payment_mode"] = "disabled"
+
+            # Nest fabric details if fabric_type is provided
+            if "fabric_type" in data:
+                fabric_type = data.get("fabric_type")
+                if fabric_type:
+                    data["fabric"] = {
+                        "fabric_type": fabric_type,
+                        "care_instructions": data.get("fabric_care_instructions", "machine_wash"),
+                        "is_organic": data.get("fabric_is_organic", False),
+                        "is_vegan": data.get("fabric_is_vegan", False),
+                        "country_of_origin": data.get("fabric_country_of_origin", ""),
+                    }
+                else:
+                    data["fabric"] = None
+
+            # Nest shipping details if weight_kg > 0
+            if "weight_kg" in data:
+                weight_raw = data.get("weight_kg")
+                try:
+                    weight_val = Decimal(str(weight_raw)) if weight_raw != "" else Decimal("0.0")
+                except Exception:
+                    weight_val = Decimal("0.0")
+                if weight_val > 0:
+                    data["shipping_profile"] = {
+                        "weight_kg": weight_val,
+                        "dimensions_cm": data.get("dimensions_cm", None),
+                        "length_cm": data.get("length_cm", 0),
+                        "width_cm": data.get("width_cm", 0),
+                        "height_cm": data.get("height_cm", 0),
+                        "is_fragile": data.get("is_fragile", False),
+                        "requires_signature": data.get("requires_signature", False),
+                        "restricted_countries": data.get("restricted_countries", []),
+                        "free_shipping_threshold": data.get("free_shipping_threshold", None),
+                        "processing_days": data.get("processing_days", 1),
+                    }
+                else:
+                    data["shipping_profile"] = None
+
+            # Coerce empty string values for nullable fields to None
+            for field in ["pre_order_date", "old_price", "discounted_price", "max_stock", "discount_percentage"]:
+                if field in data and data[field] == "":
+                    data[field] = None
 
         return super().to_internal_value(data)
 
