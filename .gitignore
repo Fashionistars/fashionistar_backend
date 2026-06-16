@@ -58,6 +58,9 @@ cover/
 
 # Django stuff:
 *.log
+*.log.*
+logs/
+TODO
 local_settings.py
 db.sqlite3
 transaction
