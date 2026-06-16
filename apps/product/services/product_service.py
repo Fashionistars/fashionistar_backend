@@ -1102,5 +1102,6 @@ def commit_draft_session(
 
     draft.status = ProductDraftStatus.COMMITTED
     draft.save(update_fields=["status", "linked_product", "updated_at"])
+    draft.soft_delete()
     return product
 

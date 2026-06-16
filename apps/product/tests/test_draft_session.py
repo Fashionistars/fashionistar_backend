@@ -137,7 +137,7 @@ class TestProductDraftSessionAPI:
         assert product.vendor == vendor_user.vendor_profile
         
         # Check draft session status is now COMMITTED
-        draft_session = ProductDraftSession.objects.get(draft_key=draft_key)
+        draft_session = ProductDraftSession.all_objects.get(draft_key=draft_key)
         assert draft_session.status == ProductDraftStatus.COMMITTED
         assert draft_session.linked_product == product
 
