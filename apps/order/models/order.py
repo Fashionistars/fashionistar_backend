@@ -169,7 +169,6 @@ ORDER_STATUS_TRANSITIONS = {
 class FulfillmentType(models.TextChoices):
     DELIVERY = "delivery", _("Delivery")
     PICKUP = "pickup", _("Pickup")
-    DIGITAL = "digital", _("Digital Download")
     CUSTOM = "custom", _("Custom (Tailor-made)")
 
 

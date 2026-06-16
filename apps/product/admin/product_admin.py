@@ -169,7 +169,7 @@ class ProductAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
             "fields": ("image", "image_preview"),
         }),
         (_("Status & Flags"), {
-            "fields": ("status", "featured", "hot_deal", "digital", "soft_delete_badge"),
+            "fields": ("status", "featured", "hot_deal", "soft_delete_badge"),
         }),
         (_("Metrics"), {
             "fields": ("views", "orders_count", "rating", "review_count"),

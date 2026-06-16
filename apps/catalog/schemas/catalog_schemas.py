@@ -116,7 +116,6 @@ class HomepageProductCardOut(Schema):
     stock_qty: int
     featured: bool
     hot_deal: bool
-    digital: bool
     rating: float
     review_count: int
     computed_review_count: int

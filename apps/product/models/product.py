@@ -426,11 +426,6 @@ class Product(TimeStampedModel, SoftDeleteModel):
         )
 
     @property
-    def digital(self) -> bool:
-        """Returns False because all fashion/physical product builder items are physical."""
-        return False
-
-    @property
     def product_gallery_media(self):
         """Related manager alias that respects prefetch caches."""
         class PrefetchedManagerAlias:

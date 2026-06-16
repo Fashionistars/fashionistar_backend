@@ -123,7 +123,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
 class PlaceOrderSerializer(serializers.Serializer):
     delivery_address = serializers.DictField(child=serializers.CharField(), required=True)
     fulfillment_type = serializers.ChoiceField(
-        choices=["delivery", "pickup", "digital", "custom"],
+        choices=["delivery", "pickup", "custom"],
         default="delivery",
     )
     idempotency_key = serializers.CharField(required=False, allow_blank=True)

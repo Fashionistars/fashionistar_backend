@@ -230,7 +230,6 @@ def _homepage_product_out(product) -> dict:
         "stock_qty": product.stock_qty,
         "featured": product.featured,
         "hot_deal": product.hot_deal,
-        "digital": product.digital,
         "rating": float(product.rating or 0),
         "review_count": product.review_count,
         "computed_review_count": getattr(product, "computed_review_count", 0),
