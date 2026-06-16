@@ -128,12 +128,12 @@ class Product(TimeStampedModel, SoftDeleteModel):
     # Identity properties
     title = models.CharField(max_length=255, db_index=True)
     slug = models.SlugField(max_length=500, unique=True, blank=True, db_index=True)
-    sku = models.CharField(
-        max_length=50,
-        unique=True,
-        blank=True,
-        help_text="Unique SKU identifier generated automatically upon saving.",
-    )
+    """
+    Unique SKU identifier generated automatically upon saving.
+    is BEEN SHIFTED AND ADDED STRAIGHT TO THE PRODUCTVARIANTGALLERYMEDIA MODEL
+    SO THAT EACH PRODUCT VARIANTS CAN HAVE THEIR OWN UNIQUE SKU
+    ENDING WITH THEIR UNIQUE COLOR AND SIZE.
+    """
     description = models.TextField()
 
     # Ownership & Classification relationships
@@ -194,7 +194,9 @@ class Product(TimeStampedModel, SoftDeleteModel):
         DISABLED = "disabled", _("Disabled")
         COD = "cod", _("Cash On Delivery")
         PAY_AT_SHOP = "pay_at_shop", _("Pay At Shop")
-        BOTH = "both", _("Both")
+        PAYMENT_ON_DELIVERY = "payment_on_delivery", _("Payment On Delivery")
+        PAYMENT_BEFORE_DELIVERY = "payment_before_delivery", _("Payment Before Delivery")
+        PART_PAYMENT_BEFORE_DELIVERY = "part_payment_before_delivery", _("Part Payment Before Delivery")
 
     cash_payment_mode = models.CharField(
         max_length=20,
@@ -355,17 +357,6 @@ class Product(TimeStampedModel, SoftDeleteModel):
                 slug = f"{base}-{counter}"
                 counter += 1
             self.slug = slug
-        if not self.sku:
-            import uuid as _uuid
-
-            # Use random uuid4 suffix to avoid UNIQUE collisions on rapid creation
-            for _attempt in range(5):
-                candidate = f"FASTAR-{_uuid.uuid4().hex[:8].upper()}"
-                if not Product.objects.filter(sku=candidate).exists():
-                    self.sku = candidate
-                    break
-            else:
-                self.sku = f"FASTAR-{_uuid.uuid4().hex[:12].upper()}"
         self.in_stock = self.stock_qty > 0
         super().save(*args, **kwargs)
 
@@ -613,8 +604,7 @@ class ProductSizeAndMeasurementGuide(TimeStampedModel):
         ]
 
     def __str__(self) -> str:
-        owner = self.vendor.store_name if self.vendor else "Platform"
-        return f"{self.name} [{owner}] — {self.size_label}"
+        return f" {self.size_label} : {self.name}"
 
 
 class ProductFabricSpecification(TimeStampedModel):
@@ -628,6 +618,7 @@ class ProductFabricSpecification(TimeStampedModel):
         ("cold_wash", _("Cold Water Wash")),
         ("tumble_dry", _("Tumble Dry Low")),
         ("air_dry", _("Air Dry")),
+        ("allow_all", _("Allow All")),
     ]
 
     product = models.OneToOneField(
@@ -743,10 +734,23 @@ class ProductVariantGalleryMedia(TimeStampedModel, SoftDeleteModel):
         return " / ".join(parts)
 
     def save(self, *args: Any, **kwargs: Any) -> None:
-        """Enforces safe auto-generation of unique variant codes."""
+        """
+        Unique SKU identifier generated automatically upon saving.
+        is BEEN SHIFTED AND ADDED STRAIGHT TO THE PRODUCTVARIANTGALLERYMEDIA MODEL
+        SO THAT EACH PRODUCT VARIANTS CAN HAVE THEIR OWN UNIQUE SKU
+        ENDING WITH THEIR UNIQUE COLOR NAME AND SIZE.
+        """
         if not self.sku:
             import uuid as _uuid
-            self.sku = f"FASTAR-{_uuid.uuid4().hex.upper()[:12]}"
+
+            # Use random uuid4 suffix to avoid UNIQUE collisions on rapid creation
+            for _attempt in range(5):
+                candidate = f"FASTAR-{_uuid.uuid4().hex[:8].upper()}"
+                if not ProductVariantGalleryMedia.objects.filter(sku=candidate).exists():
+                    self.sku = candidate
+                    break
+            else:
+                self.sku = f"FASTAR-{_uuid.uuid4().hex[:12].upper()}"
         super().save(*args, **kwargs)
 
 

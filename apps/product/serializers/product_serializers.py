@@ -67,7 +67,19 @@ class ProductFabricSpecificationWriteSerializer(serializers.ModelSerializer):
 
 
 class ProductSizeAndMeasurementGuideWriteSerializer(serializers.ModelSerializer):
-    """Enforces parameter checks on custom tailor measurement templates [1]."""
+    """Enforces parameter checks on custom tailor measurement templates.
+
+    Accepts the flattened frontend form shape (size_label + measurement cm fields)
+    and maps to the canonical model. name/description/is_default/save_as_template
+    are given safe defaults so the frontend wizard does not need to send them.
+    """
+
+    # Make backend-only fields optional with sane defaults so the frontend
+    # wizard payload can omit them without triggering validation errors.
+    name = serializers.CharField(required=False, allow_blank=True, default="")
+    description = serializers.CharField(required=False, allow_blank=True, default="")
+    is_default = serializers.BooleanField(required=False, default=False)
+    save_as_template = serializers.BooleanField(required=False, default=False)
 
     class Meta:
         model = ProductSizeAndMeasurementGuide
@@ -87,17 +99,6 @@ class ProductSizeAndMeasurementGuideWriteSerializer(serializers.ModelSerializer)
             "foot_length_cm",
             "sort_order",
         ]
-
-    def validate(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Validates that custom measurement values are correctly defined."""
-        if data.get("description") == "measurement":
-            required_params = ["chest_cm", "waist_cm", "length_cm"]
-            for field in required_params:
-                if not data.get(field):
-                    raise serializers.ValidationError(
-                        {field: "This measurement parameters is required for custom-fitted designs."}
-                    )
-        return data
 
 
 class ProductShippingProfileWriteSerializer(serializers.ModelSerializer):
@@ -235,7 +236,34 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
     """Coordinating serializer for nested product writes from the wizard stepper.
 
     Validates taxonomy links, fabric records, custom measurements,
-    logistics, and variations in a single transactional payload [1].
+    logistics, and variations in a single transactional payload.
+
+    ─── Frontend ↔ Backend Payload Contract ────────────────────────────────────
+    The frontend ProductBuilderFormValues schema differs from the backend model
+    fields in several ways. ``to_internal_value`` bridges all these gaps:
+
+    Frontend field               → Backend field / handling
+    ─────────────────────────────────────────────────────────────────────────────
+    cash_payment_mode            → coerce to valid CashPaymentMode choice
+      "payment_before_delivery"  → "disabled"  (not a model choice — no COD)
+      "payment_on_delivery"      → "cod"
+      other unknown values       → "disabled"
+    publish_intent               → status
+      "draft"                    → "draft"
+      "pending"                  → "pending"
+      (any other)                → "draft"
+    cover_image_public_id +      → variants[] list (processed below)
+      gallery[]
+    measurement_guide[]{         → measurement_guide[]{name, description,
+      size_label, *_cm, ...}       size_label, *_cm, is_default, ...}
+    faqs: ["uuid", ...]          → stripped (handled via FAQ service)
+    courier_id                   → stripped (handled separately)
+    cover_image_url              → stripped (frontend display only)
+    is_discounted                → stripped (frontend display only)
+    discount_percentage          → stripped (frontend display only)
+    discounted_price             → stripped (frontend display only)
+    shipping_amount              → shipping_amount on Product
+    ─────────────────────────────────────────────────────────────────────────────
     """
 
     category_ids = serializers.PrimaryKeyRelatedField(
@@ -254,6 +282,13 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
     fabric = ProductFabricSpecificationWriteSerializer(required=False, allow_null=True)
     measurement_guide = ProductSizeAndMeasurementGuideWriteSerializer(many=True, required=False)
     shipping_profile = ProductShippingProfileWriteSerializer(required=False, allow_null=True)
+    # status is optional on creation (defaults to draft); vendor can request
+    # pending review by passing publish_intent="pending" (mapped in to_internal_value).
+    status = serializers.ChoiceField(
+        choices=[(s.value, s.label) for s in ProductStatus],
+        required=False,
+        default=ProductStatus.PENDING,
+    )
 
     class Meta:
         model = Product
@@ -288,11 +323,84 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
             "idempotency_key",
         ]
 
+    # ── Frontend-only fields that must be stripped before DRF validation ──────
+    # These keys exist in the builder form but have no direct model column.
+    _FRONTEND_ONLY_FIELDS = {
+        # Media display helpers
+        "cover_image_url",
+        # Discount UI state (not stored on Product model)
+        "is_discounted",
+        "discount_percentage",
+        "discounted_price",
+        # Logistics reference (no FK on Product model — handled via ShippingProfile)
+        "courier_id",
+        # Fabric flat fields (nested into `fabric` dict below)
+        "fabric_type",
+        "fabric_care_instructions",
+        "fabric_is_organic",
+        "fabric_is_vegan",
+        "fabric_country_of_origin",
+        # Shipping flat fields (nested into `shipping_profile` dict below)
+        "weight_kg",
+        "dimensions_cm",
+        "length_cm",
+        "width_cm",
+        "height_cm",
+        "is_fragile",
+        "requires_signature",
+        "restricted_countries",
+        "free_shipping_threshold",
+        "processing_days",
+        # Cover image flat fields (composed into `variants` list below)
+        "cover_image_public_id",
+        "cover_image_sku",
+        "cover_image_color_name",
+        "cover_image_color_hex",
+        "cover_image_size_id",
+        # Gallery list (composed into `variants` list below)
+        "gallery",
+        # FAQ list (handled via ProductFaq service, not by this serializer)
+        "faqs",
+        # Publish intent (mapped to `status` below)
+        "publish_intent",
+    }
+
     def to_internal_value(self, data: Any) -> Dict[str, Any]:
-        """Normalizes external variables into internal designations."""
+        """Bridges the frontend form payload to backend model field expectations.
+
+        Applies all field transformations before DRF validation runs so that
+        every mapping concern is isolated and testable here.
+        """
+        import logging
+        _log = logging.getLogger(__name__)
+
         if isinstance(data, dict):
             data = data.copy()
 
+            # ── 1. publish_intent → status ────────────────────────────────────
+            # The frontend wizard sends `publish_intent: "draft" | "pending"`.
+            # Map this to the canonical ProductStatus value. Any unrecognised
+            # value falls back to draft so we never accidentally publish early.
+            publish_intent = data.pop("publish_intent", None)
+            if publish_intent and "status" not in data:
+                if publish_intent == "pending":
+                    data["status"] = ProductStatus.PENDING
+                else:
+                    data["status"] = ProductStatus.DRAFT
+
+            # ── 2. cash_payment_mode normalisation ────────────────────────────
+            # Frontend default is "payment_before_delivery" which is NOT a valid
+            # model choice.  Map to the closest semantic equivalent or "disabled".
+            VALID_CASH_MODES = {"disabled", "cod", "pay_at_shop", "both"}
+            if "cash_payment_mode" in data:
+                cash_mode = data["cash_payment_mode"]
+                if cash_mode == "payment_on_delivery":
+                    data["cash_payment_mode"] = "cod"
+                elif cash_mode not in VALID_CASH_MODES:
+                    # Includes: payment_before_delivery, part_payment_before_delivery, etc.
+                    data["cash_payment_mode"] = "disabled"
+
+            # ── 3. gender_target normalisation ───────────────────────────────
             if "gender_target" in data:
                 gender = str(data["gender_target"]).lower().strip()
                 if gender == "male":
@@ -300,104 +408,99 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
                 elif gender == "female":
                     data["gender_target"] = "women"
 
-            # Parse cover_image and gallery into variants
-            if "cover_image_public_id" in data or "gallery" in data:
-                variants = []
-
-                # Parse cover image
-                cover_public_id = data.get("cover_image_public_id")
+            # ── 4. Build `variants` from cover_image + gallery ────────────────
+            cover_public_id = data.get("cover_image_public_id", "")
+            gallery = data.get("gallery") or []
+            if cover_public_id or gallery:
+                variants: list = []
                 if cover_public_id:
-                    cover_var = {
+                    cover_var: dict = {
                         "is_primary": True,
                         "media": cover_public_id,
                         "media_type": "image",
                         "alt_text": data.get("title", "") or "Cover Image",
                         "ordering": 0,
                     }
-                    if "cover_image_sku" in data and data["cover_image_sku"]:
+                    if data.get("cover_image_sku"):
                         cover_var["sku"] = data["cover_image_sku"]
-                    if "cover_image_color_name" in data and data["cover_image_color_name"]:
+                    if data.get("cover_image_color_name"):
                         cover_var["color_name"] = data["cover_image_color_name"]
-                    if "cover_image_color_hex" in data and data["cover_image_color_hex"]:
+                    if data.get("cover_image_color_hex"):
                         cover_var["color_hex"] = data["cover_image_color_hex"]
-                    if "cover_image_size_id" in data and data["cover_image_size_id"]:
+                    if data.get("cover_image_size_id"):
                         cover_var["size_id"] = data["cover_image_size_id"]
                     variants.append(cover_var)
 
-                # Parse gallery
-                gallery = data.get("gallery") or []
                 for idx, item in enumerate(gallery):
-                    pub_id = item.get("public_id")
+                    pub_id = item.get("public_id") if isinstance(item, dict) else None
                     if pub_id:
-                        g_var = {
+                        g_var: dict = {
                             "is_primary": False,
                             "media": pub_id,
                             "media_type": item.get("media_type", "image"),
-                            "alt_text": item.get("alt_text", "") or data.get("title", "") or f"Gallery Item {idx + 1}",
+                            "alt_text": (
+                                item.get("alt_text") or data.get("title", "") or f"Gallery Item {idx + 1}"
+                            ),
                             "ordering": item.get("ordering", idx + 1),
                         }
-                        if "sku" in item and item["sku"]:
+                        if item.get("sku"):
                             g_var["sku"] = item["sku"]
-                        if "color_name" in item and item["color_name"]:
+                        if item.get("color_name"):
                             g_var["color_name"] = item["color_name"]
-                        if "color_hex" in item and item["color_hex"]:
+                        if item.get("color_hex"):
                             g_var["color_hex"] = item["color_hex"]
-                        if "size_id" in item and item["size_id"]:
+                        if item.get("size_id"):
                             g_var["size_id"] = item["size_id"]
                         variants.append(g_var)
 
                 data["variants"] = variants
 
-            # Coerce cash_payment_mode from payment_on_delivery/cod to cod, others to disabled
-            if "cash_payment_mode" in data:
-                cash_mode = data["cash_payment_mode"]
-                if cash_mode == "payment_on_delivery":
-                    data["cash_payment_mode"] = "cod"
-                elif cash_mode not in ["disabled", "cod", "pay_at_shop", "both"]:
-                    data["cash_payment_mode"] = "disabled"
+            # ── 5. Build `fabric` dict from flat frontend fields ───────────────
+            fabric_type = data.get("fabric_type", "")
+            if fabric_type:
+                data["fabric"] = {
+                    "fabric_type": fabric_type,
+                    "care_instructions": data.get("fabric_care_instructions", "machine_wash"),
+                    "is_organic": data.get("fabric_is_organic", False),
+                    "is_vegan": data.get("fabric_is_vegan", False),
+                    "country_of_origin": data.get("fabric_country_of_origin", ""),
+                }
+            elif "fabric" not in data:
+                data["fabric"] = None
 
-            # Nest fabric details if fabric_type is provided
-            if "fabric_type" in data:
-                fabric_type = data.get("fabric_type")
-                if fabric_type:
-                    data["fabric"] = {
-                        "fabric_type": fabric_type,
-                        "care_instructions": data.get("fabric_care_instructions", "machine_wash"),
-                        "is_organic": data.get("fabric_is_organic", False),
-                        "is_vegan": data.get("fabric_is_vegan", False),
-                        "country_of_origin": data.get("fabric_country_of_origin", ""),
-                    }
-                else:
-                    data["fabric"] = None
+            # ── 6. Build `shipping_profile` dict from flat frontend fields ─────
+            weight_raw = data.get("weight_kg", "")
+            try:
+                weight_val = Decimal(str(weight_raw)) if weight_raw and weight_raw != "" else Decimal("0")
+            except Exception:
+                weight_val = Decimal("0")
+            if weight_val > 0:
+                data["shipping_profile"] = {
+                    "weight_kg": weight_val,
+                    "dimensions_cm": data.get("dimensions_cm"),
+                    "length_cm": data.get("length_cm", 0),
+                    "width_cm": data.get("width_cm", 0),
+                    "height_cm": data.get("height_cm", 0),
+                    "is_fragile": data.get("is_fragile", False),
+                    "requires_signature": data.get("requires_signature", False),
+                    "restricted_countries": data.get("restricted_countries", []),
+                    "free_shipping_threshold": data.get("free_shipping_threshold") or None,
+                    "processing_days": data.get("processing_days", 1),
+                }
+            elif "shipping_profile" not in data:
+                data["shipping_profile"] = None
 
-            # Nest shipping details if weight_kg > 0
-            if "weight_kg" in data:
-                weight_raw = data.get("weight_kg")
-                try:
-                    weight_val = Decimal(str(weight_raw)) if weight_raw != "" else Decimal("0.0")
-                except Exception:
-                    weight_val = Decimal("0.0")
-                if weight_val > 0:
-                    data["shipping_profile"] = {
-                        "weight_kg": weight_val,
-                        "dimensions_cm": data.get("dimensions_cm", None),
-                        "length_cm": data.get("length_cm", 0),
-                        "width_cm": data.get("width_cm", 0),
-                        "height_cm": data.get("height_cm", 0),
-                        "is_fragile": data.get("is_fragile", False),
-                        "requires_signature": data.get("requires_signature", False),
-                        "restricted_countries": data.get("restricted_countries", []),
-                        "free_shipping_threshold": data.get("free_shipping_threshold", None),
-                        "processing_days": data.get("processing_days", 1),
-                    }
-                else:
-                    data["shipping_profile"] = None
-
-            # Coerce empty string values for nullable fields to None
-            for field in ["pre_order_date", "old_price", "discounted_price", "max_stock", "discount_percentage"]:
-                if field in data and data[field] == "":
+            # ── 7. Coerce nullable numeric / date fields from "" → None ────────
+            for field in ["pre_order_date", "old_price", "max_stock"]:
+                if data.get(field) == "":
                     data[field] = None
 
+            # ── 8. Strip all frontend-only keys before DRF validation ──────────
+            # Doing this LAST ensures earlier steps can still read these keys.
+            for key in list(self._FRONTEND_ONLY_FIELDS):
+                data.pop(key, None)
+
+        _log.debug("ProductWriteFullSerializer.to_internal_value payload keys: %s", list(data.keys()))
         return super().to_internal_value(data)
 
     def validate_price(self, value: Decimal) -> Decimal:

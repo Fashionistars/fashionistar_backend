@@ -176,23 +176,39 @@ def commit_draft_session(
     """
     Validate the draft session payload using ProductWriteFullSerializer,
     and create or update the canonical Product.
+
+    Enterprise Compliance:
+    - Logs full validation error details at ERROR level for observability.
+    - Handles FAQ UUID list from payload post-creation.
+    - Hard-deletes draft on success (no soft-delete column on this model).
     """
     from rest_framework.exceptions import ValidationError
     from apps.product.serializers.product_serializers import ProductWriteFullSerializer
     from apps.product.services.product_crud_service import create_product, update_product
+    import json
 
     draft = ProductDraftSession.objects.select_for_update().get(pk=draft_session.pk)
     if draft.status != ProductDraftStatus.ACTIVE:
         raise ValueError("Cannot commit a draft session that is not active.")
 
-    # Validate payload
-    serializer = ProductWriteFullSerializer(data=draft.payload)
+    # ── Extract FAQ IDs before serializer (serializer strips them) ───────────
+    raw_payload = draft.payload or {}
+    faq_ids = raw_payload.get("faqs", [])  # list of FAQ UUID strings or ints
+
+    # ── Validate payload through ProductWriteFullSerializer ──────────────────
+    serializer = ProductWriteFullSerializer(data=raw_payload)
     if not serializer.is_valid():
+        logger.error(
+            "commit_draft_session validation failed for draft_key=%s | errors=%s | payload_keys=%s",
+            draft.draft_key,
+            json.dumps(serializer.errors, default=str),
+            list(raw_payload.keys()),
+        )
         raise ValidationError(serializer.errors)
 
     validated_data = serializer.validated_data
 
-    # Decide whether to create or update product
+    # ── Create or update canonical Product ───────────────────────────────────
     product = draft.linked_product
     if product:
         product = update_product(
@@ -210,12 +226,27 @@ def commit_draft_session(
         )
         draft.linked_product = product
 
+    # ── Link FAQs from payload UUID list ────────────────────────────────────
+    if faq_ids:
+        try:
+            from apps.product.models import ProductFaq
+            existing_faq_qs = ProductFaq.objects.filter(pk__in=faq_ids)
+            for faq in existing_faq_qs:
+                faq.product = product
+                faq.save(update_fields=["product", "updated_at"])
+        except Exception as faq_exc:
+            # Non-fatal: log and continue — FAQs can be re-linked later.
+            logger.warning("FAQ link failed during commit for draft_key=%s: %s", draft.draft_key, faq_exc)
+
+    # ── Mark draft as committed then hard-delete ─────────────────────────────
     draft.status = ProductDraftStatus.COMMITTED
     draft.save(update_fields=["status", "linked_product", "updated_at"])
     # Hard-delete the draft now that it has been promoted to a real Product.
     # ProductDraftSession has no soft-delete column — the row is permanently purged.
     draft.delete()
+    logger.info("Draft %s committed to product %s and hard-deleted.", draft.draft_key, product.slug)
     return product
+
 
 
 

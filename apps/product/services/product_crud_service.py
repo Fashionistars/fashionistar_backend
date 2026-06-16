@@ -328,9 +328,17 @@ def create_product(
     shipping_data = validated_data.pop("shipping_profile", None)
     relations = _pop_product_m2m(validated_data)
 
+    # Pop status so it doesn't collide with the explicit kwarg below.
+    # The serializer may pass status="pending" (publish intent from frontend).
+    # Vendors may not self-publish; enforce max status of PENDING at creation.
+    requested_status = validated_data.pop("status", ProductStatus.DRAFT)
+    # Safety guard: vendor cannot create a product directly as PUBLISHED/ARCHIVED.
+    safe_statuses = {ProductStatus.DRAFT, ProductStatus.PENDING}
+    effective_status = requested_status if requested_status in safe_statuses else ProductStatus.DRAFT
+
     product = Product.objects.create(
         vendor=vendor,
-        status=ProductStatus.DRAFT,
+        status=effective_status,
         idempotency_key=idempotency_key,
         **validated_data,
     )
@@ -385,6 +393,13 @@ def update_product(
     }
 
     old_template = product.measurement_template
+
+    # Guard: vendors cannot escalate status via a direct update.
+    # Dedicated publish/archive service functions own those transitions.
+    new_status = validated_data.pop("status", None)
+    safe_statuses = {ProductStatus.DRAFT, ProductStatus.PENDING}
+    if new_status and new_status in safe_statuses:
+        product.status = new_status
 
     for attr, value in validated_data.items():
         setattr(product, attr, value)
