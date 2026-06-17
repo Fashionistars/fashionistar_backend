@@ -257,35 +257,9 @@ def _sync_product_variants(product: Product, variants_data: list[dict]) -> None:
             variant.soft_delete()
 
 
-def _sync_measurement_guide_from_template(vendor: VendorProfile) -> None:
-    """
-    If the vendor has a measurement_template name, copy all its template rows (where vendor is NULL)
-    to the vendor's sizing guide.
-    """
-    if not vendor.measurement_template:
-        return
-
-    # Clear existing guide rows
-    vendor.vendor_measurement_guide.all().delete()
-
-    # Query template rows where product is NULL, matches vendor and template name
-    template_rows = ProductSizeAndMeasurementGuide.objects.filter(
-        vendor=vendor,
-    )
-    for row in template_rows:
-        ProductSizeAndMeasurementGuide.objects.create(
-            vendor=vendor,
-            size_label=row.size_label,
-            chest_cm=row.chest_cm,
-            waist_cm=row.waist_cm,
-            hip_cm=row.hip_cm,
-            length_cm=row.length_cm,
-            shoulder_cm=row.shoulder_cm,
-            sleeve_cm=row.sleeve_cm,
-            inseam_cm=row.inseam_cm,
-            foot_length_cm=row.foot_length_cm,
-            sort_order=row.sort_order,
-        )
+# NOTE: _sync_measurement_guide_from_template was removed.
+# Neither Product nor VendorProfile has a `measurement_template` field.
+# Measurement guides are created inline via `guide_data` in create_product / update_product.
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PRODUCT CRUD
@@ -366,10 +340,27 @@ def create_product(
 
     if guide_data:
         from apps.product.models import ProductSizeAndMeasurementGuide
-        for row in guide_data:
-            ProductSizeAndMeasurementGuide.objects.create(product=product, **row)
-    elif product.measurement_template:
-        _sync_measurement_guide_from_template(product)
+        # ProductSizeAndMeasurementGuide has NO `product` FK.
+        # Guides are vendor-level templates; variants reference them via size FK.
+        # Passing product= causes TypeError — use vendor= instead.
+        VALID_DESCRIPTIONS = {"clothing", "footwear", "accessory", "measurement", "custom"}
+        for idx, row in enumerate(guide_data):
+            row = dict(row)  # defensive copy
+            # Ensure `name` is populated — unique constraint requires (vendor, name, size_label)
+            if not row.get("name"):
+                row["name"] = f"{product.title[:60]} Guide {idx + 1}"
+            # Ensure `description` is a valid model choice
+            if not row.get("description") or row.get("description") not in VALID_DESCRIPTIONS:
+                row["description"] = "custom"
+            # Use get_or_create to avoid UniqueConstraint violations on retry
+            ProductSizeAndMeasurementGuide.objects.get_or_create(
+                vendor=vendor,
+                name=row.pop("name"),
+                size_label=row.get("size_label", "M"),
+                defaults=row,
+            )
+    elif vendor:
+        _sync_measurement_guide_from_template(vendor)
 
     if variants_data is not None:
         _sync_product_variants(product, variants_data)
@@ -404,8 +395,6 @@ def update_product(
         if key in validated_data
     }
 
-    old_template = product.measurement_template
-
     # Guard: vendors cannot escalate status via a direct update.
     # Dedicated publish/archive service functions own those transitions.
     new_status = validated_data.pop("status", None)
@@ -426,18 +415,49 @@ def update_product(
             ProductFabricSpecification.objects.filter(product=product).delete()
 
     if shipping_data is not None:
+        from apps.product.models import ProductShippingProfile
         if shipping_data:
-            ProductShippingProfile.objects.update_or_create(product=product, defaults=shipping_data)
+            # ProductShippingProfile has NO `product` FK.
+            # Product.shipping_profile is a FK from Product → ShippingProfile.
+            # Update the existing linked profile or create a new one.
+            vendor = product.vendor
+            existing_profile = getattr(product, "shipping_profile", None)
+            if existing_profile:
+                for attr, val in shipping_data.items():
+                    setattr(existing_profile, attr, val)
+                existing_profile.save()
+            else:
+                new_profile = ProductShippingProfile.objects.create(
+                    vendor=vendor,
+                    **shipping_data,
+                )
+                product.shipping_profile = new_profile
+                product.save(update_fields=["shipping_profile"])
         else:
-            ProductShippingProfile.objects.filter(product=product).delete()
+            existing_profile = getattr(product, "shipping_profile", None)
+            if existing_profile:
+                product.shipping_profile = None
+                product.save(update_fields=["shipping_profile"])
+                existing_profile.delete()
 
     if guide_data is not None:
-        for row in guide_data:
+        from apps.product.models import ProductSizeAndMeasurementGuide
+        # ProductSizeAndMeasurementGuide has NO `product` FK.
+        # Guides are vendor-level templates referenced by variants via size FK.
+        VALID_DESCRIPTIONS = {"clothing", "footwear", "accessory", "measurement", "custom"}
+        vendor = product.vendor
+        for idx, row in enumerate(guide_data):
+            row = dict(row)  # defensive copy
+            if not row.get("name"):
+                row["name"] = f"{product.title[:60]} Guide {idx + 1}"
+            if not row.get("description") or row.get("description") not in VALID_DESCRIPTIONS:
+                row["description"] = "custom"
             ProductSizeAndMeasurementGuide.objects.get_or_create(
-                product=product, vendor=product.vendor, **row
+                vendor=vendor,
+                name=row.pop("name"),
+                size_label=row.get("size_label", "M"),
+                defaults=row,
             )
-    elif "measurement_template" in validated_data and product.measurement_template != old_template:
-        _sync_measurement_guide_from_template(product)
 
     if variants_data is not None:
         _sync_product_variants(product, variants_data)
