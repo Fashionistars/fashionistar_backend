@@ -333,7 +333,8 @@ def create_product(
     # Vendors may not self-publish; enforce max status of PENDING at creation.
     requested_status = validated_data.pop("status", ProductStatus.PENDING)
     # Safety guard: vendor cannot create a product directly as PUBLISHED/ARCHIVED.
-    safe_statuses = {ProductStatus.PENDING, ProductStatus.PENDING}
+    # Both DRAFT and PENDING are valid vendor-controlled creation statuses.
+    safe_statuses = {ProductStatus.DRAFT, ProductStatus.PENDING}
     effective_status = requested_status if requested_status in safe_statuses else ProductStatus.PENDING
 
     product = Product.objects.create(
@@ -350,7 +351,18 @@ def create_product(
 
     if shipping_data:
         from apps.product.models import ProductShippingProfile
-        ProductShippingProfile.objects.create(product=product, **shipping_data)
+        # ── ProductShippingProfile has NO 'product' column. ─────────────────────
+        # The relationship is a OneToOneField owned by Product.shipping_profile.
+        # We must:
+        #   1. Create the profile with the vendor FK (required field).
+        #   2. Assign the profile to product.shipping_profile and save.
+        # Passing product= would cause a TypeError (unexpected keyword argument).
+        shipping_profile = ProductShippingProfile.objects.create(
+            vendor=vendor,
+            **shipping_data,
+        )
+        product.shipping_profile = shipping_profile
+        product.save(update_fields=["shipping_profile"])
 
     if guide_data:
         from apps.product.models import ProductSizeAndMeasurementGuide

@@ -968,6 +968,22 @@ class VendorProductDraftDetailView(APIView):
 
 
 class VendorProductDraftCommitView(APIView):
+    """
+    POST /api/v1/products/vendor/drafts/<draft_key>/commit/
+
+    ── ARCHITECTURE NOTE ────────────────────────────────────────────────────
+    This endpoint now handles ONLY "Save as Draft" persistence.
+    It does NOT create a Product row.
+
+    For "Submit for Review / Publish", the frontend calls
+    POST /api/v1/products/vendor/ (VendorProductListCreateView) directly
+    with the full validated form payload.
+
+    This separation eliminates the 400 error that occurred when commit
+    tried to run ProductWriteFullSerializer validation on an incomplete
+    draft payload (e.g., missing required publish fields).
+    ─────────────────────────────────────────────────────────────────────────
+    """
     renderer_classes = _RENDERERS
     parser_classes = _PARSERS
     permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsVendor]
@@ -982,23 +998,16 @@ class VendorProductDraftCommitView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
         try:
-            product = commit_draft_session(draft_session=draft, request=request)
+            # commit_draft_session now only persists the draft — no product creation.
+            saved_draft = commit_draft_session(draft_session=draft, request=request)
         except Exception as exc:
-            from rest_framework.exceptions import ValidationError
-            if isinstance(exc, ValidationError):
-                return error_response(
-                    message="Validation error.",
-                    status=status.HTTP_400_BAD_REQUEST,
-                    code="validation_error",
-                    errors=exc.detail,
-                )
             return error_response(
                 message=str(exc),
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return success_response(
-            data=ProductDetailSerializer(product, context={"request": request}).data,
-            message="Draft committed to product successfully.",
+            data=ProductDraftSessionSerializer(saved_draft).data,
+            message="Draft session saved successfully.",
             status=status.HTTP_200_OK,
         )
 
