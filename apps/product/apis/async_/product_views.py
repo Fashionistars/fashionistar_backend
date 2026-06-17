@@ -195,6 +195,17 @@ def _tag_out(tag) -> dict:
     return {"id": str(tag.pk), "name": tag.name, "slug": tag.slug}
 
 
+def _category_out(category) -> dict:
+    image = getattr(category, "image", None)
+    image_url = _url(image)
+    return {
+        "id": str(category.pk),
+        "name": category.name,
+        "slug": category.slug,
+        "image_url": image_url,
+    }
+
+
 def _gallery_item_out(media) -> dict:
     raw_url = _url(media.media)
     return {
@@ -433,6 +444,8 @@ def _product_detail_out(product) -> dict:
                 if getattr(product, "primary_sub_category", None)
                 else None
             ),
+            "categories": [_category_out(c) for c in product.categories.all()],
+            "sub_categories": [_category_out(c) for c in product.sub_categories.all()],
             "tags": [_tag_out(t) for t in product.tags.all()],
             "specifications": [],
             "faqs": [
@@ -1209,5 +1222,4 @@ async def record_product_view(
     except Exception as exc:
         logger.warning("ViewLog write failed for slug=%s: %s", slug, exc, exc_info=False)
         return {"logged": False, "reason": "write_error"}
-
 

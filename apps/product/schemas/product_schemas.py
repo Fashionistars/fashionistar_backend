@@ -277,6 +277,8 @@ class ProductDetailOut(Schema):
     measurement_guide: List[ProductSizeAndMeasurementGuideOut] = []
     shipping_profile: Optional[ProductShippingProfileOut] = None
     status: str
+    categories: List[ProductCategoryOut] = []
+    sub_categories: List[ProductCategoryOut] = []
     category_name: Optional[str] = None
     category_slug: Optional[str] = None
     sub_category_name: Optional[str] = None

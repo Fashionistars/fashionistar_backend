@@ -173,6 +173,12 @@ class ProductVariantGalleryMediaWriteSerializer(serializers.ModelSerializer):
             "duration_sec",
             "barcode",
         ]
+        extra_kwargs = {
+            # Product updates reconcile existing same-product variants by SKU in
+            # the service layer. DRF's default unique validator runs too early
+            # for nested updates and incorrectly rejects the product's own SKU.
+            "sku": {"validators": []},
+        }
 
     def validate_stock_qty(self, value: int) -> int:
         """Enforces logical limit parameters for stock volumes."""
@@ -548,10 +554,24 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
         return value
 
     def validate_variants(self, variants: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Ensures that variant SKUs within a single submission are unique."""
+        """Ensures that submitted SKUs are unique and product-owned.
+
+        Existing variants on the current product may be updated by SKU. SKUs
+        owned by other products remain blocked to preserve warehouse integrity.
+        """
         skus = [v.get("sku", "") for v in variants if v.get("sku")]
         if len(skus) != len(set(skus)):
             raise serializers.ValidationError("Each item variation must specify a unique SKU identifier.")
+        conflicting_skus = ProductVariantGalleryMedia.objects.filter(
+            sku__in=skus,
+            is_deleted=False,
+        )
+        if self.instance is not None:
+            conflicting_skus = conflicting_skus.exclude(product=self.instance)
+        if conflicting_skus.exists():
+            raise serializers.ValidationError(
+                "One or more variation SKUs already belong to another product."
+            )
         return variants
 
     def validate(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -749,7 +769,6 @@ class ProductShippingProfileSerializer(serializers.ModelSerializer):
         max_digits=12,
         decimal_places=2,
         read_only=True,
-        source="effective_free_shipping_threshold",
     )
 
     class Meta:

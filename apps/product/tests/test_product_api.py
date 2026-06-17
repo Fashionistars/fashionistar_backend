@@ -325,6 +325,57 @@ class TestProductService:
         assert faqs[0].question == payload["faqs"][0]["question"]
         assert faqs[1].answer == payload["faqs"][1]["answer"]
 
+    def test_product_update_allows_existing_same_product_variant_sku(self, product):
+        """Nested edit payloads may update the product's own media SKU safely."""
+        from apps.product.models import ProductVariantGalleryMedia
+        from apps.product.serializers import ProductWriteFullSerializer
+        from apps.product.services import update_product
+
+        variant = ProductVariantGalleryMedia.objects.create(
+            product=product,
+            sku="FASTAR-EDIT-001",
+            media="fashionistar/products/gallery/browser-proof",
+            media_type="image",
+            alt_text="Original gallery image",
+            ordering=0,
+            is_primary=True,
+        )
+        payload = {
+            "price": "86000.00",
+            "category_ids": [str(product.categories.first().id)],
+            "gallery": [
+                {
+                    "public_id": "fashionistar/products/gallery/browser-proof",
+                    "media_type": "image",
+                    "alt_text": "Updated gallery image",
+                    "ordering": 0,
+                    "sku": variant.sku,
+                }
+            ],
+        }
+
+        serializer = ProductWriteFullSerializer(
+            product,
+            data=payload,
+            partial=True,
+        )
+        assert serializer.is_valid(), serializer.errors
+
+        updated = update_product(
+            product=product,
+            validated_data=serializer.validated_data,
+            actor=product.vendor.user,
+        )
+        variant.refresh_from_db()
+
+        assert updated.price == Decimal("86000.00")
+        assert variant.alt_text == "Updated gallery image"
+        assert ProductVariantGalleryMedia.objects.filter(
+            product=product,
+            sku="FASTAR-EDIT-001",
+            is_deleted=False,
+        ).count() == 1
+
     def test_inventory_log_serializer_exposes_before_and_after_quantities(self, product, admin_user):
         """DRF inventory history must expose the immutable before/after ledger values."""
         from apps.product.serializers import ProductInventoryLogSerializer
@@ -360,6 +411,26 @@ class TestProductService:
         )
 
         assert profile.effective_free_shipping_threshold == Decimal("87500.00")
+
+    def test_shipping_profile_serializer_exposes_effective_threshold(self, vendor_user):
+        """Product create responses must serialize the computed shipping threshold."""
+        from apps.global_platform_settings.models import PlatformSettings, SINGLETON_PK
+        from apps.product.models import ProductShippingProfile
+        from apps.product.serializers.product_serializers import ProductShippingProfileSerializer
+
+        PlatformSettings.objects.update_or_create(
+            pk=SINGLETON_PK,
+            defaults={"default_free_shipping_threshold": Decimal("87500.00")},
+        )
+        profile = ProductShippingProfile.objects.create(
+            vendor=vendor_user.vendor_profile,
+            weight_kg=Decimal("1.5"),
+            free_shipping_threshold=None,
+        )
+
+        data = ProductShippingProfileSerializer(profile).data
+
+        assert data["effective_free_shipping_threshold"] == "87500.00"
 
     def test_idempotency_guard_prevents_duplicate(self, product, client_user):
         """Same user+product combination must raise ValueError on second review attempt."""
@@ -909,4 +980,3 @@ class TestMeasurementTemplatesAPI:
         templates = response.json()
         assert any(t["id"] == template_id for t in templates)
         assert any(t["name"] == "Men's Senator Fit" for t in templates)
-
