@@ -1,7 +1,7 @@
 .git
 .gitignore
 .env.local
-.env
+# .env
 *.pyc
 __pycache__
 *.pyo
@@ -17,7 +17,7 @@ build/
 .uv-cache
 venv/
 env/
-.vscode
+# .vscode
 .idea
 *.swp
 *.swo
@@ -27,11 +27,11 @@ node_modules
 .next
 npm-debug.log
 .cache
-tests/
-docs/
-.github
+# tests/
+# docs/
+# .github
 .editorconfig
-Makefile
+# Makefile
 docker-compose.override.yml
 tmp/
 .tmp*

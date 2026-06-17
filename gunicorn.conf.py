@@ -54,11 +54,11 @@ bind = os.environ.get("GUNICORN_BIND", "0.0.0.0:8001")
 # Timeout (seconds): kill and restart a worker that doesn't respond in time.
 # Set to 30s — enough for Cloudinary webhooks and large file uploads.
 # Never set below 10s (Django startup can take 5–8s cold).
-timeout = int(os.environ.get("GUNICORN_TIMEOUT", 30))
+timeout = int(os.environ.get("GUNICORN_TIMEOUT", 900))
 
 # Keepalive: how long to wait for the next request on a persistent connection.
 # 5s is standard; increase to 75s if behind a load balancer with long-lived conns.
-keepalive = int(os.environ.get("GUNICORN_KEEPALIVE", 5))
+keepalive = int(os.environ.get("GUNICORN_KEEPALIVE", 900))
 
 # ─── Worker recycling ──────────────────────────────────────────────────────────
 # Gracefully restart a worker after N requests to prevent memory accumulation.

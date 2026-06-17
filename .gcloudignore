@@ -13,7 +13,7 @@ __pycache__/
 *.txt
 *.csv
 db.sqlite3
-media/
-static/
-staticfiles/
+# media/
+# static/
+# staticfiles/
 
