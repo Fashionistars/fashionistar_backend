@@ -853,10 +853,27 @@ async def validate_coupon_async_static(request, payload: "CouponValidateIn"):
 @router.get("/{slug}/", auth=None, summary="Get product detail by slug")
 async def get_product(request, slug: str):
     try:
-        product = await aget_product_detail(slug)
+        user = await _resolve_optional_bearer_user(request)
+        vendor = None
+        if user and is_vendor_role(getattr(user, "role", None)):
+            try:
+                vendor = user.vendor_profile
+            except ObjectDoesNotExist:
+                pass
+
+        product = None
+        if vendor:
+            product = await aget_vendor_product(vendor.pk, slug)
+        if not product:
+            product = await aget_product_detail(slug)
+
         if not product:
             raise HttpError(404, "Product not found.")
-        await async_increment_product_views(product.pk)
+
+        from apps.product.models.product import ProductStatus
+        if product.status == ProductStatus.PUBLISHED:
+            await async_increment_product_views(product.pk)
+
         return _product_detail_out(product)
     except asyncio.CancelledError:
         logger.debug("Request for product slug=%s cancelled by client", slug)
@@ -878,12 +895,33 @@ async def get_product_bundle(request, slug: str):
     if user is not None:
         request.auth = user
 
+    vendor = None
+    if user and is_vendor_role(getattr(user, "role", None)):
+        try:
+            vendor = user.vendor_profile
+        except ObjectDoesNotExist:
+            pass
+
     try:
-        product, reviews, in_wishlist = await asyncio.gather(
-            aget_product_detail(slug),
-            alist_reviews_for_product_slug(slug, limit=20),
-            auser_has_wishlist_slug(user, slug),
-        )
+        product = None
+        if vendor:
+            product = await aget_vendor_product(vendor.pk, slug)
+
+        if product:
+            reviews, in_wishlist = await asyncio.gather(
+                alist_reviews_for_product_slug(slug, limit=20),
+                auser_has_wishlist_slug(user, slug),
+            )
+        else:
+            product_dict = await aget_product_detail_bundle(
+                slug=slug,
+                user_id=user.pk if user else None,
+                session_key=None,  # session key handling inside get_product_detail_bundle
+            )
+            product = product_dict.get("product")
+            reviews = product_dict.get("reviews")
+            in_wishlist = product_dict.get("in_wishlist")
+
     except asyncio.CancelledError:
         logger.debug("Request for product bundle slug=%s cancelled by client", slug)
         raise

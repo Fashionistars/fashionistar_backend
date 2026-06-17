@@ -208,6 +208,7 @@ def _sync_product_variants(product: Product, variants_data: list[dict]) -> None:
     """
     existing_variants = {v.sku: v for v in product.product_variants_gallery_media.filter(is_deleted=False)}
     submitted_skus = set()
+    seen_combinations = set()
 
     for vdata in variants_data:
         sku = vdata.get("sku")
@@ -218,6 +219,16 @@ def _sync_product_variants(product: Product, variants_data: list[dict]) -> None:
         size = vdata.get("size")
         color_name = vdata.get("color_name", "")
         color_hex = vdata.get("color_hex", "")
+
+        size_id = size.pk if size else None
+        if size_id:
+            combo = (size_id, color_name)
+            if combo in seen_combinations:
+                size = None
+                vdata["size"] = None
+            else:
+                seen_combinations.add(combo)
+
 
         # Only write fields that actually exist on ProductVariantGalleryMedia
         variant_fields = {
