@@ -231,7 +231,7 @@ class TestAuditContextMiddleware:
         assert ctx == {}
 
     def test_auto_failed_api_capture_fires_for_4xx(self, rf):
-        """E3: 4xx responses from _capture_failed_response don't crash the middleware."""
+        """E3: 4xx responses from _maybe_capture_failed_wsgi don't crash the middleware."""
         from apps.audit_logs.middleware import AuditContextMiddleware
 
         call_log = []
@@ -240,21 +240,22 @@ class TestAuditContextMiddleware:
             from django.http import HttpResponse
             return HttpResponse("not found", status=404)
 
-        original_capture = AuditContextMiddleware._capture_failed_response
+        original_capture = AuditContextMiddleware._maybe_capture_failed_wsgi
 
         def patched_capture(self_inner, *args, **kwargs):
             call_log.append("called")
             # Don't actually try to import AuditService in test env
 
-        AuditContextMiddleware._capture_failed_response = patched_capture
+        AuditContextMiddleware._maybe_capture_failed_wsgi = patched_capture
         try:
             middleware = AuditContextMiddleware(view_404)
             request = rf.get("/api/v1/nonexistent/")
             response = middleware(request)
             assert response.status_code == 404
-            assert len(call_log) == 1, "_capture_failed_response should be called for 404"
+            assert len(call_log) == 1, "_maybe_capture_failed_wsgi should be called for 404"
         finally:
-            AuditContextMiddleware._capture_failed_response = original_capture
+            AuditContextMiddleware._maybe_capture_failed_wsgi = original_capture
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════

@@ -418,6 +418,29 @@ class Product(TimeStampedModel, SoftDeleteModel):
         )
 
     @property
+    def sku(self) -> str:
+        """Returns the SKU of the first variant if available, else a generated fallback or empty string."""
+        prefetched = getattr(self, "_prefetched_variants", None)
+        if prefetched:
+            return prefetched[0].sku
+        
+        prefetch_cache = getattr(self, "_prefetched_objects_cache", {}) or {}
+        if "product_variants_gallery_media" in prefetch_cache:
+            v_list = prefetch_cache["product_variants_gallery_media"]
+            if v_list:
+                return v_list[0].sku
+        
+        from django.core.exceptions import SynchronousOnlyOperation
+        try:
+            first_variant = self.product_variants_gallery_media.filter(is_deleted=False).first()
+            if first_variant:
+                return first_variant.sku
+        except SynchronousOnlyOperation:
+            # Fallback for async contexts where variants are not prefetched
+            return ""
+        return ""
+
+    @property
     def product_gallery_media(self):
         """Related manager alias that respects prefetch caches."""
         class PrefetchedManagerAlias:

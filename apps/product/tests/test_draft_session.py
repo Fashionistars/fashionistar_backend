@@ -124,19 +124,28 @@ class TestProductDraftSessionAPI:
         assert response.json()["data"]["payload"]["title"] == "Updated Draft Agbada"
         assert response.json()["data"]["current_step"] == 3
         
-        # 5. Commit the draft to a full product (DRF sync endpoint)
+        # 5. Commit/save the draft session (save-only)
         url_commit = reverse("product:vendor-product-draft-commit", kwargs={"draft_key": draft_key})
         response = api_client.post(url_commit)
         assert response.status_code == status.HTTP_200_OK, response.data
         
+        # 6. Submit the draft payload to create a full product
+        url_create = reverse("product:vendor-product-list")
+        response_create = api_client.post(url_create, updated_payload, format="json")
+        assert response_create.status_code == status.HTTP_201_CREATED, response_create.data
+        
         # Verify product was created
-        product_slug = response.json()["data"]["slug"]
+        product_slug = response_create.json()["data"]["slug"]
         product = Product.objects.get(slug=product_slug)
         assert product.title == "Updated Draft Agbada"
         assert product.price == Decimal("55000.00")
         assert product.vendor == vendor_user.vendor_profile
 
-        # After commit, the draft session is hard-deleted — it must not exist in DB
+        # 7. Discard the draft session
+        response_discard = api_client.delete(url_detail)
+        assert response_discard.status_code == status.HTTP_200_OK
+
+        # After discard, the draft session is hard-deleted — it must not exist in DB
         with pytest.raises(ProductDraftSession.DoesNotExist):
             ProductDraftSession.objects.get(draft_key=draft_key)
 
@@ -222,12 +231,12 @@ class TestProductDraftSessionAPI:
         )
         assert response.status_code == status.HTTP_201_CREATED
 
-        # Commit draft
-        url_commit = reverse("product:vendor-product-draft-commit", kwargs={"draft_key": draft_key})
-        response_commit = api_client.post(url_commit)
-        assert response_commit.status_code == status.HTTP_200_OK, response_commit.data
+        # Create product with this payload
+        url_create = reverse("product:vendor-product-list")
+        response_create = api_client.post(url_create, payload, format="json")
+        assert response_create.status_code == status.HTTP_201_CREATED, response_create.data
 
-        product_slug = response_commit.json()["data"]["slug"]
+        product_slug = response_create.json()["data"]["slug"]
         product = Product.objects.get(slug=product_slug)
         assert product.gender_target == "men"
         assert product.shipping_amount == Decimal("250000000.00")

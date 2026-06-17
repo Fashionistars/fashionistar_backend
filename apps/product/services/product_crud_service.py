@@ -359,8 +359,8 @@ def create_product(
                 size_label=row.get("size_label", "M"),
                 defaults=row,
             )
-    elif vendor:
-        _sync_measurement_guide_from_template(vendor)
+    # No guide_data supplied — nothing to sync; vendor-level templates are
+    # created only when explicit guide_data rows are provided by the caller.
 
     if variants_data is not None:
         _sync_product_variants(product, variants_data)
