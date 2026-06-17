@@ -389,15 +389,20 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
                     data["status"] = ProductStatus.DRAFT
 
             # ── 2. cash_payment_mode normalisation ────────────────────────────
-            # Frontend default is "payment_before_delivery" which is NOT a valid
-            # model choice.  Map to the closest semantic equivalent or "disabled".
-            VALID_CASH_MODES = {"disabled", "cod", "pay_at_shop", "both"}
+            # The model CashPaymentMode enum now includes all real payment modes.
+            # Any completely unrecognised value falls back to "disabled" for safety.
+            VALID_CASH_MODES = {
+                "disabled",
+                "cod",
+                "pay_at_shop",
+                "payment_on_delivery",
+                "payment_before_delivery",
+                "part_payment_before_delivery",
+            }
             if "cash_payment_mode" in data:
                 cash_mode = data["cash_payment_mode"]
-                if cash_mode == "payment_on_delivery":
-                    data["cash_payment_mode"] = "cod"
-                elif cash_mode not in VALID_CASH_MODES:
-                    # Includes: payment_before_delivery, part_payment_before_delivery, etc.
+                if cash_mode not in VALID_CASH_MODES:
+                    # Unknown / legacy value (e.g. old 'both') → safe fallback.
                     data["cash_payment_mode"] = "disabled"
 
             # ── 3. gender_target normalisation ───────────────────────────────
@@ -827,7 +832,7 @@ class ProductListSerializer(serializers.ModelSerializer):
             "id",
             "title",
             "slug",
-            "sku",
+            # NOTE: sku removed from Product — now lives only on ProductVariantGalleryMedia
             "price",
             "old_price",
             "is_discounted",
@@ -934,7 +939,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             "id",
             "title",
             "slug",
-            "sku",
+            # NOTE: sku removed from Product — now lives only on ProductVariantGalleryMedia
             "description",
             "price",
             "old_price",

@@ -197,9 +197,10 @@ class Product(TimeStampedModel, SoftDeleteModel):
         PAYMENT_ON_DELIVERY = "payment_on_delivery", _("Payment On Delivery")
         PAYMENT_BEFORE_DELIVERY = "payment_before_delivery", _("Payment Before Delivery")
         PART_PAYMENT_BEFORE_DELIVERY = "part_payment_before_delivery", _("Part Payment Before Delivery")
-
+        ALLOW_ALL = "allow_all", _("Allow All")
+    
     cash_payment_mode = models.CharField(
-        max_length=20,
+        max_length=32,  # longest value: 'part_payment_before_delivery' (28 chars)
         choices=CashPaymentMode.choices,
         default=CashPaymentMode.DISABLED,
         help_text="Enables or disables Cash on Delivery (COD) channels.",

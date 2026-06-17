@@ -331,10 +331,10 @@ def create_product(
     # Pop status so it doesn't collide with the explicit kwarg below.
     # The serializer may pass status="pending" (publish intent from frontend).
     # Vendors may not self-publish; enforce max status of PENDING at creation.
-    requested_status = validated_data.pop("status", ProductStatus.DRAFT)
+    requested_status = validated_data.pop("status", ProductStatus.PENDING)
     # Safety guard: vendor cannot create a product directly as PUBLISHED/ARCHIVED.
-    safe_statuses = {ProductStatus.DRAFT, ProductStatus.PENDING}
-    effective_status = requested_status if requested_status in safe_statuses else ProductStatus.DRAFT
+    safe_statuses = {ProductStatus.PENDING, ProductStatus.PENDING}
+    effective_status = requested_status if requested_status in safe_statuses else ProductStatus.PENDING
 
     product = Product.objects.create(
         vendor=vendor,

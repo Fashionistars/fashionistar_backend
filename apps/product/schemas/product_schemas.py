@@ -197,7 +197,7 @@ class ProductListItemOut(Schema):
     id: str
     title: str
     slug: str
-    sku: str
+    # NOTE: sku removed from Product — each variant carries its own sku
     price: Decimal
     old_price: Optional[Decimal] = None
     discount_percentage: int = 0
@@ -245,7 +245,7 @@ class ProductDetailOut(Schema):
     id: str
     title: str
     slug: str
-    sku: str
+    # NOTE: sku removed from Product — each variant carries its own sku
     description: str
     price: Decimal
     old_price: Optional[Decimal] = None

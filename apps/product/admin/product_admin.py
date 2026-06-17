@@ -88,7 +88,8 @@ class ProductFaqInline(admin.TabularInline):
 @admin.register(ProductFaq)
 class ProductFaqAdmin(admin.ModelAdmin):
     list_display = ["product", "question", "created_at"]
-    search_fields = ["product__title", "product__sku", "question", "answer"]
+    search_fields = ["product__title", "question", "answer"]
+    # NOTE: product__sku removed — SKU now lives on ProductVariantGalleryMedia, not Product
     list_select_related = ["product"]
     raw_id_fields = ["product"]
     ordering = ["product", "question"]
@@ -142,19 +143,21 @@ class ProductAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
         "categories",
     ]
     list_select_related = ["vendor"]
-    search_fields = ["title", "slug", "sku", "vendor__business_name"]
+    search_fields = ["title", "slug", "vendor__business_name"]
+    # NOTE: 'sku' removed from Product — SKU now lives on ProductVariantGalleryMedia
     prepopulated_fields = {"slug": ("title",)}
     list_per_page = 25
     list_max_show_all = 200
     show_full_result_count = False
     readonly_fields = [
-        "id", "sku", "views", "orders_count", "rating", "review_count",
+        "id", "views", "orders_count", "rating", "review_count",
         "created_at", "updated_at", "is_deleted", "deleted_at",
         "image_preview", "soft_delete_badge",
     ]
     fieldsets = (
         (_("Identity"), {
-            "fields": ("id", "title", "slug", "sku", "description"),
+            # NOTE: sku removed from Product — see ProductVariantGalleryMediaAdmin for SKU management
+            "fields": ("id", "title", "slug", "description"),
         }),
         (_("Taxonomy"), {
             "fields": ("vendor", "categories", "sub_categories", "tags"),
@@ -490,7 +493,8 @@ class ProductCommissionSnapshotAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
         "product", "commission_rate", "effective_from",
         "commission_amount_display", "created_at",
     ]
-    search_fields = ["product__title", "product__sku"]
+    search_fields = ["product__title"]
+    # NOTE: product__sku removed — SKU lives on ProductVariantGalleryMedia, not Product
     readonly_fields = [
         f.name for f in ProductCommissionSnapshot._meta.get_fields()
         if hasattr(f, "name")
@@ -647,7 +651,8 @@ class ProductPriceHistoryAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
         "change_reason", "changed_by", "created_at",
     ]
     list_filter = ["change_reason", "currency"]
-    search_fields = ["product__title", "product__sku"]
+    search_fields = ["product__title"]
+    # NOTE: product__sku removed — SKU lives on ProductVariantGalleryMedia, not Product
     readonly_fields = [
         f.name for f in ProductPriceHistory._meta.get_fields()
         if hasattr(f, "name")
@@ -735,7 +740,8 @@ class ProductVariantGalleryMediaAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
         "is_primary", "media_type", "media_preview", "soft_delete_badge",
     ]
     list_filter = ["is_primary", "media_type", "size"]
-    search_fields = ["sku", "product__title", "product__sku", "barcode", "color_name"]
+    search_fields = ["sku", "product__title", "barcode", "color_name"]
+    # NOTE: product__sku removed — Product.sku field no longer exists; sku is on this model itself
     list_select_related = ["product", "size"]
     raw_id_fields = ["product"]
     list_per_page = 25
