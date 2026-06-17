@@ -38,6 +38,7 @@ from django.db.models import Count
 from apps.vendor.models import VendorProfile
 from apps.product.models import (
     Product,
+    ProductFaq,
     ProductVariantGalleryMedia,
     ProductStatus,
     ProductFabricSpecification,
@@ -268,6 +269,30 @@ def _sync_product_variants(product: Product, variants_data: list[dict]) -> None:
             variant.soft_delete()
 
 
+def _sync_product_faqs(product: Product, faqs_data: list[dict]) -> None:
+    """Replace product FAQ rows with the submitted builder questions.
+
+    FAQ rows are small product-owned records. Replacing them inside the same
+    transaction keeps the write path deterministic and avoids stale static FAQ
+    IDs leaking into the storefront.
+    """
+    ProductFaq.objects.filter(product=product).delete()
+    for row in faqs_data:
+        question = str(row.get("question", "")).strip()
+        answer = str(row.get("answer", "")).strip()
+        if not question or not answer:
+            continue
+        ProductFaq.objects.create(product=product, question=question, answer=answer)
+
+
+def _extract_shipping_couriers(shipping_data: dict | None) -> tuple[dict | None, list | None]:
+    """Split M2M courier choices from concrete shipping profile columns."""
+    if not shipping_data:
+        return shipping_data, None
+    shipping_data = dict(shipping_data)
+    return shipping_data, shipping_data.pop("preferred_couriers", None)
+
+
 # NOTE: _sync_measurement_guide_from_template was removed.
 # Neither Product nor VendorProfile has a `measurement_template` field.
 # Measurement guides are created inline via `guide_data` in create_product / update_product.
@@ -311,6 +336,7 @@ def create_product(
     fabric_data = validated_data.pop("fabric", None)
     guide_data = validated_data.pop("measurement_guide", [])
     shipping_data = validated_data.pop("shipping_profile", None)
+    faqs_data = validated_data.pop("faqs", None)
     relations = _pop_product_m2m(validated_data)
 
     # Pop status so it doesn't collide with the explicit kwarg below.
@@ -336,6 +362,7 @@ def create_product(
 
     if shipping_data:
         from apps.product.models import ProductShippingProfile
+        shipping_data, preferred_couriers = _extract_shipping_couriers(shipping_data)
         # ── ProductShippingProfile has NO 'product' column. ─────────────────────
         # The relationship is a OneToOneField owned by Product.shipping_profile.
         # We must:
@@ -348,6 +375,8 @@ def create_product(
         )
         product.shipping_profile = shipping_profile
         product.save(update_fields=["shipping_profile"])
+        if preferred_couriers is not None:
+            shipping_profile.preferred_couriers.set(preferred_couriers)
 
     if guide_data:
         from apps.product.models import ProductSizeAndMeasurementGuide
@@ -376,6 +405,9 @@ def create_product(
     if variants_data is not None:
         _sync_product_variants(product, variants_data)
 
+    if faqs_data is not None:
+        _sync_product_faqs(product, faqs_data)
+
     # Dispatch audit via on_commit hook for atomic integrity
     _emit_audit(
         "product.created",
@@ -400,6 +432,7 @@ def update_product(
     fabric_data = validated_data.pop("fabric", None)
     guide_data = validated_data.pop("measurement_guide", None)
     shipping_data = validated_data.pop("shipping_profile", None)
+    faqs_data = validated_data.pop("faqs", None)
     relations = {
         key: validated_data.pop(key)
         for key in ("categories", "sub_categories", "sizes", "colors", "tags")
@@ -428,6 +461,7 @@ def update_product(
     if shipping_data is not None:
         from apps.product.models import ProductShippingProfile
         if shipping_data:
+            shipping_data, preferred_couriers = _extract_shipping_couriers(shipping_data)
             # ProductShippingProfile has NO `product` FK.
             # Product.shipping_profile is a FK from Product → ShippingProfile.
             # Update the existing linked profile or create a new one.
@@ -437,6 +471,8 @@ def update_product(
                 for attr, val in shipping_data.items():
                     setattr(existing_profile, attr, val)
                 existing_profile.save()
+                if preferred_couriers is not None:
+                    existing_profile.preferred_couriers.set(preferred_couriers)
             else:
                 new_profile = ProductShippingProfile.objects.create(
                     vendor=vendor,
@@ -444,6 +480,8 @@ def update_product(
                 )
                 product.shipping_profile = new_profile
                 product.save(update_fields=["shipping_profile"])
+                if preferred_couriers is not None:
+                    new_profile.preferred_couriers.set(preferred_couriers)
         else:
             existing_profile = getattr(product, "shipping_profile", None)
             if existing_profile:
@@ -472,6 +510,9 @@ def update_product(
 
     if variants_data is not None:
         _sync_product_variants(product, variants_data)
+
+    if faqs_data is not None:
+        _sync_product_faqs(product, faqs_data)
 
     _emit_audit("product.updated", product, actor=actor, request=request)
     return product

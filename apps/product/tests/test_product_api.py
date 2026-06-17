@@ -286,6 +286,81 @@ class TestProductService:
         except ImportError:
             pytest.skip("adjust_inventory service not yet implemented")
 
+    def test_product_builder_payload_persists_faq_rows(self, vendor_user, category):
+        """Builder FAQ rows must create real ProductFaq rows, not static ids."""
+        from apps.product.models import ProductFaq
+        from apps.product.serializers import ProductWriteFullSerializer
+        from apps.product.services import create_product
+
+        payload = {
+            "title": "Royal Embroidered Kaftan",
+            "description": "A premium embroidered kaftan tailored for ceremonial occasions.",
+            "price": "55000.00",
+            "currency": "NGN",
+            "stock_qty": 7,
+            "category_ids": [str(category.id)],
+            "faqs": [
+                {
+                    "question": "Can this kaftan be tailored to my measurements?",
+                    "answer": "Yes. Add your measurements during checkout and the tailor will confirm before cutting.",
+                },
+                {
+                    "question": "How should I care for the embroidery?",
+                    "answer": "Use gentle hand washing or dry cleaning to preserve the embroidery and fabric finish.",
+                },
+            ],
+        }
+
+        serializer = ProductWriteFullSerializer(data=payload)
+        assert serializer.is_valid(), serializer.errors
+
+        product = create_product(
+            vendor=vendor_user.vendor_profile,
+            validated_data=serializer.validated_data,
+            idempotency_key=str(uuid.uuid4()),
+        )
+
+        faqs = list(ProductFaq.objects.filter(product=product).order_by("created_at"))
+        assert len(faqs) == 2
+        assert faqs[0].question == payload["faqs"][0]["question"]
+        assert faqs[1].answer == payload["faqs"][1]["answer"]
+
+    def test_inventory_log_serializer_exposes_before_and_after_quantities(self, product, admin_user):
+        """DRF inventory history must expose the immutable before/after ledger values."""
+        from apps.product.serializers import ProductInventoryLogSerializer
+        from apps.product.services import adjust_inventory
+
+        qty_before = product.stock_qty
+        log = adjust_inventory(
+            product=product,
+            quantity_delta=4,
+            reason="restock",
+            actor=admin_user,
+            reference_id="PO-LEDGER-001",
+        )
+
+        data = ProductInventoryLogSerializer(log).data
+        assert data["quantity_before"] == qty_before
+        assert data["quantity_after"] == qty_before + 4
+
+    def test_shipping_profile_threshold_falls_back_to_platform_settings(self, vendor_user):
+        """Product shipping profile fallback must read the admin platform setting."""
+        from apps.global_platform_settings.models import PlatformSettings, SINGLETON_PK
+        from apps.product.models import ProductShippingProfile
+
+        PlatformSettings.objects.update_or_create(
+            pk=SINGLETON_PK,
+            defaults={"default_free_shipping_threshold": Decimal("87500.00")},
+        )
+
+        profile = ProductShippingProfile.objects.create(
+            vendor=vendor_user.vendor_profile,
+            weight_kg=Decimal("1.5"),
+            free_shipping_threshold=None,
+        )
+
+        assert profile.effective_free_shipping_threshold == Decimal("87500.00")
+
     def test_idempotency_guard_prevents_duplicate(self, product, client_user):
         """Same user+product combination must raise ValueError on second review attempt."""
         try:
@@ -834,5 +909,4 @@ class TestMeasurementTemplatesAPI:
         templates = response.json()
         assert any(t["id"] == template_id for t in templates)
         assert any(t["name"] == "Men's Senator Fit" for t in templates)
-
 

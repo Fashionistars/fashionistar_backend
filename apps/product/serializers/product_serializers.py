@@ -30,6 +30,7 @@ from apps.product.models import (
     ProductInventoryLog,
     ProductDraftSession,
     ProductShippingProfile,
+    DeliveryCourier,
 )
 
 
@@ -104,6 +105,13 @@ class ProductSizeAndMeasurementGuideWriteSerializer(serializers.ModelSerializer)
 class ProductShippingProfileWriteSerializer(serializers.ModelSerializer):
     """Enforces volumetric checks on shipping sizes and weights."""
 
+    preferred_courier_ids = serializers.PrimaryKeyRelatedField(
+        queryset=DeliveryCourier.objects.filter(active=True),
+        many=True,
+        source="preferred_couriers",
+        required=False,
+    )
+
     class Meta:
         model = ProductShippingProfile
         fields = [
@@ -115,6 +123,7 @@ class ProductShippingProfileWriteSerializer(serializers.ModelSerializer):
             "is_fragile",
             "requires_signature",
             "restricted_countries",
+            "preferred_courier_ids",
             "free_shipping_threshold",
             "processing_days",
         ]
@@ -256,7 +265,7 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
       gallery[]
     measurement_guide[]{         → measurement_guide[]{name, description,
       size_label, *_cm, ...}       size_label, *_cm, is_default, ...}
-    faqs: ["uuid", ...]          → stripped (handled via FAQ service)
+    faqs: [{question, answer}]   → persisted as ProductFaq rows by service layer
     courier_id                   → stripped (handled separately)
     cover_image_url              → stripped (frontend display only)
     is_discounted                → stripped (frontend display only)
@@ -282,6 +291,7 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
     fabric = ProductFabricSpecificationWriteSerializer(required=False, allow_null=True)
     measurement_guide = ProductSizeAndMeasurementGuideWriteSerializer(many=True, required=False)
     shipping_profile = ProductShippingProfileWriteSerializer(required=False, allow_null=True)
+    faqs = ProductFaqWriteSerializer(many=True, required=False)
     # status is optional on creation (defaults to draft); vendor can request
     # pending review by passing publish_intent="pending" (mapped in to_internal_value).
     status = serializers.ChoiceField(
@@ -320,6 +330,7 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
             "fabric",
             "measurement_guide",
             "shipping_profile",
+            "faqs",
             "idempotency_key",
         ]
 
@@ -359,8 +370,6 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
         "cover_image_size_id",
         # Gallery list (composed into `variants` list below)
         "gallery",
-        # FAQ list (handled via ProductFaq service, not by this serializer)
-        "faqs",
         # Publish intent (mapped to `status` below)
         "publish_intent",
     }
@@ -451,6 +460,12 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
                         }
                         if item.get("sku"):
                             g_var["sku"] = item["sku"]
+                        if item.get("barcode"):
+                            g_var["barcode"] = item["barcode"]
+                        if item.get("video_thumbnail"):
+                            g_var["video_thumbnail"] = item["video_thumbnail"]
+                        if item.get("duration_sec") is not None:
+                            g_var["duration_sec"] = item["duration_sec"]
                         if item.get("color_name"):
                             g_var["color_name"] = item["color_name"]
                         if item.get("color_hex"):
@@ -490,6 +505,11 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
                     "is_fragile": data.get("is_fragile", False),
                     "requires_signature": data.get("requires_signature", False),
                     "restricted_countries": data.get("restricted_countries", []),
+                    "preferred_courier_ids": (
+                        [data["courier_id"]]
+                        if data.get("courier_id")
+                        else []
+                    ),
                     "free_shipping_threshold": data.get("free_shipping_threshold") or None,
                     "processing_days": data.get("processing_days", 1),
                 }
@@ -560,8 +580,18 @@ class ProductInventoryLogSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ProductInventoryLog
-        fields = ["product", "variant", "quantity_delta", "reason", "reference_id", "note", "actor_name"]
-        read_only_fields = ["actor_name", "reference_id"]
+        fields = [
+            "product",
+            "variant",
+            "quantity_delta",
+            "quantity_before",
+            "quantity_after",
+            "reason",
+            "reference_id",
+            "note",
+            "actor_name",
+        ]
+        read_only_fields = ["actor_name", "reference_id", "quantity_before", "quantity_after"]
 
 
     def validate(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -1057,5 +1087,3 @@ class ProductAdminSerializer(ProductDetailSerializer):
 
     class Meta(ProductDetailSerializer.Meta):
         fields = ProductDetailSerializer.Meta.fields + ["idempotency_key"]
-
-

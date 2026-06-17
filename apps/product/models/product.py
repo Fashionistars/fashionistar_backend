@@ -822,10 +822,17 @@ class ProductShippingProfile(TimeStampedModel):
 
     @property
     def effective_free_shipping_threshold(self) -> Decimal:
-        """Resolves active free shipping parameters with standard model settings."""
+        """Resolves active free shipping parameters with platform fallback."""
         if self.free_shipping_threshold is not None:
             return self.free_shipping_threshold
-        # Logical fallback parameters when missing custom limits
+        try:
+            from apps.global_platform_settings.cache import get_platform_settings
+
+            settings = get_platform_settings()
+            return settings.default_free_shipping_threshold
+        except Exception:
+            # Keep model access safe during migrations, shell imports, and tests.
+            pass
         return Decimal("50000.00")
 
     class Meta:

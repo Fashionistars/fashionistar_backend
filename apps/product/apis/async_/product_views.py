@@ -204,21 +204,33 @@ def _gallery_item_out(media) -> dict:
         "media_type": media.media_type,
         "alt_text": media.alt_text or "",
         "ordering": media.ordering,
-        "variant_id": str(media.variant_id) if media.variant_id else None,
-        "color_id": str(media.color_id) if media.color_id else None,
+        "size_id": str(media.size_id) if media.size_id else None,
+        "color_name": media.color_name or "",
+        "color_hex": media.color_hex or "",
+        "sku": media.sku or "",
+        "barcode": media.barcode or "",
+        "is_primary": media.is_primary,
+        "video_thumbnail_url": _url(media.video_thumbnail),
+        "duration_sec": media.duration_sec,
     }
 
 
 def _variant_out(v) -> dict:
     return {
         "id": str(v.pk),
-        "sku": v.sku,
+        "sku": v.sku or "",
         "size": _size_out(v.size) if v.size else None,
-        "color": _color_out(v.color) if v.color else None,
-        "price_override": _money(v.price_override) if v.price_override else None,
-        "stock_qty": v.stock_qty,
-        "is_active": v.is_active,
-        "image_url": _url(getattr(v, "image", None)),
+        "color_name": v.color_name or "",
+        "color_hex": v.color_hex or "",
+        "media_type": v.media_type,
+        "media_url": _url(v.media),
+        "thumbnail_url": _thumbnail_url(v.media),
+        "video_thumbnail_url": _url(v.video_thumbnail),
+        "alt_text": v.alt_text or "",
+        "ordering": v.ordering,
+        "is_primary": v.is_primary,
+        "duration_sec": v.duration_sec,
+        "barcode": v.barcode or "",
     }
 
 
@@ -334,7 +346,23 @@ def _product_detail_out(product) -> dict:
     """Full product detail including gallery, variants, specs, FAQs."""
     card = _product_card_out(product)
     prefetched_cache = getattr(product, "_prefetched_objects_cache", {}) or {}
-    prefetched_variants = list(prefetched_cache.get("product_variants", []))
+    cached_variants = getattr(product, "_prefetched_variants", None)
+    prefetched_variants = (
+        list(cached_variants)
+        if cached_variants is not None
+        else list(prefetched_cache.get("product_variants_gallery_media", []))
+    )
+    if not prefetched_variants:
+        try:
+            prefetched_variants = list(product.product_variants_gallery_media.all())
+        except Exception:
+            prefetched_variants = []
+    active_variants = [
+        variant
+        for variant in prefetched_variants
+        if not getattr(variant, "is_deleted", False)
+    ]
+    gallery_items = [variant for variant in active_variants if getattr(variant, "media", None)]
 
     try:
         fabric_obj = product.product_fabric
@@ -396,11 +424,7 @@ def _product_detail_out(product) -> dict:
             "description": product.description or "",
             "shipping_amount": _money(product.shipping_amount),
             "cover_image_url": card.get("image_url"),
-            "gallery": [
-                _gallery_item_out(m)
-                for m in product.product_gallery_media.all()
-                if not getattr(m, "is_deleted", False)
-            ],
+            "gallery": [_gallery_item_out(m) for m in gallery_items],
             "max_stock": getattr(product, "max_stock", None),
             "views": product.views,
             "orders_count": product.orders_count,
@@ -415,11 +439,7 @@ def _product_detail_out(product) -> dict:
                 {"id": str(f.pk), "question": f.question, "answer": f.answer}
                 for f in product.faqs.all()
             ],
-            "variants": [
-                _variant_out(v)
-                for v in prefetched_variants
-                if getattr(v, "is_active", False)
-            ],
+            "variants": [_variant_out(v) for v in active_variants],
             "status": product.status,
             "vendor": _vendor_out(product.vendor),
             "vendor_id": str(product.vendor.pk) if product.vendor else None,
@@ -1189,6 +1209,5 @@ async def record_product_view(
     except Exception as exc:
         logger.warning("ViewLog write failed for slug=%s: %s", slug, exc, exc_info=False)
         return {"logged": False, "reason": "write_error"}
-
 
 
