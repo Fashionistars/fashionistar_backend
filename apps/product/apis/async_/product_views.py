@@ -1012,7 +1012,7 @@ async def list_vendor_gallery(request, slug: str):
         raise HttpError(404, "Product not found.")
     items = [
         _gallery_item_out(m)
-        for m in product.product_gallery_media.all()
+        for m in product.product_variants_gallery_media.all()
         if not getattr(m, "is_deleted", False)
     ]
     return {"count": len(items), "results": items}

@@ -143,7 +143,7 @@ class ProductAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
         "categories",
     ]
     list_select_related = ["vendor"]
-    search_fields = ["title", "slug", "vendor__business_name"]
+    search_fields = ["title", "slug", "vendor__store_name"]
     # NOTE: 'sku' removed from Product — SKU now lives on ProductVariantGalleryMedia
     prepopulated_fields = {"slug": ("title",)}
     list_per_page = 25
@@ -362,7 +362,7 @@ class CouponAdmin(admin.ModelAdmin):
         "utilisation_rate",
     ]
     list_filter = ["discount_type", "active"]
-    search_fields = ["code", "vendor__business_name"]
+    search_fields = ["code", "vendor__store_name"]
     readonly_fields = ["usage_count", "created_at", "updated_at"]
     raw_id_fields = ["vendor"]
     date_hierarchy = "created_at"

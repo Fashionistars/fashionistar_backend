@@ -398,6 +398,7 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
                 "payment_on_delivery",
                 "payment_before_delivery",
                 "part_payment_before_delivery",
+                "allow_all",  # CashPaymentMode.ALLOW_ALL
             }
             if "cash_payment_mode" in data:
                 cash_mode = data["cash_payment_mode"]

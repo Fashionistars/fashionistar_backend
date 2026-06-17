@@ -345,7 +345,6 @@ async def aget_vendor_reviews_summary(vendor_profile, limit: int = 5) -> list[di
                 "reviews__created_at",
                 "reviews__reviewer_email",
                 "title",
-                "sku",
             )
             .order_by("-reviews__created_at")
         )
@@ -355,7 +354,6 @@ async def aget_vendor_reviews_summary(vendor_profile, limit: int = 5) -> list[di
                 results.append({
                     "id": row["reviews__id"],
                     "product_title": row["title"],
-                    "product_pid": row["sku"],
                     "buyer_email": row["reviews__reviewer_email"] or "",
                     "rating": row["reviews__rating"] or 0,
                     "review": row["reviews__review"] or "",
