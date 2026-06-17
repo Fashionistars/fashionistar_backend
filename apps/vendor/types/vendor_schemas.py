@@ -28,7 +28,7 @@ class SetupStateOut(Schema):
     current_step:          int  = 1
     profile_complete:      bool = False
     bank_details:          bool = False
-    id_verified:           bool = False   # informational: KYC future sprint, does NOT gate access
+    id_verified:           bool = False   # Informational: KYC, does NOT gate access, will be synced from admin panel upon approval
     first_product:         bool = False
     onboarding_done:       bool = False
     completion_percentage: int  = 0       # Computed in selector, not a DB column
@@ -331,7 +331,7 @@ class ReviewListItemOut(Schema):
 class CouponListItemOut(Schema):
     id: str
     code: str
-    discount: int
+    discount: float
     discount_type: str | None = None
     valid_until: datetime | None = None
     active: bool

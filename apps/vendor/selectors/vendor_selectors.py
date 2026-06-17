@@ -224,7 +224,14 @@ async def aget_vendor_payout_profile_data(vendor_profile) -> dict[str, Any]:
             "is_verified": payout.is_verified,
         }
     except VendorPayoutProfile.DoesNotExist:  # noqa: F821
-        return {}
+        return {
+            "bank_name": "",
+            "bank_code": "",
+            "account_name": "",
+            "account_last4": "",
+            "paystack_recipient_code": "",
+            "is_verified": False,
+        }
 
 
 async def aget_vendor_order_stats(vendor_profile) -> dict[str, Any]:
