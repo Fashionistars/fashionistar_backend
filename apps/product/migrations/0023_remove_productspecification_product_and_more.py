@@ -232,21 +232,6 @@ class Migration(migrations.Migration):
             field=models.ForeignKey(help_text='The associated designer storefront profile.', null=True, on_delete=django.db.models.deletion.PROTECT, related_name='vendor_products', to='vendor.vendorprofile'),
         ),
         migrations.AlterField(
-            model_name='productdraftsession',
-            name='linked_product',
-            field=models.ForeignKey(blank=True, help_text='The product that this draft is for, if any.', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='draft_sessions', to='product.product'),
-        ),
-        migrations.AlterField(
-            model_name='productdraftsession',
-            name='payload',
-            field=models.JSONField(),
-        ),
-        migrations.AlterField(
-            model_name='productdraftsession',
-            name='status',
-            field=models.CharField(choices=[('active', 'Active'), ('committed', 'Committed'), ('discarded', 'Discarded'), ('expired', 'Expired'), ('failed', 'Failed')], db_index=True, default='active', max_length=20),
-        ),
-        migrations.AlterField(
             model_name='productfaq',
             name='product',
             field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='faqs', to='product.product'),

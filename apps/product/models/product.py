@@ -13,7 +13,7 @@ Model Architecture Map:
   - Section 5: Logistics & Shipping Profiles (ProductShippingProfile)
   - Section 6: Financials & Policy Tracking (ProductCommissionSnapshot, Coupon, ProductPriceHistory)
   - Section 7: Ledgers & Customer Review Trackers (ProductInventoryLog, ProductReview, ProductViewLog)
-  - Section 8: Persistence & Wishlist Trackers (ProductDraftSession, ProductWishlist)
+  - Section 8: Wishlist Trackers (ProductWishlist)
 """
 
 from typing import Optional
@@ -22,7 +22,6 @@ from decimal import Decimal
 import logging
 import uuid
 import uuid6
-import datetime
 from django.utils.timezone import now
 
 from django.contrib.auth import get_user_model
@@ -1152,7 +1151,7 @@ class ProductViewLog(TimeStampedModel):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# SECTION 8: PERSISTENCE & WISHLIST TRACKERS
+# SECTION 8: WISHLIST TRACKERS
 # ─────────────────────────────────────────────────────────────────────────────
 
 

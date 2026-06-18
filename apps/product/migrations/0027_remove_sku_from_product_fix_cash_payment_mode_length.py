@@ -14,14 +14,6 @@ class Migration(migrations.Migration):
             model_name='product',
             name='sku',
         ),
-        migrations.RemoveField(
-            model_name='productdraftsession',
-            name='deleted_at',
-        ),
-        migrations.RemoveField(
-            model_name='productdraftsession',
-            name='is_deleted',
-        ),
         migrations.AlterField(
             model_name='product',
             name='cash_payment_mode',
