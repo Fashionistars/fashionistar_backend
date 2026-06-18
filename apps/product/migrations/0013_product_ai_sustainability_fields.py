@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('product', '0012_productdraftsession'),
+        ('product', '0011_product_cash_payment_mode'),
     ]
 
     operations = [

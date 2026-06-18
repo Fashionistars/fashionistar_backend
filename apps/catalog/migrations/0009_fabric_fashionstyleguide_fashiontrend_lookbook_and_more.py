@@ -13,7 +13,7 @@ class Migration(migrations.Migration):
     dependencies = [
         ('catalog', '0008_blogpost_catalog_tags_collections_catalog_tags'),
         ('measurements', '0003_alter_measurementprofile_id'),
-        ('product', '0012_productdraftsession'),
+        ('product', '0011_product_cash_payment_mode'),
         ('vendor', '0005_add_vendor_bank_account_and_kyc_legal_name'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
