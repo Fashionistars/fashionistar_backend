@@ -15,7 +15,6 @@ from .product_serializers import (
     ProductAdminSerializer,
     ProductInventoryLogSerializer,
     ProductWishlistSerializer,
-    ProductDraftSessionSerializer,
 )
 from .review_serializers import (
     ProductReviewSerializer,
@@ -48,7 +47,6 @@ __all__ = [
     # Logs
     "ProductInventoryLogSerializer",
     "ProductWishlistSerializer",
-    "ProductDraftSessionSerializer",
     # Reviews
     "ProductReviewSerializer",
     "ProductReviewWriteSerializer",

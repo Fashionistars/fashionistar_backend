@@ -356,19 +356,6 @@ class ProductInventoryLogOut(Schema):
     created_at: datetime
 
 
-class ProductDraftSessionOut(Schema):
-    """Serialized recover state parameters."""
-    model_config = {"from_attributes": True}
-    id: UUID
-    draft_key: UUID
-    idempotency_key: Optional[UUID] = None
-    payload: Dict[str, Any]
-    current_step: int
-    status: str
-    expires_at: datetime
-    last_synced_at: datetime
-
-
 class ProductDetailBundleOut(Schema):
     """Bundled product data representation designed for the PDP layout.
 

@@ -19,16 +19,6 @@ from apps.product.services.product_service import (
     validate_and_apply_coupon,
     redeem_coupon,
 )
-    
-from apps.product.services.product_draft import (
-    create_draft_session,
-    update_draft_session,
-    discard_draft_session,
-    commit_draft_session,
-)
-
-
-
 from apps.product.services.async_product_service import (
     async_create_review,
     async_create_review_for_slug,
@@ -57,10 +47,6 @@ __all__ = [
     "validate_coupon",
     "validate_and_apply_coupon",
     "redeem_coupon",
-    "create_draft_session",
-    "update_draft_session",
-    "discard_draft_session",
-    "commit_draft_session",
     # Async service wrappers
     "async_create_review",
     "async_create_review_for_slug",

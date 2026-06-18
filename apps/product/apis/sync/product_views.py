@@ -44,7 +44,7 @@ from apps.common.permissions import (
     IsVendor,
 )
 from apps.common.renderers import CustomJSONRenderer, error_response, success_response
-from apps.product.models import Product, ProductVariantGalleryMedia, ProductInventoryLog, ProductDraftSession
+from apps.product.models import Product, ProductVariantGalleryMedia, ProductInventoryLog
 from apps.product.selectors import (
     filter_products,
     get_featured_products,
@@ -71,7 +71,6 @@ from apps.product.serializers import (
     ProductWriteSerializer,
     ProductWriteFullSerializer,
     VendorReplySerializer,
-    ProductDraftSessionSerializer,
 )
 from apps.product.services import (
     adjust_inventory,
@@ -87,10 +86,6 @@ from apps.product.services import (
     toggle_wishlist,
     update_product,
     validate_and_apply_coupon,
-    create_draft_session,
-    update_draft_session,
-    discard_draft_session,
-    commit_draft_session,
 )
 
 logger = logging.getLogger(__name__)
@@ -867,147 +862,5 @@ class VendorCouponDetailView(APIView):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# VENDOR DRAFT SESSIONS
-# ─────────────────────────────────────────────────────────────────────────────
 
-class VendorProductDraftListView(APIView):
-    renderer_classes = _RENDERERS
-    parser_classes = _PARSERS
-    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsVendor]
-
-    def post(self, request):
-        vendor = request.user.vendor_profile
-        serializer = ProductDraftSessionSerializer(data=request.data)
-        if not serializer.is_valid():
-            return error_response(
-                message="Validation error.",
-                status=status.HTTP_400_BAD_REQUEST,
-                errors=serializer.errors,
-            )
-        try:
-            draft = create_draft_session(
-                vendor=vendor,
-                draft_key=serializer.validated_data.get("draft_key"),
-                idempotency_key=serializer.validated_data.get("idempotency_key"),
-                payload=serializer.validated_data.get("payload", {}),
-                current_step=serializer.validated_data.get("current_step", 1),
-            )
-        except Exception as exc:
-            return error_response(
-                message=str(exc),
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        return success_response(
-            data=ProductDraftSessionSerializer(draft).data,
-            message="Draft session created successfully.",
-            status=status.HTTP_201_CREATED,
-        )
-
-
-class VendorProductDraftDetailView(APIView):
-    renderer_classes = _RENDERERS
-    parser_classes = _PARSERS
-    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsVendor]
-
-    def _get_draft(self, request, draft_key: uuid.UUID) -> ProductDraftSession | None:
-        vendor = request.user.vendor_profile
-        try:
-            return ProductDraftSession.objects.get(draft_key=draft_key, vendor=vendor)
-        except ProductDraftSession.DoesNotExist:
-            return None
-
-    def patch(self, request, draft_key: uuid.UUID):
-        draft = self._get_draft(request, draft_key)
-        if not draft:
-            return error_response(
-                message="Draft session not found.",
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        serializer = ProductDraftSessionSerializer(draft, data=request.data, partial=True)
-        if not serializer.is_valid():
-            return error_response(
-                message="Validation error.",
-                status=status.HTTP_400_BAD_REQUEST,
-                errors=serializer.errors,
-            )
-        try:
-            draft = update_draft_session(
-                draft_session=draft,
-                payload=serializer.validated_data.get("payload", draft.payload),
-                current_step=serializer.validated_data.get("current_step"),
-                idempotency_key=serializer.validated_data.get("idempotency_key"),
-            )
-        except Exception as exc:
-            return error_response(
-                message=str(exc),
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        return success_response(
-            data=ProductDraftSessionSerializer(draft).data,
-            message="Draft session updated successfully.",
-        )
-
-    def delete(self, request, draft_key: uuid.UUID):
-        draft = self._get_draft(request, draft_key)
-        if not draft:
-            return error_response(
-                message="Draft session not found.",
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        try:
-            discard_draft_session(draft_session=draft)
-        except Exception as exc:
-            return error_response(
-                message=str(exc),
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        return success_response(
-            message="Draft session discarded successfully.",
-            status=status.HTTP_200_OK,
-        )
-
-
-class VendorProductDraftCommitView(APIView):
-    """
-    POST /api/v1/products/vendor/drafts/<draft_key>/commit/
-
-    ── ARCHITECTURE NOTE ────────────────────────────────────────────────────
-    This endpoint now handles ONLY "Save as Draft" persistence.
-    It does NOT create a Product row.
-
-    For "Submit for Review / Publish", the frontend calls
-    POST /api/v1/products/vendor/ (VendorProductListCreateView) directly
-    with the full validated form payload.
-
-    This separation eliminates the 400 error that occurred when commit
-    tried to run ProductWriteFullSerializer validation on an incomplete
-    draft payload (e.g., missing required publish fields).
-    ─────────────────────────────────────────────────────────────────────────
-    """
-    renderer_classes = _RENDERERS
-    parser_classes = _PARSERS
-    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsVendor]
-
-    def post(self, request, draft_key: uuid.UUID):
-        vendor = request.user.vendor_profile
-        try:
-            draft = ProductDraftSession.objects.get(draft_key=draft_key, vendor=vendor)
-        except ProductDraftSession.DoesNotExist:
-            return error_response(
-                message="Draft session not found.",
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        try:
-            # commit_draft_session now only persists the draft — no product creation.
-            saved_draft = commit_draft_session(draft_session=draft, request=request)
-        except Exception as exc:
-            return error_response(
-                message=str(exc),
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        return success_response(
-            data=ProductDraftSessionSerializer(saved_draft).data,
-            message="Draft session saved successfully.",
-            status=status.HTTP_200_OK,
-        )
 

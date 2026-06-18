@@ -52,7 +52,6 @@ from apps.product.schemas.product_schemas import (
     ProductReviewWriteIn,
     WishlistBulkStatusOut,
     WishlistToggleOut,
-    ProductDraftSessionOut,
     VendorMeasurementTemplateOut,
     VendorMeasurementTemplateIn,
 )
@@ -667,7 +666,7 @@ async def list_couriers(request, page: int = 1, page_size: int = 50, active: boo
     return await _paginated(request, qs, _courier_out, page=page, page_size=page_size)
 
 
-# ── VENDOR — Draft Sessions ──────────────────────────────────────────────────
+# ── VENDOR — Sessions ──────────────────────────────────────────────────
 
 def _get_templates_sync(profile):
     from apps.product.models import ProductSizeAndMeasurementGuide
@@ -794,29 +793,6 @@ async def create_measurement_template(request, payload: VendorMeasurementTemplat
             
     return await sync_to_async(_save_template)()
 
-
-
-@router.get("/vendor/drafts/", response=list[ProductDraftSessionOut], summary="List active vendor drafts")
-async def list_vendor_drafts(request):
-    profile = await _require_vendor(request)
-    from apps.product.models import ProductDraftSession
-
-    drafts = []
-    async for draft in ProductDraftSession.objects.filter(vendor=profile, status="active").order_by("-updated_at"):
-        drafts.append(draft)
-    return drafts
-
-
-@router.get("/vendor/drafts/{draft_key}/", response=ProductDraftSessionOut, summary="Get vendor draft detail")
-async def get_vendor_draft_detail(request, draft_key: str):
-    profile = await _require_vendor(request)
-    from apps.product.models import ProductDraftSession
-
-    try:
-        draft = await ProductDraftSession.objects.aget(draft_key=draft_key, vendor=profile)
-    except ProductDraftSession.DoesNotExist:
-        raise HttpError(404, "Draft session not found.")
-    return draft
 
 
 @router.get("/wishlist/", auth=None, summary="List user or anonymous wishlist")

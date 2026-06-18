@@ -1156,60 +1156,7 @@ class ProductViewLog(TimeStampedModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class ProductDraftStatus(models.TextChoices):
-    ACTIVE = "active", _("Active")
-    COMMITTED = "committed", _("Committed")
-    DISCARDED = "discarded", _("Discarded")
-    EXPIRED = "expired", _("Expired")
-    FAILED = "failed", _("Failed")
 
-class ProductDraftSession(TimeStampedModel):
-    """Provides client step-saving recovery capabilities for the design wizard."""
-
-    vendor = models.ForeignKey(
-        "vendor.VendorProfile",
-        on_delete=models.CASCADE,
-        related_name="draft_sessions",
-        help_text="Vendor who owns this draft.",
-    )
-    draft_key = models.UUIDField(db_index=True, unique=True, default=uuid.uuid4)
-    idempotency_key = models.UUIDField(db_index=True, null=True, blank=True)
-    payload = models.JSONField()
-    current_step = models.PositiveSmallIntegerField(default=1)
-    status = models.CharField(
-        max_length=20,
-        choices=ProductDraftStatus.choices,
-        default=ProductDraftStatus.ACTIVE,
-        db_index=True,
-    )
-    linked_product = models.ForeignKey(
-        Product,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="draft_sessions",
-        help_text="The product that this draft is for, if any.",
-    )
-    expires_at = models.DateTimeField(db_index=True)
-    last_synced_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        verbose_name = _("Product Draft Session")
-        verbose_name_plural = _("Product Draft Sessions")
-        ordering = ["-updated_at"]
-
-    def __str__(self) -> str:
-        return f"Draft {self.draft_key} ({self.status}) for {self.vendor}"
-
-    def check_ownership(self, user: Any) -> bool:
-        """Confirms the active credentials match ownership parameters."""
-        return getattr(user, "vendor_profile", None) == self.vendor
-
-    def save(self, *args: Any, **kwargs: Any) -> None:
-        """Sets safe expiration limits for form tracking caches."""
-        if not self.expires_at:
-            self.expires_at = now() + datetime.timedelta(days=30)
-        super().save(*args, **kwargs)
 
 
 class ProductWishlist(TimeStampedModel):

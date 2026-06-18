@@ -46,9 +46,6 @@ from apps.product.apis.sync.product_views import (
     WishlistListView,
     WishlistMergeView,
     WishlistToggleView,
-    VendorProductDraftListView,
-    VendorProductDraftDetailView,
-    VendorProductDraftCommitView,
 )
 
 app_name = "product"
@@ -68,11 +65,6 @@ urlpatterns = [
     # ── Coupons ──────────────────────────────────────────────────────────────
     path("coupons/", VendorCouponListCreateView.as_view(), name="vendor-coupon-list"),
     path("coupons/<uuid:coupon_id>/", VendorCouponDetailView.as_view(), name="vendor-coupon-detail"),
-
-    # ── Vendor Drafts ────────────────────────────────────────────────────────
-    path("vendor/drafts/", VendorProductDraftListView.as_view(), name="vendor-product-draft-list"),
-    path("vendor/drafts/<uuid:draft_key>/", VendorProductDraftDetailView.as_view(), name="vendor-product-draft-detail"),
-    path("vendor/drafts/<uuid:draft_key>/commit/", VendorProductDraftCommitView.as_view(), name="vendor-product-draft-commit"),
 
     # ── Vendor ───────────────────────────────────────────────────────────────
     path("vendor/", VendorProductListCreateView.as_view(), name="vendor-product-list"),

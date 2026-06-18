@@ -15,13 +15,11 @@ Phase 1 expansion (2026):
 from apps.product.models.product import (
     # Choices
     ProductStatus,
-    ProductDraftStatus,
     # Taxonomy
     ProductTag,
     DeliveryCourier,
     # Core product
     Product,
-    ProductDraftSession,
     # Content
     ProductFaq,
     # Variants & inventory
@@ -44,14 +42,12 @@ from apps.product.models.product import (
 __all__ = [
     # Choices
     "ProductStatus",
-    "ProductDraftStatus",
     # Taxonomy
     "ProductTag",
     # Product content
     "ProductFaq",
     # Core
     "Product",
-    "ProductDraftSession",
     # Variants & inventory
     "ProductVariantGalleryMedia",
     "ProductInventoryLog",
@@ -70,4 +66,5 @@ __all__ = [
     "ProductPriceHistory",
     "ProductViewLog",
 ]
+
 

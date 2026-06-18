@@ -28,7 +28,6 @@ from apps.product.models import (
     ProductTag,
     ProductReview,
     ProductInventoryLog,
-    ProductDraftSession,
     ProductShippingProfile,
     DeliveryCourier,
 )
@@ -643,66 +642,10 @@ class ProductWishlistSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class ProductDraftSessionSerializer(serializers.ModelSerializer):
-    """Serializer mapping stepper session persistence parameters.
-
-    Ensures form recovery state is synchronized.
-    """
-
-    draft_key = serializers.UUIDField(required=False, validators=[])
-    payload = serializers.JSONField(required=False, default=dict)
-
-    class Meta:
-        model = ProductDraftSession
-        fields = [
-            "id",
-            "draft_key",
-            "idempotency_key",
-            "payload",
-            "current_step",
-            "status",
-            "linked_product",
-            "expires_at",
-            "last_synced_at",
-        ]
-        read_only_fields = [
-            "id",
-            "status",
-            "expires_at",
-            "last_synced_at",
-        ]
-
-
-
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # SECTION 8: LEDGERS & CUSTOMER REVIEW TRACKERS
 # ─────────────────────────────────────────────────────────────────────────────
 
-class ProductDraftSessionWriteSerializer(serializers.ModelSerializer):
-    """Serializer for creating and updating product draft sessions."""
-    payload = ProductWriteFullSerializer()
-
-    class Meta:
-        model = ProductDraftSession
-        fields = [
-            "id",
-            "draft_key",
-            "idempotency_key",
-            "payload",
-            "current_step",
-            "status",
-            "linked_product",
-            "expires_at",
-            "last_synced_at",
-        ]
-        read_only_fields = [
-            "id",
-            "status",
-            "expires_at",
-            "last_synced_at",
-        ]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
