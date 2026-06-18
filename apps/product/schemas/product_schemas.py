@@ -123,6 +123,7 @@ class ProductVariantGalleryMediaOut(Schema):
     """
     model_config = {"from_attributes": True}
     id: str
+    public_id: Optional[str] = None
     sku: str
     size: Optional[ProductSizeAndMeasurementGuideOut] = None
     color_name: str = ""
@@ -146,6 +147,7 @@ class ProductVariantGalleryMediaOut(Schema):
             media_obj = getattr(data, "media", None)
             if media_obj:
                 media_url = getattr(media_obj, "url", str(media_obj))
+            public_id = getattr(media_obj, "public_id", None) if media_obj else None
 
             # Generates pre-scaled CDN thumbnail images to accelerate page loads
             thumbnail_url = media_url
@@ -159,6 +161,7 @@ class ProductVariantGalleryMediaOut(Schema):
 
             return {
                 "id": str(data.id),
+                "public_id": public_id or (str(media_obj) if media_obj else None),
                 "sku": data.sku,
                 "size": getattr(data, "size", None),
                 "color_name": data.color_name or "",

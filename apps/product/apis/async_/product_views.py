@@ -110,6 +110,12 @@ def _url(field) -> str | None:
         return str(field) if field else None
 
 
+def _public_id(field) -> str | None:
+    if not field:
+        return None
+    return getattr(field, "public_id", None) or str(field)
+
+
 def _thumbnail_url(field) -> str | None:
     if not field:
         return None
@@ -209,6 +215,7 @@ def _gallery_item_out(media) -> dict:
     raw_url = _url(media.media)
     return {
         "id": str(media.pk),
+        "public_id": _public_id(media.media),
         "media_url": raw_url,
         "thumbnail_url": _thumbnail_url(media.media),
         "media_type": media.media_type,
@@ -228,6 +235,7 @@ def _gallery_item_out(media) -> dict:
 def _variant_out(v) -> dict:
     return {
         "id": str(v.pk),
+        "public_id": _public_id(v.media),
         "sku": v.sku or "",
         "size": _size_out(v.size) if v.size else None,
         "color_name": v.color_name or "",
@@ -1198,4 +1206,3 @@ async def record_product_view(
     except Exception as exc:
         logger.warning("ViewLog write failed for slug=%s: %s", slug, exc, exc_info=False)
         return {"logged": False, "reason": "write_error"}
-

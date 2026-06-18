@@ -769,6 +769,7 @@ class ProductFaqSerializer(serializers.ModelSerializer):
 
 class ProductVariantGalleryMediaSerializer(serializers.ModelSerializer):
     size = ProductSizeAndMeasurementGuideSerializer(read_only=True)
+    public_id = serializers.SerializerMethodField()
     media_url = serializers.SerializerMethodField()
     thumbnail_url = serializers.SerializerMethodField()
     video_thumbnail_url = serializers.SerializerMethodField()
@@ -777,6 +778,7 @@ class ProductVariantGalleryMediaSerializer(serializers.ModelSerializer):
         model = ProductVariantGalleryMedia
         fields = [
             "id",
+            "public_id",
             "sku",
             "size",
             "color_name",
@@ -791,6 +793,11 @@ class ProductVariantGalleryMediaSerializer(serializers.ModelSerializer):
             "video_thumbnail_url",
             "duration_sec",
         ]
+
+    def get_public_id(self, obj: ProductVariantGalleryMedia) -> Optional[str]:
+        if not obj.media:
+            return None
+        return getattr(obj.media, "public_id", None) or str(obj.media)
 
     def get_media_url(self, obj: ProductVariantGalleryMedia) -> Optional[str]:
         return str(obj.media.url) if obj.media else None
