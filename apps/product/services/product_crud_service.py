@@ -166,7 +166,6 @@ def _pop_product_m2m(validated_data: dict) -> dict[str, Any]:
     """
     return {
         "categories": validated_data.pop("categories", []),
-        "sub_categories": validated_data.pop("sub_categories", []),
         "productsizeandmeasurementguides": validated_data.pop("productsizeandmeasurementguides", []),
     }
 
@@ -185,12 +184,6 @@ def _sync_product_m2m(product: Product, relations: dict[str, Any], *, partial: b
         if not (1 <= len(categories) <= 15):
             raise ValueError("Product requires 1 to 15 categories.")
         product.categories.set(categories)
-
-    if "sub_categories" in relations:
-        sub_categories = relations["sub_categories"]
-        if len(sub_categories) > 15:
-            raise ValueError("Product supports at most 15 sub-categories.")
-        product.sub_categories.set(sub_categories)
 
     for relation_name in ("sizes", "tags"):
         if relation_name not in relations:
@@ -435,7 +428,7 @@ def update_product(
     faqs_data = validated_data.pop("faqs", None)
     relations = {
         key: validated_data.pop(key)
-        for key in ("categories", "sub_categories", "sizes", "colors", "tags")
+        for key in ("categories", "sizes", "colors", "tags")
         if key in validated_data
     }
 

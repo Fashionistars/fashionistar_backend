@@ -148,12 +148,6 @@ class Product(TimeStampedModel, SoftDeleteModel):
         related_name="category_products",
         help_text="Primary classification groups. Capped at 1 to 15 allocations.",
     )
-    sub_categories = models.ManyToManyField(
-        "catalog.Category",
-        blank=True,
-        related_name="sub_category_products",
-        help_text="Deep classification groups used for recommendation indices.",
-    )
     tags = models.ManyToManyField(ProductTag, blank=True, related_name="tag_products")
 
     # Financial and pricing attributes
@@ -381,12 +375,6 @@ class Product(TimeStampedModel, SoftDeleteModel):
     def primary_category(self) -> Optional[models.Model]:
         """Resolves the primary categorization level with zero N+1 overhead."""
         categories = list(self.categories.all()[:1])
-        return categories[0] if categories else None
-
-    @property
-    def primary_sub_category(self) -> Optional[models.Model]:
-        """Resolves the first sub-categorization level with zero N+1 overhead."""
-        categories = list(self.sub_categories.all()[:1])
         return categories[0] if categories else None
 
     @property

@@ -281,10 +281,8 @@ class ProductDetailOut(Schema):
     shipping_profile: Optional[ProductShippingProfileOut] = None
     status: str
     categories: List[ProductCategoryOut] = []
-    sub_categories: List[ProductCategoryOut] = []
     category_name: Optional[str] = None
     category_slug: Optional[str] = None
-    sub_category_name: Optional[str] = None
     vendor: Optional[ProductVendorOut] = None
     commission_rate: Decimal = Decimal("10.00")
     condition: str = "new"

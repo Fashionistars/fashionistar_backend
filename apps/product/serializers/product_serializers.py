@@ -12,10 +12,12 @@ conditions [1].
 from __future__ import annotations
 from apps.product.models import ProductWishlist
 
+from datetime import timedelta
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 from rest_framework import serializers
 from django.db import transaction
+from django.utils import timezone
 
 from apps.catalog.models import Category
 from apps.product.models import (
@@ -199,13 +201,6 @@ class ProductWriteSerializer(serializers.ModelSerializer):
         source="categories",
         required=True,
     )
-    sub_category_ids = serializers.PrimaryKeyRelatedField(
-        queryset=Category.objects.all(),
-        many=True,
-        source="sub_categories",
-        required=False,
-        allow_empty=True,
-    )
     idempotency_key = serializers.UUIDField(
         required=False, allow_null=True, write_only=True
     )
@@ -222,7 +217,6 @@ class ProductWriteSerializer(serializers.ModelSerializer):
             "stock_qty",
             "max_stock",
             "category_ids",
-            "sub_category_ids",
             "requires_measurement",
             "is_customisable",
             "cash_payment_mode",
@@ -286,12 +280,6 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
         source="categories",
         required=True,
     )
-    sub_category_ids = serializers.PrimaryKeyRelatedField(
-        queryset=Category.objects.all(),
-        many=True,
-        source="sub_categories",
-        required=False,
-    )
     variants = ProductVariantGalleryMediaWriteSerializer(many=True, required=False)
     fabric = ProductFabricSpecificationWriteSerializer(required=False, allow_null=True)
     measurement_guide = ProductSizeAndMeasurementGuideWriteSerializer(many=True, required=False)
@@ -317,7 +305,6 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
             "stock_qty",
             "max_stock",
             "category_ids",
-            "sub_category_ids",
             "requires_measurement",
             "is_customisable",
             "cash_payment_mode",
@@ -581,6 +568,19 @@ class ProductWriteFullSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"stock_qty": "Current catalog stock limits cannot exceed your maximum limits."}
             )
+
+        if data.get("is_pre_order"):
+            preorder_date = data.get("pre_order_date")
+            min_preorder_date = timezone.localdate() + timedelta(days=3)
+            if not preorder_date or preorder_date < min_preorder_date:
+                raise serializers.ValidationError(
+                    {
+                        "pre_order_date": (
+                            "Pre-order availability date must be at least 3 days from today "
+                            "so the tailor has enough production time."
+                        )
+                    }
+                )
 
         categories = data.get("categories") or []
         if not (1 <= len(categories) <= 15):
@@ -928,7 +928,6 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     shipping_profile = ProductShippingProfileSerializer(read_only=True)
     category_name = serializers.SerializerMethodField()
     category_slug = serializers.SerializerMethodField()
-    sub_category_name = serializers.SerializerMethodField()
     vendor = ProductVendorMiniSerializer(source="*", read_only=True)
     computed_review_count = serializers.IntegerField(read_only=True, default=0)
     computed_avg_rating = serializers.FloatField(read_only=True, default=0)
@@ -976,7 +975,6 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             "status",
             "category_name",
             "category_slug",
-            "sub_category_name",
             "vendor",
             "commission_rate",
             "condition",
@@ -1044,11 +1042,6 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     def get_category_slug(self, obj: Product) -> Optional[str]:
         category = obj.primary_category if hasattr(obj, "primary_category") else None
         return getattr(category, "slug", None)
-
-    def get_sub_category_name(self, obj: Product) -> Optional[str]:
-        category = obj.primary_sub_category if hasattr(obj, "primary_sub_category") else None
-        return getattr(category, "name", None)
-
 
 class ProductAdminSerializer(ProductDetailSerializer):
     status = serializers.ChoiceField(choices=ProductStatus.choices)

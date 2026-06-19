@@ -63,13 +63,13 @@ logger = logging.getLogger(__name__)
 
 
 def _category_lookup(value: Any) -> Q:
-    """Build a safe category/sub-category lookup for UUID ids or slugs."""
-    lookup = Q(categories__slug=value) | Q(sub_categories__slug=value)
+    """Build a safe category lookup for UUID ids or slugs."""
+    lookup = Q(categories__slug=value)
     try:
         category_id = value if isinstance(value, UUID) else UUID(str(value))
     except (TypeError, ValueError):
         return lookup
-    return lookup | Q(categories__id=category_id) | Q(sub_categories__id=category_id)
+    return lookup | Q(categories__id=category_id)
 
 
 # ── Optional import (guarded — avoids circular imports on cold-start) ─────────
@@ -102,7 +102,6 @@ def get_published_products():
         )
         .prefetch_related(
             "categories",       # M2M
-            "sub_categories",   # M2M
             "tags",            # M2M
             Prefetch(
                 "product_variants_gallery_media",
@@ -148,7 +147,6 @@ def get_published_products_list(
         .select_related("vendor")
         .prefetch_related(
             "categories",
-            "sub_categories",
             Prefetch("product_variants_gallery_media", queryset=ProductVariantGalleryMedia.objects.filter(is_deleted=False).select_related("size"), to_attr="_prefetched_variants"),
         )
         # .only(
@@ -188,7 +186,7 @@ def get_product_detail(slug: str) -> Product | None:
                 "vendor", "vendor__user",
             )
             .prefetch_related(
-                "categories", "sub_categories",
+                "categories",
                 "tags",
                 Prefetch(
                     "product_variants_gallery_media",
@@ -225,7 +223,7 @@ def get_products_by_vendor(vendor_id: Any):
         Product.objects
         .filter(vendor_id=vendor_id, is_deleted=False)
         .select_related("vendor__user")
-        .prefetch_related("categories", "sub_categories", "tags", "product_variants_gallery_media")
+        .prefetch_related("categories", "tags", "product_variants_gallery_media")
         .annotate(
             computed_review_count=Count("reviews", distinct=True),
         )
@@ -249,7 +247,7 @@ def get_vendor_product_or_404(vendor_id: Any, slug: str) -> Product | None:
                 "vendor", "vendor__user",
             )
             .prefetch_related(
-                "categories", "sub_categories",
+                "categories",
                 "tags",
                 Prefetch(
                     "product_variants_gallery_media",
@@ -284,7 +282,6 @@ def search_products(query: str):
 def filter_products(
     *,
     category_id: Any = None,
-    sub_category: str | None = None,
     brand_id: Any = None,
     vendor_id: Any = None,
     min_price: Any = None,
@@ -321,9 +318,6 @@ def filter_products(
         ).distinct()
     if category_id:
         qs = qs.filter(_category_lookup(category_id)).distinct()
-    if sub_category:
-        # Filter by sub-category slug via M2M relation on Product.sub_categories
-        qs = qs.filter(sub_categories__slug=sub_category).distinct()
     if brand_id:
         logger.debug(
             "Ignoring product brand filter=%s because Brand is marketing metadata.",
@@ -370,7 +364,7 @@ def get_products_export(vendor_id: Any):
     return (
         Product.objects
         .filter(vendor_id=vendor_id, is_deleted=False)
-        .prefetch_related("categories", "sub_categories")
+        .prefetch_related("categories")
         .order_by("created_at")
         .iterator(chunk_size=500)
     )
@@ -539,7 +533,6 @@ def get_active_coupons_for_vendor(vendor_id: Any):
 def afilter_products(
     *,
     category: str | None = None,
-    sub_category: str | None = None,
     brand: str | None = None,
     vendor: str | None = None,
     min_price: Any = None,
@@ -553,7 +546,6 @@ def afilter_products(
     """Return an async-ready published product queryset for Ninja feeds."""
     return filter_products(
         category_id=category,
-        sub_category=sub_category,
         brand_id=brand,
         vendor_id=vendor,
         min_price=min_price,
@@ -590,7 +582,7 @@ async def aget_product_detail(slug: str) -> Product | None:
                 "vendor", "vendor__user", "product_fabric_specification", "shipping_profile",
             )
             .prefetch_related(
-                "categories", "sub_categories",
+                "categories",
                 "tags",
                 Prefetch(
                     "product_variants_gallery_media",
@@ -736,7 +728,6 @@ def avendor_products(vendor_id: Any):
         .select_related("vendor__user")
         .prefetch_related(
             "categories",
-            "sub_categories",
             "tags",
             "product_variants_gallery_media",
             "product_variants_gallery_media__size",
@@ -756,7 +747,7 @@ async def aget_vendor_product(vendor_id: Any, slug: str) -> Product | None:
                 "vendor", "vendor__user", "product_fabric_specification", "shipping_profile",
             )
             .prefetch_related(
-                "categories", "sub_categories",
+                "categories",
                 "tags",
                 Prefetch(
                     "product_variants_gallery_media",
@@ -923,7 +914,6 @@ async def alist_products(
         .select_related("vendor")
         .prefetch_related(
             "categories",
-            "sub_categories",
             "product_variants_gallery_media",
             "product_variants_gallery_media__size",
         )
@@ -1042,7 +1032,6 @@ async def aget_featured_products(limit: int = 12) -> list:
             .select_related("vendor")
             .prefetch_related(
                 "categories",
-                "sub_categories",
                 "product_variants_gallery_media",
                 "product_variants_gallery_media__size",
             )
@@ -1079,7 +1068,6 @@ async def aget_products_by_vendor_async(
         .select_related("vendor")
         .prefetch_related(
             "categories",
-            "sub_categories",
             "product_variants_gallery_media",
             "product_variants_gallery_media__size",
         )
@@ -1191,7 +1179,6 @@ async def aget_homepage_hot_deals(limit: int = 10) -> list:
             .select_related("vendor")
             .prefetch_related(
                 "categories",
-                "sub_categories",
                 "product_variants_gallery_media",
                 "product_variants_gallery_media__size",
             )

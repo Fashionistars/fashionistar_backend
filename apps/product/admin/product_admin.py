@@ -160,7 +160,7 @@ class ProductAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
             "fields": ("id", "title", "slug", "description"),
         }),
         (_("Taxonomy"), {
-            "fields": ("vendor", "categories", "sub_categories", "tags"),
+            "fields": ("vendor", "categories", "tags"),
         }),
         (_("Pricing"), {
             "fields": ("price", "old_price", "currency", "shipping_amount", "commission_rate"),

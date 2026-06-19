@@ -446,13 +446,7 @@ def _product_detail_out(product) -> dict:
             "max_stock": getattr(product, "max_stock", None),
             "views": product.views,
             "orders_count": product.orders_count,
-            "sub_category_name": (
-                product.primary_sub_category.name
-                if getattr(product, "primary_sub_category", None)
-                else None
-            ),
             "categories": [_category_out(c) for c in product.categories.all()],
-            "sub_categories": [_category_out(c) for c in product.sub_categories.all()],
             "tags": [_tag_out(t) for t in product.tags.all()],
             "specifications": [],
             "faqs": [
@@ -570,7 +564,6 @@ async def list_products(
     page_size: int = 24,
     q: str | None = None,
     category: str | None = None,
-    sub_category: str | None = None,
     brand: str | None = None,
     vendor: str | None = None,
     in_stock: bool | None = None,
@@ -586,7 +579,6 @@ async def list_products(
     qs = afilter_products(
         query=q,
         category=category,
-        sub_category=sub_category,
         brand=brand,
         vendor=vendor,
         in_stock=in_stock,
