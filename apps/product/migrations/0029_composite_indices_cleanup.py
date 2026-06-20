@@ -27,6 +27,8 @@ from django.db import migrations
 
 class Migration(migrations.Migration):
 
+    atomic = False
+
     dependencies = [
         ('product', '0028_remove_product_sub_categories'),
         ('catalog', '0001_initial'),

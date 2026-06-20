@@ -676,3 +676,22 @@ class OwnershipViewSetMixin:
         if action in self._DETAIL_ACTIONS:
             self.check_object_permissions(self.request, obj)
         return obj
+
+
+class IsProductOwner(BasePermission):
+    """
+    Object-level permission enforcing that the executing user is the
+    associated product designer/vendor owner.
+    """
+
+    message = "You do not have permission to modify this product."
+
+    def has_object_permission(self, request, view, obj) -> bool:
+        user = _get_user(request)
+        if not _is_authenticated_user(user):
+            return False
+        vendor_profile = getattr(user, "vendor_profile", None)
+        if not vendor_profile:
+            return False
+        return getattr(obj, "vendor", None) == vendor_profile
+

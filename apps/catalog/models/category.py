@@ -33,7 +33,6 @@ class Category(TimeStampedModel, SoftDeleteModel):
     )
     name = models.CharField(max_length=100, unique=True, db_index=True)
     slug = models.SlugField(unique=True, blank=True, null=True, db_index=True)
-    active = models.BooleanField(default=True, db_index=True)
 
     # ── Cloudinary images ─────────────────────────────────────────────────
     image = CloudinaryField(
@@ -70,12 +69,7 @@ class Category(TimeStampedModel, SoftDeleteModel):
         blank=True,
         help_text="CSS icon class or SVG slug (e.g. 'icon-dress', 'lucide-shirt').",
     )
-    color_hex = models.CharField(
-        max_length=7,
-        blank=True,
-        help_text="#RRGGBB hex color for category pill / badge background.",
-    )
-
+    
     # ── Cached Counter (updated async by Celery task) ─────────────────────
     cached_product_count = models.PositiveIntegerField(
         default=0,
