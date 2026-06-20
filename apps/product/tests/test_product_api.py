@@ -461,24 +461,28 @@ class TestProductService:
 
     def test_stock_floor_prevents_oversell(self, product, admin_user):
         """
-        Inventory delta that would result in negative stock is floored at 0.
-        The service does NOT raise — it enforces floor=0 via max(0, candidate).
+        Phase 1 enterprise behavior: inventory delta that would result in negative
+        stock raises a ValidationError. Silent flooring is NOT permitted — every
+        attempted oversell must be surfaced to the caller to prevent silent data
+        corruption in high-concurrency checkouts.
         """
+        from django.core.exceptions import ValidationError as DjangoValidationError
         try:
             from apps.product.services import adjust_inventory
-            # Deduct more than available — service should floor at 0, not raise
-            adjust_inventory(
-                product=product,
-                quantity_delta=-(product.stock_qty + 100),  # More than available
-                reason="sale",
-                actor=admin_user,
-            )
+            # Deduct more than available — service must raise ValidationError
+            with pytest.raises(DjangoValidationError):
+                adjust_inventory(
+                    product=product,
+                    quantity_delta=-(product.stock_qty + 100),  # More than available
+                    reason="sale",
+                    actor=admin_user,
+                )
+            # Stock must remain unchanged (atomic rollback guarantees this)
             product.refresh_from_db()
-            # Stock must be floored at 0, never negative
-            assert product.stock_qty == 0
-            assert product.in_stock is False
+            assert product.stock_qty == 20  # Original value from fixture
         except ImportError:
             pytest.skip("adjust_inventory service not yet implemented")
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────

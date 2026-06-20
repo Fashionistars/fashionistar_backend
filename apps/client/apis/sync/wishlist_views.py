@@ -29,7 +29,7 @@ class ClientWishlistView(generics.GenericAPIView):
         wishlist = (
             ProductWishlist.objects.filter(user=request.user)
             .select_related("product")
-            .prefetch_related("product__categories", "product__sub_categories")
+            .prefetch_related("product__categories")
             .order_by("-id")
         )
         serializer = self.get_serializer(wishlist, many=True)

@@ -488,23 +488,6 @@ class Product(TimeStampedModel, SoftDeleteModel):
         except Exception:
             return None
 
-    @property
-    def measurement_template(self) -> Optional[str]:
-        """Backward compatibility for deleted measurement_template field."""
-        guide = self.product_measurement_guide.all()
-        if isinstance(guide, list) and guide:
-            return guide[0].name
-        elif hasattr(guide, "first"):
-            first = guide.first()
-            if first:
-                return first.name
-        return None
-
-    @property
-    def weight_kg(self) -> Decimal:
-        """Backward compatibility for deleted weight_kg field."""
-        profile = self.shipping_profile
-        return getattr(profile, "weight_kg", Decimal("0.0"))
 
     def color(self) -> list[dict[str, Any]]:
         """Extracts unique color values across associated product variants."""

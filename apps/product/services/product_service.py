@@ -312,43 +312,100 @@ def adjust_inventory(
     Forensic Tracking:
     - Schedules audit via on_commit hook with request context.
     """
-    # Row-level lock prevents concurrent over-deductions
+    # ── Step 1: Acquire pessimistic row lock on Product FIRST ─────────────
+    from django.core.exceptions import ValidationError as DjangoValidationError
+    from django.db.models import Sum
+
     product = Product.objects.select_for_update().get(pk=product.pk)
-    before = product.stock_qty
-    candidate = before + quantity_delta
 
-    # Floor
-    after = max(0, candidate)
+    # ── Step 2: Variant-level adjustment path ─────────────────────────────
+    if variant is not None:
+        locked_variant = ProductVariantGalleryMedia.objects.select_for_update().get(
+            pk=variant.pk, product=product
+        )
+        quantity_before = locked_variant.stock_qty
+        candidate = quantity_before + quantity_delta
 
-    # Ceiling (optional field — only enforced when set)
-    max_stock = getattr(product, "max_stock", None)
-    if max_stock is not None and max_stock > 0:
-        after = min(after, max_stock)
+        if candidate < 0:
+            raise DjangoValidationError(
+                f"Insufficient variant stock for SKU {locked_variant.sku!r}. "
+                f"Available: {quantity_before}, requested delta: {quantity_delta}."
+            )
 
-    product.stock_qty = after
-    product.in_stock = after > 0
-    product.save(update_fields=["stock_qty", "in_stock", "updated_at"])
+        max_stock = getattr(product, "max_stock", None)
+        quantity_after = min(candidate, max_stock) if max_stock and max_stock > 0 else candidate
 
-    log = ProductInventoryLog.objects.create(
-        product=product,
-        variant=variant,
-        actor=actor,
-        quantity_delta=quantity_delta,
-        quantity_before=before,
-        quantity_after=after,
-        reason=reason,
-        reference_id=reference_id,
-        note=note,
-    )
+        locked_variant.stock_qty = quantity_after
+        locked_variant.save(update_fields=["stock_qty", "updated_at"])
+
+        # Sync product.stock_qty = SUM of all non-deleted variant quantities
+        variant_total = (
+            ProductVariantGalleryMedia.objects
+            .filter(product=product, is_deleted=False)
+            .aggregate(total=Sum("stock_qty"))["total"] or 0
+        )
+        product.stock_qty = variant_total
+        product.in_stock = variant_total > 0
+        product.save(update_fields=["stock_qty", "in_stock", "updated_at"])
+
+        log = ProductInventoryLog.objects.create(
+            product=product,
+            variant=locked_variant,
+            actor=actor,
+            quantity_delta=quantity_delta,
+            quantity_before=quantity_before,
+            quantity_after=quantity_after,
+            reason=reason,
+            reference_id=reference_id,
+            note=note,
+        )
+
+    # ── Step 3: Direct product-level adjustment path ──────────────────────
+    else:
+        before = product.stock_qty
+        candidate = before + quantity_delta
+
+        if candidate < 0:
+            raise DjangoValidationError(
+                f"Insufficient product stock for {product.title!r}. "
+                f"Available: {before}, requested delta: {quantity_delta}."
+            )
+
+        max_stock = getattr(product, "max_stock", None)
+        after = min(candidate, max_stock) if max_stock and max_stock > 0 else candidate
+
+        product.stock_qty = after
+        product.in_stock = after > 0
+        product.save(update_fields=["stock_qty", "in_stock", "updated_at"])
+
+        log = ProductInventoryLog.objects.create(
+            product=product,
+            variant=None,
+            actor=actor,
+            quantity_delta=quantity_delta,
+            quantity_before=before,
+            quantity_after=after,
+            reason=reason,
+            reference_id=reference_id,
+            note=note,
+        )
+
+    # ── Step 4: Emit audit event AFTER successful write (on_commit) ───────
     _emit_audit(
         "product.inventory.adjusted",
         product,
         actor=actor,
         request=request,
         delta=quantity_delta,
-        before=before,
-        after=after,
         reason=reason,
+    )
+    logger.info(
+        "Inventory adjusted -- product=%s variant=%s delta=%+d reason=%s ref=%s",
+        product.pk,
+        getattr(variant, "pk", None),
+        quantity_delta,
+        reason,
+        reference_id or "none",
     )
     return log
 

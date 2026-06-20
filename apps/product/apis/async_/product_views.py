@@ -462,17 +462,22 @@ def _product_detail_out(product) -> dict:
             "vendor_is_verified": _vendor_out(product.vendor)["is_verified"],
             "commission_rate": _money(product.commission_rate),
             "measurement_template_id": (
+                # Derive a deterministic UUID from the first measurement guide
+                # entry name — replaces the removed Product.measurement_template
+                # backward-compat property. Uses only the already-fetched
+                # product_measurement_guide queryset (zero extra queries).
                 str(
                     __import__("uuid").UUID(
                         bytes=__import__("hashlib").md5(
-                            f"{product.vendor.pk}-{product.measurement_template}".encode("utf-8")
+                            f"{product.vendor.pk}-{guide_rows[0]['size_label']}"
+                            .encode("utf-8")
                         ).digest()
                     )
                 )
-                if product.measurement_template and product.vendor
+                if guide_rows and product.vendor
                 else None
             ),
-            "weight_kg": product.weight_kg,
+            "weight_kg": shipping_obj.weight_kg if shipping_obj else None,
             "condition": product.condition,
             "is_pre_order": product.is_pre_order,
             "pre_order_date": product.pre_order_date,

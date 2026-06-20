@@ -80,7 +80,7 @@ class CartSelector(BaseSelector):
                         "variant__size",
                         "variant__color",
                     )
-                    .prefetch_related("product__categories", "product__sub_categories")
+                    .prefetch_related("product__categories")
                     .order_by("created_at"),
                 ),
             )
@@ -109,7 +109,7 @@ class CartSelector(BaseSelector):
                         "variant__size",
                         "variant__color",
                     )
-                    .prefetch_related("product__categories", "product__sub_categories")
+                    .prefetch_related("product__categories")
                     .order_by("created_at"),
                 ),
             )
@@ -237,7 +237,7 @@ class CartSelector(BaseSelector):
                         "variant__size",
                         "variant__color",
                     )
-                    .prefetch_related("product__categories", "product__sub_categories")
+                    .prefetch_related("product__categories")
                     .order_by("created_at"),
                 ),
             )
