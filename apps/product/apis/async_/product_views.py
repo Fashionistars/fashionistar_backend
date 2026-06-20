@@ -41,6 +41,7 @@ from ninja.errors import HttpError
 
 from apps.common.pagination import async_ninja_paginate
 from apps.common.roles import is_client_role, is_vendor_role
+from apps.product.models import Product
 from apps.product.schemas.product_schemas import (
     CouponValidateIn,
     CouponValidateOut,
@@ -523,6 +524,21 @@ async def _require_vendor(request) -> Any:
     if not profile:
         raise HttpError(403, "Vendor profile not found.")
     return profile
+
+
+async def _get_vendor_product_secure(profile, slug: str) -> Product:
+    """
+    Retrieve product and strictly verify vendor ownership to prevent horizontal IDOR.
+    Raises HttpError(403) if product is owned by another vendor.
+    Raises HttpError(404) if product does not exist.
+    """
+    product = await aget_vendor_product(profile.pk, slug)
+    if not product:
+        exists = await Product.objects.filter(slug=slug, is_deleted=False).aexists()
+        if exists:
+            raise HttpError(403, "You do not have permission to modify this product.")
+        raise HttpError(404, "Product not found.")
+    return product
 
 
 async def _resolve_optional_bearer_user(request) -> Any | None:
@@ -1050,18 +1066,14 @@ async def list_vendor_products(request, page: int = 1, page_size: int = 24):
 @router.get("/vendor/{slug}/", summary="Get vendor product detail")
 async def get_vendor_product_detail(request, slug: str):
     profile = await _require_vendor(request)
-    product = await aget_vendor_product(profile.pk, slug)
-    if not product:
-        raise HttpError(404, "Product not found.")
+    product = await _get_vendor_product_secure(profile, slug)
     return _product_detail_out(product)
 
 
 @router.get("/vendor/{slug}/media/", summary="List vendor product gallery")
 async def list_vendor_gallery(request, slug: str):
     profile = await _require_vendor(request)
-    product = await aget_vendor_product(profile.pk, slug)
-    if not product:
-        raise HttpError(404, "Product not found.")
+    product = await _get_vendor_product_secure(profile, slug)
     items = [
         _gallery_item_out(m)
         for m in product.product_variants_gallery_media.all()
@@ -1078,9 +1090,7 @@ async def list_vendor_gallery(request, slug: str):
 async def list_inventory_logs(request, slug: str, page: int = 1, page_size: int = 20):
     """Best-practice #4: async inventory log read."""
     profile = await _require_vendor(request)
-    product = await aget_vendor_product(profile.pk, slug)
-    if not product:
-        raise HttpError(404, "Product not found.")
+    product = await _get_vendor_product_secure(profile, slug)
     qs = alist_inventory_logs(product.pk)
     return await _paginated(
         request, qs,
@@ -1105,9 +1115,7 @@ async def list_inventory_logs(request, slug: str, page: int = 1, page_size: int 
 @router.patch("/vendor/{slug}/inventory/", summary="Adjust product stock")
 async def adjust_inventory_async(request, slug: str, payload: InventoryAdjustIn):
     profile = await _require_vendor(request)
-    product = await aget_vendor_product(profile.pk, slug)
-    if not product:
-        raise HttpError(404, "Product not found.")
+    product = await _get_vendor_product_secure(profile, slug)
     try:
         log = await async_adjust_inventory(
             product=product,

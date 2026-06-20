@@ -294,6 +294,7 @@ _ASSET_CONFIGS: dict[str, dict] = {
         "folder_prefix": "fashionistar/measurements",
         "preset_setting": "CLOUDINARY_UPLOAD_PRESET_MEASURE",
         "resource_type": "image",
+        "type": "private",
         "eager": [
             {
                 "width": 2560,
@@ -314,6 +315,14 @@ _ASSET_CONFIGS: dict[str, dict] = {
                 "fetch_format": "auto",
             },  # thumbnail
         ],
+    },
+    # ── Vendor KYC / Compliance documents ──────────────────────────────────
+    "kyc_document": {
+        "folder_prefix": "fashionistar/vendors/kyc",
+        "preset_setting": "CLOUDINARY_UPLOAD_PRESET_PRODUCT",
+        "resource_type": "auto",
+        "type": "private",
+        "eager": [],
     },
     # ── Generic / future models ─────────────────────────────────────────
     # Any future model that has an image can use asset_type="generic_image"
@@ -380,6 +389,7 @@ class CloudinaryPresignResult:
     folder: str
     upload_preset: str
     resource_type: str
+    type: str = "upload"
     eager: str = ""  # pipe-delimited string for Cloudinary API
     eager_async: bool = True
     notification_url: str = ""
@@ -395,6 +405,7 @@ class CloudinaryPresignResult:
             "folder": self.folder,
             "upload_preset": self.upload_preset,
             "resource_type": self.resource_type,
+            "type": self.type,
             "eager": self.eager,
             "eager_async": self.eager_async,
         }
@@ -526,10 +537,13 @@ def generate_cloudinary_upload_params(
     # upload_preset is NOT required and should NOT be included in the signature.
     # Including a non-existent preset causes a 400 'Upload preset not found'.
     # The HMAC-SHA256 signature IS the authentication mechanism.
+    upload_type = config.get("type", "upload")
     params_to_sign: dict = {
         "timestamp": timestamp,
         "folder": folder,
     }
+    if upload_type != "upload":
+        params_to_sign["type"] = upload_type
     if eager_str:
         params_to_sign["eager"] = eager_str
         params_to_sign["eager_async"] = "true"
@@ -549,6 +563,7 @@ def generate_cloudinary_upload_params(
             folder="",
             upload_preset="",
             resource_type=resource_type,
+            type=upload_type,
             success=False,
             error=str(exc),
         )
@@ -562,6 +577,7 @@ def generate_cloudinary_upload_params(
         folder=folder,
         upload_preset="",  # NOT sent to Cloudinary — signature authenticates
         resource_type=resource_type,
+        type=upload_type,
         eager=eager_str,
         eager_async=True,
         notification_url=notification_url,

@@ -42,6 +42,7 @@ from apps.common.permissions import (
     IsAuthenticatedAndActive,
     IsClient,
     IsVendor,
+    IsProductOwner,
 )
 from apps.common.renderers import CustomJSONRenderer, error_response, success_response
 from apps.product.models import Product, ProductVariantGalleryMedia, ProductInventoryLog
@@ -247,6 +248,24 @@ class ProductsByCategoryView(APIView):
 # VENDOR — Product CRUD
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _get_vendor_product_secure(view_instance, request, slug: str) -> Product | None:
+    """
+    Retrieve product and strictly verify vendor ownership to prevent horizontal IDOR.
+    Raises permission_denied (403) if product is owned by another vendor.
+    """
+    vendor = request.user.vendor_profile
+    product = get_vendor_product_or_404(vendor.id, slug)
+    if not product:
+        if Product.objects.filter(slug=slug, is_deleted=False).exists():
+            view_instance.permission_denied(
+                request,
+                message="You do not have permission to modify this product."
+            )
+        return None
+    view_instance.check_object_permissions(request, product)
+    return product
+
+
 class VendorProductListCreateView(APIView):
     """
     GET  /api/v1/products/vendor/  — List vendor's own products (paginated).
@@ -306,11 +325,10 @@ class VendorProductDetailView(APIView):
     """
     renderer_classes = _RENDERERS
     parser_classes = _PARSERS
-    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsVendor]
+    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsVendor, IsProductOwner]
 
     def _get_product(self, request, slug: str) -> Product | None:
-        vendor = request.user.vendor_profile
-        return get_vendor_product_or_404(vendor.id, slug)
+        return _get_vendor_product_secure(self, request, slug)
 
     def get(self, request, slug: str):
         product = self._get_product(request, slug)
@@ -373,11 +391,10 @@ class VendorProductPublishView(APIView):
     """POST /api/v1/products/vendor/<slug>/publish/"""
     renderer_classes = _RENDERERS
     parser_classes = _PARSERS
-    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsVendor]
+    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsVendor, IsProductOwner]
 
     def post(self, request, slug: str):
-        vendor = request.user.vendor_profile
-        product = get_vendor_product_or_404(vendor.id, slug)
+        product = _get_vendor_product_secure(self, request, slug)
         if not product:
             return error_response(
                 message="Product not found.", status=status.HTTP_404_NOT_FOUND
@@ -403,11 +420,10 @@ class VendorProductGalleryView(APIView):
     """
     renderer_classes = _RENDERERS
     parser_classes = _PARSERS
-    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsVendor]
+    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsVendor, IsProductOwner]
 
     def _get_product(self, request, slug: str) -> Product | None:
-        vendor = request.user.vendor_profile
-        return get_vendor_product_or_404(vendor.id, slug)
+        return _get_vendor_product_secure(self, request, slug)
 
     def get(self, request, slug: str):
         product = self._get_product(request, slug)
@@ -457,11 +473,10 @@ class VendorProductGalleryDeleteView(APIView):
     """DELETE /api/v1/products/vendor/<slug>/media/<gid>/"""
     renderer_classes = _RENDERERS
     parser_classes = _PARSERS
-    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsVendor]
+    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsVendor, IsProductOwner]
 
     def delete(self, request, slug: str, gid):
-        vendor = request.user.vendor_profile
-        product = get_vendor_product_or_404(vendor.id, slug)
+        product = _get_vendor_product_secure(self, request, slug)
         if not product:
             return error_response(
                 message="Product not found.", status=status.HTTP_404_NOT_FOUND
@@ -487,11 +502,10 @@ class VendorInventoryLogView(APIView):
     """
     renderer_classes = _RENDERERS
     parser_classes = _PARSERS
-    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsVendor]
+    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive, IsVendor, IsProductOwner]
 
     def _get_product(self, request, slug: str) -> Product | None:
-        vendor = request.user.vendor_profile
-        return get_vendor_product_or_404(vendor.id, slug)
+        return _get_vendor_product_secure(self, request, slug)
 
     def get(self, request, slug: str):
         product = self._get_product(request, slug)

@@ -525,6 +525,17 @@ def build_logging_config(
             result.append('mail_admins')
         return result
 
+    is_celery_process = 'celery' in ' '.join(sys.argv).lower()
+
+    def _celery_handlers_for(*names: str) -> list:
+        """Return named file handlers, and conditionally console ONLY if running as a Celery process."""
+        result = list(names)
+        if is_celery_process:
+            result.insert(0, 'console')
+        if mail_admins:
+            result.append('mail_admins')
+        return result
+
     # ── Loggers ───────────────────────────────────────────────────────────────
     loggers: dict = {
 
@@ -719,17 +730,17 @@ def build_logging_config(
             'propagate': False,
         },
         'celery': {
-            'handlers': _handlers_for('file.celery'),
+            'handlers': _celery_handlers_for('file.celery'),
             'level': 'DEBUG' if debug else 'INFO',
             'propagate': False,
         },
         'celery.task': {
-            'handlers': _handlers_for('file.celery'),
+            'handlers': _celery_handlers_for('file.celery'),
             'level': 'DEBUG' if debug else 'INFO',
             'propagate': False,
         },
         'celery.worker': {
-            'handlers': _handlers_for('file.celery'),
+            'handlers': _celery_handlers_for('file.celery'),
             'level': 'INFO',
             'propagate': False,
         },
@@ -746,7 +757,7 @@ def build_logging_config(
         # messages at INFO. Without it the Celery terminal is silent —
         # tasks appear to vanish even when they ARE running.
         'celery.app.trace': {
-            'handlers': _handlers_for('file.celery'),
+            'handlers': _celery_handlers_for('file.celery'),
             'level': 'INFO',   # INFO to console — shows task lifecycle
             'propagate': False,
         },

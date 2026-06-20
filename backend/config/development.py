@@ -177,7 +177,7 @@ GOOGLE_CLIENT_SECRET = env("GOOGLE_CLIENT_SECRET", default="")  # noqa: F405
 # =============================================================================
 # Executes tasks synchronously in-process instead of sending them to a broker.
 # Bypasses local Redis connectivity/timeout issues completely.
-CELERY_TASK_ALWAYS_EAGER = True
+CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=False)
 CELERY_TASK_EAGER_PROPAGATES = True
 
 # Force local Redis for Celery worker & caching in development mode

@@ -57,8 +57,9 @@ class Category(TimeStampedModel, SoftDeleteModel):
     # ── SEO ───────────────────────────────────────────────────────────────
     meta_title = models.CharField(max_length=180, blank=True)
     meta_description = models.CharField(max_length=320, blank=True)
+    active = models.BooleanField(default=True, db_index=True)
 
-    # ── UI / Display ──────────────────────────────────────────────────────
+    # ── Sort / Order ────────────────────────────────────────────────────────
     sort_order = models.PositiveIntegerField(
         default=0,
         db_index=True,
