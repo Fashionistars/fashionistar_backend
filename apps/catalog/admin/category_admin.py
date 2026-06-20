@@ -27,6 +27,21 @@ class CategoryAdminForm(forms.ModelForm):
         return self.cleaned_data["name"].strip()
 
 
+class ActiveCategoryFilter(admin.SimpleListFilter):
+    title = "Active Categories"
+    parameter_name = "active_status"
+
+    def lookups(self, request, model_admin):
+        return (("active", "Active"), ("inactive", "Inactive"))
+
+    def queryset(self, request, queryset):
+        if self.value() == "active":
+            return queryset.filter(active=True)
+        if self.value() == "inactive":
+            return queryset.filter(active=False)
+        return queryset
+
+
 @admin.register(Category)
 class CategoryAdmin(
     AuditedModelAdmin, CloudinaryUploadAdminMixin, ImportExportModelAdmin
@@ -36,16 +51,17 @@ class CategoryAdmin(
     list_display = [
         "name",
         "cloudinary_preview",
-        "   is_deleted",
+        "is_deleted",
+        "active",
         "created_at",
         "updated_at",
         "slug",
     ]
-    list_editable = []
+    list_editable = ["active"]
     search_fields = ["name", "slug"]
     prepopulated_fields = {"slug": ("name",)}
-    list_filter = ["is_deleted", "created_at", "updated_at"]
-    actions = []
+    list_filter = [ActiveCategoryFilter, "is_deleted", "active", "created_at", "updated_at"]
+    actions = [make_active, make_inactive]
     readonly_fields = ("cloudinary_preview", "is_deleted", "created_at", "updated_at")
 
     def save_model(self, request, obj, form, change):

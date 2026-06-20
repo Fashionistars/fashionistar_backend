@@ -119,6 +119,8 @@ class Category(TimeStampedModel, SoftDeleteModel):
             models.Index(fields=["name"], name="category_name_idx"),
             models.Index(fields=["slug"], name="category_slug_idx"),
             models.Index(fields=["parent", "sort_order"], name="category_parent_sort_idx"),
+            models.Index(fields=["active", "sort_order"], name="category_active_sort_idx"),
+            models.Index(fields=["is_leaf_node", "active"], name="category_leaf_active_idx"),
             models.Index(fields=["is_deleted", "sort_order"], name="category_is_deleted_sort_idx"),
             models.Index(fields=["is_leaf_node", "is_deleted"], name="category_leaf_is_deleted_idx"),
             models.Index(fields=["ai_trend_score"], name="category_trend_score_idx"),
