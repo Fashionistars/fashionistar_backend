@@ -35,7 +35,7 @@ def make_user(db):
         user = UnifiedUser.objects.create_user(
             email=_email,
             password="TestPass@2026!",
-            role=role,
+            role=role.lower(),
             is_active=True,
             is_verified=True,
         )
@@ -67,25 +67,26 @@ ALL_ROLES = [
 ]
 
 ADMIN_ONLY_ENDPOINTS = [
-    "/api/v1/admin/users/",
-    "/api/v1/admin/roles/",
-    "/api/v1/admin/platform-settings/",
-    "/api/v1/admin/audit-logs/",
-    "/api/v1/admin/payout-requests/",
+    "/api/v1/admin_backend/auth/users/",
+    "/api/v1/admin_backend/audit/",
+    "/api/v1/admin_backend/settings/",
+    "/api/v1/admin_backend/kyc/",
+    "/api/v1/admin_backend/payment/",
 ]
 
 VENDOR_ENDPOINTS = [
-    "/api/v1/vendor/dashboard/",
-    "/api/v1/vendor/products/",
-    "/api/v1/vendor/orders/",
-    "/api/v1/vendor/earnings/",
+    "/api/v1/ninja/vendor/dashboard/",
+    "/api/v1/ninja/vendor/profile/",
+    "/api/v1/ninja/vendor/earnings/",
+    "/api/v1/ninja/vendor/products/",
+    "/api/v1/ninja/vendor/orders/",
 ]
 
 CLIENT_ENDPOINTS = [
-    "/api/v1/measurements/profile/",
-    "/api/v1/cart/",
+    "/api/v1/client/profile/",
+    "/api/v1/measurements/",
+    "/api/v1/cart/current/",
     "/api/v1/orders/",
-    "/api/v1/notifications/",
 ]
 
 PUBLIC_ENDPOINTS = [
@@ -95,6 +96,7 @@ PUBLIC_ENDPOINTS = [
 ]
 
 
+@pytest.mark.django_db
 class TestPublicEndpoints:
     """Unauthenticated access to public endpoints — must always return 200."""
 
@@ -166,6 +168,7 @@ class TestClientEndpoints:
         )
 
 
+@pytest.mark.django_db
 class TestUnauthenticatedProtectedEndpoints:
     """All protected endpoints must reject unauthenticated requests."""
 
@@ -192,7 +195,7 @@ class TestObjectLevelPermissions:
         # Create a measurement profile for owner
         profile = MeasurementProfile.objects.create(
             owner=owner, name="My Profile",
-            height_cm=175.0, weight_kg=70.0,
+            height=175.0, weight_kg=70.0,
         )
 
         api_client.force_authenticate(user=attacker)

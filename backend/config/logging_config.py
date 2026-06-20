@@ -12,7 +12,7 @@ Architecture:
   │  apps.authentication.*   →  logs/apps/authentication/auth.log   │
   │  apps.common.*           →  logs/apps/common/common.log         │
   │  apps.store.*            →  logs/apps/store/store.log           │
-  │  apps.customer (legacy)  →  logs/apps/customer/customer.log     │
+  │  apps.client (legacy)  →  logs/apps/client/client.log     │
   │  apps.vendor (legacy)    →  logs/apps/vendor/vendor.log         │
   │  apps.payments.*         →  logs/apps/payments/payments.log     │
   │  apps.notifications      →  logs/apps/notifications/notify.log  │
@@ -519,9 +519,12 @@ def build_logging_config(
         }
 
     def _handlers_for(*names: str) -> list:
-        """Return console + named file handlers, optionally + mail_admins."""
-        result = ['console'] + list(names)
-        if mail_admins:
+        """Return console + named file handlers, optionally + mail_admins, avoiding duplicates."""
+        result = ['console']
+        for name in names:
+            if name != 'console' and name not in result:
+                result.append(name)
+        if mail_admins and 'mail_admins' not in result:
             result.append('mail_admins')
         return result
 
@@ -531,9 +534,11 @@ def build_logging_config(
         """Return named file handlers, and conditionally console ONLY if running as a Celery process."""
         result = list(names)
         if is_celery_process:
-            result.insert(0, 'console')
+            if 'console' not in result:
+                result.insert(0, 'console')
         if mail_admins:
-            result.append('mail_admins')
+            if 'mail_admins' not in result:
+                result.append('mail_admins')
         return result
 
     # ── Loggers ───────────────────────────────────────────────────────────────
@@ -584,86 +589,137 @@ def build_logging_config(
             'propagate': False,
         },
 
-        # ── Store domain (new + legacy) ───────────────────────────────────────
-        'apps.store': {
-            'handlers': _handlers_for('file.store'),
-            'level': 'DEBUG' if debug else 'INFO',
-            'propagate': False,
-        },
-        'store': {
-            'handlers': _handlers_for('file.store'),
-            'level': 'DEBUG' if debug else 'INFO',
-            'propagate': False,
-        },
-        'ShopCart': {
-            'handlers': _handlers_for('file.store'),
-            'level': 'DEBUG' if debug else 'INFO',
-            'propagate': False,
-        },
-        'checkout': {
-            'handlers': _handlers_for('file.store'),
-            'level': 'DEBUG' if debug else 'INFO',
-            'propagate': False,
-        },
-        'createOrder': {
-            'handlers': _handlers_for('file.store'),
-            'level': 'DEBUG' if debug else 'INFO',
-            'propagate': False,
-        },
-        'Homepage': {
-            'handlers': _handlers_for('file.store'),
-            'level': 'DEBUG' if debug else 'INFO',
-            'propagate': False,
-        },
-        'addon': {
+        # ── apps.cart ────────────────────────────────────────────────────────
+        'apps.cart': {
             'handlers': _handlers_for('file.store'),
             'level': 'DEBUG' if debug else 'INFO',
             'propagate': False,
         },
 
-        # ── Customer domain ───────────────────────────────────────────────────
-        'apps.customer': {
-            'handlers': _handlers_for('file.customer'),
+        # ── apps.catalog ─────────────────────────────────────────────────────
+        'apps.catalog': {
+            'handlers': _handlers_for('file.store'),
             'level': 'DEBUG' if debug else 'INFO',
             'propagate': False,
         },
-        'customer': {
-            'handlers': _handlers_for('file.customer'),
+
+        # ── apps.product ─────────────────────────────────────────────────────
+        'apps.product': {
+            'handlers': _handlers_for('file.store'),
             'level': 'DEBUG' if debug else 'INFO',
             'propagate': False,
         },
-        'measurements': {
+
+        # ── apps.client ──────────────────────────────────────────────────────
+        'apps.client': {
             'handlers': _handlers_for('file.customer'),
             'level': 'DEBUG' if debug else 'INFO',
             'propagate': False,
         },
 
-        # ── Vendor domain ─────────────────────────────────────────────────────
+        # ── apps.custom_order ────────────────────────────────────────────────
+        'apps.custom_order': {
+            'handlers': _handlers_for('file.store'),
+            'level': 'DEBUG' if debug else 'INFO',
+            'propagate': False,
+        },
+
+        # ── apps.order ───────────────────────────────────────────────────────
+        'apps.order': {
+            'handlers': _handlers_for('file.store'),
+            'level': 'DEBUG' if debug else 'INFO',
+            'propagate': False,
+        },
+
+        # ── apps.payment ─────────────────────────────────────────────────────
+        'apps.payment': {
+            'handlers': _handlers_for('file.payments'),
+            'level': 'DEBUG' if debug else 'INFO',
+            'propagate': False,
+        },
+
+        # ── apps.notification ────────────────────────────────────────────────
+        'apps.notification': {
+            'handlers': _handlers_for('file.notifications'),
+            'level': 'DEBUG' if debug else 'INFO',
+            'propagate': False,
+        },
+
+        # ── apps.wallet ──────────────────────────────────────────────────────
+        'apps.wallet': {
+            'handlers': _handlers_for('file.payments'),
+            'level': 'DEBUG' if debug else 'INFO',
+            'propagate': False,
+        },
+
+        # ── apps.transactions ────────────────────────────────────────────────
+        'apps.transactions': {
+            'handlers': _handlers_for('file.payments'),
+            'level': 'DEBUG' if debug else 'INFO',
+            'propagate': False,
+        },
+
+        # ── apps.kyc ─────────────────────────────────────────────────────────
+        'apps.kyc': {
+            'handlers': _handlers_for('file.customer'),
+            'level': 'DEBUG' if debug else 'INFO',
+            'propagate': False,
+        },
+
+        # ── apps.providers ───────────────────────────────────────────────────
+        'apps.providers': {
+            'handlers': _handlers_for('file.vendor'),
+            'level': 'DEBUG' if debug else 'INFO',
+            'propagate': False,
+        },
+
+        # ── apps.support ─────────────────────────────────────────────────────
+        'apps.support': {
+            'handlers': _handlers_for('file.customer'),
+            'level': 'DEBUG' if debug else 'INFO',
+            'propagate': False,
+        },
+
+        # ── apps.scheduler ───────────────────────────────────────────────────
+        'apps.scheduler': {
+            'handlers': _celery_handlers_for('file.celery'),
+            'level': 'DEBUG' if debug else 'INFO',
+            'propagate': False,
+        },
+
+        # ── apps.search ──────────────────────────────────────────────────────
+        'apps.search': {
+            'handlers': _handlers_for('file.store'),
+            'level': 'DEBUG' if debug else 'INFO',
+            'propagate': False,
+        },
+
+        # ── apps.chat ────────────────────────────────────────────────────────
+        'apps.chat': {
+            'handlers': _handlers_for('file.chat'),
+            'level': 'DEBUG' if debug else 'INFO',
+            'propagate': False,
+        },
+
+
+        'apps.measurement': {
+            'handlers': _handlers_for('file.customer'),
+            'level': 'DEBUG' if debug else 'INFO',
+            'propagate': False,
+        },
+
+
+        # ── Vendor domain (legacy / compatibility loggers) ────────────────────
         'apps.vendor': {
             'handlers': _handlers_for('file.vendor'),
             'level': 'DEBUG' if debug else 'INFO',
             'propagate': False,
         },
-        'vendor': {
-            'handlers': _handlers_for('file.vendor'),
-            'level': 'DEBUG' if debug else 'INFO',
-            'propagate': False,
-        },
 
-        # ── Payments (Paystack) ───────────────────────────────────────────────
+        # ── Payments (legacy / compatibility loggers) ─────────────────────────
         'apps.payments': {
             'handlers': _handlers_for('file.payments'),
             'level': 'DEBUG' if debug else 'INFO',
-            'propagate': False,
-        },
-        'Paystack_Webhoook_Prod': {
-            'handlers': _handlers_for('file.payments'),
-            'level': 'DEBUG' if debug else 'INFO',
-            'propagate': False,
-        },
-        'paystack': {
-            'handlers': _handlers_for('file.paystack'),
-            'level': 'INFO',    # Always INFO — financial audit trail
             'propagate': False,
         },
 
@@ -674,27 +730,13 @@ def build_logging_config(
             'propagate': False,
         },
 
-        # ── Notifications / Chat ──────────────────────────────────────────────
+        # ── Notifications / Chat (legacy / compatibility loggers) ─────────────
         'apps.notifications': {
             'handlers': _handlers_for('file.notifications'),
             'level': 'DEBUG' if debug else 'INFO',
             'propagate': False,
         },
-        'notification': {
-            'handlers': _handlers_for('file.notifications'),
-            'level': 'DEBUG' if debug else 'INFO',
-            'propagate': False,
-        },
-        'Blog': {
-            'handlers': _handlers_for('file.notifications'),
-            'level': 'DEBUG' if debug else 'INFO',
-            'propagate': False,
-        },
-        'chat': {
-            'handlers': _handlers_for('file.chat'),
-            'level': 'DEBUG' if debug else 'INFO',
-            'propagate': False,
-        },
+       
 
         # ── Admin ─────────────────────────────────────────────────────────────
         'admin_backend': {
@@ -729,6 +771,8 @@ def build_logging_config(
             'level': 'INFO',
             'propagate': False,
         },
+
+        # ── Celery & Beat loggers ─────────────────────────────────────────────
         'celery': {
             'handlers': _celery_handlers_for('file.celery'),
             'level': 'DEBUG' if debug else 'INFO',
@@ -740,6 +784,21 @@ def build_logging_config(
             'propagate': False,
         },
         'celery.worker': {
+            'handlers': _celery_handlers_for('file.celery'),
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'celery.beat': {
+            'handlers': _celery_handlers_for('file.celery'),
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django_celery_beat': {
+            'handlers': _celery_handlers_for('file.celery'),
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django_celery_results': {
             'handlers': _celery_handlers_for('file.celery'),
             'level': 'INFO',
             'propagate': False,
@@ -775,6 +834,13 @@ def build_logging_config(
         'amqp': {
             'handlers': ['file.celery'],
             'level': 'WARNING',
+            'propagate': False,
+        },
+
+        # ── Catchall for any unconfigured apps under 'apps.' namespace ────────
+        'apps': {
+            'handlers': _handlers_for('file.application'),
+            'level': 'DEBUG' if debug else 'INFO',
             'propagate': False,
         },
 

@@ -7,6 +7,9 @@ permission behavior stays aligned with the authentication domain.
 """
 
 from __future__ import annotations
+from apps.product.models import Product
+
+from django.core.exceptions import PermissionDenied
 
 import logging
 
@@ -679,19 +682,46 @@ class OwnershipViewSetMixin:
 
 
 class IsProductOwner(BasePermission):
-    """
+    """Enforces strict owner-level access controls on product resources.
+    Verifies that the authenticated user holds a valid VendorProfile and is the
+    exclusive owner of the referenced Product resource. Denies access by default
+    to prevent horizontal privilege escalation.
     Object-level permission enforcing that the executing user is the
     associated product designer/vendor owner.
     """
 
     message = "You do not have permission to modify this product."
 
+    owner_field: str = "user"   
     def has_object_permission(self, request, view, obj) -> bool:
+        """Verifies direct product ownership against the user's VendorProfile."""
         user = _get_user(request)
         if not _is_authenticated_user(user):
             return False
-        vendor_profile = getattr(user, "vendor_profile", None)
+        # Check reverse relation helper for VendorProfile
+        vendor_profile = getattr(request.user, "vendor_profile", None) or \
+                         getattr(request.user, "vendor", None) or \
+                         getattr(request.user, "vendor__profile", None)
+                         
         if not vendor_profile:
+            permission_logger.warning(
+                "Access Denied: User %s lacks a valid VendorProfile.", request.user.email
+            )
             return False
-        return getattr(obj, "vendor", None) == vendor_profile
-
+        
+        # Determine resource type and check owner
+        if isinstance(obj, Product):
+            is_owner = obj.vendor == vendor_profile
+        elif hasattr(obj, "product") and isinstance(obj.product, Product):
+            is_owner = obj.product.vendor == vendor_profile
+        else:
+            is_owner = False
+            
+        if not is_owner:
+            permission_logger.warning(
+                "IDOR Prevention: User %s (Vendor %s) attempted to access unauthorized resource %s owned by Vendor %s",
+                request.user.email, vendor_profile.id, obj.id, getattr(obj, 'vendor_id', 'unknown')
+            )
+            raise PermissionDenied("You do not have administrative clearance permission to access this product resource.")
+            
+        return is_owner

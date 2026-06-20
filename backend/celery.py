@@ -248,10 +248,17 @@ logger = logging.getLogger(__name__)
 
 @signals.setup_logging.connect
 def config_loggers(*args, **kwargs):
-    """Configure logging for Celery workers using Django's settings."""
-    from logging.config import dictConfig
-    from django.conf import settings
-    dictConfig(settings.LOGGING)
+    """
+    Configure logging for Celery workers.
+
+    We do nothing (pass) here because Django's dynamic AppConfig.ready() hook
+    (BackendConfig in backend/apps.py) has already fully and dynamically configured
+    all per-app loggers, root StreamHandler, safe rotating file handlers, process
+    log suffixes, and propagation rules.
+
+    Returning None/True here prevents Celery from overriding Django's ready() configuration.
+    """
+    pass
 
 
 @signals.after_task_publish.connect

@@ -78,25 +78,17 @@ class BackendConfig(AppConfig):
         # WARNING so only real problems appear.
         logging.getLogger('django.utils.autoreload').setLevel(logging.WARNING)
 
-        # ── Step 3: Console StreamHandler — skip in Celery worker mode ───────
-        # In Celery worker mode, Celery's own signal handler
-        # (celeryd_hijack_root_logger) adds its `[timestamp: LEVEL/Process]`
-        # format handler to root AFTER ready() runs. If we also add our
-        # StreamHandler to root, every record appears in TWO formats.
-        # Solution: in worker mode, trust Celery's own logging; only add file
-        # handlers for persistence.
+        # ── Step 3: Console StreamHandler — Always add to root ───────────────
+        # Ensures that console output works seamlessly across both Uvicorn (web)
+        # and Celery (background worker) processes, formatted consistently.
         console_fmt = logging.Formatter(
             '[%(levelname)-8s] %(name)s \u2014 %(message)s'
         )
-        if not in_celery_worker:
-            sh = logging.StreamHandler(sys.stdout)
-            sh.setFormatter(console_fmt)
-            sh.setLevel(logging.DEBUG)
-            root.addHandler(sh)
-            root.setLevel(logging.DEBUG)
-        else:
-            # Celery worker: let Celery control root. Just set the level.
-            root.setLevel(logging.DEBUG)
+        sh = logging.StreamHandler(sys.stdout)
+        sh.setFormatter(console_fmt)
+        sh.setLevel(logging.DEBUG)
+        root.addHandler(sh)
+        root.setLevel(logging.DEBUG)
 
         # ── Step 4: Per-app RotatingFileHandler + propagation ────────────────
         file_fmt = logging.Formatter(
@@ -128,10 +120,16 @@ class BackendConfig(AppConfig):
             'apps.providers':      'logs/apps/providers/providers.log',
             'celery':              'logs/system/celery.log',
             'celery.task':         'logs/system/celery.log',
+            'celery.worker':       'logs/system/celery.log',
+            'celery.beat':         'logs/system/celery.log',
+            'celery.app.trace':    'logs/system/celery.log',
+            'django_celery_beat':  'logs/system/celery.log',
+            'django_celery_results': 'logs/system/celery.log',
             'django':              'logs/system/django.log',
             'apps.global_platform_settings':            'logs/apps/global_platform_settings/global_platform_settings.log',
-
         }
+
+        celery_logger_prefixes = ('celery', 'django_celery_beat', 'django_celery_results')
 
         for name, rel_path in log_map.items():
             lg = logging.getLogger(name)
@@ -162,9 +160,15 @@ class BackendConfig(AppConfig):
             fh.setLevel(logging.DEBUG)
             lg.addHandler(fh)
 
-            # propagate=True lets records reach root StreamHandler (console)
-            # In Celery worker mode, root has Celery's handler — still correct.
-            lg.propagate = True
+            # Celery loggers propagate ONLY when running in a Celery process
+            # to prevent polluting the Uvicorn/web terminal.
+            # App loggers and Django system loggers always propagate.
+            is_celery_logger = any(name.startswith(p) for p in celery_logger_prefixes)
+            if is_celery_logger:
+                lg.propagate = in_celery_worker
+            else:
+                lg.propagate = True
+            
             lg.setLevel(logging.DEBUG)
 
         # ── Step 5: Print startup message — only ONCE, only in non-Celery ────
