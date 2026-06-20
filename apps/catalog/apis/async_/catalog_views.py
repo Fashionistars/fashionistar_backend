@@ -75,7 +75,7 @@ def _category_out(category) -> dict:
         "slug": category.slug or "",
         "image": str(category.image) if category.image else None,
         "image_url": image_url,
-        "active": category.active,
+        "is_deleted": category.is_deleted,
         "created_at": category.created_at,
         "updated_at": category.updated_at,
     }
@@ -321,7 +321,7 @@ def _homepage_category_from_dict(row: dict) -> dict:
         # image is a plain string now — never CloudinaryResource
         "image": image_str,
         "image_url": image_url,
-        "active": row.get("active", True),
+        "is_deleted": row.get("is_deleted", False),
         "created_at": row.get("created_at").isoformat() if row.get("created_at") else None,
     }
 

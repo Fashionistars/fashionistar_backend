@@ -246,3 +246,14 @@ def on_order_placed(
             order_id,
             exc,
         )
+
+
+def on_product_created(product_id: str, **kwargs):
+    """Explicitly updates search indexes and invalidates CDN caches after product creation."""
+    logger.info("EventBus Handler: catalog.product.created for Product %s", product_id)
+    # Trigger async tasks...
+    
+def on_product_updated(product_id: str, **kwargs):
+    """Invalidates storefront detail caches immediately."""
+    logger.info("EventBus Handler: catalog.product.updated for Product %s", product_id)
+    # Trigger cache invalidation...

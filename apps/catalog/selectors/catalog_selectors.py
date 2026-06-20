@@ -166,11 +166,11 @@ class CatalogSelector(BaseSelector):
         Uses .values() to avoid model instantiation overhead.
 
         Returns:
-            list[dict] with id, name, slug, active, created_at.
+            list[dict] with id, name, slug, is_deleted, created_at.
         """
         return list(
-            Category.objects.filter(active=True)
-            .values("id", "name", "slug", "active", "created_at")
+            Category.objects.filter(is_deleted=False)
+            .values("id", "name", "slug", "is_deleted", "created_at")
             .order_by("name")
         )
 
@@ -276,12 +276,12 @@ class CatalogSelector(BaseSelector):
         No model instantiation overhead.
 
         Returns:
-            list[dict] with id, name, slug, active, created_at.
+            list[dict] with id, name, slug, is_deleted, created_at.
         """
         try:
             qs = (
-                Category.objects.filter(active=True)
-                .values("id", "name", "slug", "active", "created_at")
+                Category.objects.filter(is_deleted=False)
+                .values("id", "name", "slug", "is_deleted", "created_at")
                 .order_by("name")
             )
             return [row async for row in qs]
@@ -389,18 +389,18 @@ class CatalogSelector(BaseSelector):
             category_slug: Slug of the category to look up.
 
         Returns:
-            dict with id, name, slug, active, product_count.
+            dict with id, name, slug, is_deleted, product_count.
             Empty dict if category not found.
         """
         try:
             from apps.product.models import Product
-            cat = await Category.objects.aget(slug=category_slug, active=True)
+            cat = await Category.objects.aget(slug=category_slug, is_deleted=False)
             count = await Product.objects.filter(category=cat).acount()
             return {
                 "id": str(cat.pk),
                 "name": cat.name,
                 "slug": cat.slug,
-                "active": cat.active,
+                "is_deleted": cat.is_deleted,
                 "product_count": count,
             }
         except Category.DoesNotExist:
@@ -455,7 +455,7 @@ class CatalogSelector(BaseSelector):
         Async: first N active categories for homepage category grid.
 
         Returns:
-            list[dict] with id, name, title, slug, image_url, active.
+            list[dict] with id, name, title, slug, image_url, is_deleted.
             Limited to ``limit`` rows, ordered by name (stable).
 
         Performance:
@@ -465,8 +465,8 @@ class CatalogSelector(BaseSelector):
         """
         try:
             qs = (
-                Category.objects.filter(active=True)
-                .values("id", "name", "slug", "image", "active", "created_at")
+                Category.objects.filter(is_deleted=False)
+                .values("id", "name", "slug", "image", "is_deleted", "created_at")
                 .order_by("name")[:limit]
             )
             return [row async for row in qs]
@@ -589,7 +589,7 @@ class CatalogSelector(BaseSelector):
             q = q.strip()
 
             categories_qs = (
-                Category.objects.filter(active=True, name__icontains=q)
+                Category.objects.filter(is_deleted=False, name__icontains=q)
                 .values("id", "name", "slug", "image")
                 .order_by("name")[:limit]
             )
@@ -625,10 +625,10 @@ class CatalogSelector(BaseSelector):
             dict or None if not found.
         """
         try:
-            cat = await Category.objects.aget(slug=slug, active=True)
+            cat = await Category.objects.aget(slug=slug, is_deleted=False)
             children_qs = (
-                Category.objects.filter(parent=cat, active=True)
-                .values("id", "name", "slug", "image", "sort_order", "icon_class", "color_hex")
+                Category.objects.filter(parent=cat, is_deleted=False)
+                .values("id", "name", "slug", "image", "sort_order", "icon_class")
                 .order_by("sort_order", "name")
             )
             children = [row async for row in children_qs]
@@ -642,9 +642,8 @@ class CatalogSelector(BaseSelector):
                 "banner_image": str(cat.banner_image) if cat.banner_image else None,
                 "sort_order": cat.sort_order,
                 "icon_class": cat.icon_class,
-                "color_hex": cat.color_hex,
                 "cached_product_count": cat.cached_product_count,
-                "active": cat.active,
+                "is_deleted": cat.is_deleted,
                 "children": children,
             }
         except Category.DoesNotExist:

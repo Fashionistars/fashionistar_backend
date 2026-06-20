@@ -53,7 +53,7 @@ def rich_seed(db):
     cat_active = Category.objects.create(
         name="Aso-ebi",
         slug="aso-ebi",
-        active=True,
+        is_deleted=False,
     )
     # Try to set v2 fields if they exist on the model
     for field, value in [
@@ -71,14 +71,14 @@ def rich_seed(db):
     Category.objects.create(
         name="Archived Cat",
         slug="archived-cat",
-        active=False,
+        is_deleted=True,
     )
 
     # Sub-category (child)
     cat_child = Category.objects.create(
         name="Aso-ebi Gele",
         slug="aso-ebi-gele",
-        active=True,
+        is_deleted=False,
     )
     try:
         cat_child.parent = cat_active
@@ -458,7 +458,7 @@ class TestCategoryDetailSelector:
         result = await CatalogSelector.aget_category_with_children("aso-ebi")
         assert result is not None
         # v2 fields confirmed in the selector source
-        for field in ["meta_title", "meta_description", "cached_product_count", "active"]:
+        for field in ["meta_title", "meta_description", "cached_product_count", "is_deleted"]:
             assert field in result, f"v2 field '{field}' missing from category detail"
 
     async def test_returns_none_for_inactive(self, rich_seed):

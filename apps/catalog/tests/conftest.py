@@ -47,7 +47,7 @@ def catalog_seed(db):
     cat = Category.objects.create(
         name="Test Category",
         slug="test-category",
-        active=True,
+        is_deleted=False,
     )
     brand = Brand.objects.create(
         title="Test Brand",
@@ -90,7 +90,7 @@ def seeded_db(db):
     Category.objects.create(
         name="Concurrency Test Cat",
         slug="concurrency-test-cat",
-        active=True,
+        is_deleted=False,
     )
     Collections.objects.create(
         title="Concurrency Test Coll",

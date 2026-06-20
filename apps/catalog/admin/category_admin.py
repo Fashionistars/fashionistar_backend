@@ -8,14 +8,16 @@ from apps.catalog.models import Category
 from apps.common.admin_cloudinary_mixin import CloudinaryUploadAdminMixin
 
 
-@admin.action(description="Mark selected categories as active")
-def make_active(modeladmin, request, queryset):
-    queryset.update(active=True)
+from django.utils import timezone
+
+@admin.action(description="Soft-delete selected categories")
+def soft_delete_selected(modeladmin, request, queryset):
+    queryset.update(is_deleted=True, deleted_at=timezone.now())
 
 
-@admin.action(description="Mark selected categories as inactive")
-def make_inactive(modeladmin, request, queryset):
-    queryset.update(active=False)
+@admin.action(description="Restore selected categories")
+def restore_selected(modeladmin, request, queryset):
+    queryset.update(is_deleted=False, deleted_at=None)
 
 
 class CategoryAdminForm(forms.ModelForm):
@@ -25,21 +27,6 @@ class CategoryAdminForm(forms.ModelForm):
 
     def clean_name(self):
         return self.cleaned_data["name"].strip()
-
-
-class ActiveCategoryFilter(admin.SimpleListFilter):
-    title = "Active Categories"
-    parameter_name = "active_status"
-
-    def lookups(self, request, model_admin):
-        return (("active", "Active"), ("inactive", "Inactive"))
-
-    def queryset(self, request, queryset):
-        if self.value() == "active":
-            return queryset.filter(active=True)
-        if self.value() == "inactive":
-            return queryset.filter(active=False)
-        return queryset
 
 
 @admin.register(Category)
@@ -52,16 +39,14 @@ class CategoryAdmin(
         "name",
         "cloudinary_preview",
         "is_deleted",
-        "active",
         "created_at",
         "updated_at",
         "slug",
     ]
-    list_editable = ["active"]
     search_fields = ["name", "slug"]
     prepopulated_fields = {"slug": ("name",)}
-    list_filter = [ActiveCategoryFilter, "is_deleted", "active", "created_at", "updated_at"]
-    actions = [make_active, make_inactive]
+    list_filter = ["is_deleted", "created_at", "updated_at"]
+    actions = [soft_delete_selected, restore_selected]
     readonly_fields = ("cloudinary_preview", "is_deleted", "created_at", "updated_at")
 
     def save_model(self, request, obj, form, change):

@@ -13,6 +13,8 @@ class CategoryService:
 
         from apps.audit_logs.services.catalog import catalog_audit
         from django.db import transaction
+        from apps.common.events import event_bus
+        from apps.catalog.events import CATALOG_CATEGORY_CREATED
 
         def _dispatch():
             try:
@@ -27,6 +29,7 @@ class CategoryService:
                 logging.getLogger(__name__).warning(f"CategoryService.create: Audit failed: {e}")
 
         transaction.on_commit(_dispatch)
+        event_bus.emit_on_commit(CATALOG_CATEGORY_CREATED, category_id=str(instance.pk))
         return instance
 
     @classmethod
@@ -36,6 +39,8 @@ class CategoryService:
 
         from apps.audit_logs.services.catalog import catalog_audit
         from django.db import transaction
+        from apps.common.events import event_bus
+        from apps.catalog.events import CATALOG_CATEGORY_UPDATED
 
         def _dispatch():
             try:
@@ -52,15 +57,17 @@ class CategoryService:
                 logging.getLogger(__name__).warning(f"CategoryService.update: Audit failed: {e}")
 
         transaction.on_commit(_dispatch)
+        event_bus.emit_on_commit(CATALOG_CATEGORY_UPDATED, category_id=str(instance.pk))
         return instance
 
     @classmethod
     def archive(cls, *, instance, request, old_values: dict):
-        instance.active = False
-        instance.save(update_fields=["active", "updated_at"])
+        instance.soft_delete()
 
         from apps.audit_logs.services.catalog import catalog_audit
         from django.db import transaction
+        from apps.common.events import event_bus
+        from apps.catalog.events import CATALOG_CATEGORY_DELETED
 
         def _dispatch():
             try:
@@ -69,7 +76,7 @@ class CategoryService:
                     category_id=str(instance.pk),
                     name=instance.name,
                     old_values=old_values,
-                    new_values={"active": False},
+                    new_values={"is_deleted": True},
                     request=request,
                 )
             except Exception as e:
@@ -77,4 +84,5 @@ class CategoryService:
                 logging.getLogger(__name__).warning(f"CategoryService.archive: Audit failed: {e}")
 
         transaction.on_commit(_dispatch)
+        event_bus.emit_on_commit(CATALOG_CATEGORY_DELETED, category_id=str(instance.pk))
         return instance

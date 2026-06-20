@@ -101,8 +101,8 @@ class TestCategoriesEndpoint:
         from apps.catalog.models import Category
         from asgiref.sync import sync_to_async
 
-        await sync_to_async(Category.objects.create)(name="Active Cat", slug="active-cat", active=True)
-        await sync_to_async(Category.objects.create)(name="Inactive Cat", slug="inactive-cat", active=False)
+        await sync_to_async(Category.objects.create)(name="Active Cat", slug="active-cat", is_deleted=False)
+        await sync_to_async(Category.objects.create)(name="Inactive Cat", slug="inactive-cat", is_deleted=True)
 
         resp = await async_client.get(_url("/categories/"))
         data = _get_data(resp.json())

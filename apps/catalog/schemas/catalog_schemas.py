@@ -16,7 +16,7 @@ class CatalogCategoryOut(Schema):
     slug: str
     image: str | None
     image_url: str
-    active: bool
+    is_deleted: bool
     created_at: datetime
     updated_at: datetime
 
@@ -167,7 +167,7 @@ class HomepageCategoryCardOut(Schema):
     slug: str
     image: str | None
     image_url: str
-    active: bool
+    is_deleted: bool
     created_at: str | None
 
 

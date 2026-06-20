@@ -25,7 +25,7 @@ def _payload(response):
 
 
 def test_catalog_public_lists_return_normalized_metadata(db):
-    Category.objects.create(name="Gowns", active=True)
+    Category.objects.create(name="Gowns", is_deleted=False)
     Brand.objects.create(title="House of Ada", active=True)
     Collections.objects.create(
         title="Wedding Edit",
@@ -71,7 +71,7 @@ def test_catalog_public_lists_return_normalized_metadata(db):
 
 
 def test_catalog_public_detail_uses_slug(db):
-    category = Category.objects.create(name="Senator Wear", active=True)
+    category = Category.objects.create(name="Senator Wear", is_deleted=False)
     client = APIClient()
 
     response = client.get(f"/api/v1/ninja/catalog/categories/{category.slug}/")
