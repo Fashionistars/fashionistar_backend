@@ -141,7 +141,7 @@ class CartRetrieveView(APIView):
 
     renderer_classes = _RENDERERS
     parser_classes = _PARSERS
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive]
 
     def get(self, request):
         try:

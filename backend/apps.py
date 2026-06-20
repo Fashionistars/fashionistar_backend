@@ -123,13 +123,17 @@ class BackendConfig(AppConfig):
             'celery.worker':       'logs/system/celery.log',
             'celery.beat':         'logs/system/celery.log',
             'celery.app.trace':    'logs/system/celery.log',
+            'celery.utils.functional': 'logs/system/celery.log',
+            'celery.utils':        'logs/system/celery.log',
+            'kombu':               'logs/system/celery.log',
+            'amqp':                'logs/system/celery.log',
             'django_celery_beat':  'logs/system/celery.log',
             'django_celery_results': 'logs/system/celery.log',
             'django':              'logs/system/django.log',
             'apps.global_platform_settings':            'logs/apps/global_platform_settings/global_platform_settings.log',
         }
 
-        celery_logger_prefixes = ('celery', 'django_celery_beat', 'django_celery_results')
+        celery_logger_prefixes = ('celery', 'django_celery_beat', 'django_celery_results', 'kombu', 'amqp')
 
         for name, rel_path in log_map.items():
             lg = logging.getLogger(name)

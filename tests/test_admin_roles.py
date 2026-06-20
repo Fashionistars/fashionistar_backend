@@ -32,6 +32,9 @@ def make_user(db):
 
     def _make(role: str, email: str | None = None) -> UnifiedUser:
         _email = email or f"{role.lower().replace('_', '')}@fashionistar.test"
+        user = UnifiedUser.objects.filter(email=_email).first()
+        if user:
+            return user
         user = UnifiedUser.objects.create_user(
             email=_email,
             password="TestPass@2026!",
@@ -47,14 +50,24 @@ def make_user(db):
 @pytest.fixture
 def get_token(api_client, make_user):
     """Get JWT token for a role."""
-    def _get(role: str) -> str:
-        user = make_user(role)
+    from apps.authentication.models import UnifiedUser
+
+    def _get(role_or_user) -> str:
+        if isinstance(role_or_user, str):
+            email = f"{role_or_user.lower().replace('_', '')}@fashionistar.test"
+            user = UnifiedUser.objects.filter(email=email).first()
+            if not user:
+                user = make_user(role_or_user)
+        else:
+            user = role_or_user
+
         resp = api_client.post(
             "/api/v1/auth/login/",
-            {"email": user.email, "password": "TestPass@2026!"},
+            {"email_or_phone": user.email, "password": "TestPass@2026!"},
             format="json",
         )
-        return resp.data.get("data", {}).get("access", "")
+        token = resp.data.get("data", {}).get("access") or resp.data.get("access", "")
+        return token
     return _get
 
 
@@ -92,7 +105,7 @@ CLIENT_ENDPOINTS = [
 PUBLIC_ENDPOINTS = [
     "/api/v1/health/",
     "/api/v1/ninja/products/",
-    "/api/v1/ninja/categories/",
+    "/api/v1/ninja/catalog/categories/",
 ]
 
 
@@ -114,9 +127,10 @@ class TestAdminOnlyEndpoints:
     @pytest.mark.django_db
     @pytest.mark.parametrize("endpoint", ADMIN_ONLY_ENDPOINTS)
     @pytest.mark.parametrize("role", ALL_ROLES)
-    def test_admin_endpoint_role_access(self, api_client, make_user, endpoint, role):
-        user = make_user(role)
-        api_client.force_authenticate(user=user)
+    def test_admin_endpoint_role_access(self, api_client, get_token, endpoint, role):
+        token = get_token(role)
+        if token:
+            api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
         resp = api_client.get(endpoint)
 
         if role in ("ADMIN", "SUPER_ADMIN"):
@@ -137,9 +151,10 @@ class TestVendorEndpoints:
     @pytest.mark.django_db
     @pytest.mark.parametrize("endpoint", VENDOR_ENDPOINTS)
     @pytest.mark.parametrize("role", ALL_ROLES)
-    def test_vendor_endpoint_role_access(self, api_client, make_user, endpoint, role):
-        user = make_user(role)
-        api_client.force_authenticate(user=user)
+    def test_vendor_endpoint_role_access(self, api_client, get_token, endpoint, role):
+        token = get_token(role)
+        if token:
+            api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
         resp = api_client.get(endpoint)
 
         if role in ("VENDOR", "SUPER_VENDOR", "ADMIN", "SUPER_ADMIN"):
@@ -158,14 +173,25 @@ class TestClientEndpoints:
     @pytest.mark.django_db
     @pytest.mark.parametrize("endpoint", CLIENT_ENDPOINTS)
     @pytest.mark.parametrize("role", ["CLIENT", "VENDOR", "ADMIN"])
-    def test_client_endpoint_access(self, api_client, make_user, endpoint, role):
-        user = make_user(role)
-        api_client.force_authenticate(user=user)
+    def test_client_endpoint_access(self, api_client, get_token, endpoint, role):
+        token = get_token(role)
+        if token:
+            api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
         resp = api_client.get(endpoint)
-        # All authenticated roles can access client endpoints (own data)
-        assert resp.status_code in (200, 404), (
-            f"Role {role} cannot access {endpoint}: got {resp.status_code}"
-        )
+        
+        if role == "CLIENT":
+            assert resp.status_code in (200, 404), (
+                f"CLIENT cannot access {endpoint}: got {resp.status_code}"
+            )
+        else:
+            if endpoint in ("/api/v1/client/profile/", "/api/v1/orders/"):
+                assert resp.status_code in (403, 404), (
+                    f"Non-client role {role} accessed client endpoint {endpoint}: got {resp.status_code}"
+                )
+            else:
+                assert resp.status_code in (200, 404), (
+                    f"Role {role} cannot access client endpoint {endpoint}: got {resp.status_code}"
+                )
 
 
 @pytest.mark.django_db
@@ -186,7 +212,7 @@ class TestObjectLevelPermissions:
     """BOLA (OWASP API1) — users cannot access other users' resources."""
 
     @pytest.mark.django_db
-    def test_client_cannot_read_other_client_measurements(self, api_client, make_user):
+    def test_client_cannot_read_other_client_measurements(self, api_client, get_token, make_user):
         from apps.measurements.models import MeasurementProfile
 
         owner = make_user("CLIENT", "owner@test.com")
@@ -198,21 +224,25 @@ class TestObjectLevelPermissions:
             height=175.0, weight_kg=70.0,
         )
 
-        api_client.force_authenticate(user=attacker)
+        token = get_token(attacker)
+        if token:
+            api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
         resp = api_client.get(f"/api/v1/measurements/{profile.id}/")
         assert resp.status_code in (403, 404), (
             f"BOLA: attacker accessed owner's measurement profile: {resp.status_code}"
         )
 
     @pytest.mark.django_db
-    def test_vendor_cannot_read_other_vendor_orders(self, api_client, make_user):
+    def test_vendor_cannot_read_other_vendor_orders(self, api_client, get_token, make_user):
         from apps.order.models import Order
         from apps.vendor.models import VendorProfile
 
         vendor_a = make_user("VENDOR", "vendora@test.com")
         vendor_b = make_user("VENDOR", "vendorb@test.com")
 
-        api_client.force_authenticate(user=vendor_b)
+        token = get_token(vendor_b)
+        if token:
+            api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
         # Try to list orders for vendor_a's store
         resp = api_client.get(f"/api/v1/vendor/orders/?vendor_id={vendor_a.id}")
         # Must not return vendor_a's orders
