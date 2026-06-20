@@ -408,6 +408,8 @@ def create_product(
         actor=vendor.user if hasattr(vendor, "user") else None,
         request=request,
     )
+    from apps.common.events import event_bus
+    event_bus.emit_on_commit("catalog.product.created", product_id=str(product.id))
     logger.info("Product created: %s by vendor %s", product.slug, vendor)
     return product
 
@@ -508,6 +510,8 @@ def update_product(
         _sync_product_faqs(product, faqs_data)
 
     _emit_audit("product.updated", product, actor=actor, request=request)
+    from apps.common.events import event_bus
+    event_bus.emit_on_commit("catalog.product.updated", product_id=str(product.id))
     return product
 
 

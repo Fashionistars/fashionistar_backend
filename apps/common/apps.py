@@ -73,9 +73,16 @@ class CommonConfig(AppConfig):
         # 2. EventBus subscriptions — business lifecycle events
         # Import here (not at module level) to avoid circular imports.
         from apps.common.events import event_bus
-        from apps.common.event_handlers import on_order_placed, on_user_registered
+        from apps.common.event_handlers import (
+            on_order_placed,
+            on_user_registered,
+            on_product_created,
+            on_product_updated,
+        )
         event_bus.subscribe('user.registered', on_user_registered)
         event_bus.subscribe('order.placed', on_order_placed)
+        event_bus.subscribe('catalog.product.created', on_product_created)
+        event_bus.subscribe('catalog.product.updated', on_product_updated)
 
         # 3. Cloudinary SDK bootstrap for HTTP worker threads / django admin panel
         try:
