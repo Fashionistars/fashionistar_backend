@@ -70,6 +70,7 @@ app = Celery("backend")
 # namespace="CELERY" means all celery-related settings in Django's settings
 # file should have the `CELERY_` prefix.
 app.config_from_object("django.conf:settings", namespace="CELERY")
+app.conf.worker_hijack_root_logger = False
 
 # Auto-discover tasks from all INSTALLED_APPS.
 # Explicit list ensures future apps added to INSTALLED_APPS are auto-include.
@@ -243,6 +244,14 @@ app.conf.beat_scheduler = "django_celery_beat.schedulers:DatabaseScheduler"
 # ═══════════════════════════════════════════════════════════════════════════════
 
 logger = logging.getLogger(__name__)
+
+
+@signals.setup_logging.connect
+def config_loggers(*args, **kwargs):
+    """Configure logging for Celery workers using Django's settings."""
+    from logging.config import dictConfig
+    from django.conf import settings
+    dictConfig(settings.LOGGING)
 
 
 @signals.after_task_publish.connect

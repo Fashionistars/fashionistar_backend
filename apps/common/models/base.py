@@ -53,7 +53,7 @@ class TimeStampedModel(models.Model):
         auto_now=True,
         help_text="Timestamp when the record was last updated.",
     )
-
+    active = models.BooleanField(default=True, db_index=True)
     class Meta:
         abstract = True
 

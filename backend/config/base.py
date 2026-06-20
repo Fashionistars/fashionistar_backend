@@ -912,6 +912,7 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TIMEZONE = "UTC"
 CELERY_ENABLE_UTC = True
+CELERY_WORKER_HIJACK_ROOT_LOGGER = False
 
 # ── Reliability flags ─────────────────────────────────────────────────────
 CELERY_WORKER_MAX_TASKS_PER_CHILD = (
