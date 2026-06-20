@@ -63,7 +63,7 @@ def invalidate_catalog_cache(self) -> str:  # type: ignore[override]
     default_retry_delay=10,
     ignore_result=True,
 )
-def update_category_product_count(self, category_id: int) -> str:  # type: ignore[override]
+def update_category_product_count(self, category_id: str | int) -> str:  # type: ignore[override]
     """
     Recalculate and persist cached_product_count for a single Category.
 
@@ -90,7 +90,7 @@ def update_category_product_count(self, category_id: int) -> str:  # type: ignor
     default_retry_delay=10,
     ignore_result=True,
 )
-def update_brand_product_count(self, brand_id: int) -> str:  # type: ignore[override]
+def update_brand_product_count(self, brand_id: str | int) -> str:  # type: ignore[override]
     """
     Recalculate and persist cached_product_count for a single Brand.
 
@@ -123,7 +123,7 @@ def update_brand_product_count(self, brand_id: int) -> str:  # type: ignore[over
     default_retry_delay=10,
     ignore_result=True,
 )
-def update_collection_product_count(self, collection_id: int) -> str:  # type: ignore[override]
+def update_collection_product_count(self, collection_id: str | int) -> str:  # type: ignore[override]
     """
     Recalculate and persist cached_product_count for a Collections instance.
 

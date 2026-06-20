@@ -86,7 +86,7 @@ def _on_category_updated(category_id: str, **kwargs) -> None:
 
         invalidate_catalog_cache.apply_async()
         if category_id:
-            update_category_product_count.apply_async(args=[int(category_id)])
+            update_category_product_count.apply_async(args=[str(category_id)])
     except Exception as exc:
         logger.warning("_on_category_updated handler failed (non-fatal): %s", exc)
 
@@ -120,7 +120,7 @@ def _on_brand_updated(brand_id: str, **kwargs) -> None:
 
         invalidate_catalog_cache.apply_async()
         if brand_id:
-            update_brand_product_count.apply_async(args=[int(brand_id)])
+            update_brand_product_count.apply_async(args=[str(brand_id)])
     except Exception as exc:
         logger.warning("_on_brand_updated handler failed (non-fatal): %s", exc)
 

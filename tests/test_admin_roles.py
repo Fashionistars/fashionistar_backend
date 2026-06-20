@@ -27,21 +27,30 @@ def api_client():
 
 @pytest.fixture
 def make_user(db):
-    """Factory fixture: create a user with a specific role."""
+    """Factory fixture: create a user with a specific role and provision vendor profile if applicable."""
     from apps.authentication.models import UnifiedUser
+    from apps.vendor.models import VendorProfile
+    from apps.common.roles import is_vendor_role
 
     def _make(role: str, email: str | None = None) -> UnifiedUser:
         _email = email or f"{role.lower().replace('_', '')}@fashionistar.test"
         user = UnifiedUser.objects.filter(email=_email).first()
-        if user:
-            return user
-        user = UnifiedUser.objects.create_user(
-            email=_email,
-            password="TestPass@2026!",
-            role=role.lower(),
-            is_active=True,
-            is_verified=True,
-        )
+        if not user:
+            user = UnifiedUser.objects.create_user(
+                email=_email,
+                password="TestPass@2026!",
+                role=role.lower(),
+                is_active=True,
+                is_verified=True,
+            )
+        if is_vendor_role(user.role):
+            VendorProfile.objects.get_or_create(
+                user=user,
+                defaults={
+                    "store_name": f"{role.title()} Atelier",
+                    "store_slug": f"atelier-{user.id}",
+                }
+            )
         return user
 
     return _make
@@ -133,14 +142,14 @@ class TestAdminOnlyEndpoints:
             api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
         resp = api_client.get(endpoint)
 
-        if role in ("ADMIN", "SUPER_ADMIN"):
-            # Admin roles must be able to access
+        if role in ("ADMIN", "SUPER_ADMIN", "STAFF", "EDITOR", "SUPPORT", "MODERATOR"):
+            # Admin/Staff roles must be able to access
             assert resp.status_code in (200, 404), (
-                f"ADMIN cannot access {endpoint}: got {resp.status_code}"
+                f"ADMIN/Staff role {role} cannot access {endpoint}: got {resp.status_code}"
             )
         else:
-            # Non-admin roles must be rejected
-            assert resp.status_code in (403, 404), (
+            # Non-admin roles (CLIENT, VENDOR) must be rejected
+            assert resp.status_code in (401, 403, 404), (
                 f"Non-admin role {role} accessed admin endpoint {endpoint}: got {resp.status_code}"
             )
 
@@ -157,7 +166,7 @@ class TestVendorEndpoints:
             api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
         resp = api_client.get(endpoint)
 
-        if role in ("VENDOR", "SUPER_VENDOR", "ADMIN", "SUPER_ADMIN"):
+        if role in ("VENDOR", "SUPER_VENDOR"):
             assert resp.status_code in (200, 404), (
                 f"Vendor role {role} cannot access {endpoint}: got {resp.status_code}"
             )

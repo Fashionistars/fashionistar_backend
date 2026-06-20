@@ -47,8 +47,8 @@ class CatalogSelector(BaseSelector):
     def categories():
         """Return active categories queryset ordered by name."""
         return (
-            Category.objects.filter(active=True)
-            .only("id", "name", "slug", "image", "active", "created_at", "updated_at")
+            Category.objects.filter(is_deleted=False)
+            .only("id", "name", "slug", "image", "is_deleted", "created_at", "updated_at")
             .order_by("name")
         )
 
