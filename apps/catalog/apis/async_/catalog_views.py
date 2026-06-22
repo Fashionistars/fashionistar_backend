@@ -68,6 +68,7 @@ def _category_out(category) -> dict:
     """Serialize a Category without DRF overhead."""
 
     image_url = safe_media_url(category, "image")
+    cloudinary_url = _image_url_cloudinary(getattr(category, "image", None))
     return {
         "id": str(category.pk),
         "name": category.name,
@@ -75,7 +76,8 @@ def _category_out(category) -> dict:
         "slug": category.slug or "",
         "image": str(category.image) if category.image else None,
         "image_url": image_url,
-        "is_deleted": category.is_deleted,
+        "cloudinary_url": cloudinary_url,
+        "active": not getattr(category, "is_deleted", False),
         "created_at": category.created_at,
         "updated_at": category.updated_at,
     }
@@ -104,6 +106,8 @@ def _collection_out(collection) -> dict:
 
     image_url = safe_media_url(collection, "image")
     background_url = safe_media_url(collection, "background_image")
+    cloudinary_url = _image_url_cloudinary(getattr(collection, "image", None))
+    bg_cloudinary_url = _image_url_cloudinary(getattr(collection, "background_image", None))
     return {
         "id": str(collection.pk),
         "name": collection.title or "",
@@ -113,10 +117,12 @@ def _collection_out(collection) -> dict:
         "description": collection.description or "",
         "image": str(collection.image) if collection.image else None,
         "image_url": image_url,
+        "cloudinary_url": cloudinary_url,
         "background_image": (
             str(collection.background_image) if collection.background_image else None
         ),
         "background_image_url": background_url,
+        "background_cloudinary_url": bg_cloudinary_url,
         "created_at": collection.created_at,
         "updated_at": collection.updated_at,
     }
@@ -223,16 +229,20 @@ def _homepage_product_out(product) -> dict:
         "sku": product.sku,
         "price": _money(product.price),
         "old_price": _money(product.old_price) if product.old_price else None,
-        "discount_percentage": getattr(product, "discount_percentage", 0),
+        "discount_percentage": getattr(product, "discount_percentage", 0) or 0,
         "currency": product.currency,
+        # image_url: Django /media/ or Cloudinary URL (legacy fallback)
         "image_url": card_url,
+        # cloudinary_url: Cloudinary card-optimised URL (w_480,h_480,c_fill)
+        # Use this as the primary src on the frontend; fall back to image_url.
+        "cloudinary_url": card_url,
         "in_stock": product.in_stock,
-        "stock_qty": product.stock_qty,
+        "stock_qty": product.stock_qty or 0,
         "featured": product.featured,
         "hot_deal": product.hot_deal,
         "rating": float(product.rating or 0),
-        "review_count": product.review_count,
-        "computed_review_count": getattr(product, "computed_review_count", 0),
+        "review_count": product.review_count or 0,
+        "computed_review_count": getattr(product, "computed_review_count", 0) or 0,
         "computed_avg_rating": float(getattr(product, "computed_avg_rating", 0) or 0),
         "category_name": category.name if category else None,
         "category_slug": category.slug if category else None,
@@ -240,6 +250,14 @@ def _homepage_product_out(product) -> dict:
         "vendor_slug": vendor_slug,
         "requires_measurement": product.requires_measurement,
         "is_customisable": product.is_customisable,
+        # Demographic & discovery signals
+        "gender_target": getattr(product, "gender_target", "") or "",
+        "age_group": getattr(product, "age_group", "") or "",
+        "condition": getattr(product, "condition", "new") or "new",
+        "is_pre_order": bool(getattr(product, "is_pre_order", False)),
+        # Social proof signals
+        "orders_count": getattr(product, "orders_count", 0) or 0,
+        "views": getattr(product, "views", 0) or 0,
         "sizes": [{"id": str(s.pk), "name": s.name} for s in sizes],
         "colors": [
             {"id": str(c.pk), "name": c.name, "hex_code": c.hex_code or "#000000"}
@@ -276,6 +294,15 @@ def _homepage_collection_from_dict(row: dict) -> dict:
     image_url = safe_media_url(row, "image")
     bg_url = safe_media_url(row, "background_image")
 
+    # Best-effort Cloudinary URL — inject c_fill transform if Cloudinary asset
+    def _to_cloudinary(raw) -> str | None:
+        if not raw:
+            return None
+        s = str(raw)
+        if "res.cloudinary.com" in s and "/upload/" in s and "/upload/w_" not in s:
+            return s.replace("/upload/", "/upload/w_800,h_600,c_fill,f_auto,q_auto/")
+        return s if s.startswith("http") else None
+
     return {
         "id": str(row["id"]),
         "name": row.get("title") or "",
@@ -283,9 +310,9 @@ def _homepage_collection_from_dict(row: dict) -> dict:
         "slug": row.get("slug") or "",
         "sub_title": row.get("sub_title") or "",
         "description": row.get("description") or "",
-        # image / background_image are plain strings now — never CloudinaryResource
         "image": image_str,
         "image_url": image_url,
+        "cloudinary_url": _to_cloudinary(image_raw),
         "background_image": bg_str,
         "background_image_url": bg_url,
         "created_at": row.get("created_at").isoformat() if row.get("created_at") else None,
@@ -313,6 +340,15 @@ def _homepage_category_from_dict(row: dict) -> dict:
     image_str = _to_str(image_raw)
     image_url = safe_media_url(row, "image")
 
+    # Best-effort Cloudinary URL — inject fill transform if Cloudinary asset
+    def _to_cloudinary_cat(raw) -> str | None:
+        if not raw:
+            return None
+        s = str(raw)
+        if "res.cloudinary.com" in s and "/upload/" in s and "/upload/w_" not in s:
+            return s.replace("/upload/", "/upload/w_400,h_400,c_fill,f_auto,q_auto/")
+        return s if s.startswith("http") else None
+
     return {
         "id": str(row["id"]),
         "name": row.get("name") or "",
@@ -321,7 +357,8 @@ def _homepage_category_from_dict(row: dict) -> dict:
         # image is a plain string now — never CloudinaryResource
         "image": image_str,
         "image_url": image_url,
-        "is_deleted": row.get("is_deleted", False),
+        "cloudinary_url": _to_cloudinary_cat(image_raw),
+        "active": not row.get("is_deleted", False),
         "created_at": row.get("created_at").isoformat() if row.get("created_at") else None,
     }
 
@@ -561,12 +598,14 @@ async def get_homepage_bundle(
         "featured_products": products_out,
         "hot_deals": hot_deals_out,
         "reviews": reviews,
+        "banners": [],  # v1 endpoint has no banners — use /homepage/bundle/ for banners
         "meta": {
             "collections_count": len(collections_out),
             "categories_count": len(categories_out),
             "products_count": len(products_out),
             "hot_deals_count": len(hot_deals_out),
             "reviews_count": len(reviews),
+            "banners_count": 0,
         },
     }
 
