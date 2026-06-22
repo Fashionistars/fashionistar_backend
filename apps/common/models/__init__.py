@@ -46,6 +46,9 @@ from apps.common.models.analytics import (
 # ── Webhook audit trail ──────────────────────────────────────────────────────
 from apps.common.models.processed_webhook import CloudinaryProcessedWebhook
 
+# ── Performance telemetry audit log ──────────────────────────────────────────
+from apps.common.models.telemetry import SlowPerformanceAuditLog
+
 __all__ = [
     # base
     "TimeStampedModel",
@@ -60,4 +63,6 @@ __all__ = [
     "EntityLifecycleRegistry",
     # webhook
     "CloudinaryProcessedWebhook",
+    # telemetry
+    "SlowPerformanceAuditLog",
 ]

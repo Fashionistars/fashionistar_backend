@@ -115,6 +115,17 @@ except Exception as exc:  # pragma: no cover
     logger.warning("ℹ️ NinjaAPI: common router FAILED to register: %s", exc)
 
 
+# Telemetry domain: /api/v1/ninja/common/telemetry/
+# Receives Core Web Vitals from Next.js edge; auth via X-Internal-Token header.
+try:
+    from apps.common.telemetry_api import telemetry_router
+    ninja_api.add_router("/common/telemetry/", telemetry_router, url_name_prefix="telemetry")
+    logger.info("✅ NinjaAPI: telemetry router registered at /api/v1/ninja/common/telemetry/")
+except Exception as exc:  # pragma: no cover
+    logger.warning("ℹ️ NinjaAPI: telemetry router FAILED to register: %s", exc)
+
+
+
 # Client domain: /api/v1/ninja/client/
 try:
     from apps.client.apis.async_.dashboard_views import router as client_router
