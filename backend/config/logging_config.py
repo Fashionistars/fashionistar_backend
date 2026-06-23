@@ -589,13 +589,6 @@ def build_logging_config(
             'propagate': False,
         },
 
-        # ── apps.cart ────────────────────────────────────────────────────────
-        'apps.cart': {
-            'handlers': _handlers_for('file.store'),
-            'level': 'DEBUG' if debug else 'INFO',
-            'propagate': False,
-        },
-
         # ── apps.catalog ─────────────────────────────────────────────────────
         'apps.catalog': {
             'handlers': _handlers_for('file.store'),

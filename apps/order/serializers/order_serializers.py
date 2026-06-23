@@ -120,6 +120,13 @@ class OrderDetailSerializer(serializers.ModelSerializer):
         ]
 
 
+class PlaceOrderItemSerializer(serializers.Serializer):
+    product_id = serializers.UUIDField(required=False, allow_null=True)
+    product_slug = serializers.CharField(required=False, allow_blank=True)
+    variant_id = serializers.UUIDField(required=False, allow_null=True)
+    quantity = serializers.IntegerField(min_value=1)
+
+
 class PlaceOrderSerializer(serializers.Serializer):
     delivery_address = serializers.DictField(child=serializers.CharField(), required=True)
     fulfillment_type = serializers.ChoiceField(
@@ -129,6 +136,8 @@ class PlaceOrderSerializer(serializers.Serializer):
     idempotency_key = serializers.CharField(required=False, allow_blank=True)
     measurement_profile_id = serializers.UUIDField(required=False, allow_null=True)
     notes = serializers.CharField(required=False, allow_blank=True, max_length=500)
+    items = PlaceOrderItemSerializer(many=True, required=True)
+    coupon_code = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     def validate_delivery_address(self, value):
         if not value.get("address_line_1") or not value.get("city"):

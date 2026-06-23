@@ -132,11 +132,6 @@ try:
 except ImportError:
     pass
 
-try:
-    from apps.cart.admin_backend.api import router as cart_admin_router
-    admin_ninja_api.add_router("/cart/", cart_admin_router)
-except ImportError:
-    pass
 
 # Wave D — Financial Operations
 try:
@@ -267,11 +262,6 @@ try:
 except ImportError:
     pass
 
-try:
-    from apps.cart.admin_backend.urls import urlpatterns as cart_admin_urls
-    drf_urlpatterns.append(path("cart/", include((cart_admin_urls, "admin_cart"))))
-except ImportError:
-    pass
 
 # Wave D — Financial Operations DRF mutations
 try:

@@ -71,14 +71,21 @@ def make_wallet(db):
     from apps.wallet.models import Wallet
 
     def _factory(user, balance: Decimal = Decimal("50000.00")) -> Any:
-        return Wallet.objects.create(
-            user=user,
-            available_balance=balance,
-            held_balance=Decimal("0.00"),
-            total_credited=balance,
-            total_debited=Decimal("0.00"),
-            currency="NGN",
-        )
+        from apps.wallet.models import Wallet
+        from apps.wallet.services.wallet_service import WalletService
+        wallet = Wallet.get_or_create_for_user(user, owner_type=user.role)
+        wallet.available_balance = Decimal("0.00")
+        wallet.save(update_fields=["available_balance"])
+        if balance > 0:
+            WalletService.credit(
+                user=user,
+                amount=balance,
+                transaction_type="bonus_credit",
+                reference=f"initial_deposit_{uuid.uuid4().hex}",
+                description="Initial balance setup",
+            )
+        wallet.refresh_from_db()
+        return wallet
 
     return _factory
 

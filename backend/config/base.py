@@ -75,6 +75,10 @@ def read_debug_flag(default: bool = False) -> bool:
     return default
 
 
+FASHIONISTAR_COMPANY_WALLET_EMAIL_ADDRESS = env("FASHIONISTAR_COMPANY_WALLET_EMAIL_ADDRESS", default="fashionistarclothings@outlook.com")
+
+
+
 # =============================================================================
 # SECURITY
 # =============================================================================
@@ -181,7 +185,6 @@ INSTALLED_APPS = [
         "apps.global_platform_settings",   # Phase 9: Global admin-configurable platform settings (standalone app)
         "apps.catalog",       # Canonical public commerce metadata facade
         "apps.product",       # Phase 4: Product catalogue, variants, inventory, reviews
-        "apps.cart",          # Phase 4: Shopping cart, idempotent line items, coupon apply
         "apps.order",          # Phase 4: Order lifecycle, status machine, escrow trigger
         "apps.notification",   # Phase 4: In-app, email, push, SMS notification feed
         "apps.measurements",   # Phase 4: Body measurements, checkout gate for custom tailoring

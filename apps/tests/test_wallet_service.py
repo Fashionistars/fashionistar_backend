@@ -66,9 +66,9 @@ class TestWalletCredit:
         )
 
         tx = WalletTransaction.objects.get(reference=ref)
-        assert tx.transaction_type == "credit"
+        assert tx.entry_type == "credit"
         assert tx.amount == Decimal("5000.00")
-        assert tx.user == user
+        assert tx.wallet.user == user
 
 
 # ── B. Debit ──────────────────────────────────────────────────────────────────
@@ -143,14 +143,14 @@ class TestWalletHold:
         user = make_user(role="vendor")
         make_wallet(user, balance=Decimal("50000.00"))
 
-        WalletService.hold(
+        WalletService.escrow_hold(
             user=user,
             amount=Decimal("15000.00"),
-            reference=f"hold_{uuid.uuid4().hex}",
+            order_reference=f"hold_{uuid.uuid4().hex}",
         )
 
         wallet = Wallet.objects.get(user=user)
-        assert wallet.held_balance == Decimal("15000.00")
+        assert wallet.escrow_balance == Decimal("15000.00")
         assert wallet.available_balance == Decimal("35000.00")
 
     def test_hold_raises_on_insufficient(self, make_user, make_wallet):
@@ -160,10 +160,10 @@ class TestWalletHold:
         make_wallet(user, balance=Decimal("50000.00"))
 
         with pytest.raises(ValueError):
-            WalletService.hold(
+            WalletService.escrow_hold(
                 user=user,
                 amount=Decimal("999999.00"),
-                reference=f"hold_fail_{uuid.uuid4().hex}",
+                order_reference=f"hold_fail_{uuid.uuid4().hex}",
             )
 
 
@@ -181,12 +181,12 @@ class TestWalletRelease:
         make_wallet(user, balance=Decimal("50000.00"))
 
         ref = f"hold_{uuid.uuid4().hex}"
-        WalletService.hold(user=user, amount=Decimal("10000.00"), reference=ref)
-        WalletService.release_hold(user=user, amount=Decimal("10000.00"), reference=ref)
+        WalletService.escrow_hold(user=user, amount=Decimal("10000.00"), order_reference=ref)
+        WalletService.escrow_refund(buyer_user=user, amount=Decimal("10000.00"), order_reference=ref)
 
         wallet = Wallet.objects.get(user=user)
-        assert wallet.held_balance == Decimal("0.00")
-        assert wallet.available_balance == Decimal("50000.00")
+        assert wallet.escrow_balance == Decimal("0.00")
+        assert wallet.available_balance == Decimal("60000.00")
 
 
 # ── E. Idempotency ────────────────────────────────────────────────────────────
@@ -209,7 +209,8 @@ class TestWalletIdempotency:
             reference=ref,
         )
 
-        with pytest.raises((IntegrityError, ValueError)):
+        from apps.wallet.services.wallet_service import DuplicateTransactionError
+        with pytest.raises(DuplicateTransactionError):
             with transaction.atomic():
                 WalletService.credit(
                     user=user,

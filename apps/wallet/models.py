@@ -1,9 +1,9 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
-
+import os
 from django.conf import settings
 from django.contrib.auth.hashers import check_password, make_password
 from django.core.exceptions import ValidationError
@@ -17,6 +17,7 @@ from apps.common.models import TimeStampedModel
 if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractUser
 
+from backend.config import FASHIONISTAR_COMPANY_WALLET_EMAIL_ADDRESS
 
 class Currency(TimeStampedModel):
     name = models.CharField(max_length=100)
@@ -111,8 +112,8 @@ class Wallet(TimeStampedModel):
         return f"{self.name} [{owner}] {self.currency.code}"
 
     def clean(self):
-        if self.owner_type == WalletOwnerType.COMPANY and self.user_id:
-            raise ValidationError("Company wallets must not be tied to a user.")
+        if self.owner_type == WalletOwnerType.COMPANY and self.user.email != FASHIONISTAR_COMPANY_WALLET_EMAIL_ADDRESS:
+            raise ValidationError(f"Company wallets must be tied to {FASHIONISTAR_COMPANY_WALLET_EMAIL_ADDRESS}")
         if self.owner_type != WalletOwnerType.COMPANY and not self.user_id:
             raise ValidationError("User-owned wallets require a user.")
 

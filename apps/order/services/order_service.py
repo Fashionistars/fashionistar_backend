@@ -72,7 +72,6 @@ from apps.order.models import (
 )
 
 OrderItem = CartOrderItem  # alias: both names used in this service for clarity
-from apps.cart.services import get_or_create_cart, clear_cart
 
 # Module-level imports so tests can patch these as module attributes.
 # Both use try/except to avoid circular imports during startup.
@@ -527,6 +526,18 @@ def _get_active_order_hold(*, order: Order):
 # ─────────────────────────────────────────────────────────────────────────────
 
 @transaction.atomic
+class ClientCartItem:
+    def __init__(self, product, variant, quantity, unit_price, idempotency_key):
+        self.product = product
+        self.product_id = product.id
+        self.variant = variant
+        self.variant_id = variant.id if variant else None
+        self.quantity = quantity
+        self.unit_price = unit_price
+        self.idempotency_key = idempotency_key
+
+
+@transaction.atomic
 def place_order(
     *,
     user,
@@ -537,23 +548,23 @@ def place_order(
     idempotency_key: str | None = None,
     adjust_inventory=None,
     request=None,
+    items: list,
+    coupon_code: str | None = None,
 ) -> Order:
     """
     Atomic order placement.
 
     Steps (all inside one transaction):
       1. Check idempotency — return existing order if key already used.
-      2. Fetch cart + lock cart row.
-      3. Lock all product rows (select_for_update).
-      4. Validate stock for every line item.
-      5. Create Order.
-      6. Create OrderItems with financial snapshots.
-      7. Deduct stock atomically.
-      8. Increment coupon usage_count.
-      9. Trigger escrow (wallet service).
-      10. Clear cart.
-      11. Log status history.
-      12. Emit audit event.
+      2. Lock all product rows (select_for_update).
+      3. Validate stock for every line item.
+      4. Create Order.
+      5. Create OrderItems with financial snapshots.
+      6. Deduct stock atomically.
+      7. Increment coupon usage_count.
+      8. Trigger escrow (wallet service).
+      9. Log status history.
+      10. Emit audit event.
     """
     inventory_adjuster = adjust_inventory or globals().get("adjust_inventory")
 
@@ -571,50 +582,69 @@ def place_order(
             )
             return existing_record.order
 
-    # ── Step 2: Fetch and lock cart ──────────────────────────────────────
-    cart = get_or_create_cart(user)
-    if cart.items.filter(is_saved_for_later=False).count() == 0:
+    # ── Step 2: Fetch and lock products/variants ─────────────────────────
+    if not items:
         raise ValueError("Cart is empty. Cannot place an order.")
 
-    # Re-acquire cart with lock inside the transaction
-    cart = type(cart).objects.select_for_update().get(pk=cart.pk)
-    active_items = list(
-        cart.items.filter(is_saved_for_later=False).select_related(
-            "product",
-            "product__vendor",
-            "variant",
-            "variant__size",
-        )
+    active_items = []
+    prod_ids = [it.get("product_id") for it in items if it.get("product_id")]
+    prod_slugs = [it.get("product_slug") for it in items if it.get("product_slug")]
+
+    from apps.product.models import Product, ProductVariantGalleryMedia
+    from django.db.models import Q
+
+    products = Product.objects.select_for_update().select_related("shipping_profile", "vendor").filter(
+        Q(id__in=prod_ids) | Q(slug__in=prod_slugs)
     )
-    if not active_items:
-        raise ValueError("Cart is empty. Cannot place an order.")
+    products_by_id = {str(p.id): p for p in products}
+    products_by_slug = {p.slug: p for p in products}
 
-    # ── Step 3: Lock all product rows ────────────────────────────────────
-    product_ids = [item.product_id for item in active_items]
-    product_model = type(active_items[0].product)
-    # Product rows are reached through the cart item relationship already
-    # prefetched above, then the concrete model class is reused for the lock.
-    # This avoids importing the product domain model directly inside order
-    # services while preserving the same SELECT ... FOR UPDATE protection.
-    products_map = {
-        product.id: product
-        for product in product_model.objects.select_for_update().select_related("shipping_profile").filter(id__in=product_ids)
-    }
+    var_ids = [it.get("variant_id") for it in items if it.get("variant_id")]
+    variants_by_id = {}
+    if var_ids:
+        variants = ProductVariantGalleryMedia.objects.select_for_update().select_related("size").filter(id__in=var_ids)
+        variants_by_id = {str(v.id): v for v in variants}
 
-    # ── Step 4: Stock validation ─────────────────────────────────────────
-    for item in active_items:
-        product = products_map.get(item.product_id)
+    import uuid
+    for it in items:
+        prod_id = str(it.get("product_id")) if it.get("product_id") else None
+        prod_slug = it.get("product_slug")
+        product = products_by_id.get(prod_id) if prod_id else products_by_slug.get(prod_slug)
         if not product or getattr(product, "is_deleted", False):
-            raise ValueError(f"Product '{item.product.title}' is no longer available.")
-        available = product.stock_qty
+            raise ValueError("Product is no longer available.")
+
+        variant = None
+        var_id = str(it.get("variant_id")) if it.get("variant_id") else None
+        if var_id:
+            variant = variants_by_id.get(var_id)
+            if not variant:
+                raise ValueError("Selected variant is no longer available.")
+
+        qty = int(it["quantity"])
+        unit_price = product.price
+        item_idem_key = uuid.uuid4()
+
+        active_items.append(
+            ClientCartItem(
+                product=product,
+                variant=variant,
+                quantity=qty,
+                unit_price=unit_price,
+                idempotency_key=item_idem_key,
+            )
+        )
+
+    # ── Step 3: Stock validation ─────────────────────────────────────────
+    for item in active_items:
+        available = item.product.stock_qty
         if available < item.quantity:
             raise ValueError(
-                f"'{product.title}': only {available} unit(s) available, "
+                f"'{item.product.title}': only {available} unit(s) available, "
                 f"but {item.quantity} requested."
             )
 
-    # ── Step 5: Calculate order totals ───────────────────────────────────
-    subtotal = cart.subtotal
+    # ── Step 4: Calculate order totals ───────────────────────────────────
+    subtotal = sum(item.unit_price * item.quantity for item in active_items)
 
     # Resolve platform default free shipping threshold
     from apps.global_platform_settings.cache import get_platform_settings
@@ -623,7 +653,7 @@ def place_order(
 
     shipping = Decimal("0")
     for item in active_items:
-        prod = products_map[item.product_id]
+        prod = item.product
         profile = getattr(prod, "product_custom_shipping_profile", None)
 
         threshold = default_threshold
@@ -637,13 +667,24 @@ def place_order(
 
         shipping += item_shipping
 
-    discount = cart.coupon_discount
+    # Coupon validation
+    discount = Decimal("0.00")
+    coupon_obj = None
+    if coupon_code:
+        from apps.product.services import validate_and_apply_coupon
+        from apps.product.models import Coupon
+        result = validate_and_apply_coupon(
+            code=coupon_code, user=user, order_subtotal=subtotal, request=request
+        )
+        coupon_obj = Coupon.objects.get(id=result["coupon_id"])
+        discount = result["discount_amount"]
+
     total = max(Decimal("0"), subtotal + shipping - discount)
 
     # Commission calculation
     commission_total = Decimal("0")
     for item in active_items:
-        product = products_map[item.product_id]
+        product = item.product
         rate = product.commission_rate
         commission_total += (rate / 100) * item.unit_price * item.quantity
 
@@ -654,11 +695,8 @@ def place_order(
         vendor=vendor,
     )
 
-    # ── Step 6: Create Order ─────────────────────────────────────────────
-    idem_key = idempotency_key or _make_order_idempotency_key(
-        user.id,
-        f"{cart.id}:{subtotal}",
-    )
+    # ── Step 5: Create Order ─────────────────────────────────────────────
+    idem_key = idempotency_key or str(uuid.uuid4())
 
     try:
         order = Order.objects.create(
@@ -674,7 +712,7 @@ def place_order(
             vendor_payout=vendor_payout,
             amount_outstanding=total,
             currency="NGN",
-            coupon_code=cart.coupon.code if cart.coupon else "",
+            coupon_code=coupon_obj.code if coupon_obj else "",
             delivery_address=delivery_address,
             measurement_profile_id=measurement_profile_id,
             idempotency_key=idem_key,
@@ -697,11 +735,11 @@ def place_order(
             return existing_order
         raise
 
-    # ── Step 7: Create OrderItems with snapshots ─────────────────────────
+    # ── Step 6: Create OrderItems with snapshots ─────────────────────────
     order_items = []
     cart_order_snapshot_payload = []
     for item in active_items:
-        product = products_map[item.product_id]
+        product = item.product
         rate = product.commission_rate
         line_total = item.unit_price * item.quantity
         commission_amount = (rate / 100) * line_total
@@ -755,9 +793,9 @@ def place_order(
         )
     CartOrderItem.objects.bulk_create(order_items)
 
-    # ── Step 8: Deduct stock ─────────────────────────────────────
+    # ── Step 7: Deduct stock ─────────────────────────────────────
     for item in active_items:
-        product = products_map[item.product_id]
+        product = item.product
         if inventory_adjuster is not None:
             inventory_adjuster(
                 product=product,
@@ -771,23 +809,21 @@ def place_order(
             orders_count=product.orders_count + 1
         )
 
-    # ── Step 9: Increment coupon usage ───────────────────────────────────
-    if cart.coupon:
-        type(cart.coupon).objects.filter(pk=cart.coupon.pk).update(
-            usage_count=cart.coupon.usage_count + 1
+    # ── Step 8: Increment coupon usage ───────────────────────────────────
+    if coupon_obj:
+        from apps.product.models import Coupon
+        Coupon.objects.filter(pk=coupon_obj.pk).update(
+            usage_count=coupon_obj.usage_count + 1
         )
 
-    # ── Step 10: Store idempotency record ────────────────────────────────
+    # ── Step 9: Store idempotency record ────────────────────────────────
     OrderIdempotencyRecord.objects.create(
         key=idem_key,
         order=order,
         expires_at=timezone.now() + timezone.timedelta(hours=24),
     )
 
-    # ── Step 11: Clear cart ──────────────────────────────────────────────
-    clear_cart(user=user)
-
-    # ── Step 12: Log initial status history ──────────────────────────────
+    # ── Step 10: Log initial status history ──────────────────────────────
     _record_status_history(order, "", OrderStatus.PENDING_PAYMENT, actor=user, note="Order placed.")
 
     # ── Step 13: Emit audit event ────────────────────────────────────────
@@ -811,6 +847,8 @@ def place_order(
 
     logger.info("Order placed: %s total=%s user=%s", order.order_number, total, user)
     return order
+
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────

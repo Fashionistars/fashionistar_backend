@@ -20,6 +20,7 @@ Security:
 from __future__ import annotations
 
 import logging
+import threading
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -32,8 +33,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_sqlite_lock = threading.Lock()
 
-class InsufficientFundsError(Exception):
+
+class InsufficientFundsError(ValueError):
     """Raised when a debit exceeds available balance."""
 
 
@@ -59,11 +62,7 @@ class WalletService:
         Safe to call multiple times — get_or_create is atomic.
         """
         from apps.wallet.models import Wallet
-
-        wallet, created = Wallet.objects.get_or_create(user=user)
-        if created:
-            logger.info("Wallet provisioned for user=%s", user.id)
-        return wallet
+        return Wallet.get_or_create_for_user(user, owner_type=user.role)
 
     # ── Credit ────────────────────────────────────────────────────────────────
 
@@ -73,8 +72,9 @@ class WalletService:
         *,
         user: "UnifiedUser",
         amount: Decimal,
-        transaction_type: str,
-        reference_id: str,
+        transaction_type: str = "bonus_credit",
+        reference_id: str | None = None,
+        reference: str | None = None,
         description: str = "",
         metadata: dict | None = None,
     ) -> "WalletTransaction":
@@ -96,63 +96,84 @@ class WalletService:
             DuplicateTransactionError: If reference_id already exists.
             ValueError: If amount <= 0.
         """
-        from apps.wallet.models import Wallet, WalletTransaction
+        from django.db import connection
+        is_sqlite = connection.vendor == 'sqlite'
+        if is_sqlite:
+            _sqlite_lock.acquire()
+        try:
+            import time
+            from django.db.utils import OperationalError
+            for attempt in range(10):
+                try:
+                    with transaction.atomic():
+                        from apps.wallet.models import Wallet, WalletTransaction
 
-        if amount <= 0:
-            raise ValueError(f"Credit amount must be positive. Got: {amount}")
+                        ref = reference_id or reference
+                        if not ref:
+                            raise ValueError("reference or reference_id is required")
 
-        # Idempotency check
-        if WalletTransaction.objects.filter(reference_id=reference_id).exists():
-            raise DuplicateTransactionError(
-                f"WalletTransaction with reference_id={reference_id} already exists."
-            )
+                        if amount <= 0:
+                            raise ValueError(f"Credit amount must be positive. Got: {amount}")
 
-        # Lock wallet row
-        wallet = Wallet.objects.select_for_update().get(user=user)
-        balance_before = wallet.available_balance
-        wallet.available_balance += amount
-        wallet.total_credited += amount
-        wallet.save(update_fields=["available_balance", "total_credited", "updated_at"])
+                        # Idempotency check
+                        if WalletTransaction.objects.filter(reference=ref).exists():
+                            raise DuplicateTransactionError(
+                                f"WalletTransaction with reference={ref} already exists."
+                            )
 
-        txn = WalletTransaction.objects.create(
-            wallet=wallet,
-            transaction_type=transaction_type,
-            direction="credit",
-            amount=amount,
-            balance_before=balance_before,
-            balance_after=wallet.available_balance,
-            reference_id=reference_id,
-            description=description,
-            metadata=metadata or {},
-            status="completed",
-        )
+                        # Lock wallet row
+                        wallet = Wallet.objects.select_for_update().get(user=user)
+                        wallet.available_balance += amount
+                        wallet.save(update_fields=["available_balance", "updated_at"])
 
-        _uid = str(user.id)
-        _tid = str(txn.id)
+                        txn = WalletTransaction.objects.create(
+                            wallet=wallet,
+                            transaction_type=transaction_type,
+                            entry_type="credit",
+                            amount=amount,
+                            balance_snapshot=wallet.available_balance,
+                            reference=ref,
+                            description=description,
+                            metadata=metadata or {},
+                            status="completed",
+                        )
 
-        def _audit():
-            try:
-                from apps.audit_logs.tasks import log_audit_event_async
-                log_audit_event_async.apply_async(
-                    kwargs={
-                        "event_type": "wallet_credit",
-                        "event_category": "financial",
-                        "severity": "info",
-                        "action": f"Wallet credit: {amount} ({transaction_type})",
-                        "actor_id": _uid,
-                        "resource_type": "WalletTransaction",
-                        "resource_id": _tid,
-                        "metadata": {"amount": str(amount), "reference_id": reference_id},
-                        "is_compliance": True,
-                    },
-                    queue="audit",
-                )
-            except Exception:
-                logger.warning("Wallet credit audit failed", exc_info=True)
+                        _uid = str(user.id)
+                        _tid = str(txn.id)
 
-        transaction.on_commit(_audit)
-        logger.info("Wallet credit: user=%s amount=%s ref=%s", user.id, amount, reference_id)
-        return txn
+                        def _audit():
+                            try:
+                                from apps.audit_logs.tasks import write_audit_event
+                                write_audit_event.apply_async(
+                                    kwargs={
+                                        "payload": {
+                                            "event_type": "wallet_credit",
+                                            "event_category": "financial",
+                                            "severity": "info",
+                                            "action": f"Wallet credit: {amount} ({transaction_type})",
+                                            "actor_id": _uid,
+                                            "resource_type": "WalletTransaction",
+                                            "resource_id": _tid,
+                                            "metadata": {"amount": str(amount), "reference": ref},
+                                            "is_compliance": True,
+                                        }
+                                    },
+                                    queue="audit",
+                                )
+                            except Exception:
+                                logger.warning("Wallet credit audit failed", exc_info=True)
+
+                        transaction.on_commit(_audit)
+                        logger.info("Wallet credit: user=%s amount=%s ref=%s", user.id, amount, ref)
+                        return txn
+                except OperationalError as e:
+                    if "locked" in str(e).lower() and attempt < 9:
+                        time.sleep(0.05)
+                        continue
+                    raise
+        finally:
+            if is_sqlite:
+                _sqlite_lock.release()
 
     # ── Debit ─────────────────────────────────────────────────────────────────
 
@@ -162,81 +183,94 @@ class WalletService:
         *,
         user: "UnifiedUser",
         amount: Decimal,
-        transaction_type: str,
-        reference_id: str,
+        transaction_type: str = "payout_debit",
+        reference_id: str | None = None,
+        reference: str | None = None,
         description: str = "",
         metadata: dict | None = None,
         allow_negative: bool = False,
     ) -> "WalletTransaction":
         """
         Debit the user's wallet with negative-balance guard.
-
+        
         Raises:
             InsufficientFundsError: If available_balance < amount and allow_negative=False.
             DuplicateTransactionError: If reference_id already exists.
             ValueError: If amount <= 0.
         """
-        from apps.wallet.models import Wallet, WalletTransaction
+        from django.db import connection
+        is_sqlite = connection.vendor == 'sqlite'
+        if is_sqlite:
+            _sqlite_lock.acquire()
+        try:
+            with transaction.atomic():
+                from apps.wallet.models import Wallet, WalletTransaction
 
-        if amount <= 0:
-            raise ValueError(f"Debit amount must be positive. Got: {amount}")
+                ref = reference_id or reference
+                if not ref:
+                    raise ValueError("reference or reference_id is required")
 
-        if WalletTransaction.objects.filter(reference_id=reference_id).exists():
-            raise DuplicateTransactionError(
-                f"WalletTransaction with reference_id={reference_id} already exists."
-            )
+                if amount <= 0:
+                    raise ValueError(f"Debit amount must be positive. Got: {amount}")
 
-        wallet = Wallet.objects.select_for_update().get(user=user)
+                if WalletTransaction.objects.filter(reference=ref).exists():
+                    raise DuplicateTransactionError(
+                        f"WalletTransaction with reference={ref} already exists."
+                    )
 
-        if not allow_negative and wallet.available_balance < amount:
-            raise InsufficientFundsError(
-                f"Insufficient funds: available={wallet.available_balance}, required={amount}"
-            )
+                wallet = Wallet.objects.select_for_update().get(user=user)
 
-        balance_before = wallet.available_balance
-        wallet.available_balance -= amount
-        wallet.total_debited += amount
-        wallet.save(update_fields=["available_balance", "total_debited", "updated_at"])
+                if not allow_negative and wallet.available_balance < amount:
+                    raise InsufficientFundsError(
+                        f"Insufficient funds: available={wallet.available_balance}, required={amount}"
+                    )
 
-        txn = WalletTransaction.objects.create(
-            wallet=wallet,
-            transaction_type=transaction_type,
-            direction="debit",
-            amount=amount,
-            balance_before=balance_before,
-            balance_after=wallet.available_balance,
-            reference_id=reference_id,
-            description=description,
-            metadata=metadata or {},
-            status="completed",
-        )
+                wallet.available_balance -= amount
+                wallet.save(update_fields=["available_balance", "updated_at"])
 
-        _uid = str(user.id)
-        _tid = str(txn.id)
-
-        def _audit():
-            try:
-                from apps.audit_logs.tasks import log_audit_event_async
-                log_audit_event_async.apply_async(
-                    kwargs={
-                        "event_type": "wallet_debit",
-                        "event_category": "financial",
-                        "severity": "warning",
-                        "action": f"Wallet debit: {amount} ({transaction_type})",
-                        "actor_id": _uid,
-                        "resource_type": "WalletTransaction",
-                        "resource_id": _tid,
-                        "metadata": {"amount": str(amount), "reference_id": reference_id},
-                        "is_compliance": True,
-                    },
-                    queue="audit",
+                txn = WalletTransaction.objects.create(
+                    wallet=wallet,
+                    transaction_type=transaction_type,
+                    entry_type="debit",
+                    amount=amount,
+                    balance_snapshot=wallet.available_balance,
+                    reference=ref,
+                    description=description,
+                    metadata=metadata or {},
+                    status="completed",
                 )
-            except Exception:
-                logger.warning("Wallet debit audit failed", exc_info=True)
 
-        transaction.on_commit(_audit)
-        logger.info("Wallet debit: user=%s amount=%s ref=%s", user.id, amount, reference_id)
-        return txn
+                _uid = str(user.id)
+                _tid = str(txn.id)
+
+                def _audit():
+                    try:
+                        from apps.audit_logs.tasks import write_audit_event
+                        write_audit_event.apply_async(
+                            kwargs={
+                                "payload": {
+                                    "event_type": "wallet_debit",
+                                    "event_category": "financial",
+                                    "severity": "warning",
+                                    "action": f"Wallet debit: {amount} ({transaction_type})",
+                                    "actor_id": _uid,
+                                    "resource_type": "WalletTransaction",
+                                    "resource_id": _tid,
+                                    "metadata": {"amount": str(amount), "reference": ref},
+                                    "is_compliance": True,
+                                }
+                            },
+                            queue="audit",
+                        )
+                    except Exception:
+                        logger.warning("Wallet debit audit failed", exc_info=True)
+
+                transaction.on_commit(_audit)
+                logger.info("Wallet debit: user=%s amount=%s ref=%s", user.id, amount, ref)
+                return txn
+        finally:
+            if is_sqlite:
+                _sqlite_lock.release()
 
     # ── Escrow Hold ───────────────────────────────────────────────────────────
 
@@ -250,45 +284,53 @@ class WalletService:
     ) -> "WalletTransaction":
         """
         Move amount from available_balance to held_balance (escrow).
-
-        Called when a buyer places an order — locks funds until delivery
-        confirmation or dispute resolution.
         """
-        from apps.wallet.models import Wallet, WalletTransaction
+        from django.db import connection
+        is_sqlite = connection.vendor == 'sqlite'
+        if is_sqlite:
+            _sqlite_lock.acquire()
+        try:
+            with transaction.atomic():
+                from apps.wallet.models import Wallet, WalletTransaction
 
-        if amount <= 0:
-            raise ValueError(f"Escrow hold amount must be positive. Got: {amount}")
+                if amount <= 0:
+                    raise ValueError(f"Escrow hold amount must be positive. Got: {amount}")
 
-        ref = f"escrow_hold_{order_reference}"
-        if WalletTransaction.objects.filter(reference_id=ref).exists():
-            raise DuplicateTransactionError(f"Escrow already held for {order_reference}")
+                ref = f"escrow_hold_{order_reference}"
+                if WalletTransaction.objects.filter(reference=ref).exists():
+                    raise DuplicateTransactionError(f"Escrow already held for {order_reference}")
 
-        wallet = Wallet.objects.select_for_update().get(user=user)
+                wallet = Wallet.objects.select_for_update().get(user=user)
 
-        if wallet.available_balance < amount:
-            raise InsufficientFundsError(
-                f"Insufficient funds for escrow: available={wallet.available_balance}"
-            )
+                if wallet.available_balance < amount:
+                    raise InsufficientFundsError(
+                        f"Insufficient funds for escrow: available={wallet.available_balance}"
+                    )
 
-        balance_before = wallet.available_balance
-        wallet.available_balance -= amount
-        wallet.held_balance += amount
-        wallet.save(update_fields=["available_balance", "held_balance", "updated_at"])
+                wallet.available_balance -= amount
+                wallet.escrow_balance += amount
+                wallet.save(update_fields=["available_balance", "escrow_balance", "updated_at"])
 
-        txn = WalletTransaction.objects.create(
-            wallet=wallet,
-            transaction_type="escrow_hold",
-            direction="debit",
-            amount=amount,
-            balance_before=balance_before,
-            balance_after=wallet.available_balance,
-            reference_id=ref,
-            description=f"Escrow hold for order {order_reference}",
-            status="held",
-        )
+                txn = WalletTransaction.objects.create(
+                    wallet=wallet,
+                    transaction_type="escrow_hold",
+                    entry_type="debit",
+                    amount=amount,
+                    balance_snapshot=wallet.available_balance,
+                    reference=ref,
+                    description=f"Escrow hold for order {order_reference}",
+                    status="pending",
+                )
 
-        logger.info("Escrow hold: user=%s amount=%s order=%s", user.id, amount, order_reference)
-        return txn
+                logger.info("Escrow hold: user=%s amount=%s order=%s", user.id, amount, order_reference)
+                return txn
+        finally:
+            if is_sqlite:
+                _sqlite_lock.release()
+
+    @staticmethod
+    def hold(*, user, amount, reference):
+        return WalletService.escrow_hold(user=user, amount=amount, order_reference=reference)
 
     # ── Escrow Release ────────────────────────────────────────────────────────
 
@@ -303,9 +345,6 @@ class WalletService:
     ) -> tuple["WalletTransaction", "WalletTransaction"]:
         """
         Release escrowed funds to vendor after order delivery confirmation.
-
-        Deducts platform commission (default 10%) and credits net amount.
-        Returns (vendor_credit_txn, commission_txn).
         """
         from apps.wallet.models import Wallet, WalletTransaction
 
@@ -317,7 +356,7 @@ class WalletService:
             user=vendor_user,
             amount=vendor_net,
             transaction_type="order_payment",
-            reference_id=f"escrow_release_{order_reference}",
+            reference=f"escrow_release_{order_reference}",
             description=f"Payment for order {order_reference} (after {int(commission_rate*100)}% commission)",
             metadata={"gross": str(amount), "commission": str(platform_commission), "order_reference": order_reference},
         )
@@ -347,14 +386,18 @@ class WalletService:
         from apps.wallet.models import Wallet
 
         wallet = Wallet.objects.select_for_update().get(user=buyer_user)
-        wallet.held_balance = max(Decimal("0"), wallet.held_balance - amount)
+        wallet.escrow_balance = max(Decimal("0"), wallet.escrow_balance - amount)
         wallet.available_balance += amount
-        wallet.save(update_fields=["held_balance", "available_balance", "updated_at"])
+        wallet.save(update_fields=["escrow_balance", "available_balance", "updated_at"])
 
         return WalletService.credit(
             user=buyer_user,
             amount=amount,
             transaction_type="refund",
-            reference_id=f"escrow_refund_{order_reference}",
+            reference=f"escrow_refund_{order_reference}",
             description=f"Refund for order {order_reference}",
         )
+
+    @staticmethod
+    def release_hold(*, user, amount, reference):
+        return WalletService.escrow_refund(buyer_user=user, amount=amount, order_reference=reference)

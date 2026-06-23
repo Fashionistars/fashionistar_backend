@@ -181,13 +181,6 @@ except Exception as exc:  # pragma: no cover
     logger.warning("ℹ️ NinjaAPI: product router FAILED to register: %s", exc)
 
 
-# Cart domain: /api/v1/ninja/cart/
-try:
-    from apps.cart.apis.async_.cart_views import router as cart_router
-    ninja_api.add_router("/cart/", cart_router)
-    logger.info("✅ NinjaAPI: cart router registered at /api/v1/ninja/cart/")
-except Exception as exc:  # pragma: no cover
-    logger.warning("ℹ️ NinjaAPI: cart router FAILED to register: %s", exc)
 
 
 # Order domain: /api/v1/ninja/orders/

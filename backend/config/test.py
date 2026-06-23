@@ -12,13 +12,26 @@ Inherits from development.py, then applies test-specific overrides:
 """
 from .development import *   # noqa: F401, F403 — inherit dev settings
 
-# ─── Database — in-memory SQLite for speed ─────────────────────────────────
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': ':memory:',
+# ─── Database — PostgreSQL if DATABASE_URL environment variable exists, otherwise SQLite ────────────────
+import os
+import dj_database_url
+if os.environ.get("DATABASE_URL"):
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=os.environ.get("DATABASE_URL"),
+            conn_max_age=600,
+        )
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': 'test_db.sqlite3',
+            'OPTIONS': {
+                'timeout': 60,
+            }
+        }
+    }
 
 # ─── Celery — run tasks synchronously inside the Django test process ────────
 CELERY_TASK_ALWAYS_EAGER = True
@@ -91,3 +104,13 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': False,
     'UPDATE_LAST_LOGIN': False,
 }
+
+from django.db.backends.signals import connection_created
+from django.dispatch import receiver
+
+@receiver(connection_created)
+def set_sqlite_pragma(sender, connection, **kwargs):
+    if connection.vendor == 'sqlite':
+        cursor = connection.cursor()
+        cursor.execute('PRAGMA journal_mode=WAL;')
+        cursor.execute('PRAGMA synchronous=NORMAL;')

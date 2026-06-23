@@ -6,7 +6,6 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('cart', '0007_consolidate_product_variant_gallery_media'),
         ('order', '0012_consolidate_product_variant_gallery_media'),
         ('product', '0020_consolidate_product_variant_gallery_media'),
     ]

@@ -100,6 +100,8 @@ class PlaceOrderView(APIView):
                 idempotency_key=request.META.get("HTTP_X_IDEMPOTENCY_KEY"),
                 measurement_profile_id=serializer.validated_data.get("measurement_profile_id"),
                 notes=serializer.validated_data.get("notes", ""),
+                items=serializer.validated_data["items"],
+                coupon_code=serializer.validated_data.get("coupon_code"),
             )
         except ValueError as exc:
             return error_response(message=str(exc), status=status.HTTP_400_BAD_REQUEST)

@@ -110,7 +110,6 @@ class BackendConfig(AppConfig):
             'apps.wallet':         'logs/apps/wallet/wallet.log',
             'apps.product':        'logs/apps/product/product.log',
             'apps.catalog':        'logs/apps/catalog/catalog.log',
-            'apps.cart':           'logs/apps/cart/cart.log',
             'apps.order':          'logs/apps/order/order.log',
             'apps.chat':           'logs/apps/chat/chat.log',
             'apps.support':        'logs/apps/support/support.log',
