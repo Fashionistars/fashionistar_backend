@@ -116,7 +116,7 @@ def add_item(
     - Validates stock availability.
     - select_for_update on Cart prevents concurrent race conditions.
     """
-    from apps.product.models import Product, ProductVariant
+    from apps.product.models import Product, ProductVariantGalleryMedia
 
     # Lock the cart row
     cart = _locked_cart(user=user, session_key=session_key)
@@ -131,19 +131,19 @@ def add_item(
     variant = None
     if variant_id:
         try:
-            variant = ProductVariant.objects.get(id=variant_id, product=product, is_active=True)
-        except ProductVariant.DoesNotExist:
+            variant = ProductVariantGalleryMedia.objects.get(id=variant_id, product=product, active=True, is_deleted=False)
+        except ProductVariantGalleryMedia.DoesNotExist:
             raise ValueError(f"Variant {variant_id} not found for product '{product_slug}'.")
 
     # Stock check (base product or variant)
-    available_qty = variant.stock_qty if variant else product.stock_qty
+    available_qty = product.stock_qty
     if available_qty < quantity:
         raise ValueError(
             f"Only {available_qty} unit(s) available for '{product.title}'."
         )
 
     # Determine unit price from variant or product
-    unit_price = variant.effective_price if variant else product.price
+    unit_price = product.price
 
     # Idempotency key
     idem_key = _make_idempotency_key(cart.id, product.id, variant.id if variant else None)
@@ -252,7 +252,7 @@ def update_item_quantity(
         raise ValueError(f"Cart item {item_id} not found.")
 
     # Stock check
-    available = item.variant.stock_qty if item.variant else item.product.stock_qty
+    available = item.product.stock_qty
     if quantity > available:
         raise ValueError(f"Only {available} unit(s) available.")
     item.quantity = quantity
@@ -442,8 +442,8 @@ def discard_anonymous_cart_session(*, session_key: str | None) -> bool:
     """Delete a persisted anonymous cart when the current role cannot own it."""
     if not session_key:
         return False
-    deleted, _ = Cart.objects.select_for_update().filter(
+    deleted = Cart.objects.select_for_update().filter(
         session_key=str(session_key)[:40],
         user__isnull=True,
     ).delete()
-    return deleted > 0
+    return bool(deleted)

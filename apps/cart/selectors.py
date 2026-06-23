@@ -78,7 +78,6 @@ class CartSelector(BaseSelector):
                     .select_related(
                         "product__vendor",
                         "variant__size",
-                        "variant__color",
                     )
                     .prefetch_related("product__categories")
                     .order_by("created_at"),
@@ -107,7 +106,6 @@ class CartSelector(BaseSelector):
                     .select_related(
                         "product__vendor",
                         "variant__size",
-                        "variant__color",
                     )
                     .prefetch_related("product__categories")
                     .order_by("created_at"),
@@ -235,7 +233,6 @@ class CartSelector(BaseSelector):
                     .select_related(
                         "product__vendor",
                         "variant__size",
-                        "variant__color",
                     )
                     .prefetch_related("product__categories")
                     .order_by("created_at"),

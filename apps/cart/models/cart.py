@@ -358,10 +358,7 @@ class CartItem(TimeStampedModel, SoftDeleteModel):
     def save(self, *args, **kwargs):
         # Ensure price snapshot is always set
         if not self.unit_price:
-            if self.variant and self.variant.price_override:
-                self.unit_price = self.variant.price_override
-            else:
-                self.unit_price = self.product.price
+            self.unit_price = self.product.price
         super().save(*args, **kwargs)
 
 

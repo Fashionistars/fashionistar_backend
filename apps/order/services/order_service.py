@@ -584,7 +584,6 @@ def place_order(
             "product__vendor",
             "variant",
             "variant__size",
-            "variant__color",
         )
     )
     if not active_items:
@@ -599,7 +598,7 @@ def place_order(
     # services while preserving the same SELECT ... FOR UPDATE protection.
     products_map = {
         product.id: product
-        for product in product_model.objects.select_for_update().select_related("product_custom_shipping_profile").filter(id__in=product_ids)
+        for product in product_model.objects.select_for_update().select_related("shipping_profile").filter(id__in=product_ids)
     }
 
     # ── Step 4: Stock validation ─────────────────────────────────────────
@@ -607,7 +606,7 @@ def place_order(
         product = products_map.get(item.product_id)
         if not product or getattr(product, "is_deleted", False):
             raise ValueError(f"Product '{item.product.title}' is no longer available.")
-        available = item.variant.stock_qty if item.variant else product.stock_qty
+        available = product.stock_qty
         if available < item.quantity:
             raise ValueError(
                 f"'{product.title}': only {available} unit(s) available, "
@@ -708,7 +707,8 @@ def place_order(
         commission_amount = (rate / 100) * line_total
         variant = item.variant
         size = getattr(variant, "size", None) if variant else None
-        color = getattr(variant, "color", None) if variant else None
+        size_lbl = getattr(size, "size_label", "") if size else ""
+        color_lbl = getattr(variant, "color_name", "") if variant else ""
         try:
             cover_image_url = str(product.image.url) if product.image else ""
         except (AttributeError, ValueError):
@@ -731,8 +731,8 @@ def place_order(
                 commission_amount=commission_amount,
                 vendor_payout=line_total - commission_amount,
                 is_custom_order=product.is_customisable,
-                size_snapshot=getattr(size, "name", "") if size else "",
-                color_snapshot=getattr(color, "name", "") if color else "",
+                size_snapshot=size_lbl,
+                color_snapshot=color_lbl,
                 cart_item_idempotency_key=item.idempotency_key,
             )
         )
@@ -748,8 +748,8 @@ def place_order(
                 "quantity": item.quantity,
                 "line_total": str(line_total),
                 "commission_rate": str(rate),
-                "size_snapshot": getattr(size, "name", "") if size else "",
-                "color_snapshot": getattr(color, "name", "") if color else "",
+                "size_snapshot": size_lbl,
+                "color_snapshot": color_lbl,
                 "cart_item_idempotency_key": str(item.idempotency_key),
             }
         )

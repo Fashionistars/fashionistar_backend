@@ -323,29 +323,20 @@ def adjust_inventory(
         locked_variant = ProductVariantGalleryMedia.objects.select_for_update().get(
             pk=variant.pk, product=product
         )
-        quantity_before = locked_variant.stock_qty
+        quantity_before = product.stock_qty
         candidate = quantity_before + quantity_delta
 
         if candidate < 0:
             raise DjangoValidationError(
-                f"Insufficient variant stock for SKU {locked_variant.sku!r}. "
+                f"Insufficient product stock for {product.title!r}. "
                 f"Available: {quantity_before}, requested delta: {quantity_delta}."
             )
 
         max_stock = getattr(product, "max_stock", None)
         quantity_after = min(candidate, max_stock) if max_stock and max_stock > 0 else candidate
 
-        locked_variant.stock_qty = quantity_after
-        locked_variant.save(update_fields=["stock_qty", "updated_at"])
-
-        # Sync product.stock_qty = SUM of all non-deleted variant quantities
-        variant_total = (
-            ProductVariantGalleryMedia.objects
-            .filter(product=product, is_deleted=False)
-            .aggregate(total=Sum("stock_qty"))["total"] or 0
-        )
-        product.stock_qty = variant_total
-        product.in_stock = variant_total > 0
+        product.stock_qty = quantity_after
+        product.in_stock = quantity_after > 0
         product.save(update_fields=["stock_qty", "in_stock", "updated_at"])
 
         log = ProductInventoryLog.objects.create(
