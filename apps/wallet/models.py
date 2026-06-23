@@ -17,7 +17,7 @@ from apps.common.models import TimeStampedModel
 if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractUser
 
-from backend.config import FASHIONISTAR_COMPANY_WALLET_EMAIL_ADDRESS
+FASHIONISTAR_COMPANY_WALLET_EMAIL_ADDRESS = os.getenv("FASHIONISTAR_COMPANY_WALLET_EMAIL_ADDRESS")
 
 class Currency(TimeStampedModel):
     name = models.CharField(max_length=100)
