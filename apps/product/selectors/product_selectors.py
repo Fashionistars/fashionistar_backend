@@ -264,7 +264,13 @@ def get_vendor_product_or_404(vendor_id: Any, slug: str) -> Product | None:
 
 
 def search_products(query: str):
-    """Full-text + icontains fallback search across title, description, SKU, tags."""
+    """Full-text + icontains fallback search across title, description, SKU, tags.
+
+    NOTE: SKU lives on ProductVariantGalleryMedia (not Product). We traverse
+    the reverse FK so `product_variants_gallery_media__sku__icontains` is used.
+    .distinct() is mandatory because the JOIN can yield multiple rows per product
+    when a product has more than one variant media row.
+    """
     if not query:
         return get_published_products_list()
     return (
@@ -272,7 +278,7 @@ def search_products(query: str):
         .filter(
             Q(title__icontains=query)
             | Q(description__icontains=query)
-            | Q(sku__icontains=query)
+            | Q(product_variants_gallery_media__sku__icontains=query)
             | Q(tags__name__icontains=query)
         )
         .distinct()
@@ -300,20 +306,23 @@ def filter_products(
     All filters are applied at the DB level (no Python-side filtering).
     """
     allowed_ordering = {
-        "price":     "price",
-        "-price":    "-price",
-        "latest":    "-created_at",
-        "oldest":    "created_at",
-        "rating":    "-rating",
+        "price":       "price",
+        "-price":      "-price",
+        "newest":      "-created_at",   # alias sent by the frontend
+        "latest":      "-created_at",
+        "oldest":      "created_at",
+        "rating":      "-rating",
         "-created_at": "-created_at",
-        "popular":   "-review_count",
+        "popular":     "-review_count",
     }
     qs = get_published_products_list()
 
     if query:
+        # SKU lives on ProductVariantGalleryMedia — traverse reverse FK.
+        # .distinct() is mandatory: the JOIN multiplies rows per product variant.
         qs = qs.filter(
             Q(title__icontains=query)
-            | Q(sku__icontains=query)
+            | Q(product_variants_gallery_media__sku__icontains=query)
             | Q(tags__name__icontains=query)
         ).distinct()
     if category_id:

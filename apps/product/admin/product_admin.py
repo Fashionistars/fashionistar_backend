@@ -169,7 +169,9 @@ class ProductAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
             "fields": ("stock_qty", "in_stock", "requires_measurement", "is_customisable"),
         }),
         (_("Media"), {
-            "fields": ("image", "image_preview"),
+            # 'image' was removed from Product — it now lives on ProductVariantGalleryMedia.
+            # image_preview is a computed readonly method that reads from variant rows.
+            "fields": ("image_preview",),
         }),
         (_("Status & Flags"), {
             "fields": ("status", "featured", "hot_deal", "soft_delete_badge"),
@@ -205,27 +207,53 @@ class ProductAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
 
     # ── Computed columns ───────────────────────────────────────────────────────
 
+    def _get_cover_image_url(self, obj):
+        """Return URL of the first primary variant image, or None.
+
+        Product.image was removed — images live on ProductVariantGalleryMedia.
+        This method is defensive: it works whether the variants are prefetched
+        (via card_gallery to_attr) or not yet loaded.
+        """
+        # Check prefetch cache first (fastest path — no extra query)
+        card_gallery = getattr(obj, "card_gallery", None)
+        if card_gallery:
+            for v in card_gallery:
+                if v.media:
+                    try:
+                        return v.media.url
+                    except Exception:
+                        pass
+        # Fallback: live DB query (only fires on change-form where prefetch is absent)
+        try:
+            variant = (
+                obj.product_variants_gallery_media
+                .filter(is_deleted=False, media_type="image")
+                .order_by("-is_primary", "ordering")
+                .first()
+            )
+            if variant and variant.media:
+                return variant.media.url
+        except Exception:
+            pass
+        return None
+
     def image_preview(self, obj):
-        if obj.image:
-            try:
-                return format_html(
-                    '<img src="{}" height="120" style="border-radius:8px;object-fit:cover;" />',
-                    obj.image.url,
-                )
-            except Exception:
-                return "—"
-        return "—"
-    image_preview.short_description = _("Cover Image Preview")
+        url = self._get_cover_image_url(obj)
+        if url:
+            return format_html(
+                '<img src="{}" height="120" style="border-radius:8px;object-fit:cover;" />',
+                url,
+            )
+        return "— No variant image uploaded yet"
+    image_preview.short_description = _("Cover Image Preview (from variants)")
 
     def image_preview_small(self, obj):
-        if obj.image:
-            try:
-                return format_html(
-                    '<img src="{}" height="40" style="border-radius:4px;object-fit:cover;" />',
-                    obj.image.url,
-                )
-            except Exception:
-                return "—"
+        url = self._get_cover_image_url(obj)
+        if url:
+            return format_html(
+                '<img src="{}" height="40" style="border-radius:4px;object-fit:cover;" />',
+                url,
+            )
         return "—"
     image_preview_small.short_description = _("Cover")
 

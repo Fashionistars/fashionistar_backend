@@ -14,11 +14,13 @@ async def aget_admin_products(search_query: str = None, status: str = None, cate
     queryset = Product.objects.select_related("vendor").prefetch_related("categories")
     
     if search_query:
+        # SKU lives on ProductVariantGalleryMedia (reverse FK), not Product.
+        # .distinct() is required because the JOIN can return multiple rows per product.
         queryset = queryset.filter(
             Q(title__icontains=search_query) |
-            Q(sku__iexact=search_query) |
+            Q(product_variants_gallery_media__sku__iexact=search_query) |
             Q(vendor__store_name__icontains=search_query)
-        )
+        ).distinct()
         
     if status:
         queryset = queryset.filter(status=status)
