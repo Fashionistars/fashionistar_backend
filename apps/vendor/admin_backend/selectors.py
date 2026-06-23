@@ -97,7 +97,7 @@ async def get_vendor_detail_admin(*, vendor_id: str):
         )
         .prefetch_related(
             "collections",
-            "vendor_bank_accounts",
+            "bank_accounts",
         )
         .aget(pk=vendor_id)
     )
