@@ -31,15 +31,12 @@ from apps.measurements.serializers import (
 )
 from apps.measurements.services import (
     create_measurement_profile,
-    create_mirrorsize_browser_session,
     update_measurement_profile,
     delete_measurement_profile,
-    import_mirrorsize_browser_measurement,
     set_default_profile,
 )
 from apps.measurements.services.measurement_service import (
     MeasurementProfileLimitError,
-    MirrorSizeProviderError,
 )
 from django.core.exceptions import PermissionDenied
 
@@ -157,59 +154,4 @@ class SetDefaultProfileView(APIView):
         )
 
 
-class MirrorSizeBrowserSessionView(APIView):
-    """Create a MirrorSize mobile-browser access session.
 
-    The endpoint keeps the MirrorSize API key server-side and delegates all
-    external traffic to the provider wrapper backed by ``apps.common.http``.
-    """
-
-    renderer_classes = _RENDERERS
-    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive]
-
-    def post(self, request):
-        try:
-            session = create_mirrorsize_browser_session(
-                user=request.user,
-                name=request.data.get("name", ""),
-                email=request.data.get("email", ""),
-                mobile_no=request.data.get("mobile_no", ""),
-            )
-        except MirrorSizeProviderError as exc:
-            return error_response(message=str(exc), status=status.HTTP_502_BAD_GATEWAY)
-
-        return success_response(
-            data=session,
-            message="MirrorSize measurement session created.",
-            status=status.HTTP_201_CREATED,
-        )
-
-
-class MirrorSizeImportView(APIView):
-    """Import a completed MirrorSize mobile-browser measurement profile."""
-
-    renderer_classes = _RENDERERS
-    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive]
-
-    def post(self, request):
-        access_code = str(request.data.get("access_code", "")).strip()
-        if not access_code:
-            return error_response(
-                message="access_code is required.",
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        try:
-            profile = import_mirrorsize_browser_measurement(
-                user=request.user,
-                access_code=access_code,
-                set_as_default=bool(request.data.get("set_as_default", True)),
-            )
-        except MirrorSizeProviderError as exc:
-            return error_response(message=str(exc), status=status.HTTP_502_BAD_GATEWAY)
-        except MeasurementProfileLimitError as exc:
-            return error_response(message=str(exc), status=status.HTTP_422_UNPROCESSABLE_ENTITY)
-
-        return success_response(
-            data=MeasurementProfileSerializer(profile).data,
-            message="MirrorSize measurements imported.",
-        )

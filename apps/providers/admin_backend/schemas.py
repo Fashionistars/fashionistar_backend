@@ -39,16 +39,10 @@ class CloudinaryProviderConfigSchema(BaseProviderConfigSchema):
     max_image_bytes: int
     max_video_bytes: int
 
-class MirrorSizeProviderConfigSchema(BaseProviderConfigSchema):
-    enabled: bool
-    product_name: str
-    browser_api_base_url: str
-    user_home_base_url: str
-    access_code_ttl_seconds: int
+
 
 class AllProvidersSummarySchema(Schema):
     email: Optional[EmailProviderConfigSchema] = None
     sms: Optional[SMSProviderConfigSchema] = None
     kyc: Optional[KYCProviderConfigSchema] = None
     cloudinary: Optional[CloudinaryProviderConfigSchema] = None
-    mirrorsize: Optional[MirrorSizeProviderConfigSchema] = None

@@ -101,7 +101,7 @@ class CommissionService:
 
     @classmethod
     def get_measurement_fee(cls) -> Decimal:
-        """Return the current MirrorSize measurement processing fee from PlatformSettings.
+        """Return the current precision measurement processing fee from PlatformSettings.
 
         Returns:
             Decimal: Measurement fee in NGN (e.g. ``Decimal("1000.00")``).
@@ -480,7 +480,7 @@ class TransactionLedgerService:
         idempotency_key: str = "",
         request=None,
     ) -> Transaction:
-        """Deduct the MirrorSize measurement fee from a client wallet (atomic).
+        """Deduct the precision measurement fee from a client wallet (atomic).
 
         The fee is resolved from ``PlatformSettings`` when not explicitly
         provided, ensuring the current admin-configured rate is always applied.
@@ -491,7 +491,7 @@ class TransactionLedgerService:
             company_wallet: Fashionistar's internal wallet to credit.
             reference: Unique measurement transaction reference.
             amount: Fee in NGN — defaults to ``PlatformSettings.measurement_fee_ngn``.
-            measurement_request_id: MirrorSize session/request ID for audit trail.
+            measurement_request_id: Scan session/request ID for audit trail.
             idempotency_key: Unique key to prevent double-charging.
 
         Returns:

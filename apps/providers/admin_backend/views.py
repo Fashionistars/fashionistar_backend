@@ -9,7 +9,7 @@ from .serializers import (
     SMSProviderConfigUpdateSerializer,
     KYCProviderConfigUpdateSerializer,
     CloudinaryProviderConfigUpdateSerializer,
-    MirrorSizeProviderConfigUpdateSerializer,
+
 )
 from .services import AdminProvidersService
 
@@ -83,19 +83,4 @@ class AdminCloudinaryConfigUpdateView(APIView):
             logger.exception("Failed to update Cloudinary provider config")
             return Response({"success": False, "message": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-class AdminMirrorSizeConfigUpdateView(APIView):
-    """
-    POST /api/admin/providers/mirrorsize/update/
-    """
-    permission_classes = [IsAdminUser]
 
-    def post(self, request):
-        serializer = MirrorSizeProviderConfigUpdateSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response({"success": False, "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
-        try:
-            config = AdminProvidersService.update_mirrorsize_config(serializer.validated_data, request.user)
-            return Response({"success": True, "message": "MirrorSize provider config updated successfully.", "id": str(config.pk)})
-        except Exception as exc:
-            logger.exception("Failed to update MirrorSize provider config")
-            return Response({"success": False, "message": str(exc)}, status=status.HTTP_400_BAD_REQUEST)

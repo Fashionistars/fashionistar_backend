@@ -6,7 +6,7 @@ from apps.providers.models import (
     SMSProviderConfig,
     KYCProviderConfig,
     CloudinaryProviderConfig,
-    MirrorSizeProviderConfig,
+
 )
 
 logger = logging.getLogger(__name__)
@@ -64,15 +64,4 @@ class AdminProvidersService:
         logger.info("Admin %s updated CloudinaryProviderConfig: %s", admin_user.email, updated_fields)
         return config
 
-    @staticmethod
-    @transaction.atomic
-    def update_mirrorsize_config(data: dict, admin_user) -> MirrorSizeProviderConfig:
-        config, _ = MirrorSizeProviderConfig.objects.select_for_update().get_or_create()
-        updated_fields = []
-        for key, value in data.items():
-            if hasattr(config, key):
-                setattr(config, key, value)
-                updated_fields.append(key)
-        config.save()
-        logger.info("Admin %s updated MirrorSizeProviderConfig: %s", admin_user.email, updated_fields)
-        return config
+

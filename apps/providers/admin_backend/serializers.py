@@ -33,9 +33,4 @@ class CloudinaryProviderConfigUpdateSerializer(serializers.Serializer):
     max_image_bytes = serializers.IntegerField(required=False)
     max_video_bytes = serializers.IntegerField(required=False)
 
-class MirrorSizeProviderConfigUpdateSerializer(serializers.Serializer):
-    enabled = serializers.BooleanField(required=False)
-    product_name = serializers.CharField(max_length=100, required=False)
-    browser_api_base_url = serializers.URLField(max_length=500, required=False)
-    user_home_base_url = serializers.URLField(max_length=500, required=False)
-    access_code_ttl_seconds = serializers.IntegerField(required=False)
+

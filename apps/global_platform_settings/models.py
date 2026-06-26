@@ -64,7 +64,7 @@ class PlatformSettings(TimeStampedModel):
     Attributes:
         vendor_commission_rate: Default fraction retained by Fashionistar on each sale.
         client_platform_fee_rate: Additional fee charged to clients per purchase.
-        measurement_fee_ngn: Fixed NGN fee for MirrorSize precision measurement requests.
+        measurement_fee_ngn: Fixed NGN fee for precision measurement requests.
         advertisement_fee_ngn: Fixed NGN fee for vendor promoted listing slots.
         min_wallet_topup_ngn: Minimum single wallet top-up amount.
         max_wallet_topup_ngn: Maximum single wallet top-up amount (anti-fraud cap).
@@ -119,7 +119,7 @@ class PlatformSettings(TimeStampedModel):
         decimal_places=2,
         default=Decimal("1000.00"),
         validators=[MinValueValidator(Decimal("0.00"))],
-        verbose_name=_("MirrorSize Measurement Fee (₦)"),
+        verbose_name=_("Precision Measurement Fee (₦)"),
         help_text=_(
             "Amount in NGN charged to clients for each precision measurement request."
         ),

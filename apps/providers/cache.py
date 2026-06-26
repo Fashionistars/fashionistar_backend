@@ -12,7 +12,7 @@ Cache key format: ``provider_cfg:<app_label>:<model_name>``
     - provider_cfg:providers:smsproviderconfig     → SMSProviderConfig singleton
     - provider_cfg:providers:kycproviderconfig     → KYCProviderConfig singleton
     - provider_cfg:providers:cloudinaryproviderconfig → CloudinaryProviderConfig
-    - provider_cfg:providers:mirrorsizeproviderconfig → MirrorSizeProviderConfig
+
 
 Thread-safety: Django cache.get/set operations are atomic at the Redis level.
 """
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
         CloudinaryProviderConfig,
         EmailProviderConfig,
         KYCProviderConfig,
-        MirrorSizeProviderConfig,
+
         SMSProviderConfig,
     )
 
@@ -109,11 +109,7 @@ def get_cloudinary_provider_config() -> "CloudinaryProviderConfig":
     return _get_or_load(CloudinaryProviderConfig)
 
 
-def get_mirrorsize_provider_config() -> "MirrorSizeProviderConfig":
-    """Return the active MirrorSizeProviderConfig (Redis → DB → default)."""
-    from apps.providers.models import MirrorSizeProviderConfig
 
-    return _get_or_load(MirrorSizeProviderConfig)
 
 
 # ── Cache Invalidation ────────────────────────────────────────────────────────
@@ -143,7 +139,6 @@ __all__ = [
     "get_cloudinary_provider_config",
     "get_email_provider_config",
     "get_kyc_provider_config",
-    "get_mirrorsize_provider_config",
     "get_sms_provider_config",
     "invalidate_provider_cache",
 ]

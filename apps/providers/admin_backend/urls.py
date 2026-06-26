@@ -5,7 +5,7 @@ from .views import (
     AdminSMSConfigUpdateView,
     AdminKYCConfigUpdateView,
     AdminCloudinaryConfigUpdateView,
-    AdminMirrorSizeConfigUpdateView,
+
 )
 
 app_name = "admin_providers"
@@ -15,5 +15,5 @@ urlpatterns = [
     path("sms/update/", AdminSMSConfigUpdateView.as_view(), name="admin-providers-sms-update"),
     path("kyc/update/", AdminKYCConfigUpdateView.as_view(), name="admin-providers-kyc-update"),
     path("cloudinary/update/", AdminCloudinaryConfigUpdateView.as_view(), name="admin-providers-cloudinary-update"),
-    path("mirrorsize/update/", AdminMirrorSizeConfigUpdateView.as_view(), name="admin-providers-mirrorsize-update"),
+
 ]

@@ -71,7 +71,7 @@ def register_signals() -> None:
         CloudinaryProviderConfig,
         EmailProviderConfig,
         KYCProviderConfig,
-        MirrorSizeProviderConfig,
+
         SMSProviderConfig,
     )
 
@@ -80,7 +80,7 @@ def register_signals() -> None:
         SMSProviderConfig,
         KYCProviderConfig,
         CloudinaryProviderConfig,
-        MirrorSizeProviderConfig,
+
     ):
         post_save.connect(_invalidate_on_save, sender=model, weak=False)
         logger.debug("Provider post_save signal registered for %s", model.__name__)
@@ -93,7 +93,7 @@ _PROVIDER_MODELS = [
     ("providers", "SMSProviderConfig"),
     ("providers", "KYCProviderConfig"),
     ("providers", "CloudinaryProviderConfig"),
-    ("providers", "MirrorSizeProviderConfig"),
+
 ]
 
 

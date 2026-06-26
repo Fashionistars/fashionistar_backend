@@ -18,7 +18,7 @@ from apps.providers.models import (
     CloudinaryProviderConfig,
     EmailProviderConfig,
     KYCProviderConfig,
-    MirrorSizeProviderConfig,
+
     SMSProviderConfig,
 )
 
@@ -285,53 +285,4 @@ class CloudinaryProviderConfigAdmin(ProviderConfigAdminBase):
     )
 
 
-# ── MirrorSize Provider Admin ─────────────────────────────────────────────────
 
-
-@admin.register(MirrorSizeProviderConfig)
-class MirrorSizeProviderConfigAdmin(ProviderConfigAdminBase):
-    list_display = [
-        "product_name",
-        "enabled",
-        "health_status",
-        "circuit_state",
-        "updated_at",
-    ]
-    fieldsets = (
-        (
-            _("Widget Settings"),
-            {
-                "fields": (
-                    "enabled",
-                    "product_name",
-                    "browser_api_base_url",
-                    "user_home_base_url",
-                    "access_code_ttl_seconds",
-                ),
-                "description": _(
-                    "MirrorSize credentials (MIRRORSIZE_API_KEY, MIRRORSIZE_MERCHANT_ID) "
-                    "are configured via environment variables, not stored here."
-                ),
-            },
-        ),
-        (
-            _("Circuit Breaker & Health"),
-            {
-                "fields": (
-                    "health_status",
-                    "last_health_check",
-                    "circuit_state",
-                    "failure_count",
-                    "last_failure_at",
-                ),
-                "classes": ("collapse",),
-            },
-        ),
-        (
-            _("Timestamps"),
-            {
-                "fields": ("created_at", "updated_at"),
-                "classes": ("collapse",),
-            },
-        ),
-    )

@@ -21,7 +21,7 @@ from django.db import transaction
 from django.core.exceptions import PermissionDenied
 
 from apps.measurements.models import MeasurementProfile
-from apps.measurements.providers import MirrorSizeClient, MirrorSizeProviderError
+
 
 logger = logging.getLogger(__name__)
 
@@ -216,7 +216,6 @@ def delete_measurement_profile(*, profile_id, owner) -> None:
         logger.warning(
             "measurements_audit.delete failed silently", exc_info=True
         )
-
     if was_default:
         # Promote the next most-recent profile
         next_profile = owner.client_measurement_profiles.order_by("-updated_at").first()
@@ -233,96 +232,3 @@ def set_default_profile(*, profile_id, owner) -> MeasurementProfile:
         raise PermissionDenied("Measurement profile not found or access denied.")
     profile.set_as_default()
     return profile
-
-
-def create_mirrorsize_browser_session(
-    *,
-    user,
-    name: str = "",
-    email: str = "",
-    mobile_no: str = "",
-) -> dict[str, Any]:
-    """Create a MirrorSize mobile-browser measurement session.
-
-    Args:
-        user: Authenticated user. Contact information is read from the user
-            object to avoid importing profile models across domains.
-        name: Optional display name supplied by the frontend.
-        email: Optional email override.
-        mobile_no: Optional mobile number override.
-
-    Returns:
-        dict containing ``access_code``, ``qr_code``, and ``measurement_url``.
-    """
-    client = MirrorSizeClient.from_settings()
-    display_name = name or getattr(user, "get_full_name", lambda: "")() or getattr(user, "email", "")
-    user_email = email or getattr(user, "email", "")
-    phone = mobile_no or getattr(user, "phone", "") or getattr(user, "phone_number", "")
-    if not user_email:
-        raise MirrorSizeProviderError("A verified email address is required before taking measurements.")
-    return client.generate_mobile_browser_access_code(
-        email=user_email,
-        name=display_name,
-        mobile_no=phone,
-        reference=str(user.pk),
-    )
-
-
-def _decimal_from_mirrorsize(value: Any) -> Decimal | None:
-    """Normalize MirrorSize values such as ``'111.11 cm'`` into Decimal cm."""
-    if value in (None, ""):
-        return None
-    numeric = str(value).lower().replace("cm", "").strip()
-    try:
-        return Decimal(numeric).quantize(Decimal("0.01"))
-    except (InvalidOperation, ValueError):
-        return None
-
-
-def _map_mirrorsize_measurements(provider_data: dict[str, Any]) -> dict[str, Any]:
-    """Map MirrorSize point names into Fashionistar MeasurementProfile fields."""
-    point_values: dict[str, Any] = {}
-    for item in provider_data.get("measurement", []) or []:
-        point = str(item.get("pointName", "")).replace("_", "").lower()
-        point_values[point] = _decimal_from_mirrorsize(item.get("valueIncm"))
-
-    return {
-        "bust": point_values.get("chest") or point_values.get("chestgirth"),
-        "waist": point_values.get("waist") or point_values.get("stomach"),
-        "hips": point_values.get("hips") or point_values.get("hip"),
-        "shoulder_width": point_values.get("shoulderacross") or point_values.get("shoulderwidth"),
-        "neck": point_values.get("upperneck") or point_values.get("neck"),
-        "arm_length": point_values.get("armslength") or point_values.get("sleevelengthfull"),
-        "height": _decimal_from_mirrorsize(provider_data.get("height")),
-        "weight_kg": _decimal_from_mirrorsize(provider_data.get("weight")),
-        "notes": "Imported from MirrorSize mobile-browser measurement flow.",
-        "is_verified": True,
-    }
-
-
-@transaction.atomic
-def import_mirrorsize_browser_measurement(
-    *,
-    user,
-    access_code: str,
-    set_as_default: bool = True,
-) -> MeasurementProfile:
-    """Import completed MirrorSize measurements into a local profile."""
-    provider_data = MirrorSizeClient.from_settings().get_mobile_browser_measurement(
-        access_code=access_code,
-        reference=str(user.pk),
-    )
-    mapped = {
-        key: value
-        for key, value in _map_mirrorsize_measurements(provider_data).items()
-        if value not in (None, "")
-    }
-    if not any(mapped.get(field) is not None for field in ("bust", "waist", "hips", "height")):
-        raise MirrorSizeProviderError("MirrorSize returned no usable body measurements yet.")
-
-    return create_measurement_profile(
-        owner=user,
-        name=f"MirrorSize {access_code}",
-        data=mapped,
-        set_as_default=set_as_default,
-    )

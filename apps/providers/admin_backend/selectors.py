@@ -5,7 +5,7 @@ from apps.providers.models import (
     SMSProviderConfig,
     KYCProviderConfig,
     CloudinaryProviderConfig,
-    MirrorSizeProviderConfig,
+
 )
 
 logger = logging.getLogger(__name__)
@@ -31,10 +31,7 @@ class AdminProvidersSelector:
         config, _ = CloudinaryProviderConfig.objects.get_or_create()
         return config
 
-    @classmethod
-    def get_mirrorsize_config(cls) -> MirrorSizeProviderConfig:
-        config, _ = MirrorSizeProviderConfig.objects.get_or_create()
-        return config
+
 
     # --- Async Support ---
 
@@ -66,9 +63,4 @@ class AdminProvidersSelector:
         except Exception:
             return cls.get_cloudinary_config()
 
-    @classmethod
-    async def aget_mirrorsize_config(cls) -> MirrorSizeProviderConfig:
-        try:
-            return await MirrorSizeProviderConfig.objects.afirst() or await MirrorSizeProviderConfig.objects.acreate()
-        except Exception:
-            return cls.get_mirrorsize_config()
+

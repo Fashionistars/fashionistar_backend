@@ -35,7 +35,7 @@ class BodyScanSession(TimeStampedModel):
     """
     AI-powered body scan session.
 
-    Integrates with MirrorSize API or internal camera ML model.
+    Integrates with our internal camera ML model.
     On status=COMPLETED, the service layer creates a MeasurementProfile
     populated from extracted_measurements.
 
@@ -47,7 +47,7 @@ class BodyScanSession(TimeStampedModel):
         owner: Client who initiated the scan.
         session_id: External-facing immutable UUID (used in API URLs).
         device_type: ios / android / web.
-        scan_provider: mirrorsize / manual / ai_camera.
+        scan_provider: manual / ai_camera.
         status: Scan pipeline status.
         raw_data_url: Provider or Cloudinary storage URL for raw scan data.
         scan_confidence: Provider confidence score (0.0–1.0).
@@ -66,7 +66,6 @@ class BodyScanSession(TimeStampedModel):
         WEB = "web", _("Web")
 
     class ScanProvider(models.TextChoices):
-        MIRRORSIZE = "mirrorsize", _("MirrorSize")
         MANUAL = "manual", _("Manual Entry")
         AI_CAMERA = "ai_camera", _("AI Camera")
 

@@ -13,7 +13,7 @@ Provider Domains:
     SMS/        — Termii, Twilio, BulkSMS Nigeria dispatch drivers.
     SMTP/       — Brevo, Mailgun, Zoho Mail transactional email drivers.
     Cloudinary/ — Cloudinary media upload & CDN delivery driver.
-    MirrorSize/ — MirrorSize body measurement API driver.
+
 
 Each domain provides:
     - A ``ProviderConfig`` singleton DB model (admin-switchable, credential-storing).

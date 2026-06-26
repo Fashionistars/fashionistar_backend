@@ -460,19 +460,7 @@ CLOUDINARY_ADMIN_ASYNC = True   # Enable async Celery path (production)
 
 
 
-# MirrorSize / GetMeasured provider settings. Credentials must live in .env;
-# never hardcode the merchant API key in views or frontend code.
-MIRRORSIZE_API_KEY = env("MIRRORSIZE_API_KEY", default="")
-MIRRORSIZE_MERCHANT_ID = env("MIRRORSIZE_MERCHANT_ID", default="")
-MIRRORSIZE_PRODUCT_NAME = env("MIRRORSIZE_PRODUCT_NAME", default="GET_MEASURED")
-MIRRORSIZE_BROWSER_API_BASE_URL = env(
-    "MIRRORSIZE_BROWSER_API_BASE_URL",
-    default="https://api.user.mirrorsize.com",
-)
-MIRRORSIZE_USER_HOME_BASE_URL = env(
-    "MIRRORSIZE_USER_HOME_BASE_URL",
-    default="https://user.mirrorsize.com/home",
-)
+
 
 STORAGES = {
     "default": {

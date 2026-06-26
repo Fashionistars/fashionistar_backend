@@ -12,7 +12,7 @@ Sub-Packages:
     SMS/        — Termii, Twilio, BulkSMS Nigeria SMS dispatch drivers.
     SMTP/       — Brevo, Mailgun, Zoho Mail transactional email drivers.
     Cloudinary/ — Cloudinary media upload & transformation driver.
-    MirrorSize/ — MirrorSize body measurement API driver.
+
     backends/   — Django email backend + SMS dispatch backend wired to the
                   admin-selected active provider.
     models/     — ProviderConfig DB models for each provider domain.

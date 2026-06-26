@@ -6,7 +6,7 @@ This app owns the ``PlatformSettings`` singleton model which centralises every
 admin-configurable business constant for the Fashionistar platform:
 
   - Vendor commission rates & client platform fees
-  - Measurement (MirrorSize) fees
+  - Measurement fees
   - Wallet top-up / withdrawal limits
   - Cash-on-Delivery and in-store payment configuration
   - KYC retry / lockout policy
