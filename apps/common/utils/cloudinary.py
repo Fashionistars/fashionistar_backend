@@ -52,7 +52,7 @@ from typing import Any, Optional
 import cloudinary.api
 import cloudinary.uploader
 
-# import cloudinary.utils as cld_utils
+import cloudinary.utils as cld_utils
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -750,9 +750,9 @@ def validate_cloudinary_webhook(
     # Reference: https://cloudinary.com/documentation/notifications#verify_notification_sig
     #            https://github.com/cloudinary/pycloudinary (cloudinary/utils.py)
     try:
-        import cloudinary.utils as cld_utils  # type: ignore
-
         body_str = body.decode("utf-8", errors="replace")
+        import cloudinary
+        cloudinary.config(api_secret=api_secret)
 
         is_valid: bool = cld_utils.verify_notification_signature(
             body_str,

@@ -220,3 +220,39 @@ def mock_email(mocker):
 def mock_sms(mocker):
     """Suppress SMS sending in tests (patches SMSManager.send_sms)."""
     return mocker.patch('apps.common.managers.sms.SMSManager.send_sms')
+
+
+@pytest.fixture(autouse=True)
+def mock_cloudinary(mocker):
+    """
+    Mock all Cloudinary API endpoints globally to avoid outbound requests and NotFound exceptions.
+    """
+    mock_upload = mocker.patch('cloudinary.uploader.upload')
+    mock_upload.return_value = {
+        'public_id': 'test_public_id',
+        'url': 'http://res.cloudinary.com/demo/image/upload/v1234/test_public_id.jpg',
+        'secure_url': 'https://res.cloudinary.com/demo/image/upload/v1234/test_public_id.jpg',
+        'format': 'jpg',
+        'resource_type': 'image',
+    }
+
+    mock_explicit = mocker.patch('cloudinary.uploader.explicit')
+    mock_explicit.return_value = {
+        'public_id': 'test_public_id',
+        'url': 'http://res.cloudinary.com/demo/image/upload/v1234/test_public_id.jpg',
+        'secure_url': 'https://res.cloudinary.com/demo/image/upload/v1234/test_public_id.jpg',
+        'format': 'jpg',
+        'resource_type': 'image',
+    }
+
+    mock_destroy = mocker.patch('cloudinary.uploader.destroy')
+    mock_destroy.return_value = {
+        'result': 'ok',
+    }
+
+    return {
+        'upload': mock_upload,
+        'explicit': mock_explicit,
+        'destroy': mock_destroy,
+    }
+

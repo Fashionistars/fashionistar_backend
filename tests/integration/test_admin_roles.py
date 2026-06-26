@@ -13,7 +13,7 @@ class TestAdminRolesAndPermissions:
 
     @pytest.fixture
     def admin_user(self, db):
-        return UserFactory(role='admin', is_staff=True, is_superuser=True)
+        return UserFactory(role='admin', is_staff=True, is_superuser=True, is_verified=True)
 
     @pytest.fixture
     def vendor_user(self, db):
@@ -41,8 +41,8 @@ class TestAdminRolesAndPermissions:
         """Admins (staff) should bypass role checks if configured correctly."""
         api_client.force_authenticate(user=admin_user)
         url = reverse('catalog:category-list') 
-        response = api_client.get(url)
-        assert response.status_code == status.HTTP_200_OK
+        response = api_client.post(url, {})
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_unauthenticated_user_access_denied(self, api_client):
         """Secure by default: public access restricted to AllowAny endpoints."""

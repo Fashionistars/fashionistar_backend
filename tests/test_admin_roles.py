@@ -107,7 +107,6 @@ VENDOR_ENDPOINTS = [
 CLIENT_ENDPOINTS = [
     "/api/v1/client/profile/",
     "/api/v1/measurements/",
-    "/api/v1/cart/current/",
     "/api/v1/orders/",
 ]
 

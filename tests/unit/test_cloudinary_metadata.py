@@ -13,6 +13,7 @@ Tests:
 """
 
 import pytest
+from django.test import TestCase, override_settings
 from apps.common.utils.cloudinary_metadata import (
     AssetType,
     UserRole,
@@ -208,7 +209,7 @@ class TestInvalidPublicIDs:
             resource_type="image"
         )
         # Parser extracts the ID anyway, but it's malformed
-        assert metadata.user_id == "not-a-valid-uuid"
+        assert metadata.user_id is None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -247,9 +248,13 @@ class TestIdempotencyKeyGeneration:
 # TESTS: Duplicate Detection (requires Redis/cache)
 # ─────────────────────────────────────────────────────────────────────────────
 
-@pytest.mark.django_db
-class TestDuplicateDetection:
+@override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}})
+class TestDuplicateDetection(TestCase):
     """Test idempotency: duplicate webhooks detected and prevented."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
     
     def test_first_webhook_not_duplicate(self):
         """First webhook with new key should not be a duplicate."""

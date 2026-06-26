@@ -44,7 +44,7 @@ User = get_user_model()
 
 def make_user(
     email=None, password="SecurePass123!", role="client",
-    is_active=True, is_staff=False, is_superuser=False,
+    is_active=True, is_verified=True, is_staff=False, is_superuser=False,
 ):
     """Create a real UnifiedUser for testing."""
     email = email or f"test_{uuid.uuid4().hex[:8]}@fashionistar.test"
@@ -53,6 +53,7 @@ def make_user(
         password=password,
         role=role,
         is_active=is_active,
+        is_verified=is_verified,
         is_staff=is_staff,
         is_superuser=is_superuser,
     )

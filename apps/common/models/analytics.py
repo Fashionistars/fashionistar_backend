@@ -182,36 +182,36 @@ class ModelAnalytics(models.Model):
         from django.db.models import F, Value
         from django.db.models.functions import Greatest
 
-        with transaction.atomic():
-            # ── Step 1: optimistic F()-expression UPDATE ──────────
-            update_kwargs = {}
-            for field, delta in deltas.items():
-                update_kwargs[field] = Greatest(
-                    F(field) + Value(delta), Value(0)
-                )
-            rows = cls.objects.filter(
-                model_name=model_name,
-            ).update(**update_kwargs)
+        # ── Step 1: optimistic F()-expression UPDATE ──────────
+        update_kwargs = {}
+        for field, delta in deltas.items():
+            update_kwargs[field] = Greatest(
+                F(field) + Value(delta), Value(0)
+            )
+        rows = cls.objects.filter(
+            model_name=model_name,
+        ).update(**update_kwargs)
 
-            if rows == 0:
-                # ── Step 2: row absent — create it ────────────────
-                try:
+        if rows == 0:
+            # ── Step 2: row absent — create it ────────────────
+            try:
+                with transaction.atomic():
                     cls.objects.create(
                         model_name=model_name,
                         app_label=app_label,
                         **{k: max(v, 0) for k, v in deltas.items()},
                     )
-                except IntegrityError:
-                    # Another worker created the row between our
-                    # UPDATE (0 rows) and this INSERT — just retry.
-                    cls.objects.filter(
-                        model_name=model_name,
-                    ).update(**update_kwargs)
-            elif app_label:
+            except IntegrityError:
+                # Another worker created the row between our
+                # UPDATE (0 rows) and this INSERT — just retry.
                 cls.objects.filter(
                     model_name=model_name,
-                    app_label='',
-                ).update(app_label=app_label)
+                ).update(**update_kwargs)
+        elif app_label:
+            cls.objects.filter(
+                model_name=model_name,
+                app_label='',
+            ).update(app_label=app_label)
 
         logger.debug(
             "ModelAnalytics[%s] adjusted: %s",

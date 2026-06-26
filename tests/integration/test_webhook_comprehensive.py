@@ -65,7 +65,6 @@ class CURLAPIEndpointTests(TestCase):
         User = get_user_model()
         self.user = User.objects.create_user(
             email="test@fashionistar.com",
-            username="testuser",
             password="testpass123"
         )
         self.client = Client()
@@ -168,7 +167,6 @@ class EndToEndWebhookFlowTests(TransactionTestCase):
         User = get_user_model()
         self.user = User.objects.create_user(
             email="testuser@fashionistar.com",
-            username="testuser",
             password="testpass123"
         )
         self.client = Client()
@@ -240,7 +238,6 @@ class ConcurrencyTests(TestCase):
         User = get_user_model()
         self.user = User.objects.create_user(
             email="concurrent@fashionistar.com",
-            username="concurrentuser",
             password="testpass"
         )
         self.webhook_url = reverse("common:cloudinary-webhook")
