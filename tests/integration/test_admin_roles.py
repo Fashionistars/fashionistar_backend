@@ -13,15 +13,15 @@ class TestAdminRolesAndPermissions:
 
     @pytest.fixture
     def admin_user(self, db):
-        return UserFactory(role='admin', is_staff=True, is_superuser=True, is_verified=True)
+        return UserFactory(role='admin', is_staff=True, is_superuser=True, is_active=True, is_verified=True)
 
     @pytest.fixture
     def vendor_user(self, db):
-        return UserFactory(role='vendor', is_verified=True)
+        return UserFactory(role='vendor', is_active=True, is_verified=True)
 
     @pytest.fixture
     def client_user(self, db):
-        return UserFactory(role='client', is_verified=True)
+        return UserFactory(role='client', is_active=True, is_verified=True)
 
     def test_vendor_cannot_access_client_wishlist(self, api_client, vendor_user, client_user):
         """Vendors should be blocked from client-only endpoints."""

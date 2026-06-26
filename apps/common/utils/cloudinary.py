@@ -752,7 +752,8 @@ def validate_cloudinary_webhook(
     try:
         body_str = body.decode("utf-8", errors="replace")
         import cloudinary
-        cloudinary.config(api_secret=api_secret)
+        if cloudinary.config().api_secret != api_secret:
+            cloudinary.config(api_secret=api_secret)
 
         is_valid: bool = cld_utils.verify_notification_signature(
             body_str,
@@ -790,7 +791,7 @@ def validate_cloudinary_webhook(
         )
         return False
 
-    logger.info(
+    logger.debug(
         "✅ Cloudinary webhook signature VALID: " "timestamp=%s age=%ds sig=%s...",
         timestamp,
         age_seconds,

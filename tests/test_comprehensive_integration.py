@@ -767,16 +767,20 @@ class TestConcurrentLoginLoad(TransactionTestCase):
         N = 20  # SQLite-safe for test env; use 100+ in prod PostgreSQL
 
         def _login(i):
-            c = APIClient()
-            resp = c.post("/api/v1/auth/login/", {
-                "email_or_phone": "load_test_user@fashionistar.io",
-                "password": "LoadTest#2026",
-            }, format="json", REMOTE_ADDR=f"10.{i // 256}.{i % 256}.1")
-            with lock:
-                if resp.status_code == 200:
-                    results["success"] += 1
-                else:
-                    results["errors"].append(f"{resp.status_code}: {resp.data}")
+            from django.db import connections
+            try:
+                c = APIClient()
+                resp = c.post("/api/v1/auth/login/", {
+                    "email_or_phone": "load_test_user@fashionistar.io",
+                    "password": "LoadTest#2026",
+                }, format="json", REMOTE_ADDR=f"10.{i // 256}.{i % 256}.1")
+                with lock:
+                    if resp.status_code == 200:
+                        results["success"] += 1
+                    else:
+                        results["errors"].append(f"{resp.status_code}: {resp.data}")
+            finally:
+                connections.close_all()
 
         with ThreadPoolExecutor(max_workers=N) as pool:
             futures = [pool.submit(_login, i) for i in range(N)]
@@ -795,16 +799,20 @@ class TestConcurrentLoginLoad(TransactionTestCase):
         lock = threading.Lock()
 
         def _bad_login(i):
-            c = APIClient()
-            resp = c.post("/api/v1/auth/login/", {
-                "email": f"nobody_{uuid.uuid4().hex[:4]}@nobody.zzz",
-                "password": "wrong",
-            }, format="json", REMOTE_ADDR=f"192.168.{i // 256}.{i % 256}")
-            with lock:
-                if resp.status_code in (401, 400):
-                    results["expected_fail"] += 1
-                else:
-                    results["unexpected"].append(f"{resp.status_code}")
+            from django.db import connections
+            try:
+                c = APIClient()
+                resp = c.post("/api/v1/auth/login/", {
+                    "email": f"nobody_{uuid.uuid4().hex[:4]}@nobody.zzz",
+                    "password": "wrong",
+                }, format="json", REMOTE_ADDR=f"192.168.{i // 256}.{i % 256}")
+                with lock:
+                    if resp.status_code in (401, 400):
+                        results["expected_fail"] += 1
+                    else:
+                        results["unexpected"].append(f"{resp.status_code}")
+            finally:
+                connections.close_all()
 
         with ThreadPoolExecutor(max_workers=50) as pool:
             futures = [pool.submit(_bad_login, i) for i in range(50)]
