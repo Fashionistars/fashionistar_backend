@@ -19,7 +19,6 @@ from environs import Env
 import os
 from decouple import config
 import dj_database_url
-import cloudinary
 
 # ── Environment loader ────────────────────────────────────────────────
 env = Env()
@@ -198,6 +197,7 @@ INSTALLED_APPS = [
         "apps.order",          # Phase 4: Order lifecycle, status machine, escrow trigger
         "apps.notification",   # Phase 4: In-app, email, push, SMS notification feed
         "apps.measurements",   # Phase 4: Body measurements, checkout gate for custom tailoring
+        "apps.ai",             # Phase 6: AI Orchestration Engine — measurement, recommendation, analytics
         "apps.chat",           # Phase 5 (P1): Buyer-Vendor real-time messaging, offers, moderation
         "apps.support",        # Phase 5 (P2): Customer dispute & ticket management domain
         "apps.kyc",            # Phase 6: Identity verification (KYC) domain
@@ -978,9 +978,50 @@ CELERY_BEAT_SCHEDULE = {
 
 
 
+
 #                       =========================
 # ----------------------CELERY CONFIGURATION ENDS HERE ------------------------------
 #                       =========================
+
+
+# =============================================================================
+# AI ENGINE CONFIGURATION  (apps/ai — Phase 6)
+# =============================================================================
+
+# ── Ollama (Local LLM — self-hosted, no cloud cost) ───────────────────────────
+# Production: set OLLAMA_BASE_URL to your VPS/server URL
+# Local dev:  "http://localhost:11434" (default Ollama port)
+OLLAMA_BASE_URL = env("OLLAMA_BASE_URL", default="http://localhost:11434")
+OLLAMA_DEFAULT_MODEL = env("OLLAMA_DEFAULT_MODEL", default="llama3.2:3b")
+OLLAMA_EMBED_MODEL  = env("OLLAMA_EMBED_MODEL",  default="nomic-embed-text")
+OLLAMA_TIMEOUT_SECONDS = int(env("OLLAMA_TIMEOUT_SECONDS", default="30"))
+OLLAMA_REQUEST_TIMEOUT = int(env("OLLAMA_REQUEST_TIMEOUT", default="120"))
+
+# ── FashionSigLIP Recommendation Engine ───────────────────────────────────────
+# Model: marqo/marqo-FashionSigLIP (from HuggingFace — apache 2.0 license)
+# Embedding dimension: 512 (ViT-B-16 variant) or 768 (ViT-L-14 variant)
+FASHION_CLIP_MODEL   = env("FASHION_CLIP_MODEL",   default="hf-hub:Marqo/marqo-fashionSigLIP")
+FASHION_CLIP_PRETRAINED = env("FASHION_CLIP_PRETRAINED", default="")  # Empty = from HF hub
+FASHION_CLIP_EMBEDDING_DIM = int(env("FASHION_CLIP_EMBEDDING_DIM", default="512"))
+
+# ── pgvector (PostgreSQL vector extension) ────────────────────────────────────
+# Enable pgvector for HNSW approximate nearest-neighbour search
+# Requires: pip install django-pgvector
+# DB migration: CREATE EXTENSION IF NOT EXISTS vector;
+PGVECTOR_ENABLED = True
+PGVECTOR_EMBEDDING_DIM = FASHION_CLIP_EMBEDDING_DIM   # Must match embedding model
+
+# ── Measurement AI Engine ─────────────────────────────────────────────────────
+# Minimum landmark visibility score to accept a pose as valid
+AI_MEASUREMENT_MIN_VISIBILITY  = float(env("AI_MEASUREMENT_MIN_VISIBILITY", default="0.6"))
+# Tolerance (±cm) for size-fit filtering in recommendations
+AI_SIZE_FIT_TOLERANCE_CM       = float(env("AI_SIZE_FIT_TOLERANCE_CM", default="5.0"))
+
+# ── AI Analytics ──────────────────────────────────────────────────────────────
+# Max report cache TTL in seconds (default: 24 hours)
+AI_ANALYTICS_CACHE_TTL = int(env("AI_ANALYTICS_CACHE_TTL", default="86400"))
+# Recommendation cache TTL (default: 1 hour)
+AI_RECOMMENDATION_CACHE_TTL = int(env("AI_RECOMMENDATION_CACHE_TTL", default="3600"))
 
 
 # =============================================================================

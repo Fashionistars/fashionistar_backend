@@ -258,3 +258,40 @@ django-debug-toolbar            # SQL query inspector in DEBUG mode (correct pac
 
 Django==6.0.3
 openpyxl>=3.1.0  # Required for xlsx import/export in django-import-export
+
+
+# =============================================================================
+# AI / ML ORCHESTRATION ENGINE  (apps/ai — Phase 6)
+# All licenses: Apache 2.0 / MIT — zero cloud API cost
+# =============================================================================
+
+# ── AI Orchestration (LangGraph + LangChain stack) ────────────────────────────
+langgraph>=0.2.28               # Stateful multi-agent workflow graphs
+langchain>=0.3.0                # RAG, tool-use, pipeline building blocks
+langchain-core>=0.3.0           # Base abstractions (stable)
+langchain-community>=0.3.0      # Community integrations
+langchain-ollama>=0.2.0         # Ollama LLM integration node
+
+# ── Local LLM (Ollama — self-hosted, no cloud cost) ───────────────────────────
+ollama>=0.3.3                   # Python client for Ollama server
+
+# ── Measurement Engine ────────────────────────────────────────────────────────
+mediapipe>=0.10.14              # MediaPipe Pose (server-side landmark validation)
+opencv-python-headless>=4.9.0   # OpenCV — headless (no GUI) for server safety
+numpy>=1.26.4                   # Required by MediaPipe, CLIP, transformers
+
+# ── Recommendation Engine (FashionSigLIP / FashionCLIP) ──────────────────────
+open-clip-torch>=2.26.1         # OpenCLIP — loads marqo-FashionSigLIP weights
+sentence-transformers>=3.0.0    # Text-only product embeddings + reranking
+django-pgvector>=0.3.0          # pgvector Django ORM field + HNSW migrations
+
+# ── PyTorch CPU-only (no GPU needed for inference at startup scale) ───────────
+# NOTE: Use the CPU-only wheel to keep image size lean.
+# Production upgrade: swap to torch with CUDA when GPU instance is provisioned.
+# Install separately on server with:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch>=2.2.0                    # Required by open_clip_torch & sentence-transformers
+torchvision>=0.17.0             # Required by open_clip_torch
+
+# ── Background Processing (Celery result/beat already present — extras) ───────
+django-celery-results>=2.5.1    # Store Celery results in PostgreSQL for observability

@@ -177,6 +177,15 @@ app.conf.task_queues = (
         routing_key="devops",
         queue_arguments={"x-max-priority": 3},
     ),
+    # ── AI / ML queue — CPU-bound MediaPipe, CLIP, LangGraph ─────────────────
+    # Workers: celery -A backend worker -Q ai --concurrency=1 --loglevel=info
+    # (Low concurrency — ML models are CPU-intensive; 1-2 workers per machine)
+    Queue(
+        "ai",
+        Exchange("ai", type="direct"),
+        routing_key="ai",
+        queue_arguments={"x-max-priority": 6},
+    ),
     # ── Default catch-all ─────────────────────────────────────────────────────
     Queue(
         "default",
@@ -241,6 +250,28 @@ app.conf.task_routes = {
     # ── Payment tasks (future — pre-wire so no code change needed) ────────────
     # "process_payment_webhook": {"queue": "payments"},
     # "send_payment_receipt":    {"queue": "emails"},
+
+    # ── AI / ML tasks — routed to dedicated `ai` queue ────────────────────────
+    # Worker: celery -A backend worker -Q ai --concurrency=1 --loglevel=info
+    # Measurement pipeline
+    "apps.ai.tasks.measurement_tasks.process_body_scan":    {"queue": "ai"},
+    "apps.ai.tasks.measurement_tasks.prepare_scan_session": {"queue": "ai"},
+    # Recommendation pipeline
+    "apps.ai.tasks.recommendation_tasks.run_profile_recommendations":  {"queue": "ai"},
+    "apps.ai.tasks.recommendation_tasks.generate_product_recommendations": {"queue": "ai"},
+    "apps.ai.tasks.recommendation_tasks.run_product_embedding":         {"queue": "ai"},
+    # Embedding generation (async, background — lower priority)
+    "apps.ai.tasks.embedding_tasks.generate_product_embedding":         {"queue": "ai"},
+    "apps.ai.tasks.embedding_tasks.batch_generate_embeddings":          {"queue": "ai"},
+    "apps.ai.tasks.embedding_tasks.backfill_missing_embeddings":        {"queue": "ai"},
+    # Analytics pipeline
+    "apps.ai.tasks.analytics_tasks.run_platform_analytics":             {"queue": "ai"},
+    "apps.ai.tasks.analytics_tasks.run_user_behavior_analysis":         {"queue": "ai"},
+    "apps.ai.tasks.analytics_tasks.run_product_performance_analysis":   {"queue": "ai"},
+    "apps.ai.tasks.analytics_tasks.generate_daily_report":              {"queue": "ai"},
+    # DB ingestion — triggered by Django signals on model saves
+    "apps.ai.tasks.ingestion_tasks.ingest_db_change":                   {"queue": "ai"},
+    "apps.ai.tasks.ingestion_tasks.rebuild_ai_context_cache":           {"queue": "ai"},
 }
 
 
@@ -310,6 +341,25 @@ app.conf.beat_schedule = {
     #     "schedule": crontab(minute=0),
     #     "options":  {"queue": "cleanup"},
     # },
+
+    # ── AI / ML Periodic Tasks (apps/ai — Phase 6) ────────────────────────────
+
+    # Daily platform analytics — runs at 02:30 UTC (after audit cleanup at 02:00)
+    # Generates 1-day, 7-day, and 30-day rolling reports
+    "ai-daily-analytics-report": {
+        "task":     "apps.ai.tasks.analytics_tasks.generate_daily_report",
+        "schedule": crontab(hour=2, minute=30),
+        "options":  {"queue": "ai"},
+    },
+
+    # Weekly embedding backfill — Sunday 03:00 UTC
+    # Finds all active products without ProductEmbedding and generates them
+    "ai-weekly-embedding-backfill": {
+        "task":     "apps.ai.tasks.embedding_tasks.backfill_missing_embeddings",
+        "schedule": crontab(hour=3, minute=0, day_of_week=0),   # Sunday
+        "options":  {"queue": "ai"},
+        "kwargs":   {"limit": 1000},
+    },
 }
 
 app.conf.beat_scheduler = "django_celery_beat.schedulers:DatabaseScheduler"
