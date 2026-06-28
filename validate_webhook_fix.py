@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 """Validation script to verify Cloudinary webhook signature fix."""
-import os, sys, hashlib, time
+import os
+import sys
+import hashlib
+import time
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.config.development')
 import django
 django.setup()
@@ -23,7 +26,7 @@ with override_settings(CLOUDINARY_STORAGE=FAKE_CLOUDINARY_STORAGE):
     body = b'{"test": "data"}'
     sig = make_sig(body, ts, secret)
     
-    print(f"✅ VALIDATION TEST")
+    print("✅ VALIDATION TEST")
     print(f"Secret: {secret}")
     print(f"Timestamp: {ts}")
     print(f"Body: {body}")

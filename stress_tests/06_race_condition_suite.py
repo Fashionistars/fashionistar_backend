@@ -34,9 +34,7 @@ Pass criteria:
 import asyncio
 import aiohttp
 import uuid
-import json
 import os
-import sys
 import time
 from collections import Counter
 from typing import Optional
@@ -67,7 +65,7 @@ async def post(session: aiohttp.ClientSession, url: str, data: dict, headers: di
     try:
         async with session.post(url, json=data, headers=headers or {}) as resp:
             return resp.status
-    except Exception as e:
+    except Exception:
         return 0  # Connection error
 
 

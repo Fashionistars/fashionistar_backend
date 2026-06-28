@@ -219,7 +219,6 @@ class PayoutService:
         Deducts the held amount from wallet (held → 0, debit recorded).
         """
         from apps.wallet.models import PayoutRequest, Wallet
-        from apps.wallet.services.wallet_service import WalletService
 
         payout = PayoutRequest.objects.select_for_update().get(
             pk=payout_id, status__in=["approved", "processing"]

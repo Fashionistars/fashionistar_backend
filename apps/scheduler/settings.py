@@ -2,7 +2,6 @@
 تنظیمات اپ scheduler
 """
 import os
-from django.conf import settings
 
 # ======================
 # Celery Configuration

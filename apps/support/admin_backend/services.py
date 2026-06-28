@@ -2,9 +2,8 @@
 from __future__ import annotations
 import logging
 from django.db import transaction
-from django.utils import timezone
 from apps.common.events import event_bus
-from apps.support.models.support_ticket import SupportTicket, TicketStatus, TicketEscalation, EscalationStatus
+from apps.support.models.support_ticket import SupportTicket, TicketStatus
 
 logger = logging.getLogger(__name__)
 

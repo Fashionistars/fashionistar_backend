@@ -15,7 +15,7 @@ Key behaviours under test:
   - Generic message DOES NOT reveal whether user exists (enumeration guard)
 """
 import pytest
-from unittest.mock import patch, ANY
+from unittest.mock import patch
 from rest_framework import status
 
 RESEND_URL = '/api/v1/auth/resend-otp/'

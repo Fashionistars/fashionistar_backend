@@ -1,9 +1,7 @@
 # Create a file twilio.py inside your project directory for Twilio API credentials
 
 # settings.py
-import os
 from decouple import config
-from rest_framework_simplejwt.settings import api_settings as jwt_settings
 
 class TwilioSettings:
     """

@@ -20,7 +20,6 @@ import logging
 from django.contrib import admin
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
-from django.db.models import Sum, Count, Avg
 
 # ── Canonical shared mixins (do NOT re-define locally) ──────────────────────
 from apps.common.admin_mixins import SoftDeleteAdminMixin, ReadOnlyAdminMixin

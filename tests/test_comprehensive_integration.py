@@ -17,19 +17,14 @@ Run:
     uv run pytest tests/test_comprehensive_integration.py -v --tb=short
 """
 
-import json
 import threading
-import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List
 
 from django.contrib.auth import get_user_model
 from django.conf import settings
-from django.db import connection, transaction
+from django.db import transaction
 from django.test import Client, TestCase, TransactionTestCase, override_settings
-from django.urls import reverse
-from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework import status
 from unittest import skipIf
@@ -331,8 +326,6 @@ class TestAuditEventLog(TestCase):
     def test_audit_event_immutability_concept(self):
         """AuditEventLogAdmin class-level permissions always return False (immutable log)."""
         from apps.audit_logs.admin import AuditEventLogAdmin
-        from apps.audit_logs.models import AuditEventLog
-        from django.contrib.admin import site as admin_site
 
         # Instantiate properly with the registered model and site
         admin_cls = AuditEventLogAdmin
@@ -499,7 +492,6 @@ class TestRegisterEndpoint(TestCase):
 
     def test_register_creates_user_and_registry_row(self):
         """POST /register/ creates UnifiedUser + UserLifecycleRegistry row."""
-        from apps.common.models import UserLifecycleRegistry
 
         email = f"register_{uuid.uuid4().hex[:8]}@test.io"
         resp = self.client.post(self.register_url, {

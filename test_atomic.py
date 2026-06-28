@@ -1,7 +1,6 @@
 import os
 import django
 import asyncio
-from asgiref.sync import sync_to_async
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 django.setup()

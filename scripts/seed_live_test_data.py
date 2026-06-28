@@ -23,7 +23,6 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.development")
 django.setup()
 
 from django.contrib.auth import get_user_model
-from django.utils import timezone
 from decimal import Decimal
 
 User = get_user_model()
@@ -325,7 +324,7 @@ except Exception as e:
 print("\n" + "=" * 70)
 print("  ✅ SEED COMPLETE — Test Credentials")
 print("=" * 70)
-print(f"""
+print("""
   🔐 SUPERADMIN
      Email:    admin@fashionistar.test
      Password: Admin@Secure99!

@@ -24,7 +24,6 @@ from django.utils import timezone
 from apps.notification.models import (
     NotificationBatch,
     NotificationChannel,
-    NotificationType,
 )
 from apps.notification.models.batch import NotificationReadReceipt
 from apps.notification.models.push_device import PushDevice

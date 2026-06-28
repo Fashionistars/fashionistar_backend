@@ -8,7 +8,7 @@ For the async Ninja views, use the Pydantic schemas in apps/vendor/types/vendor_
 
 from rest_framework import serializers
 
-from apps.vendor.models import VendorPayoutProfile, VendorProfile, VendorSetupState
+from apps.vendor.models import VendorProfile, VendorSetupState
 
 def _catalog_has_any_collections() -> bool:
     from apps.catalog.models import Collections as CollectionModel

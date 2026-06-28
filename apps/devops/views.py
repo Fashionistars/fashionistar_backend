@@ -2,22 +2,15 @@
 ویوهای API برای مدیریت DevOps
 """
 from rest_framework import status, viewsets, permissions
-from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.http import JsonResponse
 from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django_ratelimit.decorators import ratelimit
-import json
 import logging
 
 from .models import (
     EnvironmentConfig,
-    SecretConfig,
     DeploymentHistory,
     HealthCheck,
     ServiceMonitoring
@@ -27,7 +20,6 @@ from .services.deployment_service import DeploymentService
 from .services.health_service import HealthService
 from .serializers import (
     EnvironmentConfigSerializer,
-    SecretConfigSerializer,
     DeploymentHistorySerializer,
     HealthCheckSerializer,
     ServiceMonitoringSerializer

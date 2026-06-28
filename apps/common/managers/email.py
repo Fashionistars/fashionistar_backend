@@ -5,7 +5,7 @@ import asyncio
 from typing import Any, List, Optional, Tuple
 
 from django.conf import settings
-from django.core.mail import EmailMultiAlternatives, get_connection
+from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.template import TemplateDoesNotExist
 

@@ -20,23 +20,20 @@ Testing Principles:
 """
 from __future__ import annotations
 
-import asyncio
 from asgiref.sync import async_to_sync
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
 
 import pytest
-from django.db import connection, transaction
+from django.db import connection
 from django.test import TestCase, TransactionTestCase
 
 from apps.authentication.models import UnifiedUser
 from apps.client.models import ClientAddress, ClientProfile
 from apps.client.selectors.client_selectors import (
     aget_client_address_list,
-    aget_client_addresses,
     aget_client_dashboard_snapshot,
     aget_client_order_stats,
-    aget_client_order_summary,
     aget_client_profile_or_none,
     get_client_address_list,
     get_client_dashboard_snapshot,

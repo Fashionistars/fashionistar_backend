@@ -3,8 +3,6 @@ Serializers برای اپ scheduler
 """
 from rest_framework import serializers
 from django.utils import timezone
-from typing import Dict, Any
-import json
 
 from .models import (
     TaskDefinition,

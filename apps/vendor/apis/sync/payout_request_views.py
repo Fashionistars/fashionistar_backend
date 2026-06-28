@@ -27,7 +27,7 @@ Security:
 from __future__ import annotations
 
 import logging
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 from rest_framework import serializers, status
 from rest_framework.generics import GenericAPIView

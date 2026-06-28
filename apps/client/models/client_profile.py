@@ -29,7 +29,7 @@ from decimal import Decimal
 from typing import Any
 
 from django.db import models, transaction
-from django.db.models import Count, F, Prefetch, Sum
+from django.db.models import Count, F, Sum
 
 from apps.common.models import TimeStampedModel, SoftDeleteModel
 

@@ -39,10 +39,8 @@ import os
 import re
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Protocol, runtime_checkable
 
 from django.conf import settings
-from django.utils.translation import gettext_lazy as _
 
 # ── Logging Configuration ─────────────────────────────────────────────────────
 

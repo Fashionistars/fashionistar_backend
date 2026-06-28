@@ -19,7 +19,6 @@ from uuid import UUID
 
 from ninja import Router, Schema
 from ninja.errors import HttpError
-from pydantic import Field
 
 from apps.support.selectors import (
     aget_ticket_or_none,

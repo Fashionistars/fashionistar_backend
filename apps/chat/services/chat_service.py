@@ -26,7 +26,6 @@ from apps.chat.models import (
     Message,
     MessageType,
     ChatOffer,
-    OfferStatus,
     ModerationFlag,
     ChatEscalation,
     EscalationStatus,

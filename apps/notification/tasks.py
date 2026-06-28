@@ -171,7 +171,7 @@ def fan_out_batch_task(self, batch_id: str):
             )
             sent_delta = len(created)
             failed_delta = len(chunk) - sent_delta
-        except Exception as exc:
+        except Exception:
             logger.exception("fan_out_batch_task chunk failed: batch=%s offset=%d", batch_id, offset)
             sent_delta = 0
             failed_delta = len(chunk)

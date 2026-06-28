@@ -1,4 +1,6 @@
-import os, django, traceback
+import os
+import django
+import traceback
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.config.development")
 django.setup()
 

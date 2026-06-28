@@ -39,8 +39,6 @@ from cloudinary.models import CloudinaryField
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
-import shortuuid
-import uuid
 
 STATUS = (
     ("draft", "Draft"),

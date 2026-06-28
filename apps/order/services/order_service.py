@@ -43,7 +43,6 @@ release_escrow()
 
 import hashlib
 import logging
-from datetime import timedelta
 from decimal import Decimal
 from uuid import uuid4
 
@@ -63,7 +62,6 @@ from apps.order.models import (
     ORDER_STATUS_TRANSITIONS,
     CashPaymentMode,
     OrderPaymentPath,
-    OrderPaymentSource,
     OrderCommercialTransitionType,
     OrderPaymentRecord,
     OrderCommercialTransitionLog,

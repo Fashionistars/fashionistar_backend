@@ -31,7 +31,6 @@ import secrets
 from typing import TYPE_CHECKING
 
 from django.db import transaction
-from django.utils import timezone
 
 if TYPE_CHECKING:
     from apps.authentication.models import UnifiedUser

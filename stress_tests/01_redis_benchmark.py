@@ -16,7 +16,13 @@ Run:
     venv/Scripts/python stress_tests/01_redis_benchmark.py
 """
 
-import asyncio, hashlib, os, sys, time, statistics, random, threading
+import hashlib
+import os
+import sys
+import time
+import statistics
+import random
+import threading
 from dataclasses import dataclass, field
 from typing import List, Dict
 
@@ -214,7 +220,7 @@ def benchmark_full_verify(r: redis_lib.Redis, seeds: List[Dict]) -> BenchmarkRes
 
 def benchmark_race_condition(r: redis_lib.Redis):
     """50 threads race to verify the SAME OTP — only 1 must win."""
-    print(f"\n🏁  Race Condition Test (50 threads, same OTP) …", flush=True)
+    print("\n🏁  Race Condition Test (50 threads, same OTP) …", flush=True)
 
     otp      = '987654'
     enc      = _fake_enc(otp)
@@ -268,7 +274,7 @@ def benchmark_race_condition(r: redis_lib.Redis):
 
 def benchmark_idempotency(r: redis_lib.Redis):
     """Verify same OTP twice — 2nd must fail (one-time use)."""
-    print(f"\n🔁  Idempotency Test (same OTP × 2) …", flush=True)
+    print("\n🔁  Idempotency Test (same OTP × 2) …", flush=True)
 
     otp      = '123654'
     enc      = _fake_enc(otp)
@@ -297,7 +303,7 @@ def benchmark_idempotency(r: redis_lib.Redis):
     r1 = _do(1)
     r2 = _do(2)
     passed = r1 and not r2
-    status = "✅ PASS" if passed else f"❌ FAIL"
+    status = "✅ PASS" if passed else "❌ FAIL"
     print(f"    1st verify: {r1}  |  2nd verify: {r2}")
     print(f"    Idempotency Guard: {status}")
     return passed
@@ -344,26 +350,26 @@ def main():
     print("  FASHIONISTAR OTP BENCHMARK — SUMMARY")
     print(f"{'═'*60}")
     print(f"  Keyspace size        : {N_USERS:,} OTP records")
-    print(f"")
-    print(f"  O(1) hash lookup")
+    print("")
+    print("  O(1) hash lookup")
     print(f"    Mean               : {res_a.mean:.3f} ms")
     print(f"    P99                : {res_a.p99:.3f} ms")
     print(f"    est. RPS           : {res_a.rps:,.0f}")
-    print(f"")
+    print("")
     if res_b.latencies_ms:
-        print(f"  KEYS scan (legacy)")
+        print("  KEYS scan (legacy)")
         print(f"    Mean               : {res_b.mean:.3f} ms")
         print(f"    P99                : {res_b.p99:.3f} ms")
         print(f"    est. RPS           : {res_b.rps:,.0f}")
         if res_a.mean > 0 and res_b.mean > 0:
             speedup = res_b.mean / res_a.mean
             print(f"    Speedup (O1/SCAN)  : {speedup:.1f}×")
-    print(f"")
-    print(f"  Full verify+delete")
+    print("")
+    print("  Full verify+delete")
     print(f"    Mean               : {res_c.mean:.3f} ms")
     print(f"    P99                : {res_c.p99:.3f} ms")
     print(f"    est. RPS           : {res_c.rps:,.0f}")
-    print(f"")
+    print("")
     print(f"  Race Condition Guard : {'✅ PASS' if race_ok else '❌ FAIL'}")
     print(f"  Idempotency Guard    : {'✅ PASS' if idem_ok else '❌ FAIL'}")
     print(f"{'═'*60}")

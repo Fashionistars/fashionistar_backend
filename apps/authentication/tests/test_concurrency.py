@@ -26,9 +26,7 @@ import threading
 import json
 import unittest
 import uuid
-import pytest
 from django.test import TransactionTestCase, Client
-from django.db import transaction
 from rest_framework_simplejwt.tokens import RefreshToken
 from unittest.mock import patch
 

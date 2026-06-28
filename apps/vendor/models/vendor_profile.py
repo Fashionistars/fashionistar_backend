@@ -32,8 +32,8 @@ from datetime import timedelta
 from typing import Any
 
 from django.contrib.auth.hashers import check_password, make_password
-from django.db import models, transaction
-from django.db.models import Avg, Count, F, Min, Q, Sum
+from django.db import models
+from django.db.models import Avg, Count, Min, Sum
 from django.db.models.functions import ExtractHour, ExtractMonth
 from django.utils import timezone
 

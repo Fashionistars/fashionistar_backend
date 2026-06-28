@@ -31,7 +31,6 @@ from ninja.errors import HttpError
 from apps.common.roles import is_client_role, is_vendor_role
 from apps.custom_order.models import (
     CustomOrder,
-    CustomOrderMilestone,
     CustomOrderStatus,
     MilestonePaymentStatus,
 )

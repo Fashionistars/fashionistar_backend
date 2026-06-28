@@ -2,14 +2,10 @@
 سرویس مدیریت deployment و CI/CD
 """
 import subprocess
-import os
 import git
-import time
-import json
-from typing import Dict, List, Optional, Tuple, Any
+from typing import List, Optional, Tuple
 from django.conf import settings
 from django.utils import timezone
-from datetime import datetime
 import logging
 
 from ..models import DeploymentHistory, EnvironmentConfig

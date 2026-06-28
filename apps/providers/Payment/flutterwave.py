@@ -16,7 +16,6 @@ Features:
 """
 from __future__ import annotations
 
-import hashlib
 import hmac
 import logging
 import secrets
@@ -211,7 +210,7 @@ class FlutterwaveClient:
             return cls._sync().request("GET", f"/banks/{country}", action="bank.list", headers=cls._headers())
         try:
             res = _breaker.call(_call)
-        except ProviderHTTPError as exc:
+        except ProviderHTTPError:
             raise
         return res.data
 
@@ -219,7 +218,7 @@ class FlutterwaveClient:
     async def alist_banks(cls, country: str = "NG") -> dict:
         try:
             res = await cls._async().request("GET", f"/banks/{country}", action="bank.list", headers=cls._headers())
-        except ProviderHTTPError as exc:
+        except ProviderHTTPError:
             raise
         return res.data
 

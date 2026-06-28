@@ -12,7 +12,6 @@ All models use UUID PKs and TimeStampedModel inheritance.
 Cloudinary handles image/video uploads via two-phase direct-upload.
 """
 
-import uuid
 import logging
 
 from django.db import models, transaction

@@ -50,7 +50,7 @@ def category(db):
 
 @pytest.fixture
 def vendor_b_product(db, vendor_b_user, category):
-    from apps.product.models import Product, ProductStatus
+    from apps.product.models import ProductStatus
     product = Product.objects.create(
         title="Vendor B Product",
         slug="vendor-b-product",

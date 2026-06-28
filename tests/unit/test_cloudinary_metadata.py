@@ -18,7 +18,6 @@ from apps.common.utils.cloudinary_metadata import (
     AssetType,
     UserRole,
     ModelTarget,
-    CloudinaryPublicIDParser,
     parse_cloudinary_public_id,
 )
 from apps.common.utils.webhook_idempotency import (
@@ -335,6 +334,7 @@ class TestEdgeCases:
         )
         s = str(metadata)
         r = repr(metadata)
+        assert isinstance(r, str)
         assert "avatar" in s.lower()
         assert "customer" in s.lower()
 

@@ -30,8 +30,7 @@ Covers:
     - unknown identifier rejected
 """
 import pytest
-from unittest.mock import patch, MagicMock
-from rest_framework import serializers as drf_serializers
+from unittest.mock import patch
 
 
 SERIALIZERS_PATH = 'apps.authentication.serializers.auth'
@@ -201,7 +200,6 @@ class TestLoginSerializer:
         return LoginSerializer(data=data)
 
     def test_valid_email_login_passes(self, registered_verified_user):
-        from apps.authentication.models import UnifiedUser
         s = self._make_serializer({
             'email_or_phone': registered_verified_user.email,
             'password': 'SecurePass123!@#',

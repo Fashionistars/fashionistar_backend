@@ -20,7 +20,6 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.custom_order.models import (
     CustomOrder,
-    CustomOrderMilestone,
     CustomOrderStatus,
     MilestonePaymentStatus,
 )

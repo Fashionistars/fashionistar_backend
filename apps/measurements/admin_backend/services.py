@@ -2,7 +2,6 @@
 from __future__ import annotations
 import logging
 from django.db import transaction
-from django.utils import timezone
 from apps.common.events import event_bus
 from apps.measurements.models.measurement import MeasurementProfile
 

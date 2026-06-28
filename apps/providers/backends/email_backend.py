@@ -15,7 +15,6 @@ Cache behaviour:
 from __future__ import annotations
 
 import logging
-from django.apps import apps
 from django.core.mail.backends.base import BaseEmailBackend
 from django.utils.module_loading import import_string
 

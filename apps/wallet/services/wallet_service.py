@@ -25,7 +25,6 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from django.db import transaction
-from django.utils import timezone
 
 if TYPE_CHECKING:
     from apps.authentication.models import UnifiedUser
@@ -346,7 +345,6 @@ class WalletService:
         """
         Release escrowed funds to vendor after order delivery confirmation.
         """
-        from apps.wallet.models import Wallet, WalletTransaction
 
         platform_commission = (amount * commission_rate).quantize(Decimal("0.01"))
         vendor_net = amount - platform_commission

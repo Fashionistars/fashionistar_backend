@@ -21,9 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import threading
-import time
-from typing import Any
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 from django.core.cache import cache
 from django.test import TestCase, override_settings

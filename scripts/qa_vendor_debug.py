@@ -1,10 +1,9 @@
-import os, django
+import os
+import django
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.config.development")
 django.setup()
 
 from apps.authentication.models import UnifiedUser
-from django.test import RequestFactory
-from django.contrib.auth.models import AnonymousUser
 import traceback
 
 u = UnifiedUser.objects.get(email="qa.vendor@fashionistar.test")

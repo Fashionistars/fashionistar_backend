@@ -21,7 +21,6 @@ import threading
 import unittest
 import pytest
 from django.test import TransactionTestCase, TestCase, Client
-from django.urls import reverse
 from unittest.mock import patch
 
 from apps.authentication.models import UnifiedUser

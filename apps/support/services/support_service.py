@@ -17,7 +17,6 @@ from uuid import UUID
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.utils import timezone
 
 # Audit imports are deferred inside methods to prevent circular import during migration
 

@@ -37,7 +37,6 @@ from __future__ import annotations
 
 from django.urls import path, include
 from ninja import NinjaAPI
-from ninja.security import django_auth
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Central Ninja API instance for ALL admin async read endpoints

@@ -198,7 +198,8 @@ class CustomOrder(TimeStampedModel, SoftDeleteModel):
 
     @staticmethod
     def _generate_reference() -> str:
-        import random, string
+        import random
+        import string
         from django.utils import timezone
         today = timezone.now().strftime("%Y%m%d")
         short = str(uuid.uuid4())[:6].upper()

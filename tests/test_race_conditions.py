@@ -16,14 +16,11 @@ Requirements:
 
 from __future__ import annotations
 
-import threading
-import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from decimal import Decimal
 
 import pytest
-from django.db import connection, transaction
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -87,7 +84,6 @@ class TestWalletRaceConditions:
     def test_concurrent_debits_prevent_negative_balance(self, transactional_db):
         """10 concurrent ₦100 debits on ₦500 wallet → exactly 5 succeed, 5 raise InsufficientFunds."""
         from apps.authentication.models import UnifiedUser
-        from apps.wallet.models import Wallet
         from apps.wallet.services.wallet_service import WalletService, InsufficientFundsError
 
         user = UnifiedUser.objects.create_user(

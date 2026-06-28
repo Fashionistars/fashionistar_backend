@@ -21,7 +21,6 @@ from django.db import transaction
 from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.renderers import BrowsableAPIRenderer
-from rest_framework.response import Response
 
 from apps.common.permissions import IsVendor
 from apps.common.renderers import CustomJSONRenderer
@@ -29,8 +28,6 @@ from apps.common.responses import error_response, success_response
 from apps.vendor.selectors.vendor_selectors import get_vendor_profile_or_none
 from apps.vendor.serializers.product_serializers import (
     VendorOrderStatusSerializer,
-    VendorProductListSerializer,
-    VendorProductSerializer,
 )
 
 logger = logging.getLogger(__name__)

@@ -291,7 +291,7 @@ def seed_products(vendor_user: object, category_map: dict) -> list:
             if vendor_profile:
                 create_kwargs["vendor"] = vendor_profile
             else:
-                log(f"    No VendorProfile — skipping remaining products", "  ⚠️")
+                log("    No VendorProfile — skipping remaining products", "  ⚠️")
                 break
 
             # Category FK

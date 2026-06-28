@@ -27,7 +27,6 @@ from apps.authentication.serializers.profile import (
     UserProfileSerializer,
 )
 from apps.authentication.services.profile_service import (
-    get_me_profile,
     update_user_profile,
 )
 from apps.common.renderers import CustomJSONRenderer

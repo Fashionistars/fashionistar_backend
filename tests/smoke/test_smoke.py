@@ -14,8 +14,6 @@ Tests that MUST pass for the app to be considered "alive":
 Smoke failures = deployment blocked.
 """
 import pytest
-import django
-from django.test import TestCase
 
 
 @pytest.mark.smoke
@@ -35,7 +33,6 @@ class TestDjangoHealth:
 
     def test_all_installed_apps_importable(self):
         """Every app in INSTALLED_APPS has a importable apps.py module."""
-        from django.conf import settings
         from django.apps import apps as django_apps
         for app_config in django_apps.get_app_configs():
             # This will raise ImportError if any app is broken

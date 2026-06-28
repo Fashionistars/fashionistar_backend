@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import pytest
 from django.core.cache import cache
-from django.core.mail import get_connection
 from django.core.mail.backends.smtp import EmailBackend as SmtpEmailBackend
 from django.core.mail.backends.console import EmailBackend as ConsoleEmailBackend
 
@@ -13,7 +12,6 @@ from apps.providers.SMTP import (
     BREVO_PROVIDER,
     MAILGUN_PROVIDER,
     ZOHO_PROVIDER,
-    EMAIL_BACKEND_CHOICES,
     get_email_backend_label,
 )
 from apps.providers.models import EmailProviderConfig

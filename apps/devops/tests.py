@@ -8,7 +8,6 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 from rest_framework import status
 from unittest.mock import patch, MagicMock
-import json
 from datetime import timedelta
 
 from .models import (
@@ -18,8 +17,7 @@ from .models import (
     HealthCheck,
     ServiceMonitoring
 )
-from .services.docker_service import DockerService, DockerComposeService
-from .services.deployment_service import DeploymentService
+from .services.docker_service import DockerService
 from .services.health_service import HealthService
 
 

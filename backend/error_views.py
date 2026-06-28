@@ -22,7 +22,6 @@ Design decisions:
 """
 
 import logging
-import json
 from django.conf import settings
 from django.http import JsonResponse, HttpResponse
 

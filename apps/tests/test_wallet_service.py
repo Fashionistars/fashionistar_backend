@@ -21,7 +21,7 @@ from decimal import Decimal
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pytest
-from django.db import IntegrityError, transaction
+from django.db import transaction
 
 pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.wallet]
 

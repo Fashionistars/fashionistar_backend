@@ -71,7 +71,6 @@ def make_wallet(db):
     from apps.wallet.models import Wallet
 
     def _factory(user, balance: Decimal = Decimal("50000.00")) -> Any:
-        from apps.wallet.models import Wallet
         from apps.wallet.services.wallet_service import WalletService
         wallet = Wallet.get_or_create_for_user(user, owner_type=user.role)
         wallet.available_balance = Decimal("0.00")

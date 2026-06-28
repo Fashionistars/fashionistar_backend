@@ -46,7 +46,6 @@ from django.utils import timezone
 
 from apps.common.events import event_bus
 from apps.global_platform_settings.cache import get_platform_settings
-from apps.wallet.models import WalletStatus
 from apps.wallet.services.balance import WalletBalanceService
 from apps.wallet.services.provisioning import WalletProvisioningService
 

@@ -28,10 +28,10 @@ Google-style docstrings are required for every non-trivial function.
 import logging
 from typing import Any, Optional
 
-from django.db.models import Count, F, Prefetch, Q, Sum
+from django.db.models import Prefetch
 from django.db.models import aprefetch_related_objects
 
-from apps.order.models import Order, CartOrderItem as OrderItem, OrderStatus, OrderStatusHistory
+from apps.order.models import Order, CartOrderItem as OrderItem
 
 logger = logging.getLogger(__name__)
 

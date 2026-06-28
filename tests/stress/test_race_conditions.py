@@ -320,7 +320,7 @@ class TestConcurrentAuthRequests:
 
         assert len(errors) == 0, f"Registration errors: {errors[:5]}"
         assert len(results) == 100, f"Expected 100 users — got {len(results)}"
-        print(f"\n✅ Concurrent registration: 100 unique users created")
+        print("\n✅ Concurrent registration: 100 unique users created")
 
     def test_duplicate_email_raises_integrity_error(self, db):
         """

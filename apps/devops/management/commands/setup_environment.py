@@ -2,7 +2,6 @@
 Management command برای راه‌اندازی اولیه محیط
 """
 from django.core.management.base import BaseCommand, CommandError
-from django.contrib.auth.models import User
 from devops.models import EnvironmentConfig, ServiceMonitoring
 import json
 
@@ -281,7 +280,7 @@ class Command(BaseCommand):
                 {
                     'service_name': 'minio',
                     'service_type': 'storage',
-                    'health_check_url': f"http://minio:9000/minio/health/live",
+                    'health_check_url': "http://minio:9000/minio/health/live",
                     'check_interval': 600,
                     'timeout': 20
                 }

@@ -3,7 +3,6 @@ import logging
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from django.db import transaction
 
 from apps.admin_backend.permissions import IsAdminUser
 from apps.catalog.models.category import Category

@@ -4,14 +4,11 @@
 import requests
 import time
 import psutil
-import subprocess
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, Optional, Any
 from django.db import connection
 from django.core.cache import cache
 from django.utils import timezone
-from django.conf import settings
 import logging
-import json
 
 from ..models import HealthCheck, ServiceMonitoring, EnvironmentConfig
 

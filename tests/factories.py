@@ -25,7 +25,6 @@ Per-app factories (app-specific) are in:
 """
 import factory
 from factory.django import DjangoModelFactory
-from factory import fuzzy
 import uuid
 
 

@@ -36,11 +36,10 @@ from typing import Any, Optional
 
 from django.core.exceptions import ValidationError
 from django.db import transaction as db_transaction
-from django.utils import timezone
 
 from apps.common.http import ProviderHTTPError
 # ── Deferred import: never import at module level to avoid circular import ──
-from apps.payment.models import PaymentProviderCode, PaymentProviderLog
+from apps.payment.models import PaymentProviderLog
 from apps.payment.orchestrator import PaymentOrchestrator
 
 logger = logging.getLogger("application")

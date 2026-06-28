@@ -37,8 +37,6 @@ import os
 import sys
 import time
 import random
-import string
-import json
 import statistics
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
@@ -123,7 +121,6 @@ def _sha256(plain: str) -> str:
 
 def _seed_otp_redis(user_id: str, otp: str, redis_conn) -> None:
     """Directly seeds one OTP into Redis (bypasses email delivery)."""
-    import base64
     encrypted = 'FAKEENC' + hashlib.sha256((otp + user_id).encode()).hexdigest()[:80]
     otp_hash  = _sha256(otp)
     snippet   = encrypted[:16]
@@ -171,7 +168,7 @@ def setup_test_users(r: redis_lib.Redis, n: int = N_USERS) -> List[Dict]:
             _seed_otp_redis(str(user.id), otp, r)
             users.append({'user_id': str(user.id), 'email': email, 'otp': otp})
 
-        except Exception as exc:
+        except Exception:
             pass  # User may already exist from previous run
 
     elapsed = time.perf_counter() - t0
@@ -280,14 +277,14 @@ async def load_test_resend_otp(
               f"{sum(1 for s, _, _ in results if 200 <= s < 300)}/{len(results)} success")
 
     # Resend flood sub-test (50 consecutive resends for same email)
-    print(f"\n💥  Resend flood sub-test: 50× same email …")
+    print("\n💥  Resend flood sub-test: 50× same email …")
     flood_user  = users[0] if users else None
     if flood_user:
         flood_tasks = [_resend(flood_user) for _ in range(50)]
         flood_res   = await asyncio.gather(*flood_tasks)
         flood_ok    = sum(1 for s, _, _ in flood_res if 200 <= s < 300)
         print(f"    Result: {flood_ok}/50 returned 200 OK")
-        print(f"    (All should return 200 — resend is idempotent by design)")
+        print("    (All should return 200 — resend is idempotent by design)")
 
     return result
 
@@ -307,7 +304,7 @@ async def load_test_idempotency(
     Expected: exactly 1 HTTP 200, the rest should be 400.
     If multiple 200s → idempotency bug / race condition.
     """
-    print(f"\n🔁  Idempotency Test — same OTP × 20 concurrent requests …")
+    print("\n🔁  Idempotency Test — same OTP × 20 concurrent requests …")
 
     if not users:
         print("    No users available — skipping")
@@ -332,7 +329,7 @@ async def load_test_idempotency(
     status_summary = {s: statuses.count(s) for s in set(statuses)}
 
     verdict = "✅ PASS" if ok_count == 1 else f"❌ FAIL — {ok_count} x 200 received!"
-    print(f"    OTP fired 20× concurrently")
+    print("    OTP fired 20× concurrently")
     print(f"    HTTP 200 responses : {ok_count}")
     print(f"    Status breakdown   : {status_summary}")
     print(f"    Idempotency guard  : {verdict}")

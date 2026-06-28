@@ -17,10 +17,9 @@ import json
 import time
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from statistics import mean, stdev
+from statistics import mean
 
 import pytest
-from django.conf import settings
 from django.test import TestCase, override_settings
 
 from apps.common.utils.cloudinary import validate_cloudinary_webhook
@@ -109,7 +108,7 @@ class CloudinaryWebhookStressTest(TestCase):
             f"Max validation latency {max_latency_ms:.3f}ms (should be < 10ms)"
         )
         
-        print(f"\n✅ Stress Test Results:")
+        print("\n✅ Stress Test Results:")
         print(f"   Total validations: {successful + failed:,}")
         print(f"   Success rate: {(successful / (successful + failed) * 100):.1f}%")
         print(f"   Avg latency: {avg_latency_ms:.3f}ms")
@@ -185,7 +184,7 @@ class CloudinaryWebhookStressTest(TestCase):
             f"Actual RPS {actual_rps:.0f} is too low (target {target_rps:.0f})"
         )
         
-        print(f"\n✅ Throughput Test Results:")
+        print("\n✅ Throughput Test Results:")
         print(f"   Total validations: {successful:,}")
         print(f"   Target RPS: {target_rps:,}")
         print(f"   Actual RPS: {actual_rps:,.0f}")
@@ -247,9 +246,9 @@ class CloudinaryWebhookStressTest(TestCase):
         self.assertEqual(successful, 100, "All 100 concurrent validations should succeed")
         self.assertEqual(failed, 0, "No validations should fail")
         
-        print(f"\n✅ Race Condition Test Results:")
+        print("\n✅ Race Condition Test Results:")
         print(f"   Concurrent validations: {successful + failed}")
-        print(f"   Success rate: 100%")
+        print("   Success rate: 100%")
 
     @override_settings(
         CLOUDINARY_STORAGE={
@@ -305,7 +304,7 @@ class CloudinaryWebhookStressTest(TestCase):
             f"Invalid signature rejection should be fast: {avg_latency_ms:.3f}ms"
         )
         
-        print(f"\n✅ Invalid Signature Rejection Test Results:")
+        print("\n✅ Invalid Signature Rejection Test Results:")
         print(f"   Total rejected: {failed:,}")
         print(f"   Avg rejection latency: {avg_latency_ms:.3f}ms")
 

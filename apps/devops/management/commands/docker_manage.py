@@ -4,7 +4,6 @@ Management command برای مدیریت Docker
 from django.core.management.base import BaseCommand, CommandError
 from devops.services.docker_service import DockerService, DockerComposeService
 import json
-import sys
 
 
 class Command(BaseCommand):
@@ -266,7 +265,7 @@ class Command(BaseCommand):
             total_services = result.get('total_services', 0)
             running_services = result.get('running_services', 0)
             
-            self.stdout.write(f"\n🐙 وضعیت Docker Compose Services")
+            self.stdout.write("\n🐙 وضعیت Docker Compose Services")
             self.stdout.write(f"فایل: {result.get('compose_file', 'نامشخص')}")
             self.stdout.write(f"کل سرویس‌ها: {total_services}")
             self.stdout.write(f"سرویس‌های در حال اجرا: {running_services}")

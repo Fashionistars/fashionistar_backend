@@ -2,7 +2,6 @@ import concurrent.futures
 from django.test import TransactionTestCase
 from rest_framework.test import APIClient
 from apps.authentication.models import UnifiedUser
-from apps.audit_logs.models import AuditEventLog, EventType
 from rest_framework_simplejwt.tokens import RefreshToken
 import uuid
 

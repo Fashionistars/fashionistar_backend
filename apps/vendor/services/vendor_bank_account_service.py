@@ -23,8 +23,6 @@ Idempotency:
 from __future__ import annotations
 
 import logging
-from typing import Any
-from decimal import Decimal
 
 import requests
 from django.conf import settings

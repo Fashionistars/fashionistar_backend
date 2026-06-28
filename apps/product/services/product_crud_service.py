@@ -35,15 +35,12 @@ from typing import Any
 from django.db import transaction
 from django.db.models import Count
 
-from apps.vendor.models import VendorProfile
 from apps.product.models import (
     Product,
     ProductFaq,
     ProductVariantGalleryMedia,
     ProductStatus,
     ProductFabricSpecification,
-    ProductSizeAndMeasurementGuide,
-    ProductShippingProfile,
 )
 
 logger = logging.getLogger(__name__)

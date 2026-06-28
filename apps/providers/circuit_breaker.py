@@ -53,7 +53,7 @@ from __future__ import annotations
 
 import functools
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Callable
 
 from django.conf import settings

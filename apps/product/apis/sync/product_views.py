@@ -35,7 +35,6 @@ from rest_framework import parsers, status
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.renderers import BrowsableAPIRenderer
-from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.common.permissions import (
@@ -45,7 +44,7 @@ from apps.common.permissions import (
     IsProductOwner,
 )
 from apps.common.renderers import CustomJSONRenderer, error_response, success_response
-from apps.product.models import Product, ProductVariantGalleryMedia, ProductInventoryLog
+from apps.product.models import Product, ProductInventoryLog
 from apps.product.selectors import (
     filter_products,
     get_featured_products,
@@ -57,7 +56,6 @@ from apps.product.selectors import (
     get_vendor_coupons,
     get_vendor_product_or_404,
     get_vendor_review_summary,
-    get_published_products_list,
 )
 from apps.product.serializers import (
     CouponSerializer,
@@ -69,7 +67,6 @@ from apps.product.serializers import (
     ProductReviewSerializer,
     ProductReviewWriteSerializer,
     ProductWishlistSerializer,
-    ProductWriteSerializer,
     ProductWriteFullSerializer,
     VendorReplySerializer,
 )

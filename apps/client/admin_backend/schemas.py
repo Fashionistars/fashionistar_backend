@@ -1,6 +1,6 @@
 # apps/client/admin_backend/schemas.py
 from datetime import datetime
-from typing import Optional, List, Any
+from typing import Optional, List
 from ninja import Schema
 from pydantic import UUID4
 

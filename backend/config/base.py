@@ -17,12 +17,9 @@ from pathlib import Path
 from datetime import timedelta
 from environs import Env
 import os
-import sys
 from decouple import config
 import dj_database_url
 import cloudinary
-import cloudinary.uploader
-import cloudinary.api
 
 # ── Environment loader ────────────────────────────────────────────────
 env = Env()
@@ -208,6 +205,14 @@ INSTALLED_APPS = [
     "django_celery_beat",
     "cloudinary",
     "cloudinary_storage",
+    # ── Django Control Room ──────────────────────────────────────────────────
+    "dj_control_room_base",
+    "dj_redis_panel",
+    "dj_cache_panel",
+    "dj_urls_panel",
+    "dj_celery_panel",
+    "dj_signals_panel",
+    "dj_control_room",
 ]
 
 
@@ -1104,6 +1109,8 @@ JAZZMIN_SETTINGS = {
         # Audit
         "audit_logs",
         "audit_logs.auditeventlog",
+        # Django Control Room
+        "dj_control_room",
         # Django internals
         "auth",
     ],
@@ -1219,6 +1226,13 @@ JAZZMIN_SETTINGS = {
         "client":                                  "fas fa-user",
         "client.clientprofile":                    "fas fa-user-circle",
         "client.clientaddress":                    "fas fa-map-marker-alt",
+        # Django Control Room
+        "dj_control_room":                         "fas fa-tools",
+        "dj_control_room.cachepanel":              "fas fa-database",
+        "dj_control_room.celerypanel":             "fas fa-tasks",
+        "dj_control_room.redispanel":              "fas fa-server",
+        "dj_control_room.signalspanel":            "fas fa-broadcast-tower",
+        "dj_control_room.urlspanel":               "fas fa-link",
     },
     "default_icon_parents":  "fas fa-chevron-circle-right",
     "default_icon_children": "fas fa-circle",
@@ -1501,3 +1515,17 @@ SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 # ==============================================================================
 # END OF OWASP SECURITY HEADERS
 # ==============================================================================
+
+# =============================================================================
+# DJANGO CONTROL ROOM CONFIGURATION
+# =============================================================================
+# Redis Panel settings: cursor-based pagination for large Redis datasets
+DJ_REDIS_PANEL_SETTINGS = {
+    "PAGINATION_METHOD": "CURSOR_PAGINATED_SCAN",
+}
+
+# Signals Panel settings: enable receiver source code viewing
+DJ_SIGNALS_PANEL_SETTINGS = {
+    "SHOW_SOURCE": True,
+}
+

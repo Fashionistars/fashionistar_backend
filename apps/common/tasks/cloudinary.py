@@ -424,7 +424,6 @@ def process_cloudinary_upload_webhook(self, payload: dict) -> None:
     from apps.common.utils.webhook_idempotency import (
         generate_idempotency_key,
         is_duplicate,
-        mark_processed,
     )
 
     public_id     = payload.get("public_id", "")

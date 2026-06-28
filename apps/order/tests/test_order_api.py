@@ -20,9 +20,8 @@ from decimal import Decimal
 from unittest.mock import patch, MagicMock
 from rest_framework import status
 from rest_framework.test import APIClient
-from django.utils import timezone
 
-from apps.order.models import Order, CartOrderItem as OrderItem, OrderStatus, OrderStatusHistory
+from apps.order.models import Order, OrderStatus
 from apps.order.services import (
     place_order, confirm_payment, transition_status,
     release_escrow, cancel_order,

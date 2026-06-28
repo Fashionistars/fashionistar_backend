@@ -2,7 +2,6 @@
 Phase 4 Database Transaction & Atomic Block Regression Tests
 """
 from django.test import TestCase, override_settings
-from django.db import IntegrityError, transaction
 from unittest.mock import patch
 
 from apps.authentication.models import UnifiedUser

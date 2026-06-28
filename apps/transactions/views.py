@@ -18,10 +18,8 @@ from rest_framework.renderers import BrowsableAPIRenderer
 
 from apps.common.renderers import CustomJSONRenderer
 from apps.common.responses import success_response, error_response
-from apps.transactions.models import Transaction
 from apps.transactions.serializers import (
     DisputeCreateSerializer,
-    RefundResponseSerializer,
     RefundSerializer,
     TransactionDisputeSerializer,
     TransactionSerializer,

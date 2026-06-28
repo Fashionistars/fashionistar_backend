@@ -16,7 +16,6 @@ class KycConfig(AppConfig):
     def ready(self) -> None:
         """Connect post_save signal to dispatch legal_name population task."""
         from django.db.models.signals import post_save
-        from django.dispatch import receiver
 
         def _on_kyc_submission_saved(sender, instance, created, **kwargs):
             """

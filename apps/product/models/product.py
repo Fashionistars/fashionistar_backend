@@ -20,8 +20,6 @@ from typing import Optional
 from typing import Any
 from decimal import Decimal
 import logging
-import uuid
-import uuid6
 from django.utils.timezone import now
 
 from django.contrib.auth import get_user_model
@@ -32,7 +30,7 @@ from django.db import models
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 
-from apps.common.models import TimeStampedModel, SoftDeleteModel, HardDeleteMixin
+from apps.common.models import TimeStampedModel, SoftDeleteModel
 
 try:
     from cloudinary.models import CloudinaryField

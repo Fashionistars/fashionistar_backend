@@ -16,7 +16,6 @@ from datetime import timedelta
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 from rest_framework import serializers
-from django.db import transaction
 from django.utils import timezone
 
 from apps.catalog.models import Category
@@ -28,7 +27,6 @@ from apps.product.models import (
     ProductFaq,
     ProductVariantGalleryMedia,
     ProductTag,
-    ProductReview,
     ProductInventoryLog,
     ProductShippingProfile,
     DeliveryCourier,

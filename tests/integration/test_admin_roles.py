@@ -1,7 +1,6 @@
 import pytest
 from django.urls import reverse
 from rest_framework import status
-from apps.authentication.models import UnifiedUser
 from tests.factories import UnifiedUserFactory as UserFactory
 
 @pytest.mark.django_db

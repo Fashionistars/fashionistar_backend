@@ -19,8 +19,8 @@ Endpoints tested:
   4. POST /api/v1/upload/webhook/cloudinary/  — webhook idempotency
 """
 
+# pyrefly: ignore [missing-import]
 from locust import HttpUser, between, task
-from locust.exception import RescheduleTask
 import json
 import random
 import string

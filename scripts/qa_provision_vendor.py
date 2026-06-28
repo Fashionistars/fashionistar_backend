@@ -7,7 +7,8 @@ Safe to run multiple times (idempotent get_or_create logic).
 Usage:
     uv run manage.py shell -c "exec(open('scripts/qa_provision_vendor.py').read())"
 """
-import os, django
+import os
+import django
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.config.development")
 
 # Only call setup() if Django is not already configured

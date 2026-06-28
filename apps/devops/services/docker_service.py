@@ -3,12 +3,9 @@
 """
 import docker
 import subprocess
-import os
 import json
-import time
 from typing import Dict, List, Optional, Tuple, Any
 from django.conf import settings
-from django.utils import timezone
 import logging
 
 logger = logging.getLogger(__name__)
@@ -241,7 +238,7 @@ class DockerComposeService:
             )
             
             if result.returncode == 0:
-                message = f"سرویس‌ها با موفقیت شروع شدند"
+                message = "سرویس‌ها با موفقیت شروع شدند"
                 if services:
                     message = f"سرویس‌های {', '.join(services)} با موفقیت شروع شدند"
                 logger.info(message)
@@ -272,7 +269,7 @@ class DockerComposeService:
             )
             
             if result.returncode == 0:
-                message = f"سرویس‌ها متوقف شدند"
+                message = "سرویس‌ها متوقف شدند"
                 if services:
                     message = f"سرویس‌های {', '.join(services)} متوقف شدند"
                 logger.info(message)
@@ -303,7 +300,7 @@ class DockerComposeService:
             )
             
             if result.returncode == 0:
-                message = f"سرویس‌ها راه‌اندازی مجدد شدند"
+                message = "سرویس‌ها راه‌اندازی مجدد شدند"
                 if services:
                     message = f"سرویس‌های {', '.join(services)} راه‌اندازی مجدد شدند"
                 logger.info(message)
@@ -358,7 +355,7 @@ class DockerComposeService:
             )
             
             if result.returncode == 0:
-                message = f"Image ها با موفقیت ساخته شدند"
+                message = "Image ها با موفقیت ساخته شدند"
                 if services:
                     message = f"Image های {', '.join(services)} با موفقیت ساخته شدند"
                 logger.info(message)
@@ -389,7 +386,7 @@ class DockerComposeService:
             )
             
             if result.returncode == 0:
-                message = f"Image ها با موفقیت دانلود شدند"
+                message = "Image ها با موفقیت دانلود شدند"
                 if services:
                     message = f"Image های {', '.join(services)} با موفقیت دانلود شدند"
                 logger.info(message)

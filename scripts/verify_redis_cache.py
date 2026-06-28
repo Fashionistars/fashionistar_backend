@@ -50,7 +50,6 @@ except RuntimeError:
 
 import redis
 from django.conf import settings
-from django.core.cache import cache
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Config — expected TTL ranges (seconds)
@@ -187,7 +186,7 @@ def verify_celery_task() -> None:
         print(f"{OK} Celery task enqueued: task_id={result.id}")
     except Exception as exc:
         print(f"{WARN} Celery task check skipped: {exc}")
-        print(f"   (This is expected if Celery broker is not running locally)")
+        print("   (This is expected if Celery broker is not running locally)")
 
 
 def check_cache_consistency(r: redis.Redis) -> None:
@@ -225,7 +224,7 @@ def main() -> None:
     keys = list_catalog_keys(r)
     if not keys:
         print(f"\n{WARN} No catalog:* keys in Redis — cache is cold.")
-        print(f"   Run: python manage.py shell -c \"import asyncio; from apps.catalog.selectors.catalog_selectors import get_homepage_bundle_v2_selector; asyncio.run(get_homepage_bundle_v2_selector())\"")
+        print("   Run: python manage.py shell -c \"import asyncio; from apps.catalog.selectors.catalog_selectors import get_homepage_bundle_v2_selector; asyncio.run(get_homepage_bundle_v2_selector())\"")
         trigger_cache_prime()
         # Re-scan after prime
         keys = list_catalog_keys(r)

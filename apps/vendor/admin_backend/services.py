@@ -12,12 +12,12 @@ from __future__ import annotations
 
 import logging
 from decimal import Decimal
-from typing import Optional
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from apps.common.events import event_bus
+from apps.vendor.models import VendorProfile
 
 logger = logging.getLogger(__name__)
 

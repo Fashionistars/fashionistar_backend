@@ -21,9 +21,7 @@ If none configured, falls back by priority order.
 from __future__ import annotations
 
 import logging
-from functools import lru_cache
 
-from django.conf import settings
 
 from apps.providers.SMTP.contract import SMTPProviderContract
 from apps.providers.SMTP.brevo_provider import BREVO

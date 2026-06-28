@@ -15,7 +15,6 @@ Design decisions:
 Activation: Run makemigrations kyc after adding "apps.kyc" to INSTALLED_APPS.
 """
 
-import uuid
 
 from django.conf import settings
 from django.db import models

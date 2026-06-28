@@ -1,5 +1,6 @@
 """Verify all QA test users are correctly configured."""
-import os, django
+import os
+import django
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.config.development")
 django.setup()
 

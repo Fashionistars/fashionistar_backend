@@ -1,12 +1,11 @@
 import os
 import django
-import json
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.config.development")
 django.setup()
 
-from apps.authentication.models import UnifiedUser, LoginEvent, UserSession
+from apps.authentication.models import LoginEvent, UserSession
 from apps.audit_logs.models import AuditEventLog, EventType
 from rest_framework.test import APIClient
 

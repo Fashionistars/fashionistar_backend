@@ -521,7 +521,6 @@ class CatalogSelector(BaseSelector):
             image, mobile_image, sort_order.
         """
         try:
-            import asyncio as _asyncio
 
             from django.db.models import Q
 

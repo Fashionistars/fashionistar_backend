@@ -11,13 +11,10 @@ Tests:
   - Audit trail logging
 """
 
-import json
 import pytest
-import hashlib
 from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 from django.db import transaction
-from unittest.mock import patch, MagicMock
 
 from apps.authentication.models import UnifiedUser
 from apps.common.utils.cloudinary_metadata import parse_cloudinary_public_id, ModelTarget
@@ -26,7 +23,6 @@ from apps.common.utils.webhook_idempotency import (
     is_duplicate,
     mark_processed,
 )
-from apps.common.utils.cloudinary import validate_cloudinary_webhook
 from apps.common.models import CloudinaryProcessedWebhook
 
 

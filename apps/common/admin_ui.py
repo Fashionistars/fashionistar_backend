@@ -2,11 +2,9 @@ from __future__ import annotations
 
 import csv
 from io import StringIO
-from typing import Iterable
 
 from django.contrib import admin
 from django.http import HttpResponse
-from django.urls import NoReverseMatch, reverse
 from django.utils.html import format_html, format_html_join
 from django.utils.translation import gettext_lazy as _
 

@@ -9,8 +9,6 @@ import time
 import math
 import logging
 from typing import List, Dict, Any, Optional, Tuple
-from functools import reduce
-from operator import or_ as OR
 
 from django.db.models.expressions import RawSQL
 from django.db.models import Q

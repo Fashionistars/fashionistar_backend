@@ -42,7 +42,20 @@ logger = logging.getLogger(__name__)
 class GoogleAuthView(generics.CreateAPIView):
     """
     POST /api/v1/auth/google/
+    Authenticate a user via Google OAuth2 ID Token.
 
+    Flow:
+      1. Verify the provided 'id_token' with Google's public keys.
+      2. Identify or register the user based on email (is_new flag returned).
+      3. Provision defaults for new client users asynchronously.
+      4. Record UserSession and LoginEvent for audit tracking.
+      5. Issue JWT tokens and profile state for frontend routing.
+
+    Status Codes:
+      - 201 Created: New user registered.
+      - 200 OK: Returning user logged in.
+      - 401 Unauthorized: Invalid or expired token.
+    
     Google OAuth2 sign-in via ID token from the frontend.
 
     Request Body:
@@ -226,19 +239,13 @@ Verifies Google ID tokens and handles the find-or-create user lifecycle.
 """
 
 import logging
-from django.db import transaction
-from rest_framework import generics, status
+from rest_framework import generics
 from rest_framework.permissions import AllowAny
 from rest_framework.renderers import BrowsableAPIRenderer
 from rest_framework.response import Response
 
 from apps.authentication.serializers import GoogleAuthSerializer
-from apps.authentication.services.google_service import SyncGoogleAuthService
-from apps.authentication.services.profile_service.profile_service import (
-    get_post_auth_state,
-)
 from apps.authentication.throttles import BurstRateThrottle
-from apps.client.tasks import provision_client_defaults
 from apps.common.renderers import CustomJSONRenderer
 from apps.common.responses import error_response, success_response
 

@@ -1,4 +1,3 @@
-import os
 import re
 
 path = r'c:\Users\FASHIONISTAR\OneDrive\Documenti\FASHIONISTAR_ANTAGRAVITY\fashionistar_backend\apps\authentication\apis\auth_views\sync_views.py'

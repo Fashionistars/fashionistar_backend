@@ -3,7 +3,7 @@ import logging
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
-from apps.order.models import Order, OrderStatus
+from apps.order.models import Order
 
 logger = logging.getLogger(__name__)
 

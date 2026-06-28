@@ -24,12 +24,9 @@ import json
 import os
 import uuid
 import threading
-import time
 import unittest
 
-import pytest
-from django.test import TestCase, Client, override_settings
-from django.core.cache import cache, caches
+from django.test import TestCase, Client
 from unittest.mock import patch
 
 from apps.authentication.models import UnifiedUser

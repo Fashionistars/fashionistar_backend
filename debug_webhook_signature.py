@@ -7,8 +7,6 @@ Cloudinary is actually using for webhook notifications.
 """
 
 import os
-import sys
-import json
 import hmac
 import hashlib
 
@@ -30,7 +28,7 @@ API_SECRET = settings.CLOUDINARY_STORAGE.get("API_SECRET", "")
 print("=" * 100)
 print("CLOUDINARY WEBHOOK SIGNATURE DIAGNOSIS")
 print("=" * 100)
-print(f"\nKnown Values:")
+print("\nKnown Values:")
 print(f"  Received Signature: {RECEIVED_SIG}")
 print(f"  Timestamp: {TIMESTAMP}")
 print(f"  Body Length: {BODY_LEN} bytes")

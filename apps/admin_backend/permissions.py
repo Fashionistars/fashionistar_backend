@@ -100,7 +100,6 @@ class AdminJWTBearer(HttpBearer):
     async def authenticate(self, request, token: str):
         try:
             from rest_framework_simplejwt.tokens import UntypedToken
-            from rest_framework_simplejwt.exceptions import TokenError
             from django.contrib.auth import get_user_model
 
             User = get_user_model()
@@ -109,7 +108,6 @@ class AdminJWTBearer(HttpBearer):
             UntypedToken(token)
 
             # Decode payload
-            import asyncio
             from rest_framework_simplejwt.tokens import AccessToken
             access = AccessToken(token)
             user_id = access["user_id"]

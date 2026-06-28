@@ -1,10 +1,8 @@
 # apps/client/admin_backend/selectors.py
 import logging
-from typing import Optional
 from django.db import models
 from django.db.models import QuerySet
 from apps.client.models.client_profile import ClientProfile
-from apps.client.models.client_address import ClientAddress
 
 logger = logging.getLogger(__name__)
 

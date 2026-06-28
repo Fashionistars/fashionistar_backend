@@ -23,10 +23,9 @@ OWASP/Enterprise compliance:
 
 import threading
 import uuid
-import pytest
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch
 from django.test import TestCase, Client, TransactionTestCase
-from django.db import transaction, connection
+from django.db import transaction
 from rest_framework import serializers as drf_serializers
 
 from apps.authentication.models import UnifiedUser

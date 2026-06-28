@@ -78,6 +78,14 @@ urlpatterns = [
     # GET /api/v1/health/
     # Used by: AWS ELB, Render.com, Kubernetes probes, Uptime Robot
     path("api/v1/health/", HealthCheckView.as_view(), name="health-check"),
+    # ── Django Control Room ──────────────────────────────────────────────────
+    path("admin/dj-redis-panel/", include("dj_redis_panel.urls")),
+    path("admin/dj-cache-panel/", include("dj_cache_panel.urls")),
+    path("admin/dj-urls-panel/", include("dj_urls_panel.urls")),
+    path("admin/dj-celery-panel/", include("dj_celery_panel.urls")),
+    path("admin/dj-signals-panel/", include("dj_signals_panel.urls")),
+    path("admin/dj-control-room/", include("dj_control_room.urls")),
+
     # Admin URL
     path("admin/", admin.site.urls),
 

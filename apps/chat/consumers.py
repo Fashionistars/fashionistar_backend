@@ -293,7 +293,6 @@ class ChatConversationConsumer(AsyncJsonWebsocketConsumer):
         """
         try:
             from rest_framework_simplejwt.tokens import AccessToken  # noqa: PLC0415
-            from rest_framework_simplejwt.exceptions import TokenError  # noqa: PLC0415
 
             query_string = self.scope.get("query_string", b"").decode("utf-8")
             params: dict[str, str] = dict(

@@ -6,8 +6,7 @@ from django.contrib.auth.models import User
 from django.core.validators import RegexValidator
 from django.utils import timezone
 from django.core.exceptions import ValidationError
-import json
-from typing import Dict, Any, Optional
+from typing import Optional
 from encrypted_model_fields.fields import EncryptedTextField
 import uuid
 

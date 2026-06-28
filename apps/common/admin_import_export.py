@@ -49,7 +49,6 @@ Performance
 from __future__ import annotations
 
 import csv
-import io
 import logging
 import time
 from typing import Any, Sequence
@@ -60,7 +59,7 @@ from django.http import StreamingHttpResponse
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 
-from import_export import resources, fields as ie_fields
+from import_export import resources
 from import_export.admin import ImportExportModelAdmin
 from import_export.formats.base_formats import CSV, JSON
 

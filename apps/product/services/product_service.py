@@ -46,8 +46,6 @@ from apps.product.models import (
 )
 from apps.product.selectors import (
     get_coupon_by_code,
-    get_user_review_for_product,
-    get_vendor_product_or_404,
     is_in_wishlist,
 )
 
@@ -314,7 +312,6 @@ def adjust_inventory(
     """
     # ── Step 1: Acquire pessimistic row lock on Product FIRST ─────────────
     from django.core.exceptions import ValidationError as DjangoValidationError
-    from django.db.models import Sum
 
     product = Product.objects.select_for_update().get(pk=product.pk)
 

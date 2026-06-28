@@ -1,7 +1,7 @@
 # apps/client/admin_backend/api.py
 import logging
 from typing import Optional, List
-from ninja import Router, Query
+from ninja import Router
 from ninja.errors import HttpError
 from apps.client.admin_backend.selectors import AdminClientSelector
 from apps.client.admin_backend.schemas import (

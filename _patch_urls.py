@@ -1,5 +1,4 @@
 """Patch backend/urls.py to add KYC URL mount."""
-import re
 
 with open("backend/urls.py", "r", encoding="utf-8") as f:
     content = f.read()

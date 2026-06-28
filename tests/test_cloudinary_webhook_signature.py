@@ -16,8 +16,6 @@ import json
 import time
 from unittest.mock import patch
 
-import pytest
-from django.conf import settings
 from django.test import TestCase, override_settings
 
 from apps.common.utils.cloudinary import validate_cloudinary_webhook

@@ -44,15 +44,8 @@ from apps.common.roles import is_client_role, is_vendor_role
 from apps.product.models import Product
 from apps.product.schemas.product_schemas import (
     CouponValidateIn,
-    CouponValidateOut,
     InventoryAdjustIn,
-    ProductDetailBundleOut,
-    ProductDetailOut,
-    ProductInventoryLogOut,
-    ProductListItemOut,
     ProductReviewWriteIn,
-    WishlistBulkStatusOut,
-    WishlistToggleOut,
     VendorMeasurementTemplateOut,
     VendorMeasurementTemplateIn,
 )

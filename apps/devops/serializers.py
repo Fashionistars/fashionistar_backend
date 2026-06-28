@@ -2,7 +2,6 @@
 Serializers برای اپلیکیشن DevOps
 """
 from rest_framework import serializers
-from django.contrib.auth.models import User
 from .models import (
     EnvironmentConfig,
     SecretConfig,
@@ -178,7 +177,6 @@ class ServiceMonitoringSerializer(serializers.ModelSerializer):
     def get_uptime_24h(self, obj):
         """uptime در 24 ساعت گذشته"""
         from django.utils import timezone
-        from django.db.models import Count
         
         from_time = timezone.now() - timezone.timedelta(hours=24)
         

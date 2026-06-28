@@ -17,7 +17,7 @@ import logging
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.contrib import admin, messages
-from django.db.models import Avg, Count, Sum, QuerySet
+from django.db.models import QuerySet
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 

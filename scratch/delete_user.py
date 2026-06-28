@@ -38,7 +38,7 @@ def main():
                             print(f"Deleting {qs.count()} instances from {model.__name__} (via field: {field.name})")
                             qs.delete()
                             deleted_any = True
-                    except Exception as e:
+                    except Exception:
                         # Fallback to all_objects if available
                         try:
                             if hasattr(model, 'all_objects'):

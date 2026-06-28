@@ -15,7 +15,7 @@ Security:
 """
 from rest_framework import serializers
 
-from apps.kyc.models.kyc_submission import KycSubmission, KycStatus
+from apps.kyc.models.kyc_submission import KycSubmission
 from apps.kyc.models.kyc_document import KycDocument, KycDocumentType
 
 

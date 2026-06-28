@@ -138,7 +138,6 @@ class NotificationAdmin(admin.ModelAdmin):
 
     @admin.action(description="🔁 Retry selected failed notifications")
     def action_retry_failed(self, request, queryset):
-        from django.utils import timezone
         qs = queryset.filter(failed=True)
         count = qs.count()
         if count == 0:

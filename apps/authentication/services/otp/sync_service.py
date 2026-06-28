@@ -221,8 +221,6 @@ class OTPService:
                 # Scan DB cache for matching OTP (less efficient but correct).
                 logger.warning("Redis unavailable during OTP-only verification — checking DB cache fallback")
                 try:
-                    from django.core.cache import cache as _django_cache
-                    from apps.authentication.models import UnifiedUser
                     # We stored OTP as: otp_fallback:{user_id}:verify
                     # Without Redis we must check DB-stored OTPs — but we don't know user_id
                     # So return None and require admin activation instead

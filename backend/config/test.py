@@ -12,10 +12,10 @@ Inherits from development.py, then applies test-specific overrides:
 """
 from .development import *   # noqa: F401, F403 — inherit dev settings
 
-# ─── Database — PostgreSQL if DATABASE_URL environment variable exists, otherwise SQLite ────────────────
+# ─── Database — PostgreSQL if FORCE_DB=postgres and DATABASE_URL exists, otherwise SQLite ────────────────
 import os
 import dj_database_url
-if os.environ.get("DATABASE_URL"):
+if os.environ.get("FORCE_DB") == "postgres" and os.environ.get("DATABASE_URL"):
     DATABASES = {
         'default': dj_database_url.config(
             default=os.environ.get("DATABASE_URL"),
@@ -26,7 +26,7 @@ else:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': 'test_db.sqlite3',
+            'NAME': ':memory:',
             'OPTIONS': {
                 'timeout': 60,
             }

@@ -8,7 +8,6 @@ Endpoints for Passkey (WebAuthn) registration and login.
 
 import logging
 from rest_framework import generics, status
-from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.renderers import BrowsableAPIRenderer
 
@@ -126,7 +125,6 @@ class BiometricLoginVerifyView(generics.GenericAPIView):
             SyncBiometricService.verify_auth_response(user, request, request.data, state)
 
             # Login successful, generate tokens
-            from apps.authentication.services.auth_service import SyncAuthService
             from rest_framework_simplejwt.tokens import RefreshToken
 
             refresh = RefreshToken.for_user(user)

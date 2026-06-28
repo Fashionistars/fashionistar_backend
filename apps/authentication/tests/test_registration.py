@@ -34,7 +34,7 @@ NOTE on transaction.on_commit() + mocking:
   on Celery dispatch, and mock the task at the service module level.
 """
 import pytest
-from unittest.mock import patch, ANY, call
+from unittest.mock import patch
 from rest_framework import status
 
 REGISTER_URL = '/api/v1/auth/register/'

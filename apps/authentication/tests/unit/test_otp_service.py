@@ -13,7 +13,7 @@ Covers:
 """
 import hashlib
 import pytest
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock
 
 
 OTP_SERVICE_PATH = 'apps.authentication.services.otp.sync_service'

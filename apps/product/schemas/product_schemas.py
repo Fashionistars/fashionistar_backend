@@ -17,7 +17,7 @@ from decimal import Decimal
 from typing import Generic, List, Optional, TypeVar, Dict, Any
 from uuid import UUID
 from ninja import Schema
-from pydantic import Field, model_validator
+from pydantic import model_validator
 
 T = TypeVar("T")
 

@@ -16,7 +16,6 @@ Usage pattern:
         assert response.status_code == 200
 """
 import pytest
-from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
 

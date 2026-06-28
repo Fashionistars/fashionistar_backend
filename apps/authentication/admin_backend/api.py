@@ -13,15 +13,13 @@ GET  /api/admin/auth/users/{id}/          → user detail
 from __future__ import annotations
 
 import logging
-from typing import Optional, List
+from typing import Optional
 
 from ninja import Router
 
 from apps.admin_backend.permissions import admin_auth
 from .selectors import AdminUserSelector
 from .schemas import (
-    UnifiedUserListSchema,
-    UnifiedUserDetailSchema,
     UserMetricsSchema,
 )
 

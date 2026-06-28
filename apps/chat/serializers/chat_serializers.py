@@ -8,8 +8,6 @@ from apps.chat.models import (
     Message,
     MessageMedia,
     ChatOffer,
-    ModerationFlag,
-    ChatEscalation,
 )
 
 

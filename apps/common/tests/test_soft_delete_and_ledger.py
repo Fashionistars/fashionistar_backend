@@ -3,17 +3,14 @@
 Stage 5 Verification: Soft/Hard Deletion & Financial Ledger Transactional Integrity Tests
 """
 from decimal import Decimal
-import pytest
 from django.db import transaction, IntegrityError
 from django.test import TestCase
-from django.utils import timezone
 
 from apps.authentication.models import UnifiedUser
 from apps.catalog.models.blog import BlogPost
 from apps.catalog.models.category import Category
 from apps.client.models import ClientProfile
-from apps.wallet.models import Wallet
-from apps.wallet.services import WalletProvisioningService, WalletBalanceService, WalletPinService
+from apps.wallet.services import WalletProvisioningService, WalletPinService
 
 
 class SoftHardDeleteAndLedgerTestCase(TestCase):

@@ -4,7 +4,6 @@ import logging
 import asyncio
 from typing import List, Dict, Any
 
-from django.conf import settings
 
 # -----------------------------------------------------------------------------
 # Logger Configuration

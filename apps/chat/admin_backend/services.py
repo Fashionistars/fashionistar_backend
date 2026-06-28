@@ -4,7 +4,7 @@ import logging
 from django.db import transaction
 from django.utils import timezone
 from apps.common.events import event_bus
-from apps.chat.models.conversation import ChatEscalation, Conversation, EscalationStatus, ConversationStatus
+from apps.chat.models.conversation import ChatEscalation, EscalationStatus, ConversationStatus
 
 logger = logging.getLogger(__name__)
 

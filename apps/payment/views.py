@@ -18,7 +18,6 @@ from django.views.decorators.csrf import csrf_exempt
 from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.renderers import BrowsableAPIRenderer
-from rest_framework.response import Response
 
 from apps.common.renderers import CustomJSONRenderer
 from apps.common.responses import success_response, error_response

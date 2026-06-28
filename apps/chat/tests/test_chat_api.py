@@ -12,21 +12,16 @@ Coverage:
   6. API endpoint authorization matrix
 """
 import pytest
-from decimal import Decimal
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-from django.urls import reverse
 
 from apps.authentication.models import UnifiedUser
 from apps.chat.models import (
     Conversation,
     ConversationStatus,
     Message,
-    ChatOffer,
     OfferStatus,
-    ModerationFlag,
     ChatEscalation,
-    EscalationStatus,
 )
 from apps.chat.services.chat_service import (
     get_or_create_conversation,

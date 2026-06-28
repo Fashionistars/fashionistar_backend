@@ -17,7 +17,6 @@ import logging
 
 from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
 
 from apps.client.selectors.client_selectors import (
     get_client_profile_or_none,
@@ -30,7 +29,7 @@ from apps.client.serializers.profile_serializers import (
     ClientProfileUpdateSerializer,
 )
 from apps.client.services.client_profile_service import ClientProfileService
-from apps.common.permissions import IsClient, IsVerifiedUser
+from apps.common.permissions import IsClient
 from apps.common.renderers import CustomJSONRenderer, error_response, success_response
 
 logger = logging.getLogger(__name__)

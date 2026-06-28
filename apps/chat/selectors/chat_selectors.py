@@ -5,7 +5,7 @@ All selectors return QuerySets — no mutations.
 """
 from django.db.models import QuerySet, Prefetch
 from apps.authentication.models import UnifiedUser
-from apps.chat.models import Conversation, ConversationStatus, Message
+from apps.chat.models import Conversation, Message
 
 
 def get_user_conversations(user: UnifiedUser) -> QuerySet[Conversation]:

@@ -21,14 +21,8 @@ from rest_framework.permissions import BasePermission
 from apps.product.models import Product
 
 
-from apps.common.request import get_client_ip
+from apps.common.permissions import IsVerifiedUser
 from apps.common.roles import (
-    CLIENT_ROLES,
-    EDITOR_ROLES,
-    MODERATOR_ROLES,
-    SALES_ROLES,
-    STAFF_ROLES,
-    SUPPORT_ROLES,
     VENDOR_ROLES,
     has_any_role,
     is_admin_role,

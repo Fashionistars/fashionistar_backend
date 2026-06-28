@@ -4,7 +4,7 @@ import logging
 from django.db import transaction
 from django.contrib.auth import get_user_model
 from apps.common.events import event_bus
-from apps.notification.models.notification import Notification, NotificationChannel, NotificationType
+from apps.notification.models.notification import Notification, NotificationChannel
 
 User = get_user_model()
 logger = logging.getLogger(__name__)

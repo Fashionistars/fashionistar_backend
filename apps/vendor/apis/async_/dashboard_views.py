@@ -17,11 +17,10 @@ IMPORTANT:
 """
 import logging
 import asyncio
-from uuid import UUID
 from datetime import timedelta
 from django.utils import timezone
-from django.db.models import Avg, Count, Sum, F, Q
-from django.db.models.functions import ExtractMonth, ExtractHour
+from django.db.models import Count, Sum, Q
+from django.db.models.functions import ExtractMonth
 
 from ninja import Router
 from ninja.errors import HttpError

@@ -4,7 +4,7 @@ UserSession Unit & Integration Tests.
 Covers session creation, client-context parsing, and geo-resolution.
 """
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from rest_framework_simplejwt.tokens import RefreshToken
 from apps.authentication.models import UserSession
 

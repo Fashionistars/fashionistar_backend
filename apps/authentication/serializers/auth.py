@@ -14,7 +14,6 @@ from phonenumber_field.serializerfields import PhoneNumberField
 from rest_framework import serializers
 
 from apps.authentication.models import UnifiedUser
-from apps.authentication.serializers.profile import MeSerializer
 
 logger = logging.getLogger(__name__)
 

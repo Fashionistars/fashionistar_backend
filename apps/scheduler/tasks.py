@@ -3,10 +3,8 @@ Celery tasks برای اپ scheduler
 مدیریت و اجرای وظایف زمان‌بندی شده
 """
 from celery import shared_task, Task
-from celery.result import AsyncResult
 from django.utils import timezone
-from django.db import transaction
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 import logging
 import traceback
 import importlib

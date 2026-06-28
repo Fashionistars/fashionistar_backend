@@ -55,7 +55,6 @@ import logging
 from decimal import Decimal
 from typing import Optional
 
-from django.db import transaction as db_transaction
 from ninja import Router, Schema
 from ninja.errors import HttpError
 from pydantic import field_validator
@@ -190,7 +189,6 @@ async def request_company_commission_payout(
     # ── Delegate to Service Layer (atomic, Double-Door secured) ───────────────
     try:
         from apps.wallet.services.company_payout import CompanyWithdrawalService
-        from django.db import connection
 
         # Django Ninja async context — use sync_to_async for ORM operations
         # that are not yet natively async (Django 6.0 transition period)

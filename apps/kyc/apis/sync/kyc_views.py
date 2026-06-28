@@ -20,7 +20,7 @@ Endpoints:
 import logging
 
 from django.core.exceptions import ObjectDoesNotExist
-from rest_framework import generics, permissions, serializers, status
+from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 

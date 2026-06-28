@@ -17,7 +17,6 @@ import datetime
 import logging
 import random
 import time
-from typing import Optional
 
 from django.conf import settings
 from django.utils import timezone

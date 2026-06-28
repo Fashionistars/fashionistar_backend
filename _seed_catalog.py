@@ -1,5 +1,6 @@
 """Seed catalog data: Brand + 3 Categories, attach to products."""
-import django, os
+import django
+import os
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.development")
 django.setup()
 

@@ -22,15 +22,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.db import transaction
 from django.test import Client, TestCase, TransactionTestCase, override_settings
-from django.test.client import MULTIPART_CONTENT
 from django.urls import reverse
 
 User = get_user_model()
@@ -291,6 +288,11 @@ class StressTests(TestCase):
     def test_100k_signature_validations(self):
         """Validate 100,000 signatures sequentially  → all should pass in <10 seconds"""
         from apps.common.utils.cloudinary import validate_cloudinary_webhook
+        import logging
+        
+        logger = logging.getLogger("apps.common.utils.cloudinary")
+        old_level = logger.getEffectiveLevel()
+        logger.setLevel(logging.WARNING)
         
         timestamp = str(int(time.time()))
         body = b'{"test": "data"}'
@@ -299,9 +301,12 @@ class StressTests(TestCase):
         start_time = time.time()
         success_count = 0
         
-        for _ in range(100000):
-            if validate_cloudinary_webhook(body, timestamp, signature):
-                success_count += 1
+        try:
+            for _ in range(100000):
+                if validate_cloudinary_webhook(body, timestamp, signature):
+                    success_count += 1
+        finally:
+            logger.setLevel(old_level)
 
         elapsed = time.time() - start_time
         
@@ -311,6 +316,11 @@ class StressTests(TestCase):
     def test_10k_concurrent_validations(self):
         """Validate 10,000 signatures concurrently with 50 workers"""
         from apps.common.utils.cloudinary import validate_cloudinary_webhook
+        import logging
+        
+        logger = logging.getLogger("apps.common.utils.cloudinary")
+        old_level = logger.getEffectiveLevel()
+        logger.setLevel(logging.WARNING)
         
         timestamp = str(int(time.time()))
         
@@ -320,9 +330,12 @@ class StressTests(TestCase):
             return validate_cloudinary_webhook(body, timestamp, signature)
 
         start_time = time.time()
-        with ThreadPoolExecutor(max_workers=50) as executor:
-            futures = [executor.submit(validate_sig, i) for i in range(10000)]
-            results = [f.result() for f in as_completed(futures)]
+        try:
+            with ThreadPoolExecutor(max_workers=50) as executor:
+                futures = [executor.submit(validate_sig, i) for i in range(10000)]
+                results = [f.result() for f in as_completed(futures)]
+        finally:
+            logger.setLevel(old_level)
 
         elapsed = time.time() - start_time
         success_count = sum(1 for r in results if r)

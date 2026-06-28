@@ -53,12 +53,10 @@ Results interpretation:
 
 import uuid
 import random
-import json
 import logging
 from typing import Optional
 
 from locust import HttpUser, task, between, events
-from locust.runners import MasterRunner
 
 logger = logging.getLogger(__name__)
 

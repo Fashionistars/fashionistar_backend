@@ -377,8 +377,7 @@ class KycService:
         Returns:
             The approved KycSubmission.
         """
-        from apps.kyc.models.kyc_submission import KycSubmission, KycStatus
-        from django.utils import timezone
+        from apps.kyc.models.kyc_submission import KycSubmission
 
         if admin_user is not None and not getattr(admin_user, "is_staff", False):
             raise PermissionError("Only staff can approve KYC submissions.")
@@ -431,8 +430,7 @@ class KycService:
         Returns:
             The rejected KycSubmission.
         """
-        from apps.kyc.models.kyc_submission import KycSubmission, KycStatus
-        from django.utils import timezone
+        from apps.kyc.models.kyc_submission import KycSubmission
 
         if admin_user is not None and not getattr(admin_user, "is_staff", False):
             raise PermissionError("Only staff can reject KYC submissions.")

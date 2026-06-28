@@ -15,7 +15,6 @@ from unittest.mock import patch
 
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
-from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.authentication.models import UnifiedUser, LoginEvent
 

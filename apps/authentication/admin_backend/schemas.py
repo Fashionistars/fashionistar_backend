@@ -1,6 +1,6 @@
 # apps/authentication/admin_backend/schemas.py
 from datetime import datetime
-from typing import Optional, Dict
+from typing import Optional
 from ninja import Schema
 from pydantic import UUID4
 

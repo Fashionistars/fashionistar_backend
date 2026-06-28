@@ -60,7 +60,6 @@ from apps.payment.models import PaymentIntent, PaymentIntentStatus, PaymentProvi
 from apps.transactions.models import (
     CompanyRevenueEntry,
     RevenueCategory,
-    Transaction,
     TransactionDirection,
     TransactionStatus,
     TransactionType,

@@ -155,11 +155,11 @@ class Command(BaseCommand):
             self.stdout.write(f"محیط: {result['environment']}")
             
             if status == 'healthy':
-                self.stdout.write(self.style.SUCCESS(f"✅ وضعیت: سالم"))
+                self.stdout.write(self.style.SUCCESS("✅ وضعیت: سالم"))
             elif status == 'warning':
-                self.stdout.write(self.style.WARNING(f"⚠️  وضعیت: هشدار"))
+                self.stdout.write(self.style.WARNING("⚠️  وضعیت: هشدار"))
             elif status == 'critical':
-                self.stdout.write(self.style.ERROR(f"❌ وضعیت: بحرانی"))
+                self.stdout.write(self.style.ERROR("❌ وضعیت: بحرانی"))
             else:
                 self.stdout.write(f"❓ وضعیت: {status}")
             
@@ -173,15 +173,15 @@ class Command(BaseCommand):
             # نتیجه جامع
             overall_status = result.get('overall_status', 'unknown')
             
-            self.stdout.write(f"\n🏥 بررسی سلامت کلی سیستم")
+            self.stdout.write("\n🏥 بررسی سلامت کلی سیستم")
             self.stdout.write(f"زمان: {result.get('timestamp', 'نامشخص')}")
             
             if overall_status == 'healthy':
-                self.stdout.write(self.style.SUCCESS(f"✅ وضعیت کلی: سالم"))
+                self.stdout.write(self.style.SUCCESS("✅ وضعیت کلی: سالم"))
             elif overall_status == 'warning':
-                self.stdout.write(self.style.WARNING(f"⚠️  وضعیت کلی: هشدار"))
+                self.stdout.write(self.style.WARNING("⚠️  وضعیت کلی: هشدار"))
             elif overall_status == 'critical':
-                self.stdout.write(self.style.ERROR(f"❌ وضعیت کلی: بحرانی"))
+                self.stdout.write(self.style.ERROR("❌ وضعیت کلی: بحرانی"))
             else:
                 self.stdout.write(f"❓ وضعیت کلی: {overall_status}")
             
@@ -189,7 +189,7 @@ class Command(BaseCommand):
             services = result.get('services', {})
             
             if services:
-                self.stdout.write(f"\n📊 جزئیات سرویس‌ها:")
+                self.stdout.write("\n📊 جزئیات سرویس‌ها:")
                 self.stdout.write("-" * 50)
                 
                 for service_name, service_data in services.items():

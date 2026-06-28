@@ -24,7 +24,7 @@ from typing import Any
 
 import pytest
 from django.contrib.auth import get_user_model
-from django.db import connection, transaction
+from django.db import transaction
 
 from apps.wallet.models import Wallet
 

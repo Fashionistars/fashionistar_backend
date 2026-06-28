@@ -13,17 +13,11 @@ Tests cover:
 """
 
 import hashlib
-import hmac
 import json
 import time
-import uuid
-from unittest.mock import patch, MagicMock
 
-import pytest
-from django.conf import settings
 from django.test import TestCase, Client, override_settings
 from django.contrib.auth import get_user_model
-from django.db import transaction as db_transaction
 
 UnifiedUser = get_user_model()
 
@@ -75,11 +69,8 @@ class CloudinaryWebhookIntegrationTest(TestCase):
         body = json.dumps(payload).encode("utf-8")
         
         # Generate valid signature
-        signature = hmac.new(
-            self.api_secret.encode("utf-8"),
-            body,
-            hashlib.sha1,
-        ).hexdigest()
+        raw = f"{body.decode('utf-8')}{timestamp}{self.api_secret}"
+        signature = hashlib.sha1(raw.encode("utf-8")).hexdigest()
         
         # Send webhook
         response = self.client.post(
@@ -112,7 +103,7 @@ class CloudinaryWebhookIntegrationTest(TestCase):
     )
     def test_eager_webhook_after_upload(self):
         """Test that eager transformation webhook is processed correctly."""
-        public_id = f"fashionistar/products/images/prod_001/testimage123"
+        public_id = "fashionistar/products/images/prod_001/testimage123"
         timestamp = str(int(time.time()))
         
         # Eager notification (from server-side transformations)
@@ -138,11 +129,8 @@ class CloudinaryWebhookIntegrationTest(TestCase):
         body = json.dumps(payload).encode("utf-8")
         
         # Generate valid signature
-        signature = hmac.new(
-            self.api_secret.encode("utf-8"),
-            body,
-            hashlib.sha1,
-        ).hexdigest()
+        raw = f"{body.decode('utf-8')}{timestamp}{self.api_secret}"
+        signature = hashlib.sha1(raw.encode("utf-8")).hexdigest()
         
         # Send eager webhook
         response = self.client.post(
@@ -217,11 +205,8 @@ class CloudinaryWebhookIntegrationTest(TestCase):
         body = json.dumps(payload).encode("utf-8")
         
         # Generate signature WITH OLD TIMESTAMP (correct signature for old timestamp)
-        signature = hmac.new(
-            self.api_secret.encode("utf-8"),
-            body,
-            hashlib.sha1,
-        ).hexdigest()
+        raw = f"{body.decode('utf-8')}{old_timestamp}{self.api_secret}"
+        signature = hashlib.sha1(raw.encode("utf-8")).hexdigest()
         
         # Send webhook
         response = self.client.post(
@@ -249,11 +234,8 @@ class CloudinaryWebhookIntegrationTest(TestCase):
         invalid_json = b"{invalid json payload}"
         
         # Generate signature for invalid JSON
-        signature = hmac.new(
-            self.api_secret.encode("utf-8"),
-            invalid_json,
-            hashlib.sha1,
-        ).hexdigest()
+        raw = f"{invalid_json.decode('utf-8', errors='replace')}{timestamp}{self.api_secret}"
+        signature = hashlib.sha1(raw.encode("utf-8")).hexdigest()
         
         # Send webhook with invalid JSON
         response = self.client.post(

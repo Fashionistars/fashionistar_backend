@@ -1,11 +1,8 @@
 # apps/client/admin_backend/views.py
 import logging
 from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
 from apps.common.renderers import CustomJSONRenderer, success_response
 from apps.client.admin_backend.services import AdminClientService
 from apps.client.admin_backend.serializers import AdminClientProfileUpdateSerializer

@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import logging
 import re
-import uuid as uuid_lib
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional

@@ -11,10 +11,7 @@ Run:
 from __future__ import annotations
 
 import pytest
-from django.test import RequestFactory
-from django.contrib.admin.sites import AdminSite
 from rest_framework.test import APIClient
-from rest_framework import status
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -242,8 +239,6 @@ class TestObjectLevelPermissions:
 
     @pytest.mark.django_db
     def test_vendor_cannot_read_other_vendor_orders(self, api_client, get_token, make_user):
-        from apps.order.models import Order
-        from apps.vendor.models import VendorProfile
 
         vendor_a = make_user("VENDOR", "vendora@test.com")
         vendor_b = make_user("VENDOR", "vendorb@test.com")

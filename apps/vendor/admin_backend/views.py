@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 import logging
-from rest_framework import status
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -13,7 +12,6 @@ from .serializers import (
     AdminVendorSuspendSerializer,
     AdminVendorRejectSerializer,
     AdminVendorCommissionSerializer,
-    AdminVendorUpdateSerializer,
 )
 from .services import AdminVendorService
 

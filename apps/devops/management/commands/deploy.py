@@ -139,14 +139,14 @@ class Command(BaseCommand):
             # نمایش نتیجه
             if deployment.status == 'success':
                 self.stdout.write(
-                    self.style.SUCCESS(f'\n✅ Deployment با موفقیت تکمیل شد!')
+                    self.style.SUCCESS('\n✅ Deployment با موفقیت تکمیل شد!')
                 )
                 self.stdout.write(f'شناسه Deployment: {deployment.id}')
                 if deployment.duration:
                     self.stdout.write(f'مدت زمان: {deployment.duration.total_seconds():.0f} ثانیه')
             else:
                 self.stdout.write(
-                    self.style.ERROR(f'\n❌ Deployment ناموفق بود!')
+                    self.style.ERROR('\n❌ Deployment ناموفق بود!')
                 )
                 self.stdout.write(f'وضعیت: {deployment.get_status_display()}')
                 
@@ -245,7 +245,7 @@ class RollbackCommand(BaseCommand):
             # ایجاد سرویس deployment
             deployment_service = DeploymentService(environment_name)
             
-            self.stdout.write(self.style.WARNING(f'\n🔄 شروع rollback...'))
+            self.stdout.write(self.style.WARNING('\n🔄 شروع rollback...'))
             
             # اجرای rollback
             rollback_deployment = deployment_service.rollback(
@@ -256,14 +256,14 @@ class RollbackCommand(BaseCommand):
             # نمایش نتیجه
             if rollback_deployment.status == 'success':
                 self.stdout.write(
-                    self.style.SUCCESS(f'\n✅ Rollback با موفقیت تکمیل شد!')
+                    self.style.SUCCESS('\n✅ Rollback با موفقیت تکمیل شد!')
                 )
                 self.stdout.write(f'شناسه Rollback: {rollback_deployment.id}')
                 if rollback_deployment.duration:
                     self.stdout.write(f'مدت زمان: {rollback_deployment.duration.total_seconds():.0f} ثانیه')
             else:
                 self.stdout.write(
-                    self.style.ERROR(f'\n❌ Rollback ناموفق بود!')
+                    self.style.ERROR('\n❌ Rollback ناموفق بود!')
                 )
                 self.stdout.write(f'وضعیت: {rollback_deployment.get_status_display()}')
                 

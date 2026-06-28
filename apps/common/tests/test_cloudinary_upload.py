@@ -18,12 +18,11 @@ import json
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, TransactionTestCase
 from django.test import override_settings
-from django.urls import reverse
 
 User = get_user_model()
 
@@ -320,7 +319,6 @@ class TasksPackageImportTests(TestCase):
     def test_all_tasks_are_celery_shared_tasks(self):
         """Each exported symbol must be a Celery task (has .apply_async)."""
         import apps.common.tasks as tasks_pkg
-        from celery import Task
         for task_name in self.EXPECTED_TASKS:
             task_obj = getattr(tasks_pkg, task_name)
             self.assertTrue(

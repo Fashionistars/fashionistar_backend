@@ -56,7 +56,7 @@ async def attempt_create_user(task_id, semaphore):
 
 async def run_concurrency_test():
     print(f"\n{'='*60}")
-    print(f"🚀 EXTREME CONCURRENCY IDEMPOTENCY TEST")
+    print("🚀 EXTREME CONCURRENCY IDEMPOTENCY TEST")
     print(f"Bombarding User Manager with {CONCURRENCY_LEVEL:,} concurrent creation requests...")
     print(f"Processing in chunks of {MAX_DB_CONNECTIONS} simultaneous requests...")
     print(f"{'='*60}\n")

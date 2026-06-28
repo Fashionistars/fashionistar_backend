@@ -23,12 +23,10 @@ from apps.kyc.services import KycGateError
 from apps.wallet.serializers import (
     EscrowHoldSerializer,
     EscrowRefundSerializer,
-    EscrowReleaseResponseSerializer,
     EscrowReleaseSerializer,
     WalletHoldSerializer,
     WalletPinChangeSerializer,
     WalletPinSetSerializer,
-    WalletPinVerifyResponseSerializer,
     WalletPinVerifySerializer,
     WalletSerializer,
     WalletWithdrawalSerializer,

@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import pytest
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.authentication.models import UnifiedUser
-from apps.common.permissions import IsVendor
 from apps.vendor.models import VendorPayoutProfile, VendorProfile, VendorSetupState
 from apps.vendor.services.vendor_service import VendorService
 

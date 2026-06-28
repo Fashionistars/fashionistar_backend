@@ -13,7 +13,7 @@ Fixtures for testing:
   - SMS manager
 """
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 
 @pytest.fixture
