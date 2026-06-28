@@ -31,3 +31,9 @@ python manage.py migrate
 ## API Spec
 
 - مستندات در `docs/api_spec.yaml` موجود است.
+
+1. Search (بر اساس جستجوی کلیدواژه‌ و متا‌دیتای منحصربه‌فرد).
+2. Semantic Search (جستجوی معنایی با استفاده از بردارهای کلمات).
+3. Chat (چت هوشمند برای پرسش‌وپاسخ با استفاده از LLM).
+4. RAG (بازیابی اطلاعات با استفاده از Embeddings، بازیابی اسناد، Summarization و Query Expansion).
+5. Agentic Search (جستجوی عامل با استفاده از ابزارها و توابع خارجی).
