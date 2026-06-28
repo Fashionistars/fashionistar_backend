@@ -291,3 +291,11 @@ try:
     logger.info("✅ NinjaAPI: devops router registered at /api/v1/ninja/devops/")
 except Exception as exc:  # pragma: no cover
     logger.warning("ℹ️ NinjaAPI: devops router FAILED to register: %s", exc)
+
+# AI Engine domain: /api/v1/ninja/ai/
+try:
+    from apps.ai.apis.async_api.ai_router import router as ai_router
+    ninja_api.add_router("/ai/", ai_router)
+    logger.info("✅ NinjaAPI: AI engine router registered at /api/v1/ninja/ai/")
+except Exception as exc:  # pragma: no cover
+    logger.warning("ℹ️ NinjaAPI: AI engine router FAILED to register: %s", exc)
