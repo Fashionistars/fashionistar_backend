@@ -1,5 +1,6 @@
+# apps/devops/admin.py
 """
-پنل مدیریت برای اپلیکیشن DevOps
+Admin panel configurations for the DevOps application.
 """
 from django.contrib import admin
 from django.utils.html import format_html
@@ -8,6 +9,7 @@ from django.utils import timezone
 from django.db.models import Count, Q
 import json
 
+from apps.common.admin_mixins import SoftDeleteAdminMixin
 from .models import (
     EnvironmentConfig,
     SecretConfig,
@@ -18,8 +20,8 @@ from .models import (
 
 
 @admin.register(EnvironmentConfig)
-class EnvironmentConfigAdmin(admin.ModelAdmin):
-    """مدیریت تنظیمات محیط"""
+class EnvironmentConfigAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
+    """Admin configuration for EnvironmentConfig."""
     
     list_display = [
         'name', 'environment_type', 'is_active', 
@@ -29,27 +31,25 @@ class EnvironmentConfigAdmin(admin.ModelAdmin):
     search_fields = ['name', 'description']
     readonly_fields = ['created_at', 'updated_at']
     fieldsets = (
-        ('اطلاعات اصلی', {
+        ('Basic Information', {
             'fields': ('name', 'environment_type', 'description', 'is_active')
         }),
-        ('اطلاعات تکمیلی', {
+        ('Audit Information', {
             'fields': ('created_by', 'created_at', 'updated_at'),
             'classes': ('collapse',)
         }),
     )
     
     def secrets_count(self, obj):
-        """تعداد secrets هر محیط"""
         count = obj.secrets.filter(is_active=True).count()
         return format_html(
             '<span style="color: {};">{}</span>',
             'green' if count > 0 else 'red',
             count
         )
-    secrets_count.short_description = 'تعداد Secrets'
+    secrets_count.short_description = 'Secrets Count'
     
     def deployments_count(self, obj):
-        """تعداد deployment های هر محیط"""
         count = obj.deployments.count()
         return format_html(
             '<a href="{}?environment__id__exact={}">{}</a>',
@@ -57,7 +57,7 @@ class EnvironmentConfigAdmin(admin.ModelAdmin):
             obj.id,
             count
         )
-    deployments_count.short_description = 'تعداد Deployments'
+    deployments_count.short_description = 'Deployments Count'
     
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
@@ -68,8 +68,8 @@ class EnvironmentConfigAdmin(admin.ModelAdmin):
 
 
 @admin.register(SecretConfig)
-class SecretConfigAdmin(admin.ModelAdmin):
-    """مدیریت تنظیمات محرمانه"""
+class SecretConfigAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
+    """Admin configuration for SecretConfig."""
     
     list_display = [
         'key_name', 'environment', 'category', 'is_active', 
@@ -79,35 +79,34 @@ class SecretConfigAdmin(admin.ModelAdmin):
     search_fields = ['key_name', 'description']
     readonly_fields = ['created_at', 'updated_at', 'is_expired_display']
     fieldsets = (
-        ('اطلاعات اصلی', {
+        ('Basic Information', {
             'fields': ('environment', 'key_name', 'encrypted_value', 'category')
         }),
-        ('تنظیمات پیشرفته', {
+        ('Advanced Configuration', {
             'fields': ('description', 'is_active', 'expires_at'),
             'classes': ('collapse',)
         }),
-        ('اطلاعات تکمیلی', {
+        ('Audit Information', {
             'fields': ('created_by', 'created_at', 'updated_at', 'is_expired_display'),
             'classes': ('collapse',)
         }),
     )
     
     def is_expired_display(self, obj):
-        """نمایش وضعیت انقضا"""
         if obj.expires_at is None:
-            return format_html('<span style="color: gray;">{}</span>', "بدون انقضا")
+            return format_html('<span style="color: gray;">{}</span>', "No Expiration")
         
         if obj.is_expired:
-            return format_html('<span style="color: red;">{}</span>', "منقضی شده")
+            return format_html('<span style="color: red;">{}</span>', "Expired")
         else:
             days_left = (obj.expires_at - timezone.now()).days
             color = 'orange' if days_left <= 7 else 'green'
             return format_html(
-                '<span style="color: {};">{} روز مانده</span>',
+                '<span style="color: {};">{} days left</span>',
                 color,
                 days_left
             )
-    is_expired_display.short_description = 'وضعیت انقضا'
+    is_expired_display.short_description = 'Expiration Status'
     
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('environment')
@@ -115,7 +114,7 @@ class SecretConfigAdmin(admin.ModelAdmin):
 
 @admin.register(DeploymentHistory)
 class DeploymentHistoryAdmin(admin.ModelAdmin):
-    """مدیریت تاریخچه deployments"""
+    """Admin configuration for DeploymentHistory."""
     
     list_display = [
         'environment', 'version', 'status_display', 'branch',
@@ -128,13 +127,13 @@ class DeploymentHistoryAdmin(admin.ModelAdmin):
         'deployment_logs_display'
     ]
     fieldsets = (
-        ('اطلاعات Deployment', {
+        ('Deployment Info', {
             'fields': ('environment', 'version', 'commit_hash', 'branch', 'status')
         }),
-        ('زمان‌بندی', {
+        ('Timestamps', {
             'fields': ('started_at', 'completed_at', 'duration_display')
         }),
-        ('جزئیات', {
+        ('Details', {
             'fields': (
                 'deployed_by', 'artifacts_url', 'rollback_from',
                 'deployment_logs_display'
@@ -144,7 +143,6 @@ class DeploymentHistoryAdmin(admin.ModelAdmin):
     )
     
     def status_display(self, obj):
-        """نمایش رنگی وضعیت"""
         colors = {
             'pending': 'orange',
             'running': 'blue',
@@ -158,24 +156,22 @@ class DeploymentHistoryAdmin(admin.ModelAdmin):
             colors.get(obj.status, 'black'),
             obj.get_status_display()
         )
-    status_display.short_description = 'وضعیت'
+    status_display.short_description = 'Status'
     
     def duration_display(self, obj):
-        """نمایش مدت زمان deployment"""
         if obj.duration:
-            return f"{obj.duration.total_seconds():.0f} ثانیه"
-        return "نامشخص"
-    duration_display.short_description = 'مدت زمان'
+            return f"{obj.duration.total_seconds():.0f} seconds"
+        return "Unknown"
+    duration_display.short_description = 'Duration'
     
     def deployment_logs_display(self, obj):
-        """نمایش لاگ‌های deployment"""
         if obj.deployment_logs:
             return format_html(
                 '<pre style="max-height: 200px; overflow-y: scroll;">{}</pre>',
                 obj.deployment_logs[:1000] + ('...' if len(obj.deployment_logs) > 1000 else '')
             )
-        return "لاگی موجود نیست"
-    deployment_logs_display.short_description = 'لاگ‌های Deployment'
+        return "No logs available"
+    deployment_logs_display.short_description = 'Deployment Logs'
     
     def get_queryset(self, request):
         return super().get_queryset(request).select_related(
@@ -185,7 +181,7 @@ class DeploymentHistoryAdmin(admin.ModelAdmin):
 
 @admin.register(HealthCheck)
 class HealthCheckAdmin(admin.ModelAdmin):
-    """مدیریت نتایج health check"""
+    """Admin configuration for HealthCheck."""
     
     list_display = [
         'service_name', 'environment', 'status_display',
@@ -195,10 +191,10 @@ class HealthCheckAdmin(admin.ModelAdmin):
     search_fields = ['service_name', 'endpoint_url', 'error_message']
     readonly_fields = ['checked_at', 'response_data_display']
     fieldsets = (
-        ('اطلاعات اصلی', {
+        ('Basic Information', {
             'fields': ('environment', 'service_name', 'endpoint_url', 'status')
         }),
-        ('نتایج بررسی', {
+        ('Check Results', {
             'fields': (
                 'response_time', 'status_code', 'error_message',
                 'response_data_display', 'checked_at'
@@ -207,7 +203,6 @@ class HealthCheckAdmin(admin.ModelAdmin):
     )
     
     def status_display(self, obj):
-        """نمایش رنگی وضعیت سلامت"""
         colors = {
             'healthy': 'green',
             'warning': 'orange',
@@ -219,10 +214,9 @@ class HealthCheckAdmin(admin.ModelAdmin):
             colors.get(obj.status, 'black'),
             obj.get_status_display()
         )
-    status_display.short_description = 'وضعیت'
+    status_display.short_description = 'Status'
     
     def response_time_display(self, obj):
-        """نمایش زمان پاسخ"""
         if obj.response_time is not None:
             color = 'green' if obj.response_time < 1000 else 'orange' if obj.response_time < 5000 else 'red'
             return format_html(
@@ -230,18 +224,17 @@ class HealthCheckAdmin(admin.ModelAdmin):
                 color,
                 obj.response_time
             )
-        return "نامشخص"
-    response_time_display.short_description = 'زمان پاسخ'
+        return "Unknown"
+    response_time_display.short_description = 'Response Time'
     
     def response_data_display(self, obj):
-        """نمایش داده‌های پاسخ"""
         if obj.response_data:
             return format_html(
                 '<pre style="max-height: 150px; overflow-y: scroll;">{}</pre>',
                 json.dumps(obj.response_data, indent=2, ensure_ascii=False)
             )
-        return "داده‌ای موجود نیست"
-    response_data_display.short_description = 'داده‌های پاسخ'
+        return "No data available"
+    response_data_display.short_description = 'Response Data'
     
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('environment')
@@ -249,7 +242,7 @@ class HealthCheckAdmin(admin.ModelAdmin):
 
 @admin.register(ServiceMonitoring)
 class ServiceMonitoringAdmin(admin.ModelAdmin):
-    """مدیریت مانیتورینگ سرویس‌ها"""
+    """Admin configuration for ServiceMonitoring."""
     
     list_display = [
         'service_name', 'environment', 'service_type',
@@ -260,20 +253,19 @@ class ServiceMonitoringAdmin(admin.ModelAdmin):
     search_fields = ['service_name', 'health_check_url']
     readonly_fields = ['created_at', 'updated_at', 'last_check_status']
     fieldsets = (
-        ('اطلاعات سرویس', {
+        ('Service Information', {
             'fields': ('environment', 'service_name', 'service_type', 'health_check_url')
         }),
-        ('تنظیمات مانیتورینگ', {
+        ('Monitoring Configuration', {
             'fields': ('check_interval', 'timeout', 'is_active', 'alert_on_failure')
         }),
-        ('اطلاعات تکمیلی', {
+        ('Audit Information', {
             'fields': ('created_at', 'updated_at', 'last_check_status'),
             'classes': ('collapse',)
         }),
     )
     
     def last_check_status(self, obj):
-        """آخرین وضعیت بررسی"""
         latest_check = obj.environment.health_checks.filter(
             service_name=obj.service_name
         ).first()
@@ -291,8 +283,8 @@ class ServiceMonitoringAdmin(admin.ModelAdmin):
                 latest_check.get_status_display(),
                 latest_check.checked_at.strftime('%H:%M')
             )
-        return format_html('<span style="color: gray;">{}</span>', "هنوز بررسی نشده")
-    last_check_status.short_description = 'آخرین بررسی'
+        return format_html('<span style="color: gray;">{}</span>', "Not Checked Yet")
+    last_check_status.short_description = 'Last Check Status'
     
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('environment')

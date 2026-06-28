@@ -1,5 +1,6 @@
+# apps/devops/services/docker_service.py
 """
-سرویس مدیریت Docker و container ها
+Docker and Container Management Service.
 """
 import docker
 import subprocess
@@ -12,19 +13,19 @@ logger = logging.getLogger(__name__)
 
 
 class DockerService:
-    """سرویس مدیریت Docker"""
+    """Docker management service."""
     
     def __init__(self):
-        """اتصال به Docker daemon"""
+        """Connect to Docker daemon."""
         try:
             self.client = docker.from_env()
             self.client.ping()
         except Exception as e:
-            logger.error(f"خطا در اتصال به Docker: {str(e)}")
-            raise ConnectionError("امکان اتصال به Docker وجود ندارد")
+            logger.error(f"Error connecting to Docker: {str(e)}")
+            raise ConnectionError("Unable to connect to Docker daemon")
     
     def get_container_status(self, container_name: str) -> Dict[str, Any]:
-        """دریافت وضعیت container"""
+        """Get container status."""
         try:
             container = self.client.containers.get(container_name)
             return {
@@ -37,13 +38,13 @@ class DockerService:
                 'stats': self._get_container_stats(container),
             }
         except docker.errors.NotFound:
-            return {'error': f'Container {container_name} یافت نشد'}
+            return {'error': f'Container {container_name} not found'}
         except Exception as e:
-            logger.error(f"خطا در دریافت وضعیت container {container_name}: {str(e)}")
+            logger.error(f"Error retrieving status of container {container_name}: {str(e)}")
             return {'error': str(e)}
     
     def get_all_containers(self) -> List[Dict[str, Any]]:
-        """دریافت لیست تمام container ها"""
+        """Get list of all containers."""
         try:
             containers = []
             for container in self.client.containers.list(all=True):
@@ -57,74 +58,74 @@ class DockerService:
                 })
             return containers
         except Exception as e:
-            logger.error(f"خطا در دریافت لیست container ها: {str(e)}")
+            logger.error(f"Error retrieving containers list: {str(e)}")
             return []
     
     def restart_container(self, container_name: str) -> Tuple[bool, str]:
-        """راه‌اندازی مجدد container"""
+        """Restart container."""
         try:
             container = self.client.containers.get(container_name)
             container.restart()
-            logger.info(f"Container {container_name} با موفقیت راه‌اندازی مجدد شد")
-            return True, f"Container {container_name} با موفقیت راه‌اندازی مجدد شد"
+            logger.info(f"Container {container_name} restarted successfully")
+            return True, f"Container {container_name} restarted successfully"
         except docker.errors.NotFound:
-            return False, f"Container {container_name} یافت نشد"
+            return False, f"Container {container_name} not found"
         except Exception as e:
-            logger.error(f"خطا در راه‌اندازی مجدد {container_name}: {str(e)}")
+            logger.error(f"Error restarting {container_name}: {str(e)}")
             return False, str(e)
     
     def stop_container(self, container_name: str) -> Tuple[bool, str]:
-        """توقف container"""
+        """Stop container."""
         try:
             container = self.client.containers.get(container_name)
             container.stop()
-            logger.info(f"Container {container_name} متوقف شد")
-            return True, f"Container {container_name} متوقف شد"
+            logger.info(f"Container {container_name} stopped")
+            return True, f"Container {container_name} stopped"
         except docker.errors.NotFound:
-            return False, f"Container {container_name} یافت نشد"
+            return False, f"Container {container_name} not found"
         except Exception as e:
-            logger.error(f"خطا در توقف {container_name}: {str(e)}")
+            logger.error(f"Error stopping {container_name}: {str(e)}")
             return False, str(e)
     
     def start_container(self, container_name: str) -> Tuple[bool, str]:
-        """شروع container"""
+        """Start container."""
         try:
             container = self.client.containers.get(container_name)
             container.start()
-            logger.info(f"Container {container_name} شروع شد")
-            return True, f"Container {container_name} شروع شد"
+            logger.info(f"Container {container_name} started")
+            return True, f"Container {container_name} started"
         except docker.errors.NotFound:
-            return False, f"Container {container_name} یافت نشد"
+            return False, f"Container {container_name} not found"
         except Exception as e:
-            logger.error(f"خطا در شروع {container_name}: {str(e)}")
+            logger.error(f"Error starting {container_name}: {str(e)}")
             return False, str(e)
     
     def get_container_logs(self, container_name: str, lines: int = 100) -> str:
-        """دریافت لاگ‌های container"""
+        """Get container logs."""
         try:
             container = self.client.containers.get(container_name)
             logs = container.logs(tail=lines).decode('utf-8')
             return logs
         except docker.errors.NotFound:
-            return f"Container {container_name} یافت نشد"
+            return f"Container {container_name} not found"
         except Exception as e:
-            logger.error(f"خطا در دریافت لاگ‌های {container_name}: {str(e)}")
-            return f"خطا در دریافت لاگ‌ها: {str(e)}"
+            logger.error(f"Error retrieving logs for {container_name}: {str(e)}")
+            return f"Error retrieving logs: {str(e)}"
     
     def execute_command(self, container_name: str, command: str) -> Tuple[bool, str]:
-        """اجرای دستور در container"""
+        """Execute command inside container."""
         try:
             container = self.client.containers.get(container_name)
             result = container.exec_run(command)
             return result.exit_code == 0, result.output.decode('utf-8')
         except docker.errors.NotFound:
-            return False, f"Container {container_name} یافت نشد"
+            return False, f"Container {container_name} not found"
         except Exception as e:
-            logger.error(f"خطا در اجرای دستور در {container_name}: {str(e)}")
+            logger.error(f"Error executing command in {container_name}: {str(e)}")
             return False, str(e)
     
     def _get_container_health(self, container) -> Dict[str, Any]:
-        """دریافت وضعیت سلامت container"""
+        """Get container health status."""
         try:
             health = container.attrs.get('State', {}).get('Health', {})
             if health:
@@ -138,22 +139,22 @@ class DockerService:
             return {'status': 'unknown'}
     
     def _get_container_stats(self, container) -> Dict[str, Any]:
-        """دریافت آمار container"""
+        """Get container resource stats."""
         try:
             stats = container.stats(stream=False)
             
-            # محاسبه CPU usage
+            # CPU usage calculation
             cpu_delta = stats['cpu_stats']['cpu_usage']['total_usage'] - \
                        stats['precpu_stats']['cpu_usage']['total_usage']
             system_delta = stats['cpu_stats']['system_cpu_usage'] - \
-                          stats['precpu_stats']['system_cpu_usage']
+                           stats['precpu_stats']['system_cpu_usage']
             
             cpu_percent = 0.0
             if system_delta > 0 and cpu_delta > 0:
                 cpu_percent = (cpu_delta / system_delta) * \
                              len(stats['cpu_stats']['cpu_usage']['percpu_usage']) * 100.0
             
-            # محاسبه Memory usage
+            # Memory usage calculation
             memory_usage = stats['memory_stats']['usage']
             memory_limit = stats['memory_stats']['limit']
             memory_percent = (memory_usage / memory_limit) * 100.0
@@ -167,25 +168,25 @@ class DockerService:
                 'network_tx': stats['networks'].get('eth0', {}).get('tx_bytes', 0),
             }
         except Exception as e:
-            logger.error(f"خطا در دریافت آمار container: {str(e)}")
+            logger.error(f"Error retrieving container stats: {str(e)}")
             return {}
 
 
 class DockerComposeService:
-    """سرویس مدیریت Docker Compose"""
+    """Docker Compose management service."""
     
     def __init__(self, compose_file: str = 'docker-compose.yml'):
         """
-        تنظیم مسیر فایل docker-compose
+        Set Docker Compose file path.
         
         Args:
-            compose_file: مسیر فایل docker-compose
+            compose_file: Path to Docker Compose file
         """
         self.compose_file = compose_file
         self.project_dir = getattr(settings, 'BASE_DIR', '/app')
     
     def get_services_status(self) -> Dict[str, Any]:
-        """دریافت وضعیت تمام سرویس‌های compose"""
+        """Get status of all Docker Compose services."""
         try:
             result = subprocess.run(
                 ['docker-compose', '-f', self.compose_file, 'ps', '--format', 'json'],
@@ -215,7 +216,7 @@ class DockerComposeService:
                     'services': []
                 }
         except Exception as e:
-            logger.error(f"خطا در دریافت وضعیت سرویس‌ها: {str(e)}")
+            logger.error(f"Error retrieving services status: {str(e)}")
             return {
                 'success': False,
                 'error': str(e),
@@ -223,7 +224,7 @@ class DockerComposeService:
             }
     
     def start_services(self, services: Optional[List[str]] = None) -> Tuple[bool, str]:
-        """شروع سرویس‌های compose"""
+        """Start Docker Compose services."""
         try:
             cmd = ['docker-compose', '-f', self.compose_file, 'up', '-d']
             if services:
@@ -238,23 +239,23 @@ class DockerComposeService:
             )
             
             if result.returncode == 0:
-                message = "سرویس‌ها با موفقیت شروع شدند"
+                message = "Services started successfully"
                 if services:
-                    message = f"سرویس‌های {', '.join(services)} با موفقیت شروع شدند"
+                    message = f"Services {', '.join(services)} started successfully"
                 logger.info(message)
                 return True, message
             else:
-                logger.error(f"خطا در شروع سرویس‌ها: {result.stderr}")
+                logger.error(f"Error starting services: {result.stderr}")
                 return False, result.stderr
                 
         except subprocess.TimeoutExpired:
-            return False, "Timeout در شروع سرویس‌ها"
+            return False, "Timeout starting services"
         except Exception as e:
-            logger.error(f"خطا در شروع سرویس‌ها: {str(e)}")
+            logger.error(f"Error starting services: {str(e)}")
             return False, str(e)
     
     def stop_services(self, services: Optional[List[str]] = None) -> Tuple[bool, str]:
-        """توقف سرویس‌های compose"""
+        """Stop Docker Compose services."""
         try:
             cmd = ['docker-compose', '-f', self.compose_file, 'stop']
             if services:
@@ -269,23 +270,23 @@ class DockerComposeService:
             )
             
             if result.returncode == 0:
-                message = "سرویس‌ها متوقف شدند"
+                message = "Services stopped"
                 if services:
-                    message = f"سرویس‌های {', '.join(services)} متوقف شدند"
+                    message = f"Services {', '.join(services)} stopped"
                 logger.info(message)
                 return True, message
             else:
-                logger.error(f"خطا در توقف سرویس‌ها: {result.stderr}")
+                logger.error(f"Error stopping services: {result.stderr}")
                 return False, result.stderr
                 
         except subprocess.TimeoutExpired:
-            return False, "Timeout در توقف سرویس‌ها"
+            return False, "Timeout stopping services"
         except Exception as e:
-            logger.error(f"خطا در توقف سرویس‌ها: {str(e)}")
+            logger.error(f"Error stopping services: {str(e)}")
             return False, str(e)
     
     def restart_services(self, services: Optional[List[str]] = None) -> Tuple[bool, str]:
-        """راه‌اندازی مجدد سرویس‌های compose"""
+        """Restart Docker Compose services."""
         try:
             cmd = ['docker-compose', '-f', self.compose_file, 'restart']
             if services:
@@ -300,23 +301,23 @@ class DockerComposeService:
             )
             
             if result.returncode == 0:
-                message = "سرویس‌ها راه‌اندازی مجدد شدند"
+                message = "Services restarted"
                 if services:
-                    message = f"سرویس‌های {', '.join(services)} راه‌اندازی مجدد شدند"
+                    message = f"Services {', '.join(services)} restarted"
                 logger.info(message)
                 return True, message
             else:
-                logger.error(f"خطا در راه‌اندازی مجدد سرویس‌ها: {result.stderr}")
+                logger.error(f"Error restarting services: {result.stderr}")
                 return False, result.stderr
                 
         except subprocess.TimeoutExpired:
-            return False, "Timeout در راه‌اندازی مجدد سرویس‌ها"
+            return False, "Timeout restarting services"
         except Exception as e:
-            logger.error(f"خطا در راه‌اندازی مجدد سرویس‌ها: {str(e)}")
+            logger.error(f"Error restarting services: {str(e)}")
             return False, str(e)
     
     def get_service_logs(self, service_name: str, lines: int = 100) -> str:
-        """دریافت لاگ‌های سرویس"""
+        """Get Docker Compose service logs."""
         try:
             result = subprocess.run(
                 ['docker-compose', '-f', self.compose_file, 'logs', '--tail', str(lines), service_name],
@@ -329,16 +330,16 @@ class DockerComposeService:
             if result.returncode == 0:
                 return result.stdout
             else:
-                return f"خطا در دریافت لاگ‌ها: {result.stderr}"
+                return f"Error retrieving logs: {result.stderr}"
                 
         except subprocess.TimeoutExpired:
-            return "Timeout در دریافت لاگ‌ها"
+            return "Timeout retrieving logs"
         except Exception as e:
-            logger.error(f"خطا در دریافت لاگ‌های سرویس {service_name}: {str(e)}")
-            return f"خطا در دریافت لاگ‌ها: {str(e)}"
+            logger.error(f"Error retrieving logs for service {service_name}: {str(e)}")
+            return f"Error retrieving logs: {str(e)}"
     
     def build_services(self, services: Optional[List[str]] = None, no_cache: bool = False) -> Tuple[bool, str]:
-        """ساخت مجدد image های سرویس‌ها"""
+        """Rebuild Docker Compose service images."""
         try:
             cmd = ['docker-compose', '-f', self.compose_file, 'build']
             if no_cache:
@@ -355,23 +356,23 @@ class DockerComposeService:
             )
             
             if result.returncode == 0:
-                message = "Image ها با موفقیت ساخته شدند"
+                message = "Images built successfully"
                 if services:
-                    message = f"Image های {', '.join(services)} با موفقیت ساخته شدند"
+                    message = f"Images for {', '.join(services)} built successfully"
                 logger.info(message)
                 return True, message
             else:
-                logger.error(f"خطا در ساخت image ها: {result.stderr}")
+                logger.error(f"Error building images: {result.stderr}")
                 return False, result.stderr
                 
         except subprocess.TimeoutExpired:
-            return False, "Timeout در ساخت image ها"
+            return False, "Timeout building images"
         except Exception as e:
-            logger.error(f"خطا در ساخت image ها: {str(e)}")
+            logger.error(f"Error building images: {str(e)}")
             return False, str(e)
     
     def pull_images(self, services: Optional[List[str]] = None) -> Tuple[bool, str]:
-        """دانلود آخرین image ها"""
+        """Pull Docker Compose service images."""
         try:
             cmd = ['docker-compose', '-f', self.compose_file, 'pull']
             if services:
@@ -386,17 +387,17 @@ class DockerComposeService:
             )
             
             if result.returncode == 0:
-                message = "Image ها با موفقیت دانلود شدند"
+                message = "Images pulled successfully"
                 if services:
-                    message = f"Image های {', '.join(services)} با موفقیت دانلود شدند"
+                    message = f"Images for {', '.join(services)} pulled successfully"
                 logger.info(message)
                 return True, message
             else:
-                logger.error(f"خطا در دانلود image ها: {result.stderr}")
+                logger.error(f"Error pulling images: {result.stderr}")
                 return False, result.stderr
                 
         except subprocess.TimeoutExpired:
-            return False, "Timeout در دانلود image ها"
+            return False, "Timeout pulling images"
         except Exception as e:
-            logger.error(f"خطا در دانلود image ها: {str(e)}")
+            logger.error(f"Error pulling images: {str(e)}")
             return False, str(e)

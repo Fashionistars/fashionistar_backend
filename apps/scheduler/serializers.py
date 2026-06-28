@@ -1,5 +1,6 @@
+# apps/scheduler/serializers.py
 """
-Serializers برای اپ scheduler
+Serializers for the scheduler app.
 """
 from rest_framework import serializers
 from django.utils import timezone
@@ -14,7 +15,7 @@ from .models import (
 
 
 class TaskDefinitionSerializer(serializers.ModelSerializer):
-    """سریالایزر تعریف وظایف"""
+    """Serializer for TaskDefinition."""
     
     created_by_name = serializers.CharField(
         source='created_by.get_full_name',
@@ -42,35 +43,30 @@ class TaskDefinitionSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at', 'created_by']
     
     def get_execution_count(self, obj):
-        """تعداد کل اجراها"""
+        """Total run count."""
         return obj.executions.count()
     
     def validate_task_path(self, value):
-        """اعتبارسنجی مسیر تابع"""
+        """Validate function path."""
         try:
-            # بررسی فرمت صحیح
+            # Check for correct format
             if '.' not in value:
                 raise serializers.ValidationError(
-                    "مسیر تابع باید به فرمت module.function باشد"
+                    "Function path must be in module.function format"
                 )
-            
-            # بررسی امکان import (اختیاری)
-            # module_path, function_name = value.rsplit('.', 1)
-            # importlib.import_module(module_path)
-            
             return value
         except Exception as e:
-            raise serializers.ValidationError(f"مسیر تابع نامعتبر است: {str(e)}")
+            raise serializers.ValidationError(f"Invalid function path: {str(e)}")
     
     def validate_default_params(self, value):
-        """اعتبارسنجی پارامترهای پیش‌فرض"""
+        """Validate default parameters."""
         if value and not isinstance(value, dict):
-            raise serializers.ValidationError("پارامترها باید به صورت dictionary باشند")
+            raise serializers.ValidationError("Parameters must be in dictionary format")
         return value
 
 
 class ScheduledTaskSerializer(serializers.ModelSerializer):
-    """سریالایزر وظایف زمان‌بندی شده"""
+    """Serializer for ScheduledTask."""
     
     task_definition_name = serializers.CharField(
         source='task_definition.name',
@@ -121,51 +117,51 @@ class ScheduledTaskSerializer(serializers.ModelSerializer):
         ]
     
     def get_success_rate(self, obj):
-        """محاسبه نرخ موفقیت"""
+        """Calculate success rate."""
         if obj.total_run_count == 0:
             return None
         return round((obj.success_count / obj.total_run_count) * 100, 2)
     
     def get_is_overdue(self, obj):
-        """بررسی عقب‌افتادگی"""
+        """Check if overdue."""
         if obj.next_run_at and obj.status == 'active':
             return obj.next_run_at < timezone.now()
         return False
     
     def validate(self, attrs):
-        """اعتبارسنجی کلی"""
+        """General validation."""
         schedule_type = attrs.get('schedule_type')
         
-        # بررسی فیلدهای مورد نیاز برای هر نوع زمان‌بندی
+        # Check required fields based on schedule type
         if schedule_type == 'once' and not attrs.get('one_off_datetime'):
             raise serializers.ValidationError({
-                'one_off_datetime': 'برای زمان‌بندی یکبار، زمان اجرا الزامی است'
+                'one_off_datetime': 'For one-off schedules, execution time is required.'
             })
         
         if schedule_type == 'interval' and not attrs.get('interval_seconds'):
             raise serializers.ValidationError({
-                'interval_seconds': 'برای زمان‌بندی بازه‌ای، بازه زمانی الزامی است'
+                'interval_seconds': 'For interval schedules, interval seconds is required.'
             })
         
         if schedule_type == 'cron' and not attrs.get('cron_expression'):
             raise serializers.ValidationError({
-                'cron_expression': 'برای زمان‌بندی کرون، عبارت کرون الزامی است'
+                'cron_expression': 'For cron schedules, cron expression is required.'
             })
         
-        # بررسی زمان شروع و پایان
+        # Verify start and end times
         start_datetime = attrs.get('start_datetime')
         end_datetime = attrs.get('end_datetime')
         
         if end_datetime and start_datetime and end_datetime <= start_datetime:
             raise serializers.ValidationError({
-                'end_datetime': 'زمان پایان باید بعد از زمان شروع باشد'
+                'end_datetime': 'End time must be after start time.'
             })
         
         return attrs
 
 
 class TaskExecutionSerializer(serializers.ModelSerializer):
-    """سریالایزر سوابق اجرا"""
+    """Serializer for TaskExecution."""
     
     task_name = serializers.SerializerMethodField()
     scheduled_task_name = serializers.CharField(
@@ -210,16 +206,16 @@ class TaskExecutionSerializer(serializers.ModelSerializer):
         ]
     
     def get_task_name(self, obj):
-        """نام وظیفه"""
+        """Task name."""
         return obj.task_definition.name
     
     def get_log_count(self, obj):
-        """تعداد لاگ‌ها"""
+        """Log count."""
         return obj.logs.count()
 
 
 class TaskExecutionDetailSerializer(TaskExecutionSerializer):
-    """سریالایزر جزئیات سوابق اجرا با لاگ‌ها"""
+    """Serializer for detailed TaskExecution including logs."""
     
     logs = serializers.SerializerMethodField()
     
@@ -227,13 +223,13 @@ class TaskExecutionDetailSerializer(TaskExecutionSerializer):
         fields = TaskExecutionSerializer.Meta.fields + ['logs']
     
     def get_logs(self, obj):
-        """لیست لاگ‌ها"""
+        """Logs list."""
         logs = obj.logs.all().order_by('created_at')
         return TaskLogSerializer(logs, many=True).data
 
 
 class TaskLogSerializer(serializers.ModelSerializer):
-    """سریالایزر لاگ‌های وظایف"""
+    """Serializer for TaskLog."""
     
     level_display = serializers.CharField(
         source='get_level_display',
@@ -255,7 +251,7 @@ class TaskLogSerializer(serializers.ModelSerializer):
 
 
 class TaskAlertSerializer(serializers.ModelSerializer):
-    """سریالایزر هشدارهای وظایف"""
+    """Serializer for TaskAlert."""
     
     task_name = serializers.SerializerMethodField()
     resolved_by_name = serializers.CharField(
@@ -302,7 +298,7 @@ class TaskAlertSerializer(serializers.ModelSerializer):
         ]
     
     def get_task_name(self, obj):
-        """نام وظیفه مرتبط"""
+        """Related task name."""
         if obj.scheduled_task:
             return obj.scheduled_task.name
         elif obj.task_definition:
@@ -311,48 +307,48 @@ class TaskAlertSerializer(serializers.ModelSerializer):
 
 
 class TaskAlertResolveSerializer(serializers.Serializer):
-    """سریالایزر حل کردن هشدار"""
+    """Serializer for resolving task alerts."""
     
     resolution_note = serializers.CharField(
         required=True,
         min_length=10,
-        help_text='توضیحات نحوه حل مشکل'
+        help_text='Description of how the issue was resolved.'
     )
 
 
 class TaskExecutionCreateSerializer(serializers.Serializer):
-    """سریالایزر ایجاد اجرای دستی"""
+    """Serializer for manual task run creation."""
     
     task_definition_id = serializers.UUIDField(
         required=True,
-        help_text='شناسه تعریف وظیفه'
+        help_text='Task definition ID'
     )
     params = serializers.JSONField(
         required=False,
         default=dict,
-        help_text='پارامترهای اجرا'
+        help_text='Execution parameters'
     )
     priority = serializers.IntegerField(
         required=False,
         default=5,
         min_value=1,
         max_value=10,
-        help_text='اولویت اجرا (1=بالا، 10=پایین)'
+        help_text='Execution priority (1=High, 10=Low)'
     )
     
     def validate_task_definition_id(self, value):
-        """بررسی وجود task definition"""
+        """Check if task definition exists."""
         try:
             TaskDefinition.objects.get(id=value, is_active=True)
             return value
         except TaskDefinition.DoesNotExist:
             raise serializers.ValidationError(
-                "تعریف وظیفه با این شناسه یافت نشد یا غیرفعال است"
+                "Task definition with this ID was not found or is inactive."
             )
 
 
 class TaskStatisticsSerializer(serializers.Serializer):
-    """سریالایزر آمار وظایف"""
+    """Serializer for task statistics."""
     
     total_definitions = serializers.IntegerField()
     active_definitions = serializers.IntegerField()

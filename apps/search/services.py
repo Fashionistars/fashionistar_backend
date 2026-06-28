@@ -1,6 +1,7 @@
+# apps/search/services.py
 """
-سرویس‌های جستجو (Hybrid: FULLTEXT + semantic rerank)
-مطابق نمونهٔ مستندات در sample_codes/search/services.py با تطبیق به محیط فعلی
+Search services (Hybrid: FULLTEXT + semantic rerank).
+Aligned with modern async-first execution.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from django.db.models.expressions import RawSQL
 from django.db.models import Q
 from django.contrib.auth import get_user_model
 from django.conf import settings
+from asgiref.sync import sync_to_async
 
 from .models import SearchableContent, SearchQuery as SearchQueryModel, SearchResult
 
@@ -32,14 +34,14 @@ class SearchService:
 
 
 class HybridSearchService:
-    """Hybrid search service combining FULLTEXT (MySQL) and semantic rerank."""
+    """Hybrid search service combining FULLTEXT and semantic rerank."""
 
     def __init__(self):
-        # وزن‌دهی نهایی
+        # Final weights
         self.fts_weight = 0.6
         self.semantic_weight = 0.4
 
-    # ---------- Public API ----------
+    # ---------- Public Sync API ----------
     def search(
         self,
         query_text: str,
@@ -50,9 +52,9 @@ class HybridSearchService:
         candidate_limit: int = 300,
     ) -> Dict[str, Any]:
         """
-        1) FULLTEXT روی SearchableContent (کاندیدا)
-        2) ریرنک کاندیدا با امبدینگ‌ها (cosine)
-        3) ترکیب امتیازها
+        1) FULLTEXT on SearchableContent (candidates)
+        2) Rerank candidates with embeddings (cosine similarity)
+        3) Combine scores
         """
         start_time = time.time()
         if not query_text or not query_text.strip():
@@ -60,10 +62,10 @@ class HybridSearchService:
 
         filters = filters or {}
 
-        # 1) FULLTEXT candidates یا fallback روی sqlite
+        # 1) FULLTEXT candidates or fallback on SQLite
         fts_candidates = self._full_text_candidates(query_text, filters, candidate_limit, boolean_mode)
 
-        # اگر هیچ کاندیدایی نیست، خالی برگرد
+        # If there are no candidates, return empty results
         if not fts_candidates:
             exec_ms = int((time.time() - start_time) * 1000)
             sq = SearchQueryModel.objects.create(
@@ -78,16 +80,16 @@ class HybridSearchService:
                 "search_id": sq.id,
             }
 
-        # 2) semantic rerank روی همین کاندیداها (فعلاً بدون وابستگی به embeddings)
+        # 2) Semantic rerank on these candidates (currently without hard embedding dependency)
         semantic_scored = self._semantic_rerank(query_text, fts_candidates)
 
-        # 3) ترکیب امتیازها
+        # 3) Combine scores
         combined_results = self._combine_results(fts_candidates, semantic_scored, limit)
 
-        # زمان اجرا
+        # Execution time
         execution_time_ms = int((time.time() - start_time) * 1000)
 
-        # ذخیرهٔ کوئری برای آنالیتیکس
+        # Save query for analytics
         search_query_obj = SearchQueryModel.objects.create(
             query_text=query_text,
             filters=filters,
@@ -96,8 +98,78 @@ class HybridSearchService:
             execution_time_ms=execution_time_ms,
         )
 
-        # کش نتایج
+        # Cache results
         self._cache_search_results(search_query_obj, combined_results)
+
+        return {
+            "results": combined_results,
+            "total_count": len(combined_results),
+            "execution_time_ms": execution_time_ms,
+            "query": query_text,
+            "filters": filters,
+            "search_id": search_query_obj.id,
+        }
+
+    # ---------- Public Async API ----------
+    async def asearch(
+        self,
+        query_text: str,
+        user: Optional[User] = None,
+        filters: Optional[Dict[str, Any]] = None,
+        limit: int = 20,
+        boolean_mode: bool = True,
+        candidate_limit: int = 300,
+    ) -> Dict[str, Any]:
+        """
+        Async version of hybrid search.
+        1) FULLTEXT on SearchableContent (candidates)
+        2) Rerank candidates with embeddings (cosine)
+        3) Combine scores
+        """
+        start_time = time.time()
+        if not query_text or not query_text.strip():
+            return {"results": [], "total_count": 0, "execution_time_ms": 0, "query": query_text}
+
+        filters = filters or {}
+
+        # 1) FULLTEXT candidates (evaluating sync DB query via thread pool)
+        fts_candidates = await sync_to_async(self._full_text_candidates)(
+            query_text, filters, candidate_limit, boolean_mode
+        )
+
+        if not fts_candidates:
+            exec_ms = int((time.time() - start_time) * 1000)
+            sq = await SearchQueryModel.objects.acreate(
+                query_text=query_text, filters=filters, user=user, results_count=0, execution_time_ms=exec_ms
+            )
+            return {
+                "results": [],
+                "total_count": 0,
+                "execution_time_ms": exec_ms,
+                "query": query_text,
+                "filters": filters,
+                "search_id": sq.id,
+            }
+
+        # 2) Semantic rerank
+        semantic_scored = self._semantic_rerank(query_text, fts_candidates)
+
+        # 3) Combine scores
+        combined_results = self._combine_results(fts_candidates, semantic_scored, limit)
+
+        execution_time_ms = int((time.time() - start_time) * 1000)
+
+        # Save query for analytics
+        search_query_obj = await SearchQueryModel.objects.acreate(
+            query_text=query_text,
+            filters=filters,
+            user=user,
+            results_count=len(combined_results),
+            execution_time_ms=execution_time_ms,
+        )
+
+        # Cache results in background via sync_to_async wrapper
+        await sync_to_async(self._cache_search_results)(search_query_obj, combined_results)
 
         return {
             "results": combined_results,
@@ -116,11 +188,11 @@ class HybridSearchService:
         candidate_limit: int,
         boolean_mode: bool,
     ) -> List[Dict[str, Any]]:
-        """FULLTEXT با MATCH ... AGAINST اگر MySQL؛ در غیر این صورت fallback contains/icontains."""
+        """FULLTEXT with MATCH ... AGAINST if MySQL; otherwise fallback to contains/icontains."""
         try:
             qs = SearchableContent.objects.all()
 
-            # فیلترها
+            # Apply filters
             if filters.get("encounter_id"):
                 qs = qs.filter(encounter_id=filters["encounter_id"])
             if filters.get("content_type"):
@@ -147,7 +219,7 @@ class HybridSearchService:
                       .values("id", "encounter_id", "content_type", "content_id", "title", "content", "metadata", "relevance")
                 )
             else:
-                # sqlite/postgres fallback: ساده با icontains و وزن‌دهی ابتدایی
+                # SQLite/Postgres fallback: simple icontains with basic weighting
                 text_q = Q(title__icontains=query_text) | Q(content__icontains=query_text) | Q(metadata_text__icontains=query_text)
                 results = (
                     qs.filter(text_q)
@@ -155,7 +227,7 @@ class HybridSearchService:
                       .order_by("-created_at")[:candidate_limit]
                       .values("id", "encounter_id", "content_type", "content_id", "title", "content", "metadata")
                 )
-                # افزودن relevance ساده (طول matched text به‌عنوان تقریبی)
+                # Add simple relevance (length of matched text as approximation)
                 for r in results:
                     r["relevance"] = float(len(query_text))
 
@@ -180,7 +252,7 @@ class HybridSearchService:
     # ---------- Internal: Semantic rerank (placeholder) ----------
     def _semantic_rerank(self, query_text: str, candidates: List[Dict[str, Any]]) -> Dict[Tuple[int, str, int], float]:
         """
-        بر اساس امبدینگ: distance (کوچک‌تر بهتر). اگر سرویس امبدینگ موجود نبود، دیکشنری خالی برگردان.
+        Rerank based on embedding distance (smaller is better). Return empty dict if embedding service is not available.
         """
         try:
             query_vec = self._make_query_embedding(query_text)
@@ -188,10 +260,10 @@ class HybridSearchService:
             return {}
 
         distances: Dict[Tuple[int, str, int], float] = {}
-        # بدون دیتابیس امبدینگ، مقداردهی تصادفی ثابت بر اساس hash
+        # Without embedding database, assign a static hash-based distance
         for c in candidates:
             key = (c.get("encounter_id") or 0, c["content_type"], c["content_id"])
-            distances[key] = 0.5  # مقدار ثابت تا زمان یکپارچه‌سازی embeddings
+            distances[key] = 0.5  # Static value until embedding integration
         return distances
 
     # ---------- Internal: Combine ----------
@@ -202,7 +274,7 @@ class HybridSearchService:
         limit: int,
     ) -> List[Dict[str, Any]]:
         """
-        ترکیب: similarity_sem = 1 - distance (clamped to [0,1])
+        Combination: similarity_sem = 1 - distance (clamped to [0,1])
         combined = w_ft * norm(keyword_relevance) + w_sem * similarity_sem
         """
         if fts_candidates:
@@ -271,7 +343,6 @@ class HybridSearchService:
     def _make_query_embedding(self, text: str) -> List[float]:
         import random
         random.seed(hash(text) & 0xFFFFFFFF)
-        vec = [random.random() for _ in range(64)]  # ابعاد موقت تا زمان یکپارچه‌سازی
+        vec = [random.random() for _ in range(64)]  # Placeholder dimensions until integration
         s = math.sqrt(sum(x*x for x in vec)) or 1.0
         return [x / s for x in vec]
-

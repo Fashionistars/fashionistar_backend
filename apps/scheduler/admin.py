@@ -1,10 +1,13 @@
+# apps/scheduler/admin.py
 """
-Admin interface برای اپ scheduler
+Admin interface for the scheduler app.
+Integrated with SoftDeleteAdminMixin for safe auditing.
 """
 from django.contrib import admin
 from django.utils.html import format_html
 from django.utils import timezone
 from django.urls import reverse
+from apps.common.admin_mixins import SoftDeleteAdminMixin
 from .models import (
     TaskDefinition,
     ScheduledTask,
@@ -15,8 +18,8 @@ from .models import (
 
 
 @admin.register(TaskDefinition)
-class TaskDefinitionAdmin(admin.ModelAdmin):
-    """مدیریت تعاریف وظایف"""
+class TaskDefinitionAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
+    """Admin manager for TaskDefinition."""
     
     list_display = [
         'name',
@@ -32,20 +35,20 @@ class TaskDefinitionAdmin(admin.ModelAdmin):
     readonly_fields = ['id', 'created_at', 'updated_at', 'created_by']
     
     fieldsets = (
-        ('اطلاعات اصلی', {
+        ('Basic Information', {
             'fields': ('name', 'task_type', 'description')
         }),
-        ('تنظیمات اجرا', {
+        ('Execution Parameters', {
             'fields': ('task_path', 'queue_name', 'default_params', 'is_active')
         }),
-        ('اطلاعات سیستمی', {
+        ('System Information', {
             'fields': ('id', 'created_at', 'updated_at', 'created_by'),
             'classes': ('collapse',)
         })
     )
     
     def execution_count(self, obj):
-        """تعداد اجراها"""
+        """Count runs."""
         count = obj.executions.count()
         return format_html(
             '<a href="{}?task_definition__id={}">{}</a>',
@@ -53,7 +56,7 @@ class TaskDefinitionAdmin(admin.ModelAdmin):
             obj.id,
             count
         )
-    execution_count.short_description = 'تعداد اجرا'
+    execution_count.short_description = 'Execution Count'
     
     def save_model(self, request, obj, form, change):
         if not change:
@@ -62,8 +65,8 @@ class TaskDefinitionAdmin(admin.ModelAdmin):
 
 
 @admin.register(ScheduledTask)
-class ScheduledTaskAdmin(admin.ModelAdmin):
-    """مدیریت وظایف زمان‌بندی شده"""
+class ScheduledTaskAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
+    """Admin manager for ScheduledTask."""
     
     list_display = [
         'name',
@@ -92,10 +95,10 @@ class ScheduledTaskAdmin(admin.ModelAdmin):
     date_hierarchy = 'created_at'
     
     fieldsets = (
-        ('اطلاعات اصلی', {
+        ('Basic Information', {
             'fields': ('name', 'task_definition', 'status', 'priority')
         }),
-        ('زمان‌بندی', {
+        ('Schedules', {
             'fields': (
                 'schedule_type',
                 'one_off_datetime',
@@ -105,17 +108,17 @@ class ScheduledTaskAdmin(admin.ModelAdmin):
                 'end_datetime'
             )
         }),
-        ('تنظیمات اجرا', {
+        ('Execution Parameters', {
             'fields': ('params', 'max_retries', 'retry_delay')
         }),
-        ('آمار اجرا', {
+        ('Execution Statistics', {
             'fields': (
                 'last_run_at', 'next_run_at', 'total_run_count',
                 'success_count', 'failure_count'
             ),
             'classes': ('collapse',)
         }),
-        ('اطلاعات سیستمی', {
+        ('System Information', {
             'fields': (
                 'id', 'celery_beat_id', 'created_at',
                 'updated_at', 'created_by'
@@ -127,7 +130,7 @@ class ScheduledTaskAdmin(admin.ModelAdmin):
     actions = ['activate_tasks', 'pause_tasks', 'run_now']
     
     def status_badge(self, obj):
-        """نمایش وضعیت با رنگ"""
+        """Colored status badges."""
         colors = {
             'active': 'green',
             'paused': 'orange',
@@ -139,10 +142,10 @@ class ScheduledTaskAdmin(admin.ModelAdmin):
             colors.get(obj.status, 'gray'),
             obj.get_status_display()
         )
-    status_badge.short_description = 'وضعیت'
+    status_badge.short_description = 'Status'
     
     def success_rate(self, obj):
-        """نرخ موفقیت"""
+        """Success rate calculation."""
         if obj.total_run_count == 0:
             return '-'
         rate = (obj.success_count / obj.total_run_count) * 100
@@ -152,37 +155,37 @@ class ScheduledTaskAdmin(admin.ModelAdmin):
             color,
             rate
         )
-    success_rate.short_description = 'نرخ موفقیت'
+    success_rate.short_description = 'Success Rate'
     
     def is_overdue(self, obj):
-        """وضعیت عقب‌افتادگی"""
+        """Overdue status check."""
         if obj.next_run_at and obj.status == 'active':
             if obj.next_run_at < timezone.now():
-                return format_html('<span style="color: red;">{}</span>', "✗ عقب‌افتاده")
-        return format_html('<span style="color: green;">{}</span>', "✓ به موقع")
-    is_overdue.short_description = 'وضعیت اجرا'
+                return format_html('<span style="color: red;">{}</span>', "✗ Overdue")
+        return format_html('<span style="color: green;">{}</span>', "✓ On Time")
+    is_overdue.short_description = 'Execution Status'
     
     def activate_tasks(self, request, queryset):
-        """فعال کردن وظایف"""
+        """Activate tasks."""
         count = queryset.filter(status__in=['paused', 'disabled']).update(status='active')
-        self.message_user(request, f'{count} وظیفه فعال شد.')
-    activate_tasks.short_description = 'فعال کردن وظایف انتخاب شده'
+        self.message_user(request, f'{count} tasks activated.')
+    activate_tasks.short_description = 'Activate selected tasks'
     
     def pause_tasks(self, request, queryset):
-        """متوقف کردن وظایف"""
+        """Pause tasks."""
         count = queryset.filter(status='active').update(status='paused')
-        self.message_user(request, f'{count} وظیفه متوقف شد.')
-    pause_tasks.short_description = 'متوقف کردن وظایف انتخاب شده'
+        self.message_user(request, f'{count} tasks paused.')
+    pause_tasks.short_description = 'Pause selected tasks'
     
     def run_now(self, request, queryset):
-        """اجرای فوری"""
+        """Run tasks immediately."""
         from .tasks import run_scheduled_task
         count = 0
         for task in queryset.filter(status__in=['active', 'paused']):
             run_scheduled_task.delay(str(task.id))
             count += 1
-        self.message_user(request, f'{count} وظیفه برای اجرا ارسال شد.')
-    run_now.short_description = 'اجرای فوری وظایف انتخاب شده'
+        self.message_user(request, f'{count} tasks queued for execution.')
+    run_now.short_description = 'Run selected tasks immediately'
     
     def save_model(self, request, obj, form, change):
         if not change:
@@ -192,7 +195,7 @@ class ScheduledTaskAdmin(admin.ModelAdmin):
 
 @admin.register(TaskExecution)
 class TaskExecutionAdmin(admin.ModelAdmin):
-    """مدیریت سوابق اجرا"""
+    """Admin manager for TaskExecution."""
     
     list_display = [
         'task_name',
@@ -223,22 +226,22 @@ class TaskExecutionAdmin(admin.ModelAdmin):
     date_hierarchy = 'queued_at'
     
     fieldsets = (
-        ('اطلاعات وظیفه', {
+        ('Task Info', {
             'fields': (
                 'task_definition', 'scheduled_task',
                 'celery_task_id', 'status'
             )
         }),
-        ('پارامترها و نتیجه', {
+        ('Parameters & Result', {
             'fields': ('params', 'result', 'error_message', 'traceback')
         }),
-        ('زمان‌ها', {
+        ('Execution Times', {
             'fields': (
                 'queued_at', 'started_at', 'completed_at',
                 'duration_seconds'
             )
         }),
-        ('اطلاعات اجرا', {
+        ('Worker Information', {
             'fields': (
                 'retry_count', 'worker_name', 'queue_name',
                 'created_by'
@@ -247,12 +250,12 @@ class TaskExecutionAdmin(admin.ModelAdmin):
     )
     
     def task_name(self, obj):
-        """نام وظیفه"""
+        """Get task name."""
         return obj.task_definition.name
-    task_name.short_description = 'نام وظیفه'
+    task_name.short_description = 'Task Name'
     
     def status_badge(self, obj):
-        """نمایش وضعیت با رنگ"""
+        """Colored status badge."""
         colors = {
             'pending': 'gray',
             'running': 'blue',
@@ -266,27 +269,26 @@ class TaskExecutionAdmin(admin.ModelAdmin):
             colors.get(obj.status, 'gray'),
             obj.get_status_display()
         )
-    status_badge.short_description = 'وضعیت'
+    status_badge.short_description = 'Status'
     
     def duration_display(self, obj):
-        """نمایش مدت زمان"""
-        if obj.duration_seconds:
+        """Show human-readable duration."""
+        if obj.duration_seconds is not None:
             if obj.duration_seconds < 60:
-                return f'{obj.duration_seconds:.2f} ثانیه'
+                return f'{obj.duration_seconds:.2f} s'
             elif obj.duration_seconds < 3600:
-                return f'{obj.duration_seconds/60:.2f} دقیقه'
+                return f'{obj.duration_seconds/60:.2f} min'
             else:
-                return f'{obj.duration_seconds/3600:.2f} ساعت'
+                return f'{obj.duration_seconds/3600:.2f} h'
         return '-'
-    duration_display.short_description = 'مدت اجرا'
+    duration_display.short_description = 'Execution Duration'
     
     def has_add_permission(self, request):
-        """غیرفعال کردن افزودن دستی"""
         return False
 
 
 class TaskLogInline(admin.TabularInline):
-    """نمایش inline لاگ‌ها"""
+    """Inline view of task logs."""
     model = TaskLog
     extra = 0
     readonly_fields = ['level', 'message', 'extra_data', 'created_at']
@@ -298,7 +300,7 @@ class TaskLogInline(admin.TabularInline):
 
 @admin.register(TaskLog)
 class TaskLogAdmin(admin.ModelAdmin):
-    """مدیریت لاگ‌های وظایف"""
+    """Admin manager for TaskLog."""
     
     list_display = [
         'execution_task_name',
@@ -312,12 +314,12 @@ class TaskLogAdmin(admin.ModelAdmin):
     date_hierarchy = 'created_at'
     
     def execution_task_name(self, obj):
-        """نام وظیفه"""
+        """Task name."""
         return obj.execution.task_definition.name
-    execution_task_name.short_description = 'وظیفه'
+    execution_task_name.short_description = 'Task'
     
     def level_badge(self, obj):
-        """نمایش سطح با رنگ"""
+        """Colored level badge."""
         colors = {
             'debug': 'gray',
             'info': 'blue',
@@ -330,12 +332,12 @@ class TaskLogAdmin(admin.ModelAdmin):
             colors.get(obj.level, 'gray'),
             obj.get_level_display()
         )
-    level_badge.short_description = 'سطح'
+    level_badge.short_description = 'Level'
     
     def message_short(self, obj):
-        """خلاصه پیام"""
+        """Summary of message."""
         return obj.message[:100] + '...' if len(obj.message) > 100 else obj.message
-    message_short.short_description = 'پیام'
+    message_short.short_description = 'Message'
     
     def has_add_permission(self, request):
         return False
@@ -346,7 +348,7 @@ class TaskLogAdmin(admin.ModelAdmin):
 
 @admin.register(TaskAlert)
 class TaskAlertAdmin(admin.ModelAdmin):
-    """مدیریت هشدارهای وظایف"""
+    """Admin manager for TaskAlert."""
     
     list_display = [
         'title',
@@ -374,25 +376,25 @@ class TaskAlertAdmin(admin.ModelAdmin):
     filter_horizontal = ['notified_users']
     
     fieldsets = (
-        ('اطلاعات هشدار', {
+        ('Alert Information', {
             'fields': (
                 'alert_type', 'severity', 'title', 'message',
                 'task_definition', 'scheduled_task', 'execution'
             )
         }),
-        ('جزئیات', {
+        ('Details', {
             'fields': ('details',)
         }),
-        ('وضعیت حل', {
+        ('Resolution Status', {
             'fields': (
                 'is_resolved', 'resolved_at', 'resolved_by',
                 'resolution_note'
             )
         }),
-        ('اطلاع‌رسانی', {
+        ('Notifications', {
             'fields': ('notified_users', 'notification_sent_at')
         }),
-        ('اطلاعات سیستمی', {
+        ('System Information', {
             'fields': ('id', 'created_at'),
             'classes': ('collapse',)
         })
@@ -401,16 +403,16 @@ class TaskAlertAdmin(admin.ModelAdmin):
     actions = ['resolve_alerts', 'send_notifications']
     
     def task_name(self, obj):
-        """نام وظیفه مرتبط"""
+        """Get related task name."""
         if obj.scheduled_task:
             return obj.scheduled_task.name
         elif obj.task_definition:
             return obj.task_definition.name
         return '-'
-    task_name.short_description = 'وظیفه'
+    task_name.short_description = 'Task'
     
     def alert_type_badge(self, obj):
-        """نمایش نوع هشدار"""
+        """Colored alert type badge."""
         colors = {
             'failure': 'red',
             'timeout': 'orange',
@@ -423,10 +425,10 @@ class TaskAlertAdmin(admin.ModelAdmin):
             colors.get(obj.alert_type, 'gray'),
             obj.get_alert_type_display()
         )
-    alert_type_badge.short_description = 'نوع'
+    alert_type_badge.short_description = 'Type'
     
     def severity_badge(self, obj):
-        """نمایش شدت"""
+        """Colored severity badge."""
         colors = {
             'low': 'green',
             'medium': 'yellow',
@@ -438,29 +440,29 @@ class TaskAlertAdmin(admin.ModelAdmin):
             colors.get(obj.severity, 'gray'),
             obj.get_severity_display()
         )
-    severity_badge.short_description = 'شدت'
+    severity_badge.short_description = 'Severity'
     
     def is_resolved_badge(self, obj):
-        """وضعیت حل"""
+        """Resolution status badge."""
         if obj.is_resolved:
-            return format_html('<span style="color: green;">{}</span>', "✓ حل شده")
-        return format_html('<span style="color: red;">{}</span>', "✗ حل نشده")
-    is_resolved_badge.short_description = 'وضعیت'
+            return format_html('<span style="color: green;">{}</span>', "✓ Resolved")
+        return format_html('<span style="color: red;">{}</span>', "✗ Unresolved")
+    is_resolved_badge.short_description = 'Status'
     
     def resolve_alerts(self, request, queryset):
-        """حل کردن هشدارها"""
+        """Resolve alerts."""
         count = queryset.filter(is_resolved=False).update(
             is_resolved=True,
             resolved_at=timezone.now(),
             resolved_by=request.user,
-            resolution_note='حل شده توسط ادمین'
+            resolution_note='Resolved by Admin'
         )
-        self.message_user(request, f'{count} هشدار حل شد.')
-    resolve_alerts.short_description = 'حل کردن هشدارهای انتخاب شده'
+        self.message_user(request, f'{count} alerts resolved.')
+    resolve_alerts.short_description = 'Mark selected alerts as resolved'
     
     def send_notifications(self, request, queryset):
-        """ارسال اطلاع‌رسانی"""
+        """Send notifications."""
         from .tasks import send_task_alerts
         send_task_alerts.delay()
-        self.message_user(request, 'درخواست ارسال اطلاع‌رسانی ثبت شد.')
-    send_notifications.short_description = 'ارسال اطلاع‌رسانی برای هشدارها'
+        self.message_user(request, 'Request to dispatch notifications registered.')
+    send_notifications.short_description = 'Dispatch notifications for selected alerts'

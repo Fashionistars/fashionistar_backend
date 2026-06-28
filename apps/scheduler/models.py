@@ -1,65 +1,70 @@
+# apps/scheduler/models.py
 """
-مدل‌های اپ scheduler
-مدیریت وظایف و زمان‌بندی‌ها
+Scheduler app models.
+Manages tasks, scheduled runs, execution logs, and performance metrics.
 """
+
+from __future__ import annotations
+
+import uuid
 from django.db import models
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from django.core.validators import MinValueValidator
-import uuid
+from apps.common.models import SoftDeleteModel
 
 User = get_user_model()
 
 
-class TaskDefinition(models.Model):
+class TaskDefinition(SoftDeleteModel):
     """
-    تعریف وظایف قابل اجرا در سیستم
+    Definitions of tasks available for execution in the system.
     """
     TASK_TYPES = [
-        ('cleanup', 'پاکسازی'),
-        ('report', 'گزارش‌گیری'),
-        ('notification', 'اطلاع‌رسانی'),
-        ('backup', 'پشتیبان‌گیری'),
-        ('sync', 'همگام‌سازی'),
-        ('analytics', 'تحلیل داده'),
-        ('health_check', 'بررسی سلامت'),
-        ('custom', 'سفارشی'),
+        ('cleanup', 'Cleanup'),
+        ('report', 'Reporting'),
+        ('notification', 'Notification'),
+        ('backup', 'Backup'),
+        ('sync', 'Synchronization'),
+        ('analytics', 'Analytics'),
+        ('health_check', 'Health Check'),
+        ('custom', 'Custom'),
     ]
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(
         max_length=200,
         unique=True,
-        verbose_name='نام وظیفه'
+        verbose_name='Task Name'
     )
     task_path = models.CharField(
         max_length=500,
-        verbose_name='مسیر تابع',
-        help_text='مثال: app_name.tasks.function_name'
+        verbose_name='Function Path',
+        help_text='Example: app_name.tasks.function_name'
     )
     task_type = models.CharField(
         max_length=20,
         choices=TASK_TYPES,
         default='custom',
-        verbose_name='نوع وظیفه'
+        verbose_name='Task Type'
     )
     description = models.TextField(
         blank=True,
-        verbose_name='توضیحات'
+        verbose_name='Description'
     )
     default_params = models.JSONField(
         default=dict,
         blank=True,
-        verbose_name='پارامترهای پیش‌فرض'
+        verbose_name='Default Parameters'
     )
     queue_name = models.CharField(
         max_length=100,
         default='default',
-        verbose_name='نام صف'
+        verbose_name='Queue Name'
     )
     is_active = models.BooleanField(
         default=True,
-        verbose_name='فعال'
+        verbose_name='Is Active'
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -68,36 +73,36 @@ class TaskDefinition(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         related_name='created_task_definitions',
-        verbose_name='ایجاد کننده'
+        verbose_name='Created By'
     )
     
     class Meta:
-        verbose_name = 'تعریف وظیفه'
-        verbose_name_plural = 'تعاریف وظایف'
+        verbose_name = 'Task Definition'
+        verbose_name_plural = 'Task Definitions'
         ordering = ['task_type', 'name']
     
     def __str__(self):
         return f"{self.name} ({self.get_task_type_display()})"
 
 
-class ScheduledTask(models.Model):
+class ScheduledTask(SoftDeleteModel):
     """
-    وظایف زمان‌بندی شده
+    Scheduled task configurations.
     """
     SCHEDULE_TYPES = [
-        ('once', 'یکبار'),
-        ('interval', 'بازه زمانی'),
-        ('cron', 'کرون'),
-        ('daily', 'روزانه'),
-        ('weekly', 'هفتگی'),
-        ('monthly', 'ماهانه'),
+        ('once', 'Once'),
+        ('interval', 'Interval'),
+        ('cron', 'Cron Expression'),
+        ('daily', 'Daily'),
+        ('weekly', 'Weekly'),
+        ('monthly', 'Monthly'),
     ]
     
     STATUS_CHOICES = [
-        ('active', 'فعال'),
-        ('paused', 'متوقف'),
-        ('expired', 'منقضی'),
-        ('disabled', 'غیرفعال'),
+        ('active', 'Active'),
+        ('paused', 'Paused'),
+        ('expired', 'Expired'),
+        ('disabled', 'Disabled'),
     ]
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -105,112 +110,112 @@ class ScheduledTask(models.Model):
         TaskDefinition,
         on_delete=models.CASCADE,
         related_name='scheduled_tasks',
-        verbose_name='تعریف وظیفه'
+        verbose_name='Task Definition'
     )
     name = models.CharField(
         max_length=200,
-        verbose_name='نام زمان‌بندی'
+        verbose_name='Schedule Name'
     )
     schedule_type = models.CharField(
         max_length=20,
         choices=SCHEDULE_TYPES,
-        verbose_name='نوع زمان‌بندی'
+        verbose_name='Schedule Type'
     )
     
-    # زمان‌بندی یکبار
+    # One-off schedule
     one_off_datetime = models.DateTimeField(
         null=True,
         blank=True,
-        verbose_name='زمان اجرا'
+        verbose_name='Execution Time'
     )
     
-    # زمان‌بندی بازه‌ای
+    # Interval schedule
     interval_seconds = models.IntegerField(
         null=True,
         blank=True,
         validators=[MinValueValidator(1)],
-        verbose_name='بازه زمانی (ثانیه)'
+        verbose_name='Interval (seconds)'
     )
     
-    # زمان‌بندی کرون
+    # Cron schedule
     cron_expression = models.CharField(
         max_length=200,
         blank=True,
-        verbose_name='عبارت کرون',
-        help_text='مثال: 0 0 * * * (هر روز ساعت 00:00)'
+        verbose_name='Cron Expression',
+        help_text='Example: 0 0 * * * (Every day at midnight)'
     )
     
-    # پارامترهای اجرا
+    # Execution parameters
     params = models.JSONField(
         default=dict,
         blank=True,
-        verbose_name='پارامترها'
+        verbose_name='Parameters'
     )
     
-    # وضعیت و کنترل
+    # Status and controls
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
         default='active',
-        verbose_name='وضعیت'
+        verbose_name='Status'
     )
     priority = models.IntegerField(
         default=5,
         validators=[MinValueValidator(1)],
-        verbose_name='اولویت',
-        help_text='1=بالاترین، 10=پایین‌ترین'
+        verbose_name='Priority',
+        help_text='1=Highest, 10=Lowest'
     )
     max_retries = models.IntegerField(
         default=3,
         validators=[MinValueValidator(0)],
-        verbose_name='حداکثر تلاش مجدد'
+        verbose_name='Max Retries'
     )
     retry_delay = models.IntegerField(
         default=60,
         validators=[MinValueValidator(1)],
-        verbose_name='تاخیر تلاش مجدد (ثانیه)'
+        verbose_name='Retry Delay (seconds)'
     )
     
-    # زمان‌های شروع و پایان
+    # Start and end boundaries
     start_datetime = models.DateTimeField(
         default=timezone.now,
-        verbose_name='زمان شروع'
+        verbose_name='Start Time'
     )
     end_datetime = models.DateTimeField(
         null=True,
         blank=True,
-        verbose_name='زمان پایان'
+        verbose_name='End Time'
     )
     
-    # آمار اجرا
+    # Execution statistics
     last_run_at = models.DateTimeField(
         null=True,
         blank=True,
-        verbose_name='آخرین اجرا'
+        verbose_name='Last Run'
     )
     next_run_at = models.DateTimeField(
         null=True,
         blank=True,
-        verbose_name='اجرای بعدی'
+        verbose_name='Next Run'
     )
     total_run_count = models.IntegerField(
         default=0,
-        verbose_name='تعداد کل اجراها'
+        verbose_name='Total Run Count'
     )
     success_count = models.IntegerField(
         default=0,
-        verbose_name='تعداد اجرای موفق'
+        verbose_name='Successful Run Count'
     )
     failure_count = models.IntegerField(
         default=0,
-        verbose_name='تعداد اجرای ناموفق'
+        verbose_name='Failed Run Count'
     )
     
-    # Celery Beat ID (برای همگام‌سازی با django-celery-beat)
+    # Celery Beat ID (for database sync lookup)
     celery_beat_id = models.IntegerField(
         null=True,
         blank=True,
-        verbose_name='شناسه Celery Beat'
+        verbose_name='Celery Beat ID'
     )
     
     created_at = models.DateTimeField(auto_now_add=True)
@@ -220,12 +225,12 @@ class ScheduledTask(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         related_name='created_scheduled_tasks',
-        verbose_name='ایجاد کننده'
+        verbose_name='Created By'
     )
     
     class Meta:
-        verbose_name = 'وظیفه زمان‌بندی شده'
-        verbose_name_plural = 'وظایف زمان‌بندی شده'
+        verbose_name = 'Scheduled Task'
+        verbose_name_plural = 'Scheduled Tasks'
         ordering = ['-priority', 'name']
         indexes = [
             models.Index(fields=['status', 'next_run_at']),
@@ -238,15 +243,15 @@ class ScheduledTask(models.Model):
 
 class TaskExecution(models.Model):
     """
-    سابقه اجرای وظایف
+    Task execution history.
     """
     STATUS_CHOICES = [
-        ('pending', 'در انتظار'),
-        ('running', 'در حال اجرا'),
-        ('success', 'موفق'),
-        ('failed', 'ناموفق'),
-        ('retrying', 'تلاش مجدد'),
-        ('cancelled', 'لغو شده'),
+        ('pending', 'Pending'),
+        ('running', 'Running'),
+        ('success', 'Success'),
+        ('failed', 'Failed'),
+        ('retrying', 'Retrying'),
+        ('cancelled', 'Cancelled'),
     ]
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -256,83 +261,83 @@ class TaskExecution(models.Model):
         null=True,
         blank=True,
         related_name='executions',
-        verbose_name='وظیفه زمان‌بندی شده'
+        verbose_name='Scheduled Task'
     )
     task_definition = models.ForeignKey(
         TaskDefinition,
         on_delete=models.CASCADE,
         related_name='executions',
-        verbose_name='تعریف وظیفه'
+        verbose_name='Task Definition'
     )
     celery_task_id = models.CharField(
         max_length=255,
         unique=True,
-        verbose_name='شناسه Celery'
+        verbose_name='Celery Task ID'
     )
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
         default='pending',
-        verbose_name='وضعیت'
+        verbose_name='Status'
     )
     params = models.JSONField(
         default=dict,
         blank=True,
-        verbose_name='پارامترهای اجرا'
+        verbose_name='Execution Parameters'
     )
     
-    # زمان‌ها
+    # Times
     queued_at = models.DateTimeField(
         auto_now_add=True,
-        verbose_name='زمان ورود به صف'
+        verbose_name='Queued Time'
     )
     started_at = models.DateTimeField(
         null=True,
         blank=True,
-        verbose_name='زمان شروع'
+        verbose_name='Start Time'
     )
     completed_at = models.DateTimeField(
         null=True,
         blank=True,
-        verbose_name='زمان اتمام'
+        verbose_name='Completion Time'
     )
     
-    # نتایج
+    # Results
     result = models.JSONField(
         null=True,
         blank=True,
-        verbose_name='نتیجه'
+        verbose_name='Result'
     )
     error_message = models.TextField(
         blank=True,
-        verbose_name='پیام خطا'
+        verbose_name='Error Message'
     )
     traceback = models.TextField(
         blank=True,
-        verbose_name='جزئیات خطا'
+        verbose_name='Error Details'
     )
     
-    # آمار
+    # Stats
     retry_count = models.IntegerField(
         default=0,
-        verbose_name='تعداد تلاش'
+        verbose_name='Retry Count'
     )
     duration_seconds = models.FloatField(
         null=True,
         blank=True,
-        verbose_name='مدت اجرا (ثانیه)'
+        verbose_name='Duration (seconds)'
     )
     
-    # اطلاعات اضافی
+    # Infrastructure info
     worker_name = models.CharField(
         max_length=200,
         blank=True,
-        verbose_name='نام Worker'
+        verbose_name='Worker Name'
     )
     queue_name = models.CharField(
         max_length=100,
         blank=True,
-        verbose_name='نام صف'
+        verbose_name='Queue Name'
     )
     
     created_by = models.ForeignKey(
@@ -341,12 +346,12 @@ class TaskExecution(models.Model):
         null=True,
         blank=True,
         related_name='created_task_executions',
-        verbose_name='اجرا کننده'
+        verbose_name='Executed By'
     )
     
     class Meta:
-        verbose_name = 'سابقه اجرا'
-        verbose_name_plural = 'سوابق اجرا'
+        verbose_name = 'Task Execution'
+        verbose_name_plural = 'Task Executions'
         ordering = ['-queued_at']
         indexes = [
             models.Index(fields=['status', 'queued_at']),
@@ -358,7 +363,7 @@ class TaskExecution(models.Model):
         return f"{self.task_definition.name} - {self.get_status_display()} ({self.queued_at})"
     
     def calculate_duration(self):
-        """محاسبه مدت زمان اجرا"""
+        """Calculate execution duration."""
         if self.started_at and self.completed_at:
             duration = (self.completed_at - self.started_at).total_seconds()
             self.duration_seconds = duration
@@ -369,14 +374,14 @@ class TaskExecution(models.Model):
 
 class TaskLog(models.Model):
     """
-    لاگ‌های جزئی اجرای وظایف
+    Detailed logs for task executions.
     """
     LOG_LEVELS = [
-        ('debug', 'اشکال‌زدایی'),
-        ('info', 'اطلاعات'),
-        ('warning', 'هشدار'),
-        ('error', 'خطا'),
-        ('critical', 'بحرانی'),
+        ('debug', 'Debug'),
+        ('info', 'Info'),
+        ('warning', 'Warning'),
+        ('error', 'Error'),
+        ('critical', 'Critical'),
     ]
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -384,30 +389,30 @@ class TaskLog(models.Model):
         TaskExecution,
         on_delete=models.CASCADE,
         related_name='logs',
-        verbose_name='اجرا'
+        verbose_name='Execution'
     )
     level = models.CharField(
         max_length=20,
         choices=LOG_LEVELS,
         default='info',
-        verbose_name='سطح'
+        verbose_name='LogLevel'
     )
     message = models.TextField(
-        verbose_name='پیام'
+        verbose_name='Message'
     )
     extra_data = models.JSONField(
         default=dict,
         blank=True,
-        verbose_name='داده‌های اضافی'
+        verbose_name='Extra Data'
     )
     created_at = models.DateTimeField(
         auto_now_add=True,
-        verbose_name='زمان ثبت'
+        verbose_name='Logged Time'
     )
     
     class Meta:
-        verbose_name = 'لاگ وظیفه'
-        verbose_name_plural = 'لاگ‌های وظایف'
+        verbose_name = 'Task Log'
+        verbose_name_plural = 'Task Logs'
         ordering = ['execution', 'created_at']
         indexes = [
             models.Index(fields=['execution', 'level']),
@@ -419,21 +424,21 @@ class TaskLog(models.Model):
 
 class TaskAlert(models.Model):
     """
-    هشدارهای مربوط به وظایف
+    Alerts generated by execution failures or timeouts.
     """
     ALERT_TYPES = [
-        ('failure', 'خطا در اجرا'),
-        ('timeout', 'اتمام زمان'),
-        ('threshold', 'عبور از آستانه'),
-        ('missing', 'عدم اجرا'),
-        ('performance', 'کاهش کارایی'),
+        ('failure', 'Execution Failure'),
+        ('timeout', 'Timeout'),
+        ('threshold', 'Threshold Breached'),
+        ('missing', 'Missed Run'),
+        ('performance', 'Performance Degradation'),
     ]
     
     SEVERITY_LEVELS = [
-        ('low', 'پایین'),
-        ('medium', 'متوسط'),
-        ('high', 'بالا'),
-        ('critical', 'بحرانی'),
+        ('low', 'Low'),
+        ('medium', 'Medium'),
+        ('high', 'High'),
+        ('critical', 'Critical'),
     ]
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -443,7 +448,7 @@ class TaskAlert(models.Model):
         null=True,
         blank=True,
         related_name='alerts',
-        verbose_name='تعریف وظیفه'
+        verbose_name='Task Definition'
     )
     scheduled_task = models.ForeignKey(
         ScheduledTask,
@@ -451,7 +456,7 @@ class TaskAlert(models.Model):
         null=True,
         blank=True,
         related_name='alerts',
-        verbose_name='وظیفه زمان‌بندی شده'
+        verbose_name='Scheduled Task'
     )
     execution = models.ForeignKey(
         TaskExecution,
@@ -459,42 +464,42 @@ class TaskAlert(models.Model):
         null=True,
         blank=True,
         related_name='alerts',
-        verbose_name='اجرا'
+        verbose_name='Execution'
     )
     
     alert_type = models.CharField(
         max_length=20,
         choices=ALERT_TYPES,
-        verbose_name='نوع هشدار'
+        verbose_name='Alert Type'
     )
     severity = models.CharField(
         max_length=20,
         choices=SEVERITY_LEVELS,
         default='medium',
-        verbose_name='شدت'
+        verbose_name='Severity'
     )
     title = models.CharField(
         max_length=200,
-        verbose_name='عنوان'
+        verbose_name='Title'
     )
     message = models.TextField(
-        verbose_name='پیام'
+        verbose_name='Message'
     )
     details = models.JSONField(
         default=dict,
         blank=True,
-        verbose_name='جزئیات'
+        verbose_name='Details'
     )
     
-    # وضعیت هشدار
+    # Alert state
     is_resolved = models.BooleanField(
         default=False,
-        verbose_name='حل شده'
+        verbose_name='Is Resolved'
     )
     resolved_at = models.DateTimeField(
         null=True,
         blank=True,
-        verbose_name='زمان حل'
+        verbose_name='Resolved Time'
     )
     resolved_by = models.ForeignKey(
         User,
@@ -502,34 +507,34 @@ class TaskAlert(models.Model):
         null=True,
         blank=True,
         related_name='resolved_task_alerts',
-        verbose_name='حل کننده'
+        verbose_name='Resolved By'
     )
     resolution_note = models.TextField(
         blank=True,
-        verbose_name='یادداشت حل'
+        verbose_name='Resolution Note'
     )
     
-    # اطلاع‌رسانی
+    # Notifications
     notified_users = models.ManyToManyField(
         User,
         blank=True,
         related_name='task_alert_notifications',
-        verbose_name='کاربران مطلع شده'
+        verbose_name='Notified Users'
     )
     notification_sent_at = models.DateTimeField(
         null=True,
         blank=True,
-        verbose_name='زمان ارسال اطلاع‌رسانی'
+        verbose_name='Notification Sent Time'
     )
     
     created_at = models.DateTimeField(
         auto_now_add=True,
-        verbose_name='زمان ایجاد'
+        verbose_name='Created Time'
     )
     
     class Meta:
-        verbose_name = 'هشدار وظیفه'
-        verbose_name_plural = 'هشدارهای وظایف'
+        verbose_name = 'Task Alert'
+        verbose_name_plural = 'Task Alerts'
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['severity', 'is_resolved']),

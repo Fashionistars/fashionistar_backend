@@ -1,6 +1,6 @@
+# apps/search/models.py
 """
-مدل‌های اپلیکیشن جستجو
-Search app models (compatible with MySQL FULLTEXT and sqlite fallback)
+Search app models (compatible with MySQL FULLTEXT and SQLite fallback).
 """
 
 from __future__ import annotations
@@ -9,13 +9,12 @@ import json
 from django.db import models
 from django.contrib.auth import get_user_model
 
-
 User = get_user_model()
 
 
 class SearchableContent(models.Model):
     """
-    ایندکس محتوای قابل جستجو برای FULLTEXT (MySQL) یا جستجوی ساده در sqlite.
+    Searchable content index for FULLTEXT (MySQL) or simple fallback in SQLite.
     """
 
     CONTENT_TYPE_CHOICES = [
@@ -26,8 +25,8 @@ class SearchableContent(models.Model):
         ("notes", "Clinical Notes"),
     ]
 
-    # توجه: مدل encounters.Encounter ممکن است در این پروژه موجود نباشد.
-    # برای جلوگیری از وابستگی سخت، از ForeignKey به رشته استفاده می‌کنیم.
+    # Note: The encounters.Encounter model might not be available in this project.
+    # To avoid a hard dependency, we use a ForeignKey referencing the string name.
     encounter = models.ForeignKey(
         "encounters.Encounter",
         on_delete=models.CASCADE,
@@ -40,13 +39,13 @@ class SearchableContent(models.Model):
     title = models.CharField(max_length=200)
     content = models.TextField()
 
-    # به‌جای SearchVectorField (Postgres)، متن کمکی برای ایندکس
+    # Index helper text instead of Postgres SearchVectorField
     search_vector = models.TextField(null=True, blank=True)
 
     metadata = models.JSONField(default=dict)
     metadata_text = models.TextField(blank=True, default="")
 
-    # ستون fulltext_all در مهاجرت 0002 برای MySQL ساخته می‌شود (Generated column)
+    # The fulltext_all column is created as a Generated Column for MySQL in migration 0002
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -63,15 +62,15 @@ class SearchableContent(models.Model):
                 name="uniq_search_encounter_contenttype_contentid",
             ),
         ]
-        verbose_name = "محتوای قابل جستجو"
-        verbose_name_plural = "محتوای قابل جستجو"
+        verbose_name = "Searchable Content"
+        verbose_name_plural = "Searchable Contents"
 
     def __str__(self) -> str:
         return f"{self.content_type}:{self.content_id} - {self.title}"
 
     def save(self, *args, **kwargs) -> None:
         """
-        تولید metadata_text از فیلد JSON برای استفاده در fulltext_all
+        Generate metadata_text from JSON field to use in fulltext_all.
         """
         try:
             self.metadata_text = json.dumps(self.metadata, ensure_ascii=False, separators=(", ", ": "))
@@ -82,7 +81,7 @@ class SearchableContent(models.Model):
 
 class SearchQuery(models.Model):
     """
-    نگهداری کوئری‌های جستجو برای آنالیتیکس و کش نتایج
+    Keep search queries for analytics and result caching.
     """
 
     query_text = models.TextField()
@@ -97,8 +96,8 @@ class SearchQuery(models.Model):
             models.Index(fields=["user", "created_at"]),
             models.Index(fields=["created_at"]),
         ]
-        verbose_name = "کوئری جستجو"
-        verbose_name_plural = "کوئری‌های جستجو"
+        verbose_name = "Search Query"
+        verbose_name_plural = "Search Queries"
 
     def __str__(self) -> str:
         return f"Search: {self.query_text[:50]}..."
@@ -106,7 +105,7 @@ class SearchQuery(models.Model):
 
 class SearchResult(models.Model):
     """
-    نتایج کش شده برای هر کوئری
+    Cached results for each query.
     """
 
     query = models.ForeignKey(SearchQuery, on_delete=models.CASCADE, related_name="cached_results")
@@ -126,9 +125,8 @@ class SearchResult(models.Model):
             ),
         ]
         ordering = ["rank"]
-        verbose_name = "نتیجه جستجو"
-        verbose_name_plural = "نتایج جستجو"
+        verbose_name = "Search Result"
+        verbose_name_plural = "Search Results"
 
     def __str__(self) -> str:
         return f"Result {self.rank} for query {self.query.id}"
-

@@ -1,5 +1,6 @@
+# apps/devops/tasks.py
 """
-تسک‌های Celery برای اپلیکیشن DevOps
+Celery tasks for the DevOps application.
 """
 from celery import shared_task
 from django.utils import timezone
@@ -15,20 +16,18 @@ logger = logging.getLogger(__name__)
 @shared_task
 def run_health_checks():
     """
-    اجرای health check های دوره‌ای برای تمام سرویس‌های فعال
+    Run periodic health checks for all active monitored services.
     """
-    logger.info("شروع health check های دوره‌ای")
+    logger.info("Starting periodic health checks")
     
     current_time = timezone.now()
     total_checks = 0
     successful_checks = 0
     
-    # دریافت تمام سرویس‌های فعال
     active_services = ServiceMonitoring.objects.filter(is_active=True)
     
     for service in active_services:
         try:
-            # بررسی آیا زمان check کردن رسیده یا نه
             last_check = HealthCheck.objects.filter(
                 environment=service.environment,
                 service_name=service.service_name
@@ -40,18 +39,14 @@ def run_health_checks():
                 should_check = time_since_last_check >= service.check_interval
             
             if should_check:
-                logger.debug(f"اجرای health check برای {service.service_name}")
+                logger.debug(f"Running health check for {service.service_name}")
                 
-                # ایجاد health service
                 health_service = HealthService(service.environment.name)
-                
-                # بررسی سرویس
                 result = health_service.check_external_service(
                     service.health_check_url,
                     service.timeout
                 )
                 
-                # ذخیره نتیجه
                 health_service._save_health_check_result(service, result)
                 
                 total_checks += 1
@@ -59,9 +54,8 @@ def run_health_checks():
                     successful_checks += 1
                     
         except Exception as e:
-            logger.error(f"خطا در health check سرویس {service.service_name}: {str(e)}")
+            logger.error(f"Error checking health for service {service.service_name}: {str(e)}")
             
-            # ذخیره خطا به عنوان health check ناموفق
             try:
                 HealthCheck.objects.create(
                     environment=service.environment,
@@ -71,11 +65,11 @@ def run_health_checks():
                     error_message=str(e)
                 )
             except Exception as save_error:
-                logger.error(f"خطا در ذخیره health check: {str(save_error)}")
+                logger.error(f"Error saving health check error record: {str(save_error)}")
     
     logger.info(
-        f"health check های دوره‌ای تکمیل شد. "
-        f"کل: {total_checks}, موفق: {successful_checks}"
+        f"Periodic health checks completed. "
+        f"Total checks: {total_checks}, Successful: {successful_checks}"
     )
     
     return {
@@ -88,20 +82,19 @@ def run_health_checks():
 @shared_task
 def cleanup_old_health_checks(days_to_keep=30):
     """
-    پاکسازی health check های قدیمی
+    Cleanup old health check records from the database.
     
     Args:
-        days_to_keep: تعداد روزهایی که health check ها نگه داشته شوند
+        days_to_keep: Number of days of health checks to retain.
     """
-    logger.info(f"شروع پاکسازی health check های بیشتر از {days_to_keep} روز")
+    logger.info(f"Starting cleanup of health checks older than {days_to_keep} days")
     
     cutoff_date = timezone.now() - timedelta(days=days_to_keep)
-    
     deleted_count, _ = HealthCheck.objects.filter(
         checked_at__lt=cutoff_date
     ).delete()
     
-    logger.info(f"{deleted_count} health check قدیمی پاک شد")
+    logger.info(f"Cleaned up {deleted_count} old health check records")
     
     return {
         'deleted_count': deleted_count,
@@ -112,13 +105,13 @@ def cleanup_old_health_checks(days_to_keep=30):
 @shared_task
 def generate_uptime_report(environment_name, hours=24):
     """
-    تولید گزارش uptime برای محیط مشخص
+    Generate service uptime report for a specified environment.
     
     Args:
-        environment_name: نام محیط
-        hours: بازه زمانی به ساعت
+        environment_name: Target environment name.
+        hours: Uptime time range in hours.
     """
-    logger.info(f"تولید گزارش uptime برای محیط {environment_name}")
+    logger.info(f"Generating uptime report for environment {environment_name}")
     
     try:
         environment = EnvironmentConfig.objects.get(
@@ -126,12 +119,10 @@ def generate_uptime_report(environment_name, hours=24):
             is_active=True
         )
     except EnvironmentConfig.DoesNotExist:
-        logger.error(f"محیط {environment_name} یافت نشد")
-        return {'error': f'محیط {environment_name} یافت نشد'}
+        logger.error(f"Environment {environment_name} not found")
+        return {'error': f'Environment {environment_name} not found'}
     
     health_service = HealthService(environment_name)
-    
-    # دریافت تمام سرویس‌های محیط
     services = ServiceMonitoring.objects.filter(
         environment=environment,
         is_active=True
@@ -148,7 +139,7 @@ def generate_uptime_report(environment_name, hours=24):
         uptime_data = health_service.get_service_uptime(service.service_name, hours)
         report['services'].append(uptime_data)
     
-    logger.info(f"گزارش uptime برای {len(services)} سرویس تولید شد")
+    logger.info(f"Uptime report generated for {len(services)} services")
     
     return report
 
@@ -156,13 +147,13 @@ def generate_uptime_report(environment_name, hours=24):
 @shared_task
 def check_deployment_status():
     """
-    بررسی وضعیت deployment های در حال اجرا
+    Monitor and check for stuck deployment runs.
     """
     from .models import DeploymentHistory
     
-    logger.info("بررسی deployment های در حال اجرا")
+    logger.info("Checking running deployments status")
     
-    # deployment هایی که بیش از 30 دقیقه در حال اجرا هستند
+    # Stuck if deployment has been running for more than 30 minutes
     timeout_threshold = timezone.now() - timedelta(minutes=30)
     
     stuck_deployments = DeploymentHistory.objects.filter(
@@ -172,12 +163,9 @@ def check_deployment_status():
     
     for deployment in stuck_deployments:
         logger.warning(
-            f"Deployment {deployment.id} در محیط {deployment.environment.name} "
-            f"بیش از 30 دقیقه در حال اجرا است"
+            f"Deployment {deployment.id} in environment {deployment.environment.name} "
+            f"has been running for over 30 minutes"
         )
-        
-        # می‌توان deployment را به عنوان failed علامت‌گذاری کرد
-        # یا اعلان ارسال کرد
     
     return {
         'stuck_deployments': stuck_deployments.count(),
@@ -188,25 +176,22 @@ def check_deployment_status():
 @shared_task
 def backup_deployment_logs():
     """
-    پشتیبان‌گیری از لاگ‌های deployment
+    Backup deployment execution logs to a file.
     """
     from .models import DeploymentHistory
     import json
     from django.conf import settings
     import os
     
-    logger.info("شروع پشتیبان‌گیری لاگ‌های deployment")
+    logger.info("Starting backup of deployment logs")
     
-    # تنها deployment های آخر 7 روز
     since_date = timezone.now() - timedelta(days=7)
-    
     deployments = DeploymentHistory.objects.filter(
         started_at__gte=since_date,
         deployment_logs__isnull=False
     ).exclude(deployment_logs='')
     
     backup_data = []
-    
     for deployment in deployments:
         backup_data.append({
             'id': str(deployment.id),
@@ -218,8 +203,7 @@ def backup_deployment_logs():
             'logs': deployment.deployment_logs
         })
     
-    # ذخیره در فایل
-    backup_dir = getattr(settings, 'BACKUP_DIR', '/tmp/helssa_backups')
+    backup_dir = getattr(settings, 'BACKUP_DIR', '/tmp/fashionistar_backups')
     os.makedirs(backup_dir, exist_ok=True)
     
     backup_filename = f"deployment_logs_{timezone.now().strftime('%Y%m%d_%H%M%S')}.json"
@@ -228,7 +212,7 @@ def backup_deployment_logs():
     with open(backup_path, 'w', encoding='utf-8') as f:
         json.dump(backup_data, f, ensure_ascii=False, indent=2)
     
-    logger.info(f"پشتیبان‌گیری {len(backup_data)} deployment در {backup_path} ذخیره شد")
+    logger.info(f"Backed up {len(backup_data)} deployments to {backup_path}")
     
     return {
         'backed_up_count': len(backup_data),
@@ -240,18 +224,15 @@ def backup_deployment_logs():
 @shared_task
 def monitor_system_resources():
     """
-    مانیتورینگ منابع سیستم (CPU, Memory, Disk)
+    Monitor core system resource metrics (CPU, Memory, Disk).
     """
-    logger.info("مانیتورینگ منابع سیستم")
+    logger.info("Monitoring core system resources")
     
     health_service = HealthService()
-    
-    # بررسی منابع
     cpu_info = health_service.check_cpu()
     memory_info = health_service.check_memory()
     disk_info = health_service.check_disk_space()
     
-    # ثبت هشدارها در صورت نیاز
     warnings = []
     
     if cpu_info.get('status') in ['warning', 'critical']:
@@ -264,7 +245,7 @@ def monitor_system_resources():
         warnings.append(f"Disk usage: {disk_info.get('percent_used', 0)}%")
     
     if warnings:
-        logger.warning(f"هشدارهای منابع سیستم: {', '.join(warnings)}")
+        logger.warning(f"System resource warnings: {', '.join(warnings)}")
     
     return {
         'cpu': cpu_info,

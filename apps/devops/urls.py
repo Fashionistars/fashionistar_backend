@@ -1,11 +1,11 @@
+# apps/devops/urls.py
 """
-URL patterns برای اپلیکیشن DevOps
+URL patterns for the DevOps application.
 """
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from . import views
+from .apis.sync import devops_views as views
 
-# Router برای ViewSets
 router = DefaultRouter()
 router.register(r'environments', views.EnvironmentConfigViewSet, basename='environment')
 router.register(r'deployments', views.DeploymentHistoryViewSet, basename='deployment')

@@ -1,71 +1,72 @@
+# apps/devops/settings.py
 """
-تنظیمات خاص اپلیکیشن DevOps
+DevOps application settings.
+All logging is handled centrally by backend.apps.BackendConfig.
 """
 from django.conf import settings
 import os
 
-
-# تنظیمات Docker
+# Docker Settings
 DOCKER_COMPOSE_FILE = getattr(settings, 'DOCKER_COMPOSE_FILE', 'docker-compose.yml')
 DOCKER_COMPOSE_PROD_FILE = getattr(settings, 'DOCKER_COMPOSE_PROD_FILE', 'docker-compose.prod.yml')
 DOCKER_COMPOSE_STAGING_FILE = getattr(settings, 'DOCKER_COMPOSE_STAGING_FILE', 'docker-compose.staging.yml')
 
-# تنظیمات Health Check
-HEALTH_CHECK_TIMEOUT = getattr(settings, 'HEALTH_CHECK_TIMEOUT', 30)  # ثانیه
-HEALTH_CHECK_INTERVAL = getattr(settings, 'HEALTH_CHECK_INTERVAL', 300)  # 5 دقیقه
+# Health Check Settings
+HEALTH_CHECK_TIMEOUT = getattr(settings, 'HEALTH_CHECK_TIMEOUT', 30)  # seconds
+HEALTH_CHECK_INTERVAL = getattr(settings, 'HEALTH_CHECK_INTERVAL', 300)  # 5 minutes
 
-# تنظیمات Deployment
-DEPLOYMENT_TIMEOUT = getattr(settings, 'DEPLOYMENT_TIMEOUT', 1800)  # 30 دقیقه
+# Deployment Settings
+DEPLOYMENT_TIMEOUT = getattr(settings, 'DEPLOYMENT_TIMEOUT', 1800)  # 30 minutes
 DEPLOYMENT_LOG_RETENTION_DAYS = getattr(settings, 'DEPLOYMENT_LOG_RETENTION_DAYS', 90)
 
-# تنظیمات پشتیبان‌گیری
-BACKUP_DIR = getattr(settings, 'BACKUP_DIR', '/tmp/helssa_backups')
+# Backup Settings
+BACKUP_DIR = getattr(settings, 'BACKUP_DIR', '/tmp/fashionistar_backups')
 BACKUP_RETENTION_DAYS = getattr(settings, 'BACKUP_RETENTION_DAYS', 30)
 
-# تنظیمات مانیتورینگ
+# Monitoring Settings
 HEALTH_CHECK_RETENTION_DAYS = getattr(settings, 'HEALTH_CHECK_RETENTION_DAYS', 30)
-SYSTEM_MONITOR_INTERVAL = getattr(settings, 'SYSTEM_MONITOR_INTERVAL', 600)  # 10 دقیقه
+SYSTEM_MONITOR_INTERVAL = getattr(settings, 'SYSTEM_MONITOR_INTERVAL', 600)  # 10 minutes
 
-# تنظیمات امنیتی
+# Security Settings
 SECRET_ENCRYPTION_KEY = getattr(settings, 'SECRET_ENCRYPTION_KEY', settings.SECRET_KEY)
 MAX_DEPLOYMENT_ATTEMPTS = getattr(settings, 'MAX_DEPLOYMENT_ATTEMPTS', 3)
 
-# تنظیمات Rate Limiting
+# Rate Limiting Settings
 RATE_LIMIT_HEALTH_CHECK = getattr(settings, 'RATE_LIMIT_HEALTH_CHECK', '10/m')
 RATE_LIMIT_DEPLOYMENT = getattr(settings, 'RATE_LIMIT_DEPLOYMENT', '5/h')
 RATE_LIMIT_DOCKER_OPS = getattr(settings, 'RATE_LIMIT_DOCKER_OPS', '20/m')
 
-# تنظیمات Celery
+# Celery settings
 CELERY_DEVOPS_QUEUE = getattr(settings, 'CELERY_DEVOPS_QUEUE', 'devops')
 
-# URL های پیش‌فرض
+# Default Health Check URLs
 DEFAULT_HEALTH_CHECK_URLS = {
     'development': 'http://localhost:8001/health/',
-    'staging': 'https://staging.helssa.ir/health/',
-    'production': 'https://helssa.ir/health/',
+    'staging': 'https://staging.fashionistar.io/health/',
+    'production': 'https://fashionistar.io/health/',
     'testing': 'http://localhost:8001/health/',
 }
 
-# تنظیمات environment های پیش‌فرض
+# Default environments configuration
 DEFAULT_ENVIRONMENTS = [
     {
         'name': 'development',
         'environment_type': 'development',
-        'description': 'محیط توسعه محلی'
+        'description': 'Local development environment'
     },
     {
         'name': 'staging', 
         'environment_type': 'staging',
-        'description': 'محیط تست قبل از production'
+        'description': 'Staging environment for pre-prod testing'
     },
     {
         'name': 'production',
         'environment_type': 'production', 
-        'description': 'محیط تولید اصلی'
+        'description': 'Main production environment'
     }
 ]
 
-# سرویس‌های پیش‌فرض برای مانیتورینگ
+# Default monitoring services
 DEFAULT_MONITORING_SERVICES = {
     'web': {
         'service_type': 'web',
@@ -93,46 +94,3 @@ DEFAULT_MONITORING_SERVICES = {
         'timeout': 10
     }
 }
-
-# تنظیمات لاگ
-DEVOPS_LOGGER_CONFIG = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'devops_formatter': {
-            'format': '{asctime} [{levelname}] {name}: {message}',
-            'style': '{',
-        },
-    },
-    'handlers': {
-        'devops_file': {
-            'level': 'INFO',
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join(getattr(settings, 'LOG_DIR', '/tmp'), 'devops.log'),
-            'maxBytes': 1024*1024*10,  # 10MB
-            'backupCount': 5,
-            'formatter': 'devops_formatter',
-        },
-        'devops_console': {
-            'level': 'INFO',
-            'class': 'logging.StreamHandler',
-            'formatter': 'devops_formatter',
-        },
-    },
-    'loggers': {
-        'devops': {
-            'handlers': ['devops_file', 'devops_console'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-        'devops.services': {
-            'handlers': ['devops_file'],
-            'level': 'DEBUG',
-            'propagate': False,
-        },
-    },
-}
-
-# اعمال تنظیمات لاگ
-import logging.config
-logging.config.dictConfig(DEVOPS_LOGGER_CONFIG)

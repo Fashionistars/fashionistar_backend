@@ -1,7 +1,7 @@
+# apps/search/__init__.py
 """
-اپلیکیشن جستجو (search)
+Search app.
 Search Django app for hybrid search functionality.
 """
 
-default_app_config = "search.apps.SearchConfig"
-
+default_app_config = "apps.search.apps.SearchConfig"

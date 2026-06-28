@@ -1,10 +1,11 @@
+# apps/scheduler/urls.py
 """
-URL patterns برای اپ scheduler
+URL patterns for the scheduler app (DRF compatibility and write operations).
 """
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
-from .views import (
+from .apis.sync.scheduler_views import (
     TaskDefinitionViewSet,
     ScheduledTaskViewSet,
     TaskExecutionViewSet,
@@ -14,7 +15,6 @@ from .views import (
 
 app_name = 'scheduler'
 
-# ایجاد router
 router = DefaultRouter()
 router.register(r'definitions', TaskDefinitionViewSet, basename='taskdefinition')
 router.register(r'scheduled', ScheduledTaskViewSet, basename='scheduledtask')

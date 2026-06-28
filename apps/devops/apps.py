@@ -1,19 +1,20 @@
+# apps/devops/apps.py
 """
-تنظیمات اپلیکیشن DevOps برای مدیریت زیرساخت و deployment
+AppConfig configuration for the devops app.
 """
 from django.apps import AppConfig
 
 
 class DevopsConfig(AppConfig):
-    """پیکربندی اپلیکیشن DevOps"""
+    """Configuration class for the devops app."""
     
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'devops'
-    verbose_name = 'مدیریت DevOps'
+    name = 'apps.devops'
+    verbose_name = 'DevOps Management'
     
     def ready(self):
-        """تنظیمات اولیه پس از بارگذاری اپلیکیشن"""
+        """Initial settings after app load."""
         try:
-            import devops.signals
+            import apps.devops.signals  # noqa: F401
         except ImportError:
             pass

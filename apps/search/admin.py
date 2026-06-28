@@ -1,6 +1,6 @@
+# apps/search/admin.py
 """
-پیکربندی ادمین برای اپ جستجو
-Admin configuration for search app.
+Admin configuration for the search app.
 """
 
 from django.contrib import admin
@@ -94,4 +94,3 @@ class SearchResultAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         })
     )
-

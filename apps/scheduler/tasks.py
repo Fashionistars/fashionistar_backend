@@ -1,7 +1,9 @@
+# apps/scheduler/tasks.py
 """
-Celery tasks برای اپ scheduler
-مدیریت و اجرای وظایف زمان‌بندی شده
+Celery tasks for scheduler app.
+Manages and executes scheduled tasks.
 """
+
 from celery import shared_task, Task
 from django.utils import timezone
 from typing import Dict, Any
@@ -23,14 +25,14 @@ logger = logging.getLogger(__name__)
 
 class CallbackTask(Task):
     """
-    کلاس پایه برای تسک‌ها با قابلیت callback
+    Base class for tasks with callback capability.
     """
     def on_success(self, retval, task_id, args, kwargs):
-        """هنگام اتمام موفق"""
+        """On successful completion."""
         update_task_execution_status(task_id, 'success', result=retval)
     
     def on_failure(self, exc, task_id, args, kwargs, einfo):
-        """هنگام خطا"""
+        """On failure."""
         update_task_execution_status(
             task_id, 
             'failed', 
@@ -39,29 +41,29 @@ class CallbackTask(Task):
         )
     
     def on_retry(self, exc, task_id, args, kwargs, einfo):
-        """هنگام تلاش مجدد"""
+        """On retry."""
         update_task_execution_status(task_id, 'retrying', error_message=str(exc))
 
 
 @shared_task(bind=True, base=CallbackTask, name='scheduler.execute_task')
 def execute_task(self, execution_id: str, task_path: str, params: Dict[str, Any] = None):
     """
-    اجرای یک وظیفه بر اساس مسیر تابع
+    Execute a task based on function path.
     
     Args:
-        execution_id: شناسه رکورد اجرا
-        task_path: مسیر کامل تابع (module.function)
-        params: پارامترهای ورودی تابع
+        execution_id: ID of the execution record
+        task_path: Full path of the function (module.function)
+        params: Input parameters of the function
     
     Returns:
-        نتیجه اجرای تابع
+        Result of the function execution
     """
     if params is None:
         params = {}
     
     execution = None
     try:
-        # بروزرسانی وضعیت به در حال اجرا
+        # Update status to running
         execution = TaskExecution.objects.get(id=execution_id)
         execution.status = 'running'
         execution.started_at = timezone.now()
@@ -69,41 +71,41 @@ def execute_task(self, execution_id: str, task_path: str, params: Dict[str, Any]
         execution.worker_name = self.request.hostname
         execution.save()
         
-        # ثبت لاگ شروع
+        # Log starting
         TaskLog.objects.create(
             execution=execution,
             level='info',
-            message=f'شروع اجرای وظیفه: {task_path}',
+            message=f'Start executing task: {task_path}',
             extra_data={'params': params}
         )
         
-        # import و اجرای تابع
+        # Import and execute function
         module_path, function_name = task_path.rsplit('.', 1)
         module = importlib.import_module(module_path)
         function = getattr(module, function_name)
         
-        # اجرای تابع با پارامترها
+        # Execute function with parameters
         result = function(**params)
         
-        # بروزرسانی وضعیت موفق
+        # Update successful status
         execution.status = 'success'
         execution.completed_at = timezone.now()
         execution.result = result if isinstance(result, (dict, list)) else {'result': str(result)}
         execution.calculate_duration()
         execution.save()
         
-        # بروزرسانی آمار scheduled task
+        # Update stats for scheduled task
         if execution.scheduled_task:
             execution.scheduled_task.success_count += 1
             execution.scheduled_task.total_run_count += 1
             execution.scheduled_task.last_run_at = timezone.now()
             execution.scheduled_task.save()
         
-        # ثبت لاگ موفقیت
+        # Log success
         TaskLog.objects.create(
             execution=execution,
             level='info',
-            message='وظیفه با موفقیت اجرا شد',
+            message='Task executed successfully',
             extra_data={'result': execution.result}
         )
         
@@ -113,10 +115,10 @@ def execute_task(self, execution_id: str, task_path: str, params: Dict[str, Any]
         error_msg = str(e)
         error_traceback = traceback.format_exc()
         
-        logger.error(f"خطا در اجرای وظیفه {task_path}: {error_msg}")
+        logger.error(f"Error in executing task {task_path}: {error_msg}")
         
         if execution:
-            # بروزرسانی وضعیت خطا
+            # Update error status
             execution.status = 'failed'
             execution.completed_at = timezone.now()
             execution.error_message = error_msg
@@ -124,20 +126,20 @@ def execute_task(self, execution_id: str, task_path: str, params: Dict[str, Any]
             execution.calculate_duration()
             execution.save()
             
-            # بروزرسانی آمار scheduled task
+            # Update stats for scheduled task
             if execution.scheduled_task:
                 execution.scheduled_task.failure_count += 1
                 execution.scheduled_task.total_run_count += 1
                 execution.scheduled_task.last_run_at = timezone.now()
                 execution.scheduled_task.save()
                 
-                # ایجاد هشدار برای خطا
+                # Create alert for error
                 TaskAlert.objects.create(
                     scheduled_task=execution.scheduled_task,
                     execution=execution,
                     alert_type='failure',
                     severity='high',
-                    title=f'خطا در اجرای وظیفه {execution.scheduled_task.name}',
+                    title=f'Error in executing task {execution.scheduled_task.name}',
                     message=error_msg,
                     details={
                         'task_path': task_path,
@@ -146,15 +148,15 @@ def execute_task(self, execution_id: str, task_path: str, params: Dict[str, Any]
                     }
                 )
             
-            # ثبت لاگ خطا
+            # Log error
             TaskLog.objects.create(
                 execution=execution,
                 level='error',
-                message=f'خطا در اجرای وظیفه: {error_msg}',
+                message=f'Error in executing task: {error_msg}',
                 extra_data={'traceback': error_traceback}
             )
         
-        # تلاش مجدد در صورت امکان
+        # Retry if possible
         if execution and execution.retry_count < (execution.scheduled_task.max_retries if execution.scheduled_task else 3):
             execution.retry_count += 1
             execution.save()
@@ -168,27 +170,27 @@ def execute_task(self, execution_id: str, task_path: str, params: Dict[str, Any]
 @shared_task(name='scheduler.run_scheduled_task')
 def run_scheduled_task(scheduled_task_id: str):
     """
-    اجرای یک وظیفه زمان‌بندی شده
+    Execute a scheduled task.
     
     Args:
-        scheduled_task_id: شناسه وظیفه زمان‌بندی شده
+        scheduled_task_id: ID of the scheduled task
     """
     try:
         scheduled_task = ScheduledTask.objects.get(id=scheduled_task_id)
         
-        # بررسی وضعیت
+        # Check status
         if scheduled_task.status != 'active':
-            logger.info(f"وظیفه {scheduled_task.name} غیرفعال است")
+            logger.info(f"Task {scheduled_task.name} is inactive")
             return
         
-        # بررسی زمان پایان
+        # Check end time
         if scheduled_task.end_datetime and timezone.now() > scheduled_task.end_datetime:
             scheduled_task.status = 'expired'
             scheduled_task.save()
-            logger.info(f"وظیفه {scheduled_task.name} منقضی شده است")
+            logger.info(f"Task {scheduled_task.name} is expired")
             return
         
-        # ایجاد رکورد اجرا
+        # Create execution record
         execution = TaskExecution.objects.create(
             scheduled_task=scheduled_task,
             task_definition=scheduled_task.task_definition,
@@ -196,7 +198,7 @@ def run_scheduled_task(scheduled_task_id: str):
             params=scheduled_task.params or scheduled_task.task_definition.default_params
         )
         
-        # اجرای وظیفه
+        # Dispatch task
         task = execute_task.apply_async(
             args=[str(execution.id), scheduled_task.task_definition.task_path],
             kwargs={'params': execution.params},
@@ -204,44 +206,44 @@ def run_scheduled_task(scheduled_task_id: str):
             priority=scheduled_task.priority
         )
         
-        # بروزرسانی celery_task_id
+        # Update celery_task_id
         execution.celery_task_id = task.id
         execution.save()
         
-        logger.info(f"وظیفه {scheduled_task.name} برای اجرا ارسال شد: {task.id}")
+        logger.info(f"Task {scheduled_task.name} dispatched for execution: {task.id}")
         
     except ScheduledTask.DoesNotExist:
-        logger.error(f"وظیفه زمان‌بندی شده با شناسه {scheduled_task_id} یافت نشد")
+        logger.error(f"Scheduled task with id {scheduled_task_id} not found")
     except Exception as e:
-        logger.error(f"خطا در اجرای وظیفه زمان‌بندی شده: {str(e)}")
+        logger.error(f"Error in executing scheduled task: {str(e)}")
         raise
 
 
 @shared_task(name='scheduler.cleanup_old_executions')
 def cleanup_old_executions(days: int = 30):
     """
-    پاکسازی سوابق اجرای قدیمی
+    Cleanup old execution histories.
     
     Args:
-        days: تعداد روزهای نگهداری سوابق
+        days: Days to retain histories
     
     Returns:
-        تعداد رکوردهای حذف شده
+        Number of deleted records
     """
     cutoff_date = timezone.now() - timedelta(days=days)
     
-    # حذف لاگ‌های قدیمی
+    # Delete old logs
     deleted_logs = TaskLog.objects.filter(
         created_at__lt=cutoff_date
     ).delete()[0]
     
-    # حذف اجراهای قدیمی
+    # Delete old executions
     deleted_executions = TaskExecution.objects.filter(
         queued_at__lt=cutoff_date,
         status__in=['success', 'failed', 'cancelled']
     ).delete()[0]
     
-    logger.info(f"پاکسازی انجام شد: {deleted_executions} اجرا و {deleted_logs} لاگ حذف شد")
+    logger.info(f"Cleanup completed: {deleted_executions} executions and {deleted_logs} logs deleted")
     
     return {
         'deleted_executions': deleted_executions,
@@ -252,11 +254,11 @@ def cleanup_old_executions(days: int = 30):
 @shared_task(name='scheduler.check_missing_executions')
 def check_missing_executions():
     """
-    بررسی وظایف زمان‌بندی شده که اجرا نشده‌اند
+    Check scheduled tasks that have not run at their expected times.
     """
     threshold = timezone.now() - timedelta(minutes=5)
     
-    # یافتن وظایفی که باید اجرا می‌شدند
+    # Find tasks that should have run
     missing_tasks = ScheduledTask.objects.filter(
         status='active',
         next_run_at__lt=threshold,
@@ -264,20 +266,20 @@ def check_missing_executions():
     )
     
     for task in missing_tasks:
-        # ایجاد هشدار
+        # Create alert
         TaskAlert.objects.create(
             scheduled_task=task,
             alert_type='missing',
             severity='high',
-            title=f'عدم اجرای وظیفه {task.name}',
-            message=f'وظیفه {task.name} در زمان مقرر ({task.next_run_at}) اجرا نشده است',
+            title=f'Missed run for task {task.name}',
+            message=f'Task {task.name} was not executed at the scheduled time ({task.next_run_at})',
             details={
                 'expected_run_at': task.next_run_at.isoformat(),
                 'current_time': timezone.now().isoformat()
             }
         )
         
-        logger.warning(f"وظیفه {task.name} در زمان مقرر اجرا نشده است")
+        logger.warning(f"Task {task.name} was not executed at scheduled time")
     
     return {'missing_tasks': missing_tasks.count()}
 
@@ -285,16 +287,15 @@ def check_missing_executions():
 @shared_task(name='scheduler.monitor_task_performance')
 def monitor_task_performance():
     """
-    پایش عملکرد وظایف و ایجاد هشدار در صورت کاهش کارایی
+    Monitor task performance and generate alert on degradation.
     """
-    # محاسبه میانگین زمان اجرا برای هر task definition
     from django.db.models import Avg, Count
     
     one_day_ago = timezone.now() - timedelta(days=1)
     one_week_ago = timezone.now() - timedelta(days=7)
     
     for task_def in TaskDefinition.objects.filter(is_active=True):
-        # آمار روز گذشته
+        # Stats for last 24 hours
         recent_stats = TaskExecution.objects.filter(
             task_definition=task_def,
             status='success',
@@ -304,7 +305,7 @@ def monitor_task_performance():
             count=Count('id')
         )
         
-        # آمار هفته گذشته
+        # Stats for last week
         weekly_stats = TaskExecution.objects.filter(
             task_definition=task_def,
             status='success',
@@ -318,14 +319,14 @@ def monitor_task_performance():
             recent_avg = recent_stats['avg_duration']
             weekly_avg = weekly_stats['avg_duration']
             
-            # اگر میانگین اخیر 50% بیشتر از میانگین هفتگی باشد
+            # If recent average is 50% higher than weekly average
             if recent_avg > weekly_avg * 1.5:
                 TaskAlert.objects.create(
                     task_definition=task_def,
                     alert_type='performance',
                     severity='medium',
-                    title=f'کاهش کارایی در وظیفه {task_def.name}',
-                    message=f'میانگین زمان اجرا از {weekly_avg:.2f} به {recent_avg:.2f} ثانیه افزایش یافته است',
+                    title=f'Performance degradation in task {task_def.name}',
+                    message=f'Average execution duration increased from {weekly_avg:.2f} to {recent_avg:.2f} seconds',
                     details={
                         'recent_average': recent_avg,
                         'weekly_average': weekly_avg,
@@ -344,14 +345,14 @@ def update_task_execution_status(
     traceback: str = None
 ):
     """
-    بروزرسانی وضعیت اجرای وظیفه
+    Update task execution status.
     
     Args:
-        task_id: شناسه Celery task
-        status: وضعیت جدید
-        result: نتیجه (در صورت موفقیت)
-        error_message: پیام خطا (در صورت خطا)
-        traceback: جزئیات خطا
+        task_id: Celery task ID
+        status: New status
+        result: Result (if success)
+        error_message: Error message (if failed)
+        traceback: Error traceback details
     """
     try:
         execution = TaskExecution.objects.get(celery_task_id=task_id)
@@ -373,20 +374,20 @@ def update_task_execution_status(
         execution.save()
         
     except TaskExecution.DoesNotExist:
-        logger.warning(f"TaskExecution با celery_task_id={task_id} یافت نشد")
+        logger.warning(f"TaskExecution with celery_task_id={task_id} not found")
     except Exception as e:
-        logger.error(f"خطا در بروزرسانی وضعیت task execution: {str(e)}")
+        logger.error(f"Error updating task execution status: {str(e)}")
 
 
 @shared_task(name='scheduler.send_task_alerts')
 def send_task_alerts():
     """
-    ارسال هشدارهای حل نشده به کاربران مربوطه
+    Send unresolved alerts to relevant users.
     """
     from django.contrib.auth import get_user_model
     User = get_user_model()
     
-    # یافتن هشدارهای حل نشده که هنوز اطلاع‌رسانی نشده‌اند
+    # Find unresolved alerts that haven't been notified yet
     unnotified_alerts = TaskAlert.objects.filter(
         is_resolved=False,
         notification_sent_at__isnull=True,
@@ -395,19 +396,18 @@ def send_task_alerts():
     
     for alert in unnotified_alerts:
         try:
-            # یافتن کاربران admin
+            # Find staff users to notify
             admin_users = User.objects.filter(is_staff=True, is_active=True)
             
-            # ارسال نوتیفیکیشن (این باید با notifications app هماهنگ شود)
-            # فعلا فقط لاگ می‌کنیم
-            logger.info(f"ارسال هشدار {alert.title} به {admin_users.count()} کاربر")
+            # Send notification (integration with notifications app if needed)
+            logger.info(f"Sending alert {alert.title} to {admin_users.count()} users")
             
-            # بروزرسانی وضعیت اطلاع‌رسانی
+            # Update notification status
             alert.notification_sent_at = timezone.now()
             alert.notified_users.set(admin_users)
             alert.save()
             
         except Exception as e:
-            logger.error(f"خطا در ارسال هشدار {alert.id}: {str(e)}")
+            logger.error(f"Error sending alert {alert.id}: {str(e)}")
     
     return {'sent_alerts': unnotified_alerts.count()}

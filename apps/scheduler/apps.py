@@ -1,14 +1,17 @@
+# apps/scheduler/apps.py
+"""
+AppConfig configuration for the scheduler app.
+"""
 from django.apps import AppConfig
 
 
 class SchedulerConfig(AppConfig):
+    """Configuration class for the scheduler app."""
+    
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'scheduler'
-    verbose_name = 'برنامه‌ریزی کارها'
+    name = 'apps.scheduler'
+    verbose_name = 'Task Scheduler'
     
     def ready(self):
-        """
-        آماده‌سازی اپ در زمان راه‌اندازی
-        """
-        # Import signal handlers here if needed
+        """Prepare the app when loaded."""
         pass

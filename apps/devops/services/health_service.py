@@ -1,5 +1,6 @@
+# apps/devops/services/health_service.py
 """
-سرویس بررسی سلامت سیستم و مانیتورینگ
+System Health Check and Monitoring Service.
 """
 import requests
 import time
@@ -16,14 +17,14 @@ logger = logging.getLogger(__name__)
 
 
 class HealthService:
-    """سرویس بررسی سلامت سیستم"""
+    """System Health Check Service."""
     
     def __init__(self, environment_name: Optional[str] = None):
         """
-        تنظیم محیط برای health check
+        Set environment for health check.
         
         Args:
-            environment_name: نام محیط (اختیاری)
+            environment_name: Name of the environment (optional)
         """
         self.environment = None
         if environment_name:
@@ -33,10 +34,10 @@ class HealthService:
                     is_active=True
                 )
             except EnvironmentConfig.DoesNotExist:
-                logger.warning(f"محیط {environment_name} یافت نشد")
+                logger.warning(f"Environment {environment_name} not found")
     
     def check_database(self) -> Dict[str, Any]:
-        """بررسی سلامت پایگاه داده"""
+        """Check database health."""
         start_time = time.time()
         
         try:
@@ -46,7 +47,7 @@ class HealthService:
             
             response_time = (time.time() - start_time) * 1000
             
-            # دریافت اطلاعات اضافی پایگاه داده
+            # Get additional database stats
             with connection.cursor() as cursor:
                 cursor.execute("SHOW STATUS LIKE 'Threads_connected'")
                 connections = cursor.fetchone()
@@ -63,7 +64,7 @@ class HealthService:
             }
             
         except Exception as e:
-            logger.error(f"خطا در بررسی پایگاه داده: {str(e)}")
+            logger.error(f"Error checking database: {str(e)}")
             return {
                 'status': 'critical',
                 'error': str(e),
@@ -71,11 +72,11 @@ class HealthService:
             }
     
     def check_cache(self) -> Dict[str, Any]:
-        """بررسی سلامت کش (Redis)"""
+        """Check cache (Redis) health."""
         start_time = time.time()
         
         try:
-            # تست ساده کش
+            # Simple cache test
             test_key = f'health_check_{int(time.time())}'
             cache.set(test_key, 'OK', 10)
             value = cache.get(test_key)
@@ -84,7 +85,7 @@ class HealthService:
             response_time = (time.time() - start_time) * 1000
             
             if value == 'OK':
-                # دریافت اطلاعات Redis
+                # Get Redis info
                 from django_redis import get_redis_connection
                 redis_conn = get_redis_connection("default")
                 info = redis_conn.info()
@@ -100,12 +101,12 @@ class HealthService:
             else:
                 return {
                     'status': 'critical',
-                    'error': 'تست کش ناموفق بود',
+                    'error': 'Cache test failed',
                     'response_time': round(response_time, 2)
                 }
                 
         except Exception as e:
-            logger.error(f"خطا در بررسی کش: {str(e)}")
+            logger.error(f"Error checking cache: {str(e)}")
             return {
                 'status': 'critical',
                 'error': str(e),
@@ -113,7 +114,7 @@ class HealthService:
             }
     
     def check_disk_space(self) -> Dict[str, Any]:
-        """بررسی فضای دیسک"""
+        """Check disk space usage."""
         try:
             disk_usage = psutil.disk_usage('/')
             total = disk_usage.total
@@ -121,7 +122,7 @@ class HealthService:
             free = disk_usage.free
             percent = (used / total) * 100
             
-            # تعیین وضعیت بر اساس درصد استفاده
+            # Determine status based on usage percentage
             if percent < 80:
                 status = 'healthy'
             elif percent < 90:
@@ -138,19 +139,19 @@ class HealthService:
             }
             
         except Exception as e:
-            logger.error(f"خطا در بررسی فضای دیسک: {str(e)}")
+            logger.error(f"Error checking disk space: {str(e)}")
             return {
                 'status': 'unknown',
                 'error': str(e)
             }
     
     def check_memory(self) -> Dict[str, Any]:
-        """بررسی حافظه سیستم"""
+        """Check system memory usage."""
         try:
             memory = psutil.virtual_memory()
             percent = memory.percent
             
-            # تعیین وضعیت بر اساس درصد استفاده
+            # Determine status based on usage percentage
             if percent < 80:
                 status = 'healthy'
             elif percent < 90:
@@ -167,21 +168,21 @@ class HealthService:
             }
             
         except Exception as e:
-            logger.error(f"خطا در بررسی حافظه: {str(e)}")
+            logger.error(f"Error checking memory: {str(e)}")
             return {
                 'status': 'unknown',
                 'error': str(e)
             }
     
     def check_cpu(self) -> Dict[str, Any]:
-        """بررسی CPU سیستم"""
+        """Check system CPU usage."""
         try:
-            # دریافت درصد CPU در 1 ثانیه
+            # Get CPU percent over 1 second
             cpu_percent = psutil.cpu_percent(interval=1)
             cpu_count = psutil.cpu_count()
             load_avg = psutil.getloadavg() if hasattr(psutil, 'getloadavg') else None
             
-            # تعیین وضعیت بر اساس بار CPU
+            # Determine status based on CPU load
             if cpu_percent < 70:
                 status = 'healthy'
             elif cpu_percent < 85:
@@ -201,21 +202,21 @@ class HealthService:
             return result
             
         except Exception as e:
-            logger.error(f"خطا در بررسی CPU: {str(e)}")
+            logger.error(f"Error checking CPU: {str(e)}")
             return {
                 'status': 'unknown',
                 'error': str(e)
             }
     
     def check_external_service(self, url: str, timeout: int = 10) -> Dict[str, Any]:
-        """بررسی سلامت سرویس خارجی"""
+        """Check external service health."""
         start_time = time.time()
         
         try:
             response = requests.get(url, timeout=timeout)
             response_time = (time.time() - start_time) * 1000
             
-            # تعیین وضعیت بر اساس کد پاسخ و زمان
+            # Determine status based on response code and duration
             if response.status_code == 200:
                 if response_time < 1000:
                     status = 'healthy'
@@ -241,7 +242,7 @@ class HealthService:
                 'url': url,
             }
         except Exception as e:
-            logger.error(f"خطا در بررسی سرویس {url}: {str(e)}")
+            logger.error(f"Error checking service {url}: {str(e)}")
             return {
                 'status': 'critical',
                 'error': str(e),
@@ -250,7 +251,7 @@ class HealthService:
             }
     
     def comprehensive_health_check(self) -> Dict[str, Any]:
-        """بررسی جامع سلامت سیستم"""
+        """Comprehensive system health check."""
         start_time = time.time()
         
         results = {
@@ -259,20 +260,20 @@ class HealthService:
             'services': {}
         }
         
-        # بررسی پایگاه داده
+        # Check database
         db_result = self.check_database()
         results['services']['database'] = db_result
         
-        # بررسی کش
+        # Check cache
         cache_result = self.check_cache()
         results['services']['cache'] = cache_result
         
-        # بررسی منابع سیستم
+        # Check system resources
         results['services']['disk'] = self.check_disk_space()
         results['services']['memory'] = self.check_memory()
         results['services']['cpu'] = self.check_cpu()
         
-        # بررسی سرویس‌های مانیتور شده
+        # Check monitored services
         if self.environment:
             monitored_services = ServiceMonitoring.objects.filter(
                 environment=self.environment,
@@ -286,10 +287,10 @@ class HealthService:
                 )
                 results['services'][service.service_name] = service_result
                 
-                # ذخیره نتیجه در پایگاه داده
+                # Save result to database
                 self._save_health_check_result(service, service_result)
         
-        # تعیین وضعیت کلی
+        # Determine overall status
         critical_count = sum(1 for s in results['services'].values() 
                            if s.get('status') == 'critical')
         warning_count = sum(1 for s in results['services'].values() 
@@ -300,13 +301,13 @@ class HealthService:
         elif warning_count > 0:
             results['overall_status'] = 'warning'
         
-        # زمان کل بررسی
+        # Total check duration
         results['total_check_time'] = round((time.time() - start_time) * 1000, 2)
         
         return results
     
     def _save_health_check_result(self, service: ServiceMonitoring, result: Dict[str, Any]):
-        """ذخیره نتیجه health check در پایگاه داده"""
+        """Save health check result to database."""
         try:
             HealthCheck.objects.create(
                 environment=service.environment,
@@ -319,12 +320,12 @@ class HealthService:
                 error_message=result.get('error', '')
             )
         except Exception as e:
-            logger.error(f"خطا در ذخیره نتیجه health check: {str(e)}")
+            logger.error(f"Error saving health check result: {str(e)}")
     
     def get_service_uptime(self, service_name: str, hours: int = 24) -> Dict[str, Any]:
-        """محاسبه uptime سرویس در بازه زمانی مشخص"""
+        """Calculate service uptime over specified hours."""
         if not self.environment:
-            return {'error': 'محیط مشخص نشده'}
+            return {'error': 'Environment not specified'}
         
         try:
             from_time = timezone.now() - timezone.timedelta(hours=hours)
@@ -347,7 +348,7 @@ class HealthService:
             healthy_checks = checks.filter(status='healthy').count()
             uptime_percent = (healthy_checks / total_checks) * 100
             
-            # آخرین وضعیت
+            # Latest status
             latest_check = checks.last()
             
             return {
@@ -361,31 +362,32 @@ class HealthService:
             }
             
         except Exception as e:
-            logger.error(f"خطا در محاسبه uptime: {str(e)}")
+            logger.error(f"Error calculating uptime: {str(e)}")
             return {'error': str(e)}
     
     def get_performance_metrics(self, hours: int = 24) -> Dict[str, Any]:
-        """دریافت متریک‌های عملکرد سیستم"""
+        """Retrieve system performance metrics."""
         try:
-            # متریک‌های فعلی سیستم
+            # Current system metrics
             current_metrics = {
                 'cpu': self.check_cpu(),
                 'memory': self.check_memory(),
                 'disk': self.check_disk_space(),
             }
             
-            # اگر محیط مشخص شده، متریک‌های سرویس‌ها را نیز اضافه کن
+            # If environment is specified, append services performance metrics
             if self.environment:
                 from_time = timezone.now() - timezone.timedelta(hours=hours)
                 
-                # میانگین زمان پاسخ سرویس‌ها
+                # Average response time of services
+                from django.db.models import Avg, Count
                 avg_response_times = HealthCheck.objects.filter(
                     environment=self.environment,
                     checked_at__gte=from_time,
                     response_time__isnull=False
                 ).values('service_name').annotate(
-                    avg_response_time=models.Avg('response_time'),
-                    check_count=models.Count('id')
+                    avg_response_time=Avg('response_time'),
+                    check_count=Count('id')
                 )
                 
                 current_metrics['services_performance'] = list(avg_response_times)
@@ -397,5 +399,5 @@ class HealthService:
             }
             
         except Exception as e:
-            logger.error(f"خطا در دریافت متریک‌های عملکرد: {str(e)}")
+            logger.error(f"Error retrieving performance metrics: {str(e)}")
             return {'error': str(e)}

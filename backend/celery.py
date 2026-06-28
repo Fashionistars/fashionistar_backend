@@ -145,6 +145,38 @@ app.conf.task_queues = (
         routing_key="bulk",
         queue_arguments={"x-max-priority": 2},
     ),
+    # ── Scheduler queues ──────────────────────────────────────────────────────
+    Queue(
+        "scheduler",
+        Exchange("scheduler", type="direct"),
+        routing_key="scheduler",
+        queue_arguments={"x-max-priority": 5},
+    ),
+    Queue(
+        "maintenance",
+        Exchange("maintenance", type="direct"),
+        routing_key="maintenance",
+        queue_arguments={"x-max-priority": 3},
+    ),
+    Queue(
+        "monitoring",
+        Exchange("monitoring", type="direct"),
+        routing_key="monitoring",
+        queue_arguments={"x-max-priority": 3},
+    ),
+    Queue(
+        "notifications",
+        Exchange("notifications", type="direct"),
+        routing_key="notifications",
+        queue_arguments={"x-max-priority": 10},
+    ),
+    # ── DevOps queues ─────────────────────────────────────────────────────────
+    Queue(
+        "devops",
+        Exchange("devops", type="direct"),
+        routing_key="devops",
+        queue_arguments={"x-max-priority": 3},
+    ),
     # ── Default catch-all ─────────────────────────────────────────────────────
     Queue(
         "default",
@@ -191,6 +223,21 @@ app.conf.task_routes = {
     "apps.common.tasks.send_account_status_email": {"queue": "emails"},
     "apps.common.tasks.send_account_status_sms":   {"queue": "emails"},
 
+    # ── Scheduler App tasks ───────────────────────────────────────────────────
+    "scheduler.execute_task": {"queue": "scheduler"},
+    "scheduler.run_scheduled_task": {"queue": "scheduler"},
+    "scheduler.cleanup_old_executions": {"queue": "maintenance"},
+    "scheduler.check_missing_executions": {"queue": "monitoring"},
+    "scheduler.monitor_task_performance": {"queue": "monitoring"},
+    "scheduler.send_task_alerts": {"queue": "notifications"},
+
+    # ── DevOps App tasks ──────────────────────────────────────────────────────
+    "apps.devops.tasks.run_health_checks": {"queue": "devops"},
+    "apps.devops.tasks.cleanup_old_health_checks": {"queue": "devops"},
+    "apps.devops.tasks.generate_uptime_report": {"queue": "devops"},
+    "apps.devops.tasks.check_deployment_status": {"queue": "devops"},
+    "apps.devops.tasks.backup_deployment_logs": {"queue": "devops"},
+
     # ── Payment tasks (future — pre-wire so no code change needed) ────────────
     # "process_payment_webhook": {"queue": "payments"},
     # "send_payment_receipt":    {"queue": "emails"},
@@ -221,6 +268,35 @@ app.conf.beat_schedule = {
         "task":     "audit_log_cleanup",
         "schedule": crontab(hour=2, minute=0),
         "options":  {"queue": "audit"},
+    },
+
+    # ── Scheduler App Periodic Tasks ──────────────────────────────────────────
+    "cleanup-old-executions": {
+        "task": "scheduler.cleanup_old_executions",
+        "schedule": crontab(hour=2, minute=0),
+        "options": {"queue": "maintenance"},
+    },
+    "check-missing-executions": {
+        "task": "scheduler.check_missing_executions",
+        "schedule": crontab(minute="*/5"),
+        "options": {"queue": "monitoring"},
+    },
+    "monitor-task-performance": {
+        "task": "scheduler.monitor_task_performance",
+        "schedule": crontab(minute=0),
+        "options": {"queue": "monitoring"},
+    },
+    "send-task-alerts": {
+        "task": "scheduler.send_task_alerts",
+        "schedule": crontab(minute="*/10"),
+        "options": {"queue": "notifications"},
+    },
+
+    # ── DevOps App Periodic Tasks ─────────────────────────────────────────────
+    "run-devops-health-checks": {
+        "task": "apps.devops.tasks.run_health_checks",
+        "schedule": crontab(minute="*/5"),
+        "options": {"queue": "devops"},
     },
 
     # ── Future periodic tasks (pre-register; activate by uncommenting) ────────

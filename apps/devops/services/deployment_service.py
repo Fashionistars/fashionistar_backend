@@ -1,5 +1,6 @@
+# apps/devops/services/deployment_service.py
 """
-سرویس مدیریت deployment و CI/CD
+CI/CD and Deployment Management Service.
 """
 import subprocess
 import git
@@ -15,14 +16,14 @@ logger = logging.getLogger(__name__)
 
 
 class DeploymentService:
-    """سرویس مدیریت deployment"""
+    """Deployment management service."""
     
     def __init__(self, environment_name: str):
         """
-        تنظیم محیط deployment
+        Configure deployment environment.
         
         Args:
-            environment_name: نام محیط (development, staging, production)
+            environment_name: Environment name (development, staging, production)
         """
         try:
             self.environment = EnvironmentConfig.objects.get(
@@ -30,12 +31,12 @@ class DeploymentService:
                 is_active=True
             )
         except EnvironmentConfig.DoesNotExist:
-            raise ValueError(f"محیط {environment_name} یافت نشد یا غیرفعال است")
+            raise ValueError(f"Environment {environment_name} not found or is inactive")
         
         self.project_dir = getattr(settings, 'BASE_DIR', '/app')
         self.compose_service = DockerComposeService()
         
-        # تنظیم compose file بر اساس محیط
+        # Set compose file based on environment
         if environment_name == 'production':
             self.compose_service.compose_file = 'docker-compose.prod.yml'
         elif environment_name == 'staging':
@@ -53,21 +54,21 @@ class DeploymentService:
         restart_services: bool = True
     ) -> DeploymentHistory:
         """
-        اجرای deployment کامل
+        Execute full deployment.
         
         Args:
-            version: نسخه برای deployment
-            branch: شاخه git
-            user: کاربر اجراکننده
-            build_images: آیا image ها ساخته شوند
-            run_migrations: آیا migration ها اجرا شوند
-            restart_services: آیا سرویس‌ها راه‌اندازی مجدد شوند
+            version: Version for deployment
+            branch: Git branch name
+            user: Triggering user
+            build_images: Build images?
+            run_migrations: Run migrations?
+            restart_services: Restart services?
             
         Returns:
-            DeploymentHistory: رکورد تاریخچه deployment
+            DeploymentHistory: Deployment execution record
         """
         
-        # ایجاد رکورد deployment
+        # Create deployment record
         deployment = DeploymentHistory.objects.create(
             environment=self.environment,
             version=version,
@@ -82,56 +83,56 @@ class DeploymentService:
             deployment.status = 'running'
             deployment.save()
             
-            logs.append(f"[{timezone.now()}] شروع deployment نسخه {version}")
+            logs.append(f"[{timezone.now()}] Starting deployment of version {version}")
             
-            # 1. دریافت آخرین کد
+            # 1. Pull latest code
             commit_hash = self._pull_latest_code(branch)
             deployment.commit_hash = commit_hash
             deployment.save()
-            logs.append(f"[{timezone.now()}] کد آپدیت شد - Commit: {commit_hash}")
+            logs.append(f"[{timezone.now()}] Code updated - Commit: {commit_hash}")
             
-            # 2. ساخت image ها (اختیاری)
+            # 2. Build images (optional)
             if build_images:
                 success, message = self._build_images()
                 logs.append(f"[{timezone.now()}] Build Images: {message}")
                 if not success:
-                    raise Exception(f"خطا در ساخت image ها: {message}")
+                    raise Exception(f"Error building images: {message}")
             
-            # 3. اجرای migration ها (اختیاری)
+            # 3. Run migrations (optional)
             if run_migrations:
                 success, message = self._run_migrations()
                 logs.append(f"[{timezone.now()}] Migrations: {message}")
                 if not success:
-                    raise Exception(f"خطا در اجرای migration ها: {message}")
+                    raise Exception(f"Error executing migrations: {message}")
             
-            # 4. جمع‌آوری فایل‌های static
+            # 4. Collect static files
             success, message = self._collect_static()
             logs.append(f"[{timezone.now()}] Collect Static: {message}")
             if not success:
-                raise Exception(f"خطا در جمع‌آوری static files: {message}")
+                raise Exception(f"Error collecting static files: {message}")
             
-            # 5. راه‌اندازی مجدد سرویس‌ها (اختیاری)
+            # 5. Restart services (optional)
             if restart_services:
                 success, message = self._restart_services()
                 logs.append(f"[{timezone.now()}] Restart Services: {message}")
                 if not success:
-                    raise Exception(f"خطا در راه‌اندازی مجدد سرویس‌ها: {message}")
+                    raise Exception(f"Error restarting services: {message}")
             
-            # 6. بررسی سلامت سرویس‌ها
+            # 6. Check service health
             health_check_result = self._health_check()
             logs.append(f"[{timezone.now()}] Health Check: {health_check_result}")
             
-            # تکمیل موفق
+            # Mark complete
             deployment.status = 'success'
             deployment.completed_at = timezone.now()
-            logs.append(f"[{timezone.now()}] Deployment با موفقیت تکمیل شد")
+            logs.append(f"[{timezone.now()}] Deployment completed successfully")
             
         except Exception as e:
-            # خطا در deployment
+            # Mark failed
             deployment.status = 'failed'
             deployment.completed_at = timezone.now()
-            logs.append(f"[{timezone.now()}] خطا در deployment: {str(e)}")
-            logger.error(f"خطا در deployment: {str(e)}")
+            logs.append(f"[{timezone.now()}] Error during deployment: {str(e)}")
+            logger.error(f"Error during deployment: {str(e)}")
         
         finally:
             deployment.deployment_logs = '\n'.join(logs)
@@ -141,14 +142,14 @@ class DeploymentService:
     
     def rollback(self, target_deployment_id: str, user=None) -> DeploymentHistory:
         """
-        بازگشت به deployment قبلی
+        Rollback to a previous successful deployment.
         
         Args:
-            target_deployment_id: ID deployment مقصد
-            user: کاربر اجراکننده
+            target_deployment_id: ID of the target deployment
+            user: Triggering user
             
         Returns:
-            DeploymentHistory: رکورد rollback
+            DeploymentHistory: Rollback execution record
         """
         try:
             target_deployment = DeploymentHistory.objects.get(
@@ -157,9 +158,9 @@ class DeploymentService:
                 status='success'
             )
         except DeploymentHistory.DoesNotExist:
-            raise ValueError("Deployment مقصد یافت نشد یا موفق نبوده")
+            raise ValueError("Target deployment not found or was not successful")
         
-        # ایجاد رکورد rollback
+        # Create rollback record
         rollback_deployment = DeploymentHistory.objects.create(
             environment=self.environment,
             version=f"rollback-{target_deployment.version}",
@@ -176,40 +177,40 @@ class DeploymentService:
             rollback_deployment.status = 'running'
             rollback_deployment.save()
             
-            logs.append(f"[{timezone.now()}] شروع rollback به نسخه {target_deployment.version}")
+            logs.append(f"[{timezone.now()}] Starting rollback to version {target_deployment.version}")
             
-            # بازگشت به commit مورد نظر
+            # Checkout target commit
             success, message = self._checkout_commit(target_deployment.commit_hash)
             logs.append(f"[{timezone.now()}] Checkout Commit: {message}")
             if not success:
-                raise Exception(f"خطا در checkout: {message}")
+                raise Exception(f"Error during checkout: {message}")
             
-            # ساخت مجدد image ها
+            # Rebuild images
             success, message = self._build_images()
             logs.append(f"[{timezone.now()}] Build Images: {message}")
             if not success:
-                raise Exception(f"خطا در ساخت image ها: {message}")
+                raise Exception(f"Error building images: {message}")
             
-            # راه‌اندازی مجدد سرویس‌ها
+            # Restart services
             success, message = self._restart_services()
             logs.append(f"[{timezone.now()}] Restart Services: {message}")
             if not success:
-                raise Exception(f"خطا در راه‌اندازی مجدد: {message}")
+                raise Exception(f"Error during restart: {message}")
             
-            # بررسی سلامت
+            # Check service health
             health_check_result = self._health_check()
             logs.append(f"[{timezone.now()}] Health Check: {health_check_result}")
             
-            # تکمیل موفق
+            # Mark complete
             rollback_deployment.status = 'success'
             rollback_deployment.completed_at = timezone.now()
-            logs.append(f"[{timezone.now()}] Rollback با موفقیت تکمیل شد")
+            logs.append(f"[{timezone.now()}] Rollback completed successfully")
             
         except Exception as e:
             rollback_deployment.status = 'failed'
             rollback_deployment.completed_at = timezone.now()
-            logs.append(f"[{timezone.now()}] خطا در rollback: {str(e)}")
-            logger.error(f"خطا در rollback: {str(e)}")
+            logs.append(f"[{timezone.now()}] Error during rollback: {str(e)}")
+            logger.error(f"Error during rollback: {str(e)}")
         
         finally:
             rollback_deployment.deployment_logs = '\n'.join(logs)
@@ -218,7 +219,7 @@ class DeploymentService:
         return rollback_deployment
     
     def _pull_latest_code(self, branch: str) -> str:
-        """دریافت آخرین کد از git"""
+        """Pull latest code from git."""
         try:
             repo = git.Repo(self.project_dir)
             
@@ -234,36 +235,36 @@ class DeploymentService:
             # Get current commit hash
             commit_hash = repo.head.commit.hexsha
             
-            logger.info(f"کد آپدیت شد - Branch: {branch}, Commit: {commit_hash}")
+            logger.info(f"Code updated - Branch: {branch}, Commit: {commit_hash}")
             return commit_hash
             
         except Exception as e:
-            logger.error(f"خطا در pull کردن کد: {str(e)}")
-            raise Exception(f"خطا در دریافت کد: {str(e)}")
+            logger.error(f"Error pulling code: {str(e)}")
+            raise Exception(f"Error retrieving code: {str(e)}")
     
     def _checkout_commit(self, commit_hash: str) -> Tuple[bool, str]:
-        """رفتن به commit خاص"""
+        """Checkout to specific commit."""
         try:
             repo = git.Repo(self.project_dir)
             repo.git.checkout(commit_hash)
             
-            logger.info(f"Checkout به commit {commit_hash} انجام شد")
-            return True, f"Checkout به commit {commit_hash} موفق بود"
+            logger.info(f"Checkout to commit {commit_hash} completed")
+            return True, f"Checkout to commit {commit_hash} successful"
             
         except Exception as e:
-            logger.error(f"خطا در checkout به commit {commit_hash}: {str(e)}")
+            logger.error(f"Error during checkout to commit {commit_hash}: {str(e)}")
             return False, str(e)
     
     def _build_images(self) -> Tuple[bool, str]:
-        """ساخت Docker images"""
+        """Build Docker images."""
         try:
             return self.compose_service.build_services(no_cache=False)
         except Exception as e:
-            logger.error(f"خطا در ساخت images: {str(e)}")
+            logger.error(f"Error building images: {str(e)}")
             return False, str(e)
     
     def _run_migrations(self) -> Tuple[bool, str]:
-        """اجرای Django migrations"""
+        """Run Django migrations in Docker container."""
         try:
             result = subprocess.run(
                 ['docker-compose', '-f', self.compose_service.compose_file, 
@@ -275,20 +276,20 @@ class DeploymentService:
             )
             
             if result.returncode == 0:
-                logger.info("Migration ها با موفقیت اجرا شدند")
-                return True, "Migration ها با موفقیت اجرا شدند"
+                logger.info("Migrations completed successfully")
+                return True, "Migrations completed successfully"
             else:
-                logger.error(f"خطا در اجرای migration ها: {result.stderr}")
+                logger.error(f"Error executing migrations: {result.stderr}")
                 return False, result.stderr
                 
         except subprocess.TimeoutExpired:
-            return False, "Timeout در اجرای migration ها"
+            return False, "Timeout executing migrations"
         except Exception as e:
-            logger.error(f"خطا در اجرای migration ها: {str(e)}")
+            logger.error(f"Error executing migrations: {str(e)}")
             return False, str(e)
     
     def _collect_static(self) -> Tuple[bool, str]:
-        """جمع‌آوری static files"""
+        """Collect static files in Docker container."""
         try:
             result = subprocess.run(
                 ['docker-compose', '-f', self.compose_service.compose_file,
@@ -300,28 +301,28 @@ class DeploymentService:
             )
             
             if result.returncode == 0:
-                logger.info("Static files با موفقیت جمع‌آوری شدند")
-                return True, "Static files با موفقیت جمع‌آوری شدند"
+                logger.info("Static files collected successfully")
+                return True, "Static files collected successfully"
             else:
-                logger.error(f"خطا در جمع‌آوری static files: {result.stderr}")
+                logger.error(f"Error collecting static files: {result.stderr}")
                 return False, result.stderr
                 
         except subprocess.TimeoutExpired:
-            return False, "Timeout در جمع‌آوری static files"
+            return False, "Timeout collecting static files"
         except Exception as e:
-            logger.error(f"خطا در جمع‌آوری static files: {str(e)}")
+            logger.error(f"Error collecting static files: {str(e)}")
             return False, str(e)
     
     def _restart_services(self) -> Tuple[bool, str]:
-        """راه‌اندازی مجدد سرویس‌ها"""
+        """Restart Docker services."""
         try:
             return self.compose_service.restart_services()
         except Exception as e:
-            logger.error(f"خطا در راه‌اندازی مجدد سرویس‌ها: {str(e)}")
+            logger.error(f"Error restarting services: {str(e)}")
             return False, str(e)
     
     def _health_check(self) -> str:
-        """بررسی سلامت سرویس‌ها پس از deployment"""
+        """Check service health after deployment."""
         try:
             services_status = self.compose_service.get_services_status()
             
@@ -330,31 +331,31 @@ class DeploymentService:
                 total_count = services_status['total_services']
                 
                 if running_count == total_count:
-                    return f"تمام سرویس‌ها ({total_count}) سالم هستند"
+                    return f"All services ({total_count}) are healthy"
                 else:
-                    return f"تنها {running_count} از {total_count} سرویس در حال اجرا هستند"
+                    return f"Only {running_count} out of {total_count} services are running"
             else:
-                return f"خطا در بررسی سلامت: {services_status.get('error', 'نامشخص')}"
+                return f"Health check error: {services_status.get('error', 'unknown')}"
                 
         except Exception as e:
-            logger.error(f"خطا در health check: {str(e)}")
-            return f"خطا در بررسی سلامت: {str(e)}"
+            logger.error(f"Error during health check: {str(e)}")
+            return f"Health check error: {str(e)}"
     
     def get_deployment_history(self, limit: int = 10) -> List[DeploymentHistory]:
-        """دریافت تاریخچه deployment ها"""
+        """Retrieve deployment history."""
         return DeploymentHistory.objects.filter(
             environment=self.environment
         ).order_by('-started_at')[:limit]
     
     def get_latest_successful_deployment(self) -> Optional[DeploymentHistory]:
-        """دریافت آخرین deployment موفق"""
+        """Retrieve latest successful deployment."""
         return DeploymentHistory.objects.filter(
             environment=self.environment,
             status='success'
         ).order_by('-completed_at').first()
     
     def cancel_deployment(self, deployment_id: str) -> Tuple[bool, str]:
-        """لغو deployment در حال اجرا"""
+        """Cancel running deployment execution."""
         try:
             deployment = DeploymentHistory.objects.get(
                 id=deployment_id,
@@ -364,14 +365,14 @@ class DeploymentService:
             
             deployment.status = 'cancelled'
             deployment.completed_at = timezone.now()
-            deployment.deployment_logs += f"\n[{timezone.now()}] Deployment لغو شد"
+            deployment.deployment_logs += f"\n[{timezone.now()}] Deployment cancelled"
             deployment.save()
             
-            logger.info(f"Deployment {deployment_id} لغو شد")
-            return True, f"Deployment {deployment_id} لغو شد"
+            logger.info(f"Deployment {deployment_id} cancelled")
+            return True, f"Deployment {deployment_id} cancelled"
             
         except DeploymentHistory.DoesNotExist:
-            return False, "Deployment یافت نشد یا قابل لغو نیست"
+            return False, "Deployment not found or is not cancellable"
         except Exception as e:
-            logger.error(f"خطا در لغو deployment: {str(e)}")
+            logger.error(f"Error cancelling deployment: {str(e)}")
             return False, str(e)

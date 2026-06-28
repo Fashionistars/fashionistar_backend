@@ -264,3 +264,30 @@ try:
     logger.info("✅ NinjaAPI: vendor custom-orders router registered at /api/v1/ninja/vendor/custom-orders/")
 except Exception as exc:  # pragma: no cover
     logger.warning("ℹ️ NinjaAPI: vendor custom-orders router FAILED to register: %s", exc)
+
+
+# Search domain: /api/v1/ninja/search/
+try:
+    from apps.search.apis.async_.search_views import router as search_router
+    ninja_api.add_router("/search/", search_router)
+    logger.info("✅ NinjaAPI: search router registered at /api/v1/ninja/search/")
+except Exception as exc:  # pragma: no cover
+    logger.warning("ℹ️ NinjaAPI: search router FAILED to register: %s", exc)
+
+
+# Scheduler domain: /api/v1/ninja/scheduler/
+try:
+    from apps.scheduler.apis.async_.scheduler_views import router as scheduler_router
+    ninja_api.add_router("/scheduler/", scheduler_router)
+    logger.info("✅ NinjaAPI: scheduler router registered at /api/v1/ninja/scheduler/")
+except Exception as exc:  # pragma: no cover
+    logger.warning("ℹ️ NinjaAPI: scheduler router FAILED to register: %s", exc)
+
+
+# DevOps domain: /api/v1/ninja/devops/
+try:
+    from apps.devops.apis.async_.devops_views import router as devops_router
+    ninja_api.add_router("/devops/", devops_router)
+    logger.info("✅ NinjaAPI: devops router registered at /api/v1/ninja/devops/")
+except Exception as exc:  # pragma: no cover
+    logger.warning("ℹ️ NinjaAPI: devops router FAILED to register: %s", exc)

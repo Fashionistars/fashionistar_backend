@@ -189,6 +189,9 @@ INSTALLED_APPS = [
         "apps.support",        # Phase 5 (P2): Customer dispute & ticket management domain
         "apps.kyc",            # Phase 6: Identity verification (KYC) domain
         "apps.custom_order",   # Phase 7: Bespoke commission (Custom Order) domain
+        "apps.search",         # Search domain (hybrid FTS + semantic)
+        "apps.scheduler",      # Task scheduler and time-based runner
+        "apps.devops",         # DevOps environment control and health monitoring
         # ── Third Party ──────────────────────────────────────────────────────────
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",  # JWT logout blacklisting
