@@ -84,6 +84,19 @@ SECRET_KEY = env(
     default="django-insecure-b*tuoe%^o+=^35$0fufrm=oamh^(o0tabn39(7ni12(i-oup+4",
 )
 
+# field-encryption-key for encrypted-model-fields in devops models
+import base64
+import hashlib
+raw_encryption_key = env("FIELD_ENCRYPTION_KEY", default=None)
+if not raw_encryption_key:
+    secret = SECRET_KEY.encode("utf-8")
+    salt = b"fashionistar-field-encryption-salt-v1"
+    dk = hashlib.pbkdf2_hmac("sha256", secret, salt, iterations=100_000)
+    FIELD_ENCRYPTION_KEY = base64.urlsafe_b64encode(dk).decode("utf-8")
+else:
+    FIELD_ENCRYPTION_KEY = raw_encryption_key
+
+
 # Base settings must always define DEBUG because this module is imported before
 # environment-specific overrides. Development/production settings can still
 # override DEBUG after import, but base.py needs a safe default for any values

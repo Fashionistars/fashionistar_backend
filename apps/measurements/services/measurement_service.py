@@ -230,3 +230,109 @@ def set_default_profile(*, profile_id, owner) -> MeasurementProfile:
         raise PermissionDenied("Measurement profile not found or access denied.")
     profile.set_as_default()
     return profile
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AI SCAN PROFILE (called by apps.ai.workflows.measurement)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@transaction.atomic
+def create_or_update_ai_scan_profile(
+    *,
+    user_id: int,
+    measurements: dict,
+    quality_score: float = 0.0,
+    source: str = "ai_camera_scan",
+) -> MeasurementProfile:
+    """
+    Create or update the user's AI Camera Scan measurement profile.
+
+    Unlike create_measurement_profile:
+      - Never raises MeasurementProfileLimitError (AI scans replace existing AI profile)
+      - Always sets the new/updated profile as default
+      - Logs 'ai_camera' as the source in the audit event
+
+    Called by:
+        apps.ai.workflows.measurement.MeasurementWorkflow._save_profile()
+    After:
+        Celery task process_body_scan completes successfully.
+
+    Args:
+        user_id:       Owner user PK
+        measurements:  Dict of measurement field values (e.g., bust, waist, hips...)
+        quality_score: AI scan confidence score 0.0-1.0
+        source:        Audit source identifier
+
+    Returns:
+        Created or updated MeasurementProfile
+    """
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+
+    try:
+        owner = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        raise PermissionDenied(f"User {user_id} not found.")
+
+    # Look for existing AI scan profile (named "AI Body Scan")
+    existing_ai_profile = (
+        owner.client_measurement_profiles
+        .filter(name="AI Body Scan")
+        .order_by("-created_at")
+        .first()
+    )
+
+    # Filter measurements to only include valid MeasurementProfile fields
+    VALID_FIELDS = {
+        "bust", "waist", "hips", "shoulder_width", "neck",
+        "inseam", "thigh", "knee", "ankle", "arm_length",
+        "bicep", "wrist", "height", "weight_kg",
+    }
+    clean_data = {
+        k: v for k, v in measurements.items()
+        if k in VALID_FIELDS and v is not None
+    }
+
+    if existing_ai_profile:
+        # Update existing AI scan profile
+        for field, value in clean_data.items():
+            setattr(existing_ai_profile, field, value)
+        existing_ai_profile.save()
+        profile = existing_ai_profile
+        logger.info(
+            "AI scan profile UPDATED: id=%s user=%s quality=%.2f",
+            profile.id, user_id, quality_score,
+        )
+    else:
+        # Create new AI scan profile
+        profile = owner.client_measurement_profiles.create(
+            name="AI Body Scan",
+            **clean_data,
+        )
+        logger.info(
+            "AI scan profile CREATED: id=%s user=%s quality=%.2f",
+            profile.id, user_id, quality_score,
+        )
+
+    # Always make the AI scan profile the default
+    profile.set_as_default()
+
+    # Audit event
+    _profile_id = str(profile.id)
+    _owner = owner
+    _source = source
+    _quality = quality_score
+
+    def _audit_ai_scan():
+        try:
+            from apps.audit_logs.services.measurements import measurements_audit
+            measurements_audit.log_measurement_created(
+                actor=_owner,
+                measurement_id=_profile_id,
+                source=_source,
+            )
+        except Exception:
+            logger.warning("measurements_audit.log_measurement_created (AI) failed silently", exc_info=True)
+
+    transaction.on_commit(_audit_ai_scan)
+    return profile

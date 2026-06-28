@@ -11,14 +11,14 @@ from .models import SearchableContent, SearchQuery, SearchResult
 class SearchableContentAdmin(admin.ModelAdmin):
     """Admin interface for SearchableContent."""
 
-    list_display = ['id', 'title', 'content_type', 'encounter', 'content_preview', 'created_at']
+    list_display = ['id', 'title', 'content_type', 'encounter_id', 'content_preview', 'created_at']
     list_filter = ['content_type', 'created_at']
     search_fields = ['title', 'content']
     ordering = ['-created_at']
 
     fieldsets = (
         (None, {
-            'fields': ('encounter', 'content_type', 'content_id', 'title')
+            'fields': ('encounter_id', 'content_type', 'content_id', 'title')
         }),
         ('Content', {
             'fields': ('content',),

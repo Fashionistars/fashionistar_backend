@@ -25,14 +25,10 @@ class SearchableContent(models.Model):
         ("notes", "Clinical Notes"),
     ]
 
-    # Note: The encounters.Encounter model might not be available in this project.
-    # To avoid a hard dependency, we use a ForeignKey referencing the string name.
-    encounter = models.ForeignKey(
-        "encounters.Encounter",
-        on_delete=models.CASCADE,
-        related_name="search_content",
+    encounter_id = models.IntegerField(
         null=True,
         blank=True,
+        verbose_name="Encounter ID"
     )
     content_type = models.CharField(max_length=20, choices=CONTENT_TYPE_CHOICES)
     content_id = models.PositiveIntegerField()
@@ -52,13 +48,13 @@ class SearchableContent(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=["encounter", "content_type"]),
+            models.Index(fields=["encounter_id", "content_type"]),
             models.Index(fields=["content_type", "content_id"]),
             models.Index(fields=["created_at"]),
         ]
         constraints = [
             models.UniqueConstraint(
-                fields=["encounter", "content_type", "content_id"],
+                fields=["encounter_id", "content_type", "content_id"],
                 name="uniq_search_encounter_contenttype_contentid",
             ),
         ]

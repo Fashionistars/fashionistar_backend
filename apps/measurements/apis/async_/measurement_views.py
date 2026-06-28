@@ -6,6 +6,12 @@ Architecture:
   - READ ONLY. Mutation endpoints live on the DRF sync surface.
   - Async reads use Django native async ORM through selectors.
   - No ``sync_to_async`` and no executor bridge in canonical read routers.
+
+Endpoints:
+  GET /api/v1/ninja/measurements/                         — List user profiles
+  GET /api/v1/ninja/measurements/default/                 — Get default profile
+  GET /api/v1/ninja/measurements/{profile_id}/            — Get profile by ID
+  GET /api/v1/ninja/measurements/scan/{session_id}/status/ — Poll AI scan status
 """
 
 import logging
@@ -114,3 +120,67 @@ async def get_profile_detail(request, profile_id: int):
     if profile is None:
         raise HttpError(404, "Measurement profile not found.")
     return {"status": "success", "data": _serialize_profile(profile)}
+
+
+@router.get("/scan/{session_id}/status/")
+async def get_scan_session_status(request, session_id: str):
+    """
+    GET /api/v1/ninja/measurements/scan/{session_id}/status/
+
+    Poll the status of an AI body scan session.
+    Frontend polls this after submitting landmarks until status = completed | failed.
+
+    Returns:
+        {
+            "session_id": "...",
+            "status": "completed",           // pending | processing | completed | failed
+            "scan_confidence": 0.85,         // AI quality score 0.0-1.0
+            "measurement_profile_id": "...", // Set on completed
+            "extracted_measurements": {...}, // Raw extracted values
+            "error_message": "",             // Set on failed
+        }
+    """
+    user = _get_auth_user(request)
+    if user is None:
+        raise HttpError(401, "Authentication required.")
+
+    try:
+        import uuid as uuid_mod
+        session_uuid = uuid_mod.UUID(session_id)
+    except (ValueError, AttributeError):
+        raise HttpError(400, "Invalid session ID format.")
+
+    try:
+        from apps.measurements.models.scan import BodyScanSession
+        session = await BodyScanSession.objects.aget(
+            session_id=session_uuid,
+            owner=user,
+        )
+    except BodyScanSession.DoesNotExist:
+        raise HttpError(404, "Scan session not found.")
+    except Exception:
+        logger.exception("get_scan_session_status: error session=%s", session_id)
+        raise HttpError(500, "Failed to fetch scan status.")
+
+    return {
+        "status": "success",
+        "data": {
+            "session_id":             str(session.session_id),
+            "status":                 session.status,
+            "scan_confidence":        session.scan_confidence,
+            "measurement_profile_id": (
+                str(session.measurement_profile_id)
+                if session.measurement_profile_id else None
+            ),
+            "extracted_measurements": session.extracted_measurements or {},
+            "error_message":          session.error_message or "",
+            "processing_started_at":  (
+                session.processing_started_at.isoformat()
+                if session.processing_started_at else None
+            ),
+            "completed_at": (
+                session.completed_at.isoformat()
+                if session.completed_at else None
+            ),
+        },
+    }
