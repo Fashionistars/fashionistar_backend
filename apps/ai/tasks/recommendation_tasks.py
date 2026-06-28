@@ -61,7 +61,12 @@ def run_profile_recommendations(
         from django.core.cache import cache
 
         db = FashionistarDatabaseLayer()
-        measurements = db.get_measurement_profile(int(profile_id))
+        try:
+            _profile_pk = int(profile_id)
+        except (ValueError, TypeError):
+            # profile_id may be a UUID string or non-integer — look up by PK string
+            _profile_pk = profile_id
+        measurements = db.get_measurement_profile(_profile_pk)
 
         if not measurements:
             logger.warning("[run_profile_recommendations] No profile found: %s", profile_id)
@@ -219,7 +224,7 @@ def embed_unembedded_products() -> None:
         unembedded_ids = list(
             Product.objects
             .filter(is_active=True)
-            .exclude(embedding__isnull=False)
+            .exclude(productembedding__isnull=False)
             .values_list("id", flat=True)[:200]  # Max 200 per run
         )
 

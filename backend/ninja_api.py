@@ -30,8 +30,13 @@ Router registry  ← SINGLE source-of-truth:
     /api/v1/ninja/payments/                  → apps/payment
     /api/v1/ninja/kyc/                       → apps/kyc
     /api/v1/ninja/measurements/              → apps/measurements
-    /api/v1/ninja/client/custom-orders/      → apps/apps/custom-orders (custom_order_views)
-    /api/v1/ninja/vendor/custom-orders/      → apps/apps/custom-orders (custom_order_views)
+    /api/v1/ninja/scheduler/               → apps/scheduler
+    /api/v1/ninja/devops/                  → apps/devops
+    /api/v1/ninja/ai/                      → apps/ai (scan status, recommendations, health)
+      /api/v1/ninja/ai/health/             → AI sub-system health check (public)
+      /api/v1/ninja/ai/scan/{id}/status/  → Body scan session polling
+      /api/v1/ninja/ai/profiles/{id}/recommend/ → Outfit recommendations
+      /api/v1/ninja/ai/products/{id}/size-advice/ → LLM size advice
 """
 import logging
 

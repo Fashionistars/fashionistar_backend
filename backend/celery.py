@@ -186,6 +186,15 @@ app.conf.task_queues = (
         routing_key="ai",
         queue_arguments={"x-max-priority": 6},
     ),
+    # ── AI Ingestion — high-frequency, lightweight signal-driven tasks ────────
+    # Workers: celery -A backend worker -Q ai_ingestion --concurrency=4
+    # (Higher concurrency than 'ai' — tasks are lightweight DB cache invalidations)
+    Queue(
+        "ai_ingestion",
+        Exchange("ai_ingestion", type="direct"),
+        routing_key="ai_ingestion",
+        queue_arguments={"x-max-priority": 4},
+    ),
     # ── Default catch-all ─────────────────────────────────────────────────────
     Queue(
         "default",
@@ -270,8 +279,14 @@ app.conf.task_routes = {
     "apps.ai.tasks.analytics_tasks.run_product_performance_analysis":   {"queue": "ai"},
     "apps.ai.tasks.analytics_tasks.generate_daily_report":              {"queue": "ai"},
     # DB ingestion — triggered by Django signals on model saves
-    "apps.ai.tasks.ingestion_tasks.ingest_db_change":                   {"queue": "ai"},
-    "apps.ai.tasks.ingestion_tasks.rebuild_ai_context_cache":           {"queue": "ai"},
+    "apps.ai.tasks.ingestion_tasks.ingest_db_change":                   {"queue": "ai_ingestion"},
+    "apps.ai.tasks.ingestion_tasks.refresh_trending_cache":             {"queue": "ai_ingestion"},
+    "apps.ai.tasks.ingestion_tasks.cleanup_old_events":                 {"queue": "ai_ingestion"},
+    "apps.ai.tasks.ingestion_tasks.rebuild_ai_context_cache":           {"queue": "ai_ingestion"},
+    # Recommendation tasks
+    "apps.ai.tasks.recommendation_tasks.run_profile_recommendations":   {"queue": "ai"},
+    "apps.ai.tasks.recommendation_tasks.embed_product":                 {"queue": "ai"},
+    "apps.ai.tasks.recommendation_tasks.embed_unembedded_products":     {"queue": "ai"},
 }
 
 
@@ -355,10 +370,24 @@ app.conf.beat_schedule = {
     # Weekly embedding backfill — Sunday 03:00 UTC
     # Finds all active products without ProductEmbedding and generates them
     "ai-weekly-embedding-backfill": {
-        "task":     "apps.ai.tasks.embedding_tasks.backfill_missing_embeddings",
+        "task":     "apps.ai.tasks.recommendation_tasks.embed_unembedded_products",
         "schedule": crontab(hour=3, minute=0, day_of_week=0),   # Sunday
         "options":  {"queue": "ai"},
-        "kwargs":   {"limit": 1000},
+    },
+
+    # Hourly trending products cache rebuild
+    "ai-refresh-trending-cache": {
+        "task":    "apps.ai.tasks.ingestion_tasks.refresh_trending_cache",
+        "schedule": crontab(minute=0),   # Every hour on the hour
+        "options": {"queue": "ai_ingestion"},
+    },
+
+    # Weekly DBChangeEvent cleanup — Monday 04:00 UTC (30-day retention)
+    "ai-cleanup-old-events": {
+        "task":    "apps.ai.tasks.ingestion_tasks.cleanup_old_events",
+        "schedule": crontab(hour=4, minute=0, day_of_week=1),   # Monday
+        "options": {"queue": "ai_ingestion"},
+        "kwargs":  {"days": 30},
     },
 }
 

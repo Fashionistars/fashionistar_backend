@@ -253,6 +253,27 @@ class MeasurementProfile(TimeStampedModel):
         help_text="Optional notes from client or tailor (e.g. 'prefer relaxed fit').",
     )
 
+    # ── AI Recommendation Snapshot ────────────────────────────────────────────
+    # Cached by apps.ai.workflows.recommendation.RecommendationWorkflow._persist_recommendations()
+    # Schema: {"recommendations": [...], "generated_at": "ISO8601", "model_version": "..."}
+    ai_recommendation_snapshot = models.JSONField(
+        null=True,
+        blank=True,
+        default=None,
+        help_text=(
+            "Latest AI product recommendations snapshot for this profile. "
+            "Auto-populated by the RecommendationWorkflow Celery task. "
+            "Schema: {recommendations: [...], generated_at: str, model_version: str}"
+        ),
+    )
+    last_recommendation_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        default=None,
+        help_text="Timestamp of the last AI recommendation generation for this profile.",
+    )
+
+
     class Meta:
         verbose_name = _("Measurement Profile")
         verbose_name_plural = _("Measurement Profiles")

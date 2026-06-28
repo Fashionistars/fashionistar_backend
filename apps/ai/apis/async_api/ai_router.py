@@ -102,7 +102,7 @@ async def get_scan_status(request, session_id: str) -> dict:
       completed  — Measurements saved to MeasurementProfile
       failed     — Processing error (see error_message)
     """
-    from apps.measurements.models import BodyScanSession
+    from apps.measurements.models.scan import BodyScanSession
     from asgiref.sync import sync_to_async
 
     get_session = sync_to_async(
@@ -381,3 +381,98 @@ async def get_size_advice(request, product_id: int) -> dict:
         return result
 
     return await generate_advice()
+
+
+class VendorAnalyticsSchema(Schema):
+    vendor_id:       int
+    generated_at:    str
+    days:            int
+    scope:           str
+    order_metrics:   dict = {}
+    product_metrics: dict = {}
+    user_metrics:    dict = {}
+    vendor_metrics:  dict = {}
+    anomalies:       list = []
+    llm_insights:    str  = ""
+
+
+class AIHealthSchema(Schema):
+    status:           str          # "healthy" | "degraded" | "unavailable"
+    ollama_available: bool
+    siglip_available: bool
+    pgvector_ready:   bool
+    mediapipe_ready:  bool
+    checked_at:       str
+
+
+# ─── Health Check Endpoint ─────────────────────────────────────────────────────
+
+
+@router.get(
+    "/health/",
+    response=AIHealthSchema,
+    summary="AI engine sub-system health check",
+    description=(
+        "Reports availability of all AI sub-systems: Ollama LLM, "
+        "FashionSigLIP text encoder, pgvector HNSW index, and MediaPipe. "
+        "No auth required — safe for monitoring probes."
+    ),
+    operation_id="ai_health",
+    auth=None,  # Public endpoint — monitoring-safe
+)
+async def get_ai_health(request) -> dict:
+    """GET /api/v1/ninja/ai/health/"""
+    from asgiref.sync import sync_to_async
+    from django.utils import timezone
+
+    @sync_to_async
+    def check_health():
+        results = {
+            "ollama_available": False,
+            "siglip_available": False,
+            "pgvector_ready":   False,
+            "mediapipe_ready":  False,
+        }
+
+        # Check Ollama LLM
+        try:
+            from apps.ai.engines.llm_engine import OllamaLLMEngine
+            engine = OllamaLLMEngine()
+            results["ollama_available"] = engine.is_available()
+        except Exception:
+            pass
+
+        # Check FashionSigLIP (CLIP model)
+        try:
+            from apps.ai.engines.recommendation_engine import FashionEmbeddingEngine
+            eng = FashionEmbeddingEngine()
+            results["siglip_available"] = eng.model is not None
+        except Exception:
+            pass
+
+        # Check pgvector (ProductEmbedding table + extension)
+        try:
+            from apps.ai.models.product_embedding import ProductEmbedding
+            ProductEmbedding.objects.count()
+            results["pgvector_ready"] = True
+        except Exception:
+            pass
+
+        # Check MediaPipe availability (library import test)
+        try:
+            import mediapipe  # noqa: F401
+            results["mediapipe_ready"] = True
+        except ImportError:
+            pass
+
+        return results
+
+    checks = await check_health()
+    all_ok = checks["ollama_available"] and checks["siglip_available"] and checks["pgvector_ready"]
+    degraded = any(checks.values()) and not all_ok
+
+    return {
+        "status":           "healthy" if all_ok else ("degraded" if degraded else "unavailable"),
+        "checked_at":       timezone.now().isoformat(),
+        **checks,
+    }
