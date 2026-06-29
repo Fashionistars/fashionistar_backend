@@ -3,14 +3,10 @@ from django.db import migrations
 
 class Migration(migrations.Migration):
     dependencies = [
-        ('ai', '0001_initial_ai_models'),
+        ('ai', '0002_vectorfield_migration'),
     ]
     
     operations = [
-        migrations.RunSQL(
-            "CREATE EXTENSION IF NOT EXISTS vector",
-            reverse_sql="DROP EXTENSION IF EXISTS vector"
-        ),
         migrations.RunSQL(
             """
             CREATE INDEX ai_pe_combined_hnsw 

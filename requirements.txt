@@ -278,7 +278,7 @@ numpy>=1.26.4                   # Required by MediaPipe, CLIP, transformers
 # ── Recommendation Engine (FashionSigLIP / FashionCLIP) ──────────────────────
 open-clip-torch>=2.26.1         # OpenCLIP — loads marqo-FashionSigLIP weights
 sentence-transformers>=3.0.0    # Text-only product embeddings + reranking
-django-pgvector>=0.3.0          # pgvector Django ORM field + HNSW migrations
+pgvector>=0.3.0                 # pgvector Django ORM field + HNSW migrations
 
 # ── PyTorch CPU-only (no GPU needed for inference at startup scale) ───────────
 # NOTE: Use the CPU-only wheel to keep image size lean.
