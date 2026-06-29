@@ -68,7 +68,7 @@ class FashionistarDatabaseLayer:
 
     # ─── USERS ─────────────────────────────────────────────────────────────────
 
-    def get_user_full_context(self, user_id: int) -> dict:
+    def get_user_full_context(self, user_id: str |int) -> dict:
         """
         Full user context: profile + KYC + measurements + purchase history.
         Used by recommendation workflow to personalise results.

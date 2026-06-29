@@ -173,11 +173,41 @@ def embed_product(self, product_id: int) -> dict:
         db = FashionistarDatabaseLayer()
         product = db.get_product_full(product_id)
 
+        # ── Fetch primary product image from Cloudinary ────────────────────
+        image_bytes: bytes | None = None
+        image_url: str | None = (
+            product.get("primary_image_url")  # populated by get_product_full()
+            or product.get("image_url")
+        )
+        if image_url:
+            try:
+                import urllib.request
+                req = urllib.request.Request(
+                    image_url,
+                    headers={
+                        "User-Agent": "FASHIONISTAR-AI-Embedder/1.0",
+                        "Accept":     "image/*",
+                    },
+                )
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    image_bytes = resp.read()
+                logger.debug(
+                    "[embed_product] fetched %d bytes from Cloudinary for product %s",
+                    len(image_bytes), product_id,
+                )
+            except Exception as img_exc:
+                # Non-fatal: degrade to text-only embedding
+                logger.warning(
+                    "[embed_product] image fetch failed for product %s (%s) — using text-only",
+                    product_id, img_exc,
+                )
+        # ── End image fetch ────────────────────────────────────────────────
+
         engine = FashionEmbeddingEngine()
         vectors = engine.embed_product(
             title=product.get("name", ""),
             description=product.get("description", ""),
-            image_bytes=None,  # TODO: fetch primary image from Cloudinary
+            image_bytes=image_bytes,
         )
 
         if not vectors.get("combined_vector"):

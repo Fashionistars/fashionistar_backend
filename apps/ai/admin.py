@@ -16,13 +16,12 @@ from django.utils.html import format_html
 
 # ── WorkflowExecution ─────────────────────────────────────────────────────────
 
-@admin.register(*[])   # Registered conditionally below
 class WorkflowExecutionAdmin(admin.ModelAdmin):
     list_display = [
         "id", "workflow_type", "status_badge", "user",
         "duration_ms", "model_version", "started_at", "completed_at",
     ]
-    list_filter = ["workflow_type", "status", "model_version"]
+    list_filter  = ["workflow_type", "status", "model_version"]
     search_fields = ["user__email", "celery_task_id", "id"]
     readonly_fields = [
         "id", "workflow_type", "status", "user", "input_snapshot",
@@ -57,19 +56,19 @@ class WorkflowExecutionAdmin(admin.ModelAdmin):
 
 # ── ProductEmbedding ──────────────────────────────────────────────────────────
 
-@admin.register(*[])
 class ProductEmbeddingAdmin(admin.ModelAdmin):
     list_display = [
-        "product", "model_version", "has_text_vector",
-        "has_image_vector", "has_combined_vector", "created_at", "updated_at",
+        "product", "model_version", "embedding_status", "has_text_vector",
+        "has_image_vector", "has_combined_vector", "last_embedded_at",
     ]
-    list_filter = ["model_version"]
+    list_filter  = ["model_version", "embedding_status"]
     search_fields = ["product__name", "product__id"]
     readonly_fields = [
-        "product", "model_version", "text_vector", "image_vector",
-        "combined_vector", "created_at", "updated_at",
+        "product", "model_version", "embedding_status", "text_vector",
+        "image_vector", "combined_vector", "last_embedded_at",
+        "created_at", "updated_at",
     ]
-    ordering = ["-updated_at"]
+    ordering = ["-last_embedded_at"]
     list_per_page = 50
 
     def has_text_vector(self, obj):
@@ -108,13 +107,12 @@ class ProductEmbeddingAdmin(admin.ModelAdmin):
 
 # ── DBChangeEvent ──────────────────────────────────────────────────────────────
 
-@admin.register(*[])
 class DBChangeEventAdmin(admin.ModelAdmin):
     list_display = [
         "id", "app_label", "model_name", "object_id",
         "event_type", "is_processed", "processed_at", "created_at",
     ]
-    list_filter = ["app_label", "event_type", "is_processed"]
+    list_filter  = ["app_label", "event_type", "is_processed"]
     search_fields = ["object_id", "model_name"]
     readonly_fields = [
         "app_label", "model_name", "object_id", "event_type",
@@ -131,25 +129,10 @@ class DBChangeEventAdmin(admin.ModelAdmin):
         return False
 
 
-# ── Dynamic registration (models loaded after Django setup) ───────────────────
+# ── Registration (deferred to avoid AppRegistryNotReady) ─────────────────────
 
-def _register_ai_admin():
-    """
-    Deferred admin registration to avoid AppRegistryNotReady.
-    Called from AppConfig.ready() — safe after all apps are loaded.
-    """
-    try:
-        from apps.ai.models import WorkflowExecution, ProductEmbedding, DBChangeEvent
-        admin.site.register(WorkflowExecution, WorkflowExecutionAdmin)
-        admin.site.register(ProductEmbedding, ProductEmbeddingAdmin)
-        admin.site.register(DBChangeEvent, DBChangeEventAdmin)
-    except Exception:
-        pass
-
-
-# Self-register when this module is imported during Django setup
 try:
-    from apps.ai.models import WorkflowExecution, ProductEmbedding, DBChangeEvent
+    from apps.ai.models import WorkflowExecution, ProductEmbedding, DBChangeEvent  # noqa: E402
 
     if not admin.site.is_registered(WorkflowExecution):
         admin.site.register(WorkflowExecution, WorkflowExecutionAdmin)
@@ -158,4 +141,5 @@ try:
     if not admin.site.is_registered(DBChangeEvent):
         admin.site.register(DBChangeEvent, DBChangeEventAdmin)
 except Exception:
+    # Models may not be available during testing or migrations — fail silently.
     pass

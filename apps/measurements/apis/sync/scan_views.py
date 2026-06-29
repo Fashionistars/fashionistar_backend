@@ -11,7 +11,7 @@ Endpoints:
   POST /api/v1/measurements/scan/<session_id>/submit-landmarks/
       — Accepts MediaPipe world landmarks + user height from browser.
         Fires process_body_scan Celery task.
-        Frontend polls /api/v1/ninja/measurements/scan/<session_id>/status/
+        Frontend polls /api/v1/ninja/ai/scan/<session_id>/status/
         for COMPLETED or FAILED status.
 
 Architecture note:
@@ -92,7 +92,42 @@ class InitiateScanView(APIView):
     permission_classes = [IsAuthenticated, IsAuthenticatedAndActive]
     renderer_classes = [CustomJSONRenderer]
 
+    # ── Rate limiting ─────────────────────────────────────────────────────────
+    # Max 3 scan sessions per user per hour (Redis-backed, graceful fallback).
+    # Prevents abuse — scan sessions trigger Celery ML tasks (CPU-intensive).
+    RATE_LIMIT_MAX   = 3
+    RATE_LIMIT_WINDOW = 3600  # 1 hour in seconds
+
+    def _check_rate_limit(self, user_id: int) -> tuple[bool, int]:
+        """
+        Returns (allowed: bool, remaining: int).
+        Uses Django cache (Redis in prod) with key: scan_rate:<user_id>
+        If cache is unavailable, allow the request (fail-open).
+        """
+        try:
+            from django.core.cache import cache
+            cache_key = f"scan_rate:{user_id}"
+            count = cache.get(cache_key, 0)
+            if count >= self.RATE_LIMIT_MAX:
+                return False, 0
+            # Increment; set expiry only on first increment
+            new_count = count + 1
+            cache.set(cache_key, new_count, timeout=self.RATE_LIMIT_WINDOW)
+            return True, self.RATE_LIMIT_MAX - new_count
+        except Exception:
+            # Cache unavailable — fail open (never block legitimate users)
+            return True, self.RATE_LIMIT_MAX
+
     def post(self, request):
+        # ── Rate limit check ──────────────────────────────────────────────────
+        allowed, remaining = self._check_rate_limit(request.user.pk)
+        if not allowed:
+            return error_response(
+                f"Scan rate limit reached. You may initiate up to {self.RATE_LIMIT_MAX} "
+                f"scans per hour. Please wait before starting a new scan session.",
+                http_status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
         device_type = request.data.get("device_type", "web")
         if device_type not in ("web", "ios", "android"):
             device_type = "web"

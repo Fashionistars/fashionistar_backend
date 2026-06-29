@@ -261,3 +261,128 @@ In 2 sentences, encourage them and suggest 1 specific thing to improve accuracy 
             return "  No size chart available"
         lines = [f"  {size}: {details}" for size, details in specs.items()]
         return "\n".join(lines)
+
+    # ── G4 Fix: Public alias + size chart loader ──────────────────────────────
+
+    def generate_size_recommendation(
+        self,
+        measurements: dict,
+        product_info: dict,
+    ) -> str:
+        """
+        Public method called by ai_router.py get_size_advice endpoint.
+
+        Loads the product size chart from ProductVariant, determines the best
+        size algorithmically, then generates a natural-language explanation.
+
+        Args:
+            measurements: dict of {bust, waist, hips, shoulder_width, height, ...} in cm
+            product_info: dict with {name, category, size_chart} — size_chart may be
+                          pre-populated by the router or loaded here from DB.
+
+        Returns:
+            Human-readable size recommendation string.
+        """
+        # If router didn't supply size chart, try loading from DB
+        size_chart = product_info.get("size_chart") or []
+        product_id = product_info.get("product_id")
+        if not size_chart and product_id:
+            try:
+                size_chart = self.load_product_size_chart(product_id)
+            except Exception as exc:
+                logger.debug("[generate_size_recommendation] size chart load failed: %s", exc)
+
+        # Determine best size algorithmically using bust/waist/hips cascade
+        recommended_size = self._pick_best_size(measurements, size_chart)
+
+        # Format size chart for prompt context
+        size_chart_dict: dict[str, str] = {}
+        for entry in size_chart:
+            label = entry.get("size", "")
+            ranges = []
+            if entry.get("bust_min") and entry.get("bust_max"):
+                ranges.append(f"bust {entry['bust_min']}-{entry['bust_max']}cm")
+            if entry.get("waist_min") and entry.get("waist_max"):
+                ranges.append(f"waist {entry['waist_min']}-{entry['waist_max']}cm")
+            if entry.get("hips_min") and entry.get("hips_max"):
+                ranges.append(f"hips {entry['hips_min']}-{entry['hips_max']}cm")
+            size_chart_dict[label] = ", ".join(ranges) if ranges else "see vendor chart"
+
+        product_specs = size_chart_dict or {
+            k: v for k, v in product_info.items()
+            if k not in ("name", "category", "product_id", "size_chart")
+        }
+
+        return self.generate_size_recommendation_reasoning(
+            measurements=measurements,
+            product_specs=product_specs,
+            recommended_size=recommended_size or "—",
+        )
+
+    @staticmethod
+    def load_product_size_chart(product_id: int | str) -> list[dict]:
+        """
+        Load size chart rows from ProductVariant for a given product_id.
+
+        Returns a list of dicts, each representing one size option:
+            [{"size": "M", "bust_min": 86, "bust_max": 92, "waist_min": 70, ...}, ...]
+
+        Gracefully returns [] if the product has no size variants or DB is unavailable.
+        """
+        try:
+            from django.apps import apps
+            ProductVariant = apps.get_model("product", "ProductVariant")
+            variants = (
+                ProductVariant.objects
+                .filter(product_id=product_id, is_active=True)
+                .values(
+                    "size",
+                    "bust_min", "bust_max",
+                    "waist_min", "waist_max",
+                    "hips_min", "hips_max",
+                    "shoulder_min", "shoulder_max",
+                )
+                .order_by("size")
+            )
+            return list(variants)
+        except Exception as exc:
+            logger.debug("[load_product_size_chart] product_id=%s failed: %s", product_id, exc)
+            return []
+
+    @staticmethod
+    def _pick_best_size(measurements: dict, size_chart: list[dict]) -> str | None:
+        """
+        Algorithmic size selection from ProductVariant size chart.
+
+        Priority cascade: bust → waist → hips → shoulder_width
+        Returns the size label (e.g. "M") or None if no chart available.
+        """
+        if not size_chart:
+            return None
+
+        bust  = measurements.get("bust")
+        waist = measurements.get("waist")
+        hips  = measurements.get("hips")
+
+        def _in_range(val, lo, hi) -> bool:
+            if val is None or lo is None or hi is None:
+                return False
+            return float(lo) <= float(val) <= float(hi)
+
+        # Score each variant by how many measurement dimensions fit
+        best_size  = None
+        best_score = -1
+
+        for variant in size_chart:
+            score = 0
+            if _in_range(bust,  variant.get("bust_min"),  variant.get("bust_max")):
+                score += 3  # Bust is most reliable for tops/dresses
+            if _in_range(waist, variant.get("waist_min"), variant.get("waist_max")):
+                score += 2
+            if _in_range(hips,  variant.get("hips_min"),  variant.get("hips_max")):
+                score += 2
+            if score > best_score:
+                best_score = score
+                best_size  = variant.get("size")
+
+        return best_size
