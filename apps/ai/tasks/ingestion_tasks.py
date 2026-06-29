@@ -68,7 +68,23 @@ def ingest_db_change(
 
         elif model_key in ("measurements.measurementprofile",):
             # Invalidate recommendation cache for this user's profile
-            pass  # Cache already invalidated by signal
+            from apps.ai.database.access_layer import FashionistarDatabaseLayer
+            db = FashionistarDatabaseLayer()
+            db.invalidate_measurement_cache(profile_id=int(object_id))
+
+        elif model_key == "authentication.unifieduser":
+            # Invalidate user context cache
+            from apps.ai.database.access_layer import FashionistarDatabaseLayer
+            db = FashionistarDatabaseLayer()
+            db.invalidate_user_cache(user_id=int(object_id))
+
+        elif model_key == "order.order":
+            # Invalidate trending products and platform stats cache
+            from apps.ai.database.access_layer import FashionistarDatabaseLayer
+            db = FashionistarDatabaseLayer()
+            db.invalidate("ai:trending:7d:20")
+            db.invalidate("ai:trending:30d:20")
+            db.invalidate("ai:platform_stats:30d")
 
         # Mark event as processed
         DBChangeEvent.objects.filter(pk=event.pk).update(

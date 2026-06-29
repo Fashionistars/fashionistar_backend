@@ -311,7 +311,7 @@ class RecommendationWorkflow:
             # HNSW ANN search — sub-50ms p95 at scale
             similar = (
                 ProductEmbedding.objects.annotate(
-                    similarity=CosineDistance("embedding", embedding_vector)
+                    similarity=CosineDistance("combined_vector", embedding_vector)
                 )
                 .filter(product__is_active=True)
                 .order_by("similarity")

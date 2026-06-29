@@ -29,6 +29,7 @@ import operator
 from typing import Annotated, Any
 
 from django.utils import timezone
+from langgraph.graph import StateGraph, END
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +84,42 @@ class MeasurementWorkflow:
     workflow_type = "measurement"
     model_version = "mediapipe-tasks-0.10.14+geometry-1.0"
 
+    def __init__(self):
+        """Initialize the workflow and build the LangGraph state machine."""
+        self.graph = self._build_graph()
+
+    def _build_graph(self) -> StateGraph:
+        """Build the LangGraph state machine with nodes and edges."""
+        workflow = StateGraph(MeasurementState)
+
+        # Add nodes
+        workflow.add_node("run_full_pipeline", self._run_full_pipeline)
+        workflow.add_node("save_profile", self._save_profile)
+        workflow.add_node("update_session_completed", self._update_session_completed)
+        workflow.add_node("update_session_failed", self._update_session_failed)
+        workflow.add_node("trigger_recommendation", self._trigger_recommendation)
+
+        # Add edges
+        workflow.set_entry_point("run_full_pipeline")
+        workflow.add_conditional_edges(
+            "run_full_pipeline",
+            self._should_continue,
+            {
+                "continue": "save_profile",
+                "fail": "update_session_failed"
+            }
+        )
+        workflow.add_edge("save_profile", "update_session_completed")
+        workflow.add_edge("update_session_completed", "trigger_recommendation")
+        workflow.add_edge("trigger_recommendation", END)
+        workflow.add_edge("update_session_failed", END)
+
+        return workflow.compile()
+
+    def _should_continue(self, state: dict) -> str:
+        """Determine if workflow should continue or fail based on errors."""
+        return "continue" if not state["errors"] else "fail"
+
     def execute(self, input_data: dict) -> dict:
         """
         Run the full measurement pipeline.
@@ -117,35 +154,27 @@ class MeasurementWorkflow:
         )
 
         try:
-            # ── Node 1: Full measurement pipeline (validate + extract + estimate) ─
-            state = self._run_full_pipeline(state)
-            if state["errors"]:
-                self._update_session_failed(state)
-                base.fail_execution("; ".join(state["errors"]))
-                return self._build_output(state)
+            # Execute the LangGraph state machine
+            result = self.graph.invoke(state)
 
-            # ── Node 2: Save MeasurementProfile ────────────────────────────────
-            state = self._save_profile(state)
-
-            # ── Node 3: Update BodyScanSession to COMPLETED ────────────────────
-            self._update_session_completed(state)
-
-            # ── Node 4: Trigger recommendation pipeline ─────────────────────────
-            self._trigger_recommendation(state)
-
-            base.complete_execution(output_snapshot={
-                "profile_id":    state["profile_id"],
-                "quality_score": state["measurement_result"].get("quality_score"),
-                "is_valid":      state["measurement_result"].get("is_valid"),
-            })
+            # Update workflow execution tracking
+            if result["errors"]:
+                base.fail_execution("; ".join(result["errors"]))
+            else:
+                base.complete_execution(output_snapshot={
+                    "profile_id":    result.get("profile_id"),
+                    "quality_score": result["measurement_result"].get("quality_score"),
+                    "is_valid":      result["measurement_result"].get("is_valid"),
+                })
 
         except Exception as exc:
             logger.exception("[MeasurementWorkflow] Unexpected error for session %s", state["session_id"])
             state["errors"].append(str(exc))
             self._update_session_failed(state, error=str(exc))
             base.fail_execution(exc)
+            result = state
 
-        return self._build_output(state)
+        return self._build_output(result)
 
     # ── Workflow nodes ──────────────────────────────────────────────────────────
 
