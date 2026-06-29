@@ -1270,3 +1270,469 @@ async def aget_homepage_reviews(limit: int = 8) -> list[dict]:
     except Exception as exc:
         logger.error("aget_homepage_reviews: %s", exc)
         return []
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PHASE 8 — SIZE GUIDE · SHIPPING PROFILE · COMMISSION SNAPSHOT SELECTORS
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Imports (guarded to avoid circular imports) ───────────────────────────────
+from apps.product.models import ProductCommissionSnapshot, ProductShippingProfile
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# A. SIZE & MEASUREMENT GUIDE SELECTORS
+# ─────────────────────────────────────────────────────────────────────────────
+
+def get_size_guides_for_vendor(vendor_id):
+    """Sync: return all measurement guide rows for a single vendor.
+
+    Args:
+        vendor_id: PK of the VendorProfile to scope the query.
+
+    Returns:
+        QuerySet[ProductSizeAndMeasurementGuide] ordered by sort_order.
+    """
+    return (
+        ProductSizeAndMeasurementGuide.objects
+        .filter(vendor_id=vendor_id)
+        .order_by("sort_order", "name")
+    )
+
+
+def get_size_guide_detail(pk, *, vendor_id=None):
+    """Sync: fetch a single size guide row, optionally scoped to a vendor.
+
+    Args:
+        pk: Primary key of the guide row.
+        vendor_id: If supplied, adds ownership check (vendor-facing views).
+
+    Returns:
+        ProductSizeAndMeasurementGuide or None.
+    """
+    qs = ProductSizeAndMeasurementGuide.objects.filter(pk=pk)
+    if vendor_id is not None:
+        qs = qs.filter(vendor_id=vendor_id)
+    return qs.first()
+
+
+def get_all_size_guides(*, vendor_id=None):
+    """Sync: admin view — all guides, optionally filtered by vendor.
+
+    Args:
+        vendor_id: Optional vendor filter for admin drill-down.
+
+    Returns:
+        QuerySet with select_related("vendor") for admin display.
+    """
+    qs = (
+        ProductSizeAndMeasurementGuide.objects
+        .select_related("vendor")
+        .order_by("sort_order", "name")
+    )
+    if vendor_id:
+        qs = qs.filter(vendor_id=vendor_id)
+    return qs
+
+
+async def aget_size_guides_for_vendor(vendor_id) -> list[dict]:
+    """Async: flat dict list of size guide rows for a vendor (Ninja reads).
+
+    Uses Django 6.0 native async ORM — zero sync_to_async.
+
+    Args:
+        vendor_id: PK of the VendorProfile.
+
+    Returns:
+        list[dict] — serialization-ready row dicts.
+    """
+    try:
+        qs = (
+            ProductSizeAndMeasurementGuide.objects
+            .filter(vendor_id=vendor_id)
+            .order_by("sort_order", "name")
+            .values(
+                "id", "name", "description", "size_label",
+                "chest_cm", "waist_cm", "hip_cm", "length_cm",
+                "shoulder_cm", "sleeve_cm", "inseam_cm",
+                "foot_length_cm", "sort_order",
+                "is_default", "save_as_template", "created_at",
+            )
+        )
+        return [row async for row in qs]
+    except Exception as exc:
+        logger.error("aget_size_guides_for_vendor vendor=%s: %s", vendor_id, exc)
+        return []
+
+
+async def aget_all_size_guides(*, vendor_id=None) -> list[dict]:
+    """Async: admin — all size guide rows, optionally filtered by vendor.
+
+    Args:
+        vendor_id: Optional vendor PK to filter results.
+
+    Returns:
+        list[dict] including vendor_id for admin table display.
+    """
+    try:
+        qs = (
+            ProductSizeAndMeasurementGuide.objects
+            .order_by("sort_order", "name")
+            .values(
+                "id", "name", "description", "size_label",
+                "chest_cm", "waist_cm", "hip_cm", "length_cm",
+                "shoulder_cm", "sleeve_cm", "inseam_cm",
+                "foot_length_cm", "sort_order", "vendor_id",
+                "is_default", "save_as_template", "created_at",
+            )
+        )
+        if vendor_id:
+            qs = qs.filter(vendor_id=vendor_id)
+        return [row async for row in qs]
+    except Exception as exc:
+        logger.error("aget_all_size_guides: %s", exc)
+        return []
+
+
+async def aget_size_guide_detail(pk, *, vendor_id=None) -> dict | None:
+    """Async: single size guide detail row.
+
+    Args:
+        pk: Primary key of the guide.
+        vendor_id: Ownership check when called from vendor Ninja views.
+
+    Returns:
+        dict row or None if not found.
+    """
+    try:
+        qs = ProductSizeAndMeasurementGuide.objects.filter(pk=pk)
+        if vendor_id is not None:
+            qs = qs.filter(vendor_id=vendor_id)
+        return await qs.values(
+            "id", "name", "description", "size_label",
+            "chest_cm", "waist_cm", "hip_cm", "length_cm",
+            "shoulder_cm", "sleeve_cm", "inseam_cm",
+            "foot_length_cm", "sort_order", "vendor_id",
+            "is_default", "save_as_template", "created_at", "updated_at",
+        ).afirst()
+    except Exception as exc:
+        logger.error("aget_size_guide_detail pk=%s: %s", pk, exc)
+        return None
+
+
+async def aget_size_guides_with_client_overlay(
+    vendor_id, *, measurement_profile_id=None
+) -> list[dict]:
+    """Async: client view — guide rows enriched with client measurement overlay.
+
+    Combines size guide data with the client's active measurement profile so
+    the frontend can render a side-by-side fit comparison.
+
+    Args:
+        vendor_id: VendorProfile PK to scope guide rows.
+        measurement_profile_id: Optional MeasurementProfile PK for overlay.
+
+    Returns:
+        list[dict] each containing ``guide`` key and optional ``client_measurements`` key.
+    """
+    try:
+        guides = await aget_size_guides_for_vendor(vendor_id)
+
+        client_data: dict = {}
+        if measurement_profile_id:
+            try:
+                from apps.measurements.models import MeasurementProfile
+                profile = await MeasurementProfile.objects.filter(
+                    pk=measurement_profile_id
+                ).values(
+                    "chest_cm", "waist_cm", "hip_cm", "shoulder_cm",
+                    "sleeve_length_cm", "inseam_cm", "height_cm",
+                ).afirst()
+                if profile:
+                    client_data = profile
+            except Exception as inner_exc:
+                logger.warning(
+                    "aget_size_guides_with_client_overlay: measurement fetch failed: %s",
+                    inner_exc,
+                )
+
+        return [{"guide": g, "client_measurements": client_data or None} for g in guides]
+    except Exception as exc:
+        logger.error("aget_size_guides_with_client_overlay: %s", exc)
+        return []
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# B. SHIPPING PROFILE SELECTORS
+# ─────────────────────────────────────────────────────────────────────────────
+
+def get_shipping_profiles_for_vendor(vendor_id):
+    """Sync: all shipping profiles belonging to a vendor.
+
+    Args:
+        vendor_id: PK of the VendorProfile.
+
+    Returns:
+        QuerySet[ProductShippingProfile] with preferred_couriers prefetched.
+    """
+    return (
+        ProductShippingProfile.objects
+        .filter(vendor_id=vendor_id)
+        .prefetch_related("preferred_couriers")
+        .order_by("-created_at")
+    )
+
+
+def get_all_shipping_profiles(*, vendor_id=None):
+    """Sync: admin — all shipping profiles.
+
+    Args:
+        vendor_id: Optional vendor filter.
+
+    Returns:
+        QuerySet with vendor select_related.
+    """
+    qs = (
+        ProductShippingProfile.objects
+        .select_related("vendor")
+        .prefetch_related("preferred_couriers")
+        .order_by("-created_at")
+    )
+    if vendor_id:
+        qs = qs.filter(vendor_id=vendor_id)
+    return qs
+
+
+def get_shipping_profile_detail(pk, *, vendor_id=None):
+    """Sync: single shipping profile, optionally ownership-scoped.
+
+    Args:
+        pk: Primary key.
+        vendor_id: Ownership check for vendor views.
+
+    Returns:
+        ProductShippingProfile or None.
+    """
+    qs = (
+        ProductShippingProfile.objects
+        .prefetch_related("preferred_couriers")
+        .filter(pk=pk)
+    )
+    if vendor_id is not None:
+        qs = qs.filter(vendor_id=vendor_id)
+    return qs.first()
+
+
+async def aget_shipping_profiles_for_vendor(vendor_id) -> list[dict]:
+    """Async: flat dict shipping profile list for a vendor (Ninja reads).
+
+    Args:
+        vendor_id: PK of the VendorProfile.
+
+    Returns:
+        list[dict] serialization-ready rows.
+    """
+    try:
+        qs = (
+            ProductShippingProfile.objects
+            .filter(vendor_id=vendor_id)
+            .order_by("-created_at")
+            .values(
+                "id", "vendor_id", "weight_kg",
+                "dimensions_cm", "length_cm", "width_cm", "height_cm",
+                "is_fragile", "requires_signature",
+                "restricted_countries", "free_shipping_threshold",
+                "processing_days", "created_at",
+            )
+        )
+        return [row async for row in qs]
+    except Exception as exc:
+        logger.error("aget_shipping_profiles_for_vendor vendor=%s: %s", vendor_id, exc)
+        return []
+
+
+async def aget_all_shipping_profiles(*, vendor_id=None) -> list[dict]:
+    """Async: admin — all shipping profiles with optional vendor filter.
+
+    Args:
+        vendor_id: Optional vendor PK.
+
+    Returns:
+        list[dict] rows.
+    """
+    try:
+        qs = (
+            ProductShippingProfile.objects
+            .order_by("-created_at")
+            .values(
+                "id", "vendor_id", "weight_kg",
+                "dimensions_cm", "length_cm", "width_cm", "height_cm",
+                "is_fragile", "requires_signature",
+                "restricted_countries", "free_shipping_threshold",
+                "processing_days", "created_at",
+            )
+        )
+        if vendor_id:
+            qs = qs.filter(vendor_id=vendor_id)
+        return [row async for row in qs]
+    except Exception as exc:
+        logger.error("aget_all_shipping_profiles: %s", exc)
+        return []
+
+
+async def aget_shipping_profile_detail(pk, *, vendor_id=None) -> dict | None:
+    """Async: single shipping profile detail.
+
+    Args:
+        pk: Primary key.
+        vendor_id: Ownership check for vendor Ninja views.
+
+    Returns:
+        dict row or None.
+    """
+    try:
+        qs = ProductShippingProfile.objects.filter(pk=pk)
+        if vendor_id is not None:
+            qs = qs.filter(vendor_id=vendor_id)
+        return await qs.values(
+            "id", "vendor_id", "weight_kg",
+            "dimensions_cm", "length_cm", "width_cm", "height_cm",
+            "is_fragile", "requires_signature",
+            "restricted_countries", "free_shipping_threshold",
+            "processing_days", "created_at", "updated_at",
+        ).afirst()
+    except Exception as exc:
+        logger.error("aget_shipping_profile_detail pk=%s: %s", pk, exc)
+        return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# C. COMMISSION SNAPSHOT SELECTORS (admin-only)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def get_commission_snapshots_for_product(product_id):
+    """Sync: all commission snapshot rows for a product.
+
+    Args:
+        product_id: PK of the Product.
+
+    Returns:
+        QuerySet[ProductCommissionSnapshot] with set_by select_related.
+    """
+    return (
+        ProductCommissionSnapshot.objects
+        .filter(product_id=product_id)
+        .select_related("set_by", "product")
+        .order_by("-effective_from")
+    )
+
+
+def get_all_commission_snapshots(*, product_id=None, vendor_id=None):
+    """Sync: admin — all commission snapshots with optional filters.
+
+    Args:
+        product_id: Optional product filter.
+        vendor_id: Optional vendor filter (joins through product.vendor).
+
+    Returns:
+        QuerySet[ProductCommissionSnapshot].
+    """
+    qs = (
+        ProductCommissionSnapshot.objects
+        .select_related("product", "product__vendor", "set_by")
+        .order_by("-effective_from")
+    )
+    if product_id:
+        qs = qs.filter(product_id=product_id)
+    if vendor_id:
+        qs = qs.filter(product__vendor_id=vendor_id)
+    return qs
+
+
+async def aget_commission_snapshots_for_product(product_id) -> list[dict]:
+    """Async: flat dict commission snapshot list for a product.
+
+    Admin-only endpoint. Returns chronological commission history.
+
+    Args:
+        product_id: PK of the Product.
+
+    Returns:
+        list[dict] rows ordered newest first.
+    """
+    try:
+        qs = (
+            ProductCommissionSnapshot.objects
+            .filter(product_id=product_id)
+            .order_by("-effective_from")
+            .values(
+                "id", "product_id", "commission_rate",
+                "effective_from", "effective_to", "note",
+                "set_by_id", "created_at",
+            )
+        )
+        return [row async for row in qs]
+    except Exception as exc:
+        logger.error(
+            "aget_commission_snapshots_for_product product=%s: %s",
+            product_id, exc,
+        )
+        return []
+
+
+async def aget_all_commission_snapshots(
+    *, product_id=None, vendor_id=None, limit: int = 100
+) -> list[dict]:
+    """Async: admin — all commission snapshots, filtered and paginated.
+
+    Args:
+        product_id: Optional product filter.
+        vendor_id: Optional vendor filter.
+        limit: Maximum rows to return.
+
+    Returns:
+        list[dict] commission snapshot rows.
+    """
+    try:
+        qs = (
+            ProductCommissionSnapshot.objects
+            .order_by("-effective_from")
+            .values(
+                "id", "product_id", "commission_rate",
+                "effective_from", "effective_to", "note",
+                "set_by_id", "created_at",
+            )
+        )
+        if product_id:
+            qs = qs.filter(product_id=product_id)
+        if vendor_id:
+            qs = qs.filter(product__vendor_id=vendor_id)
+        return [row async for row in qs[:limit]]
+    except Exception as exc:
+        logger.error("aget_all_commission_snapshots: %s", exc)
+        return []
+
+
+async def aget_commission_snapshot_detail(pk) -> dict | None:
+    """Async: single commission snapshot detail (admin only).
+
+    Args:
+        pk: Primary key of the snapshot.
+
+    Returns:
+        dict row or None if not found.
+    """
+    try:
+        return await (
+            ProductCommissionSnapshot.objects
+            .filter(pk=pk)
+            .values(
+                "id", "product_id", "commission_rate",
+                "effective_from", "effective_to", "note",
+                "set_by_id", "created_at", "updated_at",
+            )
+            .afirst()
+        )
+    except Exception as exc:
+        logger.error("aget_commission_snapshot_detail pk=%s: %s", pk, exc)
+        return None

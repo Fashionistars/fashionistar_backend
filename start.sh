@@ -3,18 +3,22 @@
 # Exit immediately if a command exits with a non-zero status.
 set -o errexit
 
-echo "Starting Gunicorn, Celery Worker, and Celery Beat..."
+echo "Starting Uvicorn, Celery Worker, and Celery Beat..."
 
-# Start Gunicorn web server in the background.
+# Run database migrations before starting servers
+python manage.py migrate --noinput
+
+# Start Uvicorn web server in the background.
 # --workers 1 is optimal for the free tier's shared CPU.
-# --timeout 60 gives long requests more time to complete.
-gunicorn backend.wsgi:application --bind 0.0.0.0:${PORT} --workers 1 --threads 2 --timeout 60 --log-level info &
+# --timeout-keep-alive 120 matches our ASGI timeout configurations.
+uvicorn backend.asgi:application --host 0.0.0.0 --port ${PORT:-8001} --workers 1 --ws auto --timeout-keep-alive 120 --log-config uvicorn_log_config.json &
 
 # Start Celery Worker in the background.
 # --concurrency=1 is best for the free tier.
 # --max-tasks-per-child=100 prevents memory leaks over time (critical for stability).
 # --without-gossip --without-mingle makes it more lightweight.
-celery -A backend worker -l info --concurrency=1 --without-gossip --without-mingle --max-tasks-per-child=100 &
+# Using 'solo' pool is safer for low-memory environments.
+celery -A backend worker -l info --pool=solo --concurrency=1 --without-gossip --without-mingle --max-tasks-per-child=100 &
 
 # Start Celery Beat scheduler in the background.
 # --scheduler django_celery_beat... explicitly uses the database for schedules.

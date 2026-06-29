@@ -438,6 +438,160 @@ class MeasurementTemplateRowOut(Schema):
 
 
 class VendorMeasurementTemplateIn(Schema):
+    commission_rate: Decimal = Decimal("10.00")
+    condition: str = "new"
+    is_pre_order: bool = False
+    pre_order_date: Optional[datetime] = None
+    meta_title: str = ""
+    meta_description: str = ""
+    age_group: str = ""
+    gender_target: str = ""
+    sustainability_score: Optional[Decimal] = None
+    carbon_footprint_kg: Optional[Decimal] = None
+    ai_trend_score: Decimal = Decimal("0.0")
+    created_at: datetime
+    updated_at: datetime
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 6: SERVICE-RELATED LEDGER READ SCHEMAS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ProductReviewOut(Schema):
+    """Serialized consumer feedback parameters."""
+    model_config = {"from_attributes": True}
+    id: str
+    reviewer_name: str = "Anonymous"
+    reviewer_email: str = ""
+    product_title: Optional[str] = None
+    rating: int
+    review: str
+    reply: str = ""
+    helpful_votes: int = 0
+    active: bool
+    moderated: bool
+    created_at: datetime
+
+
+class WishlistItemOut(Schema):
+    """Serialized wishlist values."""
+    model_config = {"from_attributes": True}
+    id: str
+    product: ProductListItemOut
+    created_at: datetime
+
+
+class CouponOut(Schema):
+    """Serialized promotional coupon parameter definitions."""
+    model_config = {"from_attributes": True}
+    id: str
+    code: str
+    discount_type: str
+    discount_value: Decimal
+    minimum_order: Decimal = Decimal("0")
+    maximum_discount: Optional[Decimal] = None
+    usage_limit: Optional[int] = None
+    usage_count: int = 0
+    active: bool
+    valid_from: datetime
+    valid_to: datetime
+
+
+class ProductInventoryLogOut(Schema):
+    """Serialized inventory change records."""
+    model_config = {"from_attributes": True}
+    id: str
+    quantity_delta: int
+    quantity_before: int
+    quantity_after: int
+    reason: str
+    reference_id: str = ""
+    note: str = ""
+    actor_name: str = "System Engine"
+    created_at: datetime
+
+
+class ProductDetailBundleOut(Schema):
+    """Bundled product data representation designed for the PDP layout.
+
+    Allows the frontend to fetch the product specifications, active reviews, and
+    client wishlist status in a single asynchronous request [1].
+    """
+    product: Optional[ProductDetailOut] = None
+    reviews: List[ProductReviewOut] = []
+    in_wishlist: bool = False
+    review_count: int = 0
+    avg_rating: float = 0.0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 7: WRITE / INPUT & EXTRA ENDPOINT SCHEMAS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class CouponValidateIn(Schema):
+    code: str
+    order_subtotal: Decimal
+    cart_total: Optional[Decimal] = None
+
+
+class CouponValidateOut(Schema):
+    coupon_id: str
+    code: str
+    discount_type: str
+    discount_amount: Decimal
+
+
+class InventoryAdjustIn(Schema):
+    quantity_delta: int
+    reason: str
+    note: str = ""
+    reference_id: str = ""
+
+
+class ProductReviewWriteIn(Schema):
+    rating: int
+    review: str
+    idempotency_key: Optional[UUID] = None
+
+
+class WishlistBulkStatusOut(Schema):
+    statuses: Dict[str, bool]
+
+
+class WishlistToggleOut(Schema):
+    added: bool
+    message: str
+
+
+class MeasurementTemplateRowIn(Schema):
+    size_label: str
+    chest_cm: str = ""
+    waist_cm: str = ""
+    hip_cm: str = ""
+    length_cm: str = ""
+    shoulder_cm: str = ""
+    sleeve_cm: str = ""
+    inseam_cm: str = ""
+    foot_length_cm: str = ""
+    sort_order: int = 0
+
+
+class MeasurementTemplateRowOut(Schema):
+    id: str
+    size_id: str
+    size_label: str
+    chest_cm: str = ""
+    waist_cm: str = ""
+    hip_cm: str = ""
+    length_cm: str = ""
+    shoulder_cm: str = ""
+    sleeve_cm: str = ""
+    inseam_cm: str = ""
+    foot_length_cm: str = ""
+    sort_order: int = 0
+
+
+class VendorMeasurementTemplateIn(Schema):
     name: str
     description: str = ""
     template_rows: List[MeasurementTemplateRowIn]
@@ -449,3 +603,134 @@ class VendorMeasurementTemplateOut(Schema):
     name: str
     description: str = ""
     template_rows: List[MeasurementTemplateRowOut]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PHASE 8 — SIZE GUIDE · SHIPPING PROFILE · COMMISSION SNAPSHOT SCHEMAS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ProductSizeGuideListOut(Schema):
+    """Size guide row — list view for vendor, client, and admin portals."""
+
+    id: str
+    name: str
+    description: str = "custom"
+    size_label: str
+    chest_cm: str = ""
+    waist_cm: str = ""
+    hip_cm: str = ""
+    length_cm: str = ""
+    shoulder_cm: str = ""
+    sleeve_cm: str = ""
+    inseam_cm: str = ""
+    foot_length_cm: str = ""
+    sort_order: int = 0
+    is_default: bool = False
+    save_as_template: bool = True
+    vendor_id: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
+class ProductSizeGuideDetailOut(ProductSizeGuideListOut):
+    """Size guide row — full detail view with timestamps."""
+
+    updated_at: Optional[datetime] = None
+
+
+class ClientMeasurementOverlayOut(Schema):
+    """Client portal — size guide row enriched with personal measurement data.
+
+    Allows the frontend to render a colour-coded side-by-side comparison
+    between the vendor's size range and the client's actual body measurements.
+    """
+
+    guide: ProductSizeGuideListOut
+    # Raw measurement fields from the client's active MeasurementProfile.
+    client_measurements: Optional[Dict[str, Any]] = None
+
+
+class ProductShippingProfileListOut(Schema):
+    """Shipping profile row — list view for vendor and admin portals."""
+
+    id: str
+    vendor_id: Optional[str] = None
+    weight_kg: Decimal = Decimal("0.000")
+    dimensions_cm: Optional[Dict[str, Any]] = None
+    length_cm: Decimal = Decimal("0.0")
+    width_cm: Decimal = Decimal("0.0")
+    height_cm: Decimal = Decimal("0.0")
+    is_fragile: bool = False
+    requires_signature: bool = False
+    restricted_countries: List[str] = []
+    free_shipping_threshold: Optional[Decimal] = None
+    processing_days: int = 1
+    created_at: Optional[datetime] = None
+
+
+class ProductShippingProfileDetailOut(ProductShippingProfileListOut):
+    """Shipping profile — full detail view with audit timestamps."""
+
+    updated_at: Optional[datetime] = None
+
+
+class ProductCommissionSnapshotOut(Schema):
+    """Commission snapshot row — admin portal only.
+
+    Tracks the commission rate history applied to a product over time.
+    Each row is immutable once created; updates create new snapshots.
+    """
+
+    id: str
+    product_id: str
+    commission_rate: Decimal
+    effective_from: datetime
+    effective_to: Optional[datetime] = None
+    note: str = ""
+    set_by_id: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+# ── Write-side schemas (Ninja input validation — Phase C endpoints) ──────────
+
+class ProductSizeGuideCreateIn(Schema):
+    """Input schema for creating or updating a size guide template."""
+
+    name: str
+    description: str = "custom"
+    size_label: str = "M"
+    chest_cm: str = ""
+    waist_cm: str = ""
+    hip_cm: str = ""
+    length_cm: str = ""
+    shoulder_cm: str = ""
+    sleeve_cm: str = ""
+    inseam_cm: str = ""
+    foot_length_cm: str = ""
+    sort_order: int = 0
+    is_default: bool = False
+    save_as_template: bool = True
+
+
+class ProductShippingProfileCreateIn(Schema):
+    """Input schema for creating or updating a shipping profile."""
+
+    weight_kg: Decimal = Decimal("0.000")
+    length_cm: Decimal = Decimal("0.0")
+    width_cm: Decimal = Decimal("0.0")
+    height_cm: Decimal = Decimal("0.0")
+    is_fragile: bool = False
+    requires_signature: bool = False
+    restricted_countries: List[str] = []
+    free_shipping_threshold: Optional[Decimal] = None
+    processing_days: int = 1
+
+
+class ProductCommissionSnapshotCreateIn(Schema):
+    """Input schema for creating a new commission snapshot (admin only)."""
+
+    product_id: str
+    commission_rate: Decimal
+    effective_from: datetime
+    effective_to: Optional[datetime] = None
+    note: str = ""
