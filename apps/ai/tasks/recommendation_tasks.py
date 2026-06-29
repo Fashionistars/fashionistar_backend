@@ -254,7 +254,7 @@ def embed_unembedded_products() -> None:
         unembedded_ids = list(
             Product.objects
             .filter(is_active=True)
-            .exclude(productembedding__isnull=False)
+            .exclude(embedding__isnull=False)
             .values_list("id", flat=True)[:200]  # Max 200 per run
         )
 
