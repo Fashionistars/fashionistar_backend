@@ -1,15 +1,12 @@
 """
-Serializers برای API های Analytics
+Analytics Serializers for Fashionistar.
 """
+
 from rest_framework import serializers
 from .models import Metric, UserActivity, PerformanceMetric, BusinessMetric, AlertRule, Alert
 
 
 class MetricSerializer(serializers.ModelSerializer):
-    """
-    Serializer برای مدل Metric
-    """
-    
     class Meta:
         model = Metric
         fields = [
@@ -20,10 +17,7 @@ class MetricSerializer(serializers.ModelSerializer):
 
 
 class UserActivitySerializer(serializers.ModelSerializer):
-    """
-    Serializer برای مدل UserActivity
-    """
-    user_username = serializers.CharField(source='user.username', read_only=True)
+    user_username = serializers.SerializerMethodField()
     
     class Meta:
         model = UserActivity
@@ -33,13 +27,15 @@ class UserActivitySerializer(serializers.ModelSerializer):
             'metadata', 'timestamp'
         ]
         read_only_fields = ['id', 'timestamp', 'user_username']
+        
+    def get_user_username(self, obj) -> str:
+        if obj.user:
+            return obj.user.phone or obj.user.email or str(obj.user.id)
+        return ''
 
 
 class PerformanceMetricSerializer(serializers.ModelSerializer):
-    """
-    Serializer برای مدل PerformanceMetric
-    """
-    user_username = serializers.CharField(source='user.username', read_only=True)
+    user_username = serializers.SerializerMethodField()
     
     class Meta:
         model = PerformanceMetric
@@ -50,12 +46,13 @@ class PerformanceMetricSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'timestamp', 'user_username']
 
+    def get_user_username(self, obj) -> str:
+        if obj.user:
+            return obj.user.phone or obj.user.email or str(obj.user.id)
+        return ''
+
 
 class BusinessMetricSerializer(serializers.ModelSerializer):
-    """
-    Serializer برای مدل BusinessMetric
-    """
-    
     class Meta:
         model = BusinessMetric
         fields = [
@@ -66,10 +63,6 @@ class BusinessMetricSerializer(serializers.ModelSerializer):
 
 
 class AlertRuleSerializer(serializers.ModelSerializer):
-    """
-    Serializer برای مدل AlertRule
-    """
-    
     class Meta:
         model = AlertRule
         fields = [
@@ -80,9 +73,6 @@ class AlertRuleSerializer(serializers.ModelSerializer):
 
 
 class AlertSerializer(serializers.ModelSerializer):
-    """
-    Serializer برای مدل Alert
-    """
     rule_name = serializers.CharField(source='rule.name', read_only=True)
     rule_severity = serializers.CharField(source='rule.severity', read_only=True)
     
@@ -96,9 +86,6 @@ class AlertSerializer(serializers.ModelSerializer):
 
 
 class RecordMetricSerializer(serializers.Serializer):
-    """
-    Serializer برای ثبت متریک جدید
-    """
     name = serializers.CharField(max_length=255)
     value = serializers.FloatField()
     metric_type = serializers.ChoiceField(
@@ -109,33 +96,19 @@ class RecordMetricSerializer(serializers.Serializer):
 
 
 class UserAnalyticsQuerySerializer(serializers.Serializer):
-    """
-    Serializer برای پارامترهای جستجوی تحلیل‌های کاربر
-    """
     user_id = serializers.IntegerField(required=False)
     days = serializers.IntegerField(default=30, min_value=1, max_value=365)
 
 
 class PerformanceAnalyticsQuerySerializer(serializers.Serializer):
-    """
-    Serializer برای پارامترهای جستجوی تحلیل‌های عملکرد
-    """
     days = serializers.IntegerField(default=7, min_value=1, max_value=90)
 
 
 class BusinessMetricsQuerySerializer(serializers.Serializer):
-    """
-    Serializer برای پارامترهای جستجوی متریک‌های کسب و کار
-    """
     period_start = serializers.DateTimeField()
     period_end = serializers.DateTimeField()
     
     def validate(self, data):
-        """
-        اعتبارسنجی محدوده زمانی
-        """
         if data['period_start'] >= data['period_end']:
-            raise serializers.ValidationError(
-                "زمان شروع باید قبل از زمان پایان باشد"
-            )
+            raise serializers.ValidationError("Period start must be before period end.")
         return data

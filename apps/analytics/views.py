@@ -1,15 +1,15 @@
 """
-Views برای API های Analytics
+Analytics API Views for Fashionistar.
 """
+
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.utils import timezone
-from django.db.models import Q
 
 from .models import Metric, UserActivity, PerformanceMetric, BusinessMetric, AlertRule, Alert
 from .serializers import (
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 class StandardResultsSetPagination(PageNumberPagination):
     """
-    صفحه‌بندی استاندارد برای نتایج
+    Standard pagination for analytics results.
     """
     page_size = 50
     page_size_query_param = 'page_size'
@@ -34,7 +34,7 @@ class StandardResultsSetPagination(PageNumberPagination):
 
 class MetricViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    ViewSet برای مشاهده متریک‌ها
+    ViewSet for viewing system telemetry metrics.
     """
     queryset = Metric.objects.all()
     serializer_class = MetricSerializer
@@ -42,22 +42,16 @@ class MetricViewSet(viewsets.ReadOnlyModelViewSet):
     pagination_class = StandardResultsSetPagination
     
     def get_queryset(self):
-        """
-        فیلتر کردن متریک‌ها بر اساس پارامترهای جستجو
-        """
         queryset = super().get_queryset()
         
-        # فیلتر بر اساس نام
         name = self.request.query_params.get('name')
         if name:
             queryset = queryset.filter(name__icontains=name)
         
-        # فیلتر بر اساس نوع
         metric_type = self.request.query_params.get('metric_type')
         if metric_type:
             queryset = queryset.filter(metric_type=metric_type)
         
-        # فیلتر بر اساس محدوده زمانی
         start_date = self.request.query_params.get('start_date')
         end_date = self.request.query_params.get('end_date')
         
@@ -80,7 +74,7 @@ class MetricViewSet(viewsets.ReadOnlyModelViewSet):
 
 class UserActivityViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    ViewSet برای مشاهده فعالیت‌های کاربران
+    ViewSet for auditing user activities.
     """
     queryset = UserActivity.objects.all()
     serializer_class = UserActivitySerializer
@@ -88,22 +82,16 @@ class UserActivityViewSet(viewsets.ReadOnlyModelViewSet):
     pagination_class = StandardResultsSetPagination
     
     def get_queryset(self):
-        """
-        فیلتر کردن فعالیت‌ها بر اساس پارامترهای جستجو
-        """
         queryset = super().get_queryset()
         
-        # فیلتر بر اساس کاربر
         user_id = self.request.query_params.get('user_id')
         if user_id:
             queryset = queryset.filter(user_id=user_id)
         
-        # فیلتر بر اساس عمل
-        action = self.request.query_params.get('action')
-        if action:
-            queryset = queryset.filter(action__icontains=action)
+        action_param = self.request.query_params.get('action')
+        if action_param:
+            queryset = queryset.filter(action__icontains=action_param)
         
-        # فیلتر بر اساس منبع
         resource = self.request.query_params.get('resource')
         if resource:
             queryset = queryset.filter(resource__icontains=resource)
@@ -113,7 +101,7 @@ class UserActivityViewSet(viewsets.ReadOnlyModelViewSet):
 
 class PerformanceMetricViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    ViewSet برای مشاهده متریک‌های عملکرد
+    ViewSet for checking API latencies.
     """
     queryset = PerformanceMetric.objects.all()
     serializer_class = PerformanceMetricSerializer
@@ -121,27 +109,20 @@ class PerformanceMetricViewSet(viewsets.ReadOnlyModelViewSet):
     pagination_class = StandardResultsSetPagination
     
     def get_queryset(self):
-        """
-        فیلتر کردن متریک‌های عملکرد بر اساس پارامترهای جستجو
-        """
         queryset = super().get_queryset()
         
-        # فیلتر بر اساس endpoint
         endpoint = self.request.query_params.get('endpoint')
         if endpoint:
             queryset = queryset.filter(endpoint__icontains=endpoint)
         
-        # فیلتر بر اساس متد
         method = self.request.query_params.get('method')
         if method:
             queryset = queryset.filter(method=method)
         
-        # فیلتر بر اساس کد وضعیت
         status_code = self.request.query_params.get('status_code')
         if status_code:
             queryset = queryset.filter(status_code=status_code)
         
-        # فیلتر خطاها
         errors_only = self.request.query_params.get('errors_only')
         if errors_only and errors_only.lower() == 'true':
             queryset = queryset.filter(status_code__gte=400)
@@ -151,7 +132,7 @@ class PerformanceMetricViewSet(viewsets.ReadOnlyModelViewSet):
 
 class BusinessMetricViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    ViewSet برای مشاهده متریک‌های کسب و کار
+    ViewSet for viewing business aggregates (admin only).
     """
     queryset = BusinessMetric.objects.all()
     serializer_class = BusinessMetricSerializer
@@ -161,7 +142,7 @@ class BusinessMetricViewSet(viewsets.ReadOnlyModelViewSet):
 
 class AlertRuleViewSet(viewsets.ModelViewSet):
     """
-    ViewSet برای مدیریت قوانین هشدار
+    ViewSet for managing alert rules (admin only).
     """
     queryset = AlertRule.objects.all()
     serializer_class = AlertRuleSerializer
@@ -170,7 +151,7 @@ class AlertRuleViewSet(viewsets.ModelViewSet):
 
 class AlertViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    ViewSet برای مشاهده هشدارها
+    ViewSet for viewing fired alerts.
     """
     queryset = Alert.objects.all()
     serializer_class = AlertSerializer
@@ -178,17 +159,12 @@ class AlertViewSet(viewsets.ReadOnlyModelViewSet):
     pagination_class = StandardResultsSetPagination
     
     def get_queryset(self):
-        """
-        فیلتر کردن هشدارها بر اساس پارامترهای جستجو
-        """
         queryset = super().get_queryset()
         
-        # فیلتر بر اساس وضعیت
         status_filter = self.request.query_params.get('status')
         if status_filter:
             queryset = queryset.filter(status=status_filter)
         
-        # فیلتر بر اساس سطح اهمیت
         severity = self.request.query_params.get('severity')
         if severity:
             queryset = queryset.filter(rule__severity=severity)
@@ -198,7 +174,7 @@ class AlertViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['post'], permission_classes=[IsAdminUser])
     def resolve_all(self, request):
         """
-        حل تمام هشدارهای فعال
+        Resolve all currently firing alerts.
         """
         try:
             updated_count = Alert.objects.filter(status='firing').update(
@@ -207,13 +183,13 @@ class AlertViewSet(viewsets.ReadOnlyModelViewSet):
             )
             
             return Response({
-                'message': f'{updated_count} هشدار حل شد',
+                'message': f'{updated_count} alerts resolved successfully.',
                 'resolved_count': updated_count
             })
         except Exception as e:
-            logger.error(f"خطا در حل هشدارها: {str(e)}")
+            logger.error(f"Error resolving alerts: {str(e)}")
             return Response(
-                {'error': 'خطا در حل هشدارها'},
+                {'error': 'Failed to resolve alerts.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -222,7 +198,7 @@ class AlertViewSet(viewsets.ReadOnlyModelViewSet):
 @permission_classes([IsAuthenticated])
 def record_metric(request):
     """
-    ثبت متریک جدید
+    Record a new telemetry metric.
     """
     serializer = RecordMetricSerializer(data=request.data)
     if serializer.is_valid():
@@ -239,9 +215,9 @@ def record_metric(request):
             return Response(response_serializer.data, status=status.HTTP_201_CREATED)
         
         except Exception as e:
-            logger.error(f"خطا در ثبت متریک: {str(e)}")
+            logger.error(f"Error recording metric: {str(e)}")
             return Response(
-                {'error': 'خطا در ثبت متریک'},
+                {'error': 'Failed to record metric.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
@@ -252,7 +228,7 @@ def record_metric(request):
 @permission_classes([IsAuthenticated])
 def user_analytics(request):
     """
-    دریافت تحلیل‌های کاربر
+    Retrieve user activity statistics.
     """
     serializer = UserAnalyticsQuerySerializer(data=request.GET)
     if serializer.is_valid():
@@ -266,9 +242,9 @@ def user_analytics(request):
             return Response(analytics_data)
         
         except Exception as e:
-            logger.error(f"خطا در دریافت تحلیل‌های کاربر: {str(e)}")
+            logger.error(f"Error getting user analytics: {str(e)}")
             return Response(
-                {'error': 'خطا در دریافت تحلیل‌های کاربر'},
+                {'error': 'Failed to retrieve user analytics.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
@@ -279,7 +255,7 @@ def user_analytics(request):
 @permission_classes([IsAuthenticated])
 def performance_analytics(request):
     """
-    دریافت تحلیل‌های عملکرد
+    Retrieve API latency analytics.
     """
     serializer = PerformanceAnalyticsQuerySerializer(data=request.GET)
     if serializer.is_valid():
@@ -292,9 +268,9 @@ def performance_analytics(request):
             return Response(analytics_data)
         
         except Exception as e:
-            logger.error(f"خطا در دریافت تحلیل‌های عملکرد: {str(e)}")
+            logger.error(f"Error getting performance analytics: {str(e)}")
             return Response(
-                {'error': 'خطا در دریافت تحلیل‌های عملکرد'},
+                {'error': 'Failed to retrieve performance analytics.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
@@ -305,7 +281,7 @@ def performance_analytics(request):
 @permission_classes([IsAdminUser])
 def calculate_business_metrics(request):
     """
-    محاسبه متریک‌های کسب و کار
+    Calculate e-commerce aggregates.
     """
     serializer = BusinessMetricsQuerySerializer(data=request.data)
     if serializer.is_valid():
@@ -317,14 +293,14 @@ def calculate_business_metrics(request):
             )
             
             return Response({
-                'message': 'متریک‌های کسب و کار محاسبه شد',
+                'message': 'Business metrics calculated successfully.',
                 'metrics': metrics
             })
         
         except Exception as e:
-            logger.error(f"خطا در محاسبه متریک‌های کسب و کار: {str(e)}")
+            logger.error(f"Error calculating business metrics: {str(e)}")
             return Response(
-                {'error': 'خطا در محاسبه متریک‌های کسب و کار'},
+                {'error': 'Failed to calculate business metrics.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
@@ -335,7 +311,7 @@ def calculate_business_metrics(request):
 @permission_classes([IsAuthenticated])
 def system_overview(request):
     """
-    دریافت بررسی کلی سیستم
+    Retrieve a system-wide overview of active indicators.
     """
     try:
         analytics_service = AnalyticsService()
@@ -344,9 +320,9 @@ def system_overview(request):
         return Response(overview)
     
     except Exception as e:
-        logger.error(f"خطا در دریافت بررسی کلی سیستم: {str(e)}")
+        logger.error(f"Error getting system overview: {str(e)}")
         return Response(
-            {'error': 'خطا در دریافت بررسی کلی سیستم'},
+            {'error': 'Failed to retrieve system overview.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -355,20 +331,20 @@ def system_overview(request):
 @permission_classes([IsAdminUser])
 def check_alerts(request):
     """
-    بررسی قوانین هشدار
+    Evaluate alert rules.
     """
     try:
         analytics_service = AnalyticsService()
         triggered_alerts = analytics_service.check_alert_rules()
         
         return Response({
-            'message': f'{len(triggered_alerts)} هشدار تولید شد',
+            'message': f'{len(triggered_alerts)} alerts evaluated/triggered.',
             'triggered_alerts': triggered_alerts
         })
     
     except Exception as e:
-        logger.error(f"خطا در بررسی هشدارها: {str(e)}")
+        logger.error(f"Error evaluating alerts: {str(e)}")
         return Response(
-            {'error': 'خطا در بررسی هشدارها'},
+            {'error': 'Failed to evaluate alert rules.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

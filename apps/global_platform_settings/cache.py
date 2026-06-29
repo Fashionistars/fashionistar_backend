@@ -92,5 +92,9 @@ def get_platform_settings():
             platform_name="Fashionistar",
             support_email="support@fashionistar.net",
             support_phone="+2349137654300",
+            default_free_shipping_threshold=Decimal("50000.00"),
+            active=True,
+            terms_url="https://fashionistar.net/terms",
+            privacy_url="https://fashionistar.net/privacy",
         )
         return instance

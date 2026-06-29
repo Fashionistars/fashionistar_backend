@@ -3,7 +3,7 @@ URL patterns برای اپلیکیشن integrations
 """
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from integrations.views import (
+from .views import (
     IntegrationProviderViewSet,
     IntegrationCredentialViewSet,
     IntegrationLogViewSet,

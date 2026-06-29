@@ -121,6 +121,10 @@ urlpatterns = [
     path("api/v1/support/", include("apps.support.urls", namespace="support")),
     # ── Phase 6: Identity Verification (KYC) Domain ──────────
     path("api/v1/kyc/", include("apps.kyc.urls", namespace="kyc")),
+    # ── Phase 7: Integrations, Chatbot & Analytics Domains ───
+    path("api/v1/integrations/", include("apps.integrations.urls", namespace="integrations")),
+    path("api/v1/chatbot/", include("apps.chatbot.urls", namespace="chatbot")),
+    path("api/v1/analytics/", include("apps.analytics.urls", namespace="analytics")),
     # ── Phase 2: Central Async Ninja API (/api/v1/ninja/*) ───────────────────
     path("api/v1/ninja/", ninja_api.urls),
 

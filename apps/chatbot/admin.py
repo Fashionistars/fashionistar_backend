@@ -23,7 +23,7 @@ class ChatbotSessionAdmin(admin.ModelAdmin):
         'session_type', 'status', 'started_at'
     ]
     search_fields = [
-        'user__phone_number', 'user__first_name', 'user__last_name'
+        'user__phone', 'user__first_name', 'user__last_name'
     ]
     readonly_fields = [
         'id', 'started_at', 'duration_display'
@@ -81,7 +81,7 @@ class ConversationAdmin(admin.ModelAdmin):
         'session__session_type'
     ]
     search_fields = [
-        'title', 'session__user__phone_number',
+        'title', 'session__user__phone',
         'session__user__first_name', 'session__user__last_name'
     ]
     readonly_fields = [
@@ -180,7 +180,7 @@ class MessageAdmin(admin.ModelAdmin):
     ]
     search_fields = [
         'content', 'conversation__title',
-        'conversation__session__user__phone_number'
+        'conversation__session__user__phone'
     ]
     readonly_fields = [
         'id', 'created_at', 'processing_time'

@@ -1,6 +1,7 @@
 """
-سرویس‌های Analytics برای جمع‌آوری و تحلیل متریک‌ها
+Analytics Services for telemetry and performance monitoring.
 """
+
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
@@ -16,22 +17,13 @@ User = get_user_model()
 
 class AnalyticsService:
     """
-    سرویس اصلی برای جمع‌آوری و تحلیل متریک‌ها
+    Main service to record and analyze system telemetry and business metrics.
     """
     
     def record_metric(self, name: str, value: float, metric_type: str = 'gauge', 
-                     tags: Optional[Dict[str, Any]] = None) -> Metric:
+                      tags: Optional[Dict[str, Any]] = None) -> Metric:
         """
-        ثبت یک متریک
-        
-        Args:
-            name: نام متریک
-            value: مقدار متریک
-            metric_type: نوع متریک (counter, gauge, histogram, timer)
-            tags: برچسب‌های اختیاری برای ابعاد متریک
-        
-        Returns:
-            شیء Metric
+        Record a numeric telemetry metric.
         """
         return Metric.objects.create(
             name=name,
@@ -41,21 +33,10 @@ class AnalyticsService:
         )
     
     def record_user_activity(self, user: User, action: str, resource: str = '', 
-                           resource_id: Optional[int] = None, metadata: Optional[Dict] = None,
-                           request=None) -> UserActivity:
+                            resource_id: Optional[int] = None, metadata: Optional[Dict] = None,
+                            request=None) -> UserActivity:
         """
-        ثبت فعالیت کاربر
-        
-        Args:
-            user: کاربر انجام‌دهنده عمل
-            action: نام عمل
-            resource: منبع مورد عمل
-            resource_id: شناسه منبع
-            metadata: اطلاعات اضافی
-            request: شیء درخواست HTTP (برای IP، user agent و غیره)
-        
-        Returns:
-            شیء UserActivity
+        Record a user activity action.
         """
         activity_data = {
             'user': user,
@@ -78,19 +59,7 @@ class AnalyticsService:
                                 status_code: int, user: Optional[User] = None,
                                 error_message: str = '', metadata: Optional[Dict] = None) -> PerformanceMetric:
         """
-        ثبت متریک عملکرد API
-        
-        Args:
-            endpoint: نقطه انتهایی API
-            method: متد HTTP
-            response_time_ms: زمان پاسخ به میلی‌ثانیه
-            status_code: کد وضعیت HTTP
-            user: کاربر درخواست‌کننده
-            error_message: پیام خطا در صورت وجود
-            metadata: اطلاعات اضافی
-        
-        Returns:
-            شیء PerformanceMetric
+        Record an API endpoint performance entry.
         """
         return PerformanceMetric.objects.create(
             endpoint=endpoint,
@@ -104,36 +73,29 @@ class AnalyticsService:
     
     def calculate_business_metrics(self, period_start: datetime, period_end: datetime) -> Dict[str, Any]:
         """
-        محاسبه متریک‌های کسب و کار برای یک دوره زمانی
-        
-        Args:
-            period_start: شروع دوره
-            period_end: پایان دوره
-        
-        Returns:
-            دیکشنری شامل متریک‌های کسب و کار
+        Calculate key e-commerce order and activity metrics for a period.
         """
-        # متریک‌های encounter (در صورت وجود)
+        # Order Metrics (if available)
         try:
-            from encounters.models import Encounter
-            total_encounters = Encounter.objects.filter(
+            from apps.order.models import Order
+            total_orders = Order.objects.filter(
                 created_at__range=[period_start, period_end]
             ).count()
             
-            completed_encounters = Encounter.objects.filter(
+            completed_orders = Order.objects.filter(
                 created_at__range=[period_start, period_end],
                 status='completed'
             ).count()
         except ImportError:
-            total_encounters = 0
-            completed_encounters = 0
+            total_orders = 0
+            completed_orders = 0
         
-        # متریک‌های فعالیت کاربر
+        # User activity metrics
         active_users = UserActivity.objects.filter(
             timestamp__range=[period_start, period_end]
         ).values('user').distinct().count()
         
-        # متریک‌های عملکرد
+        # Performance metrics
         avg_response_time = PerformanceMetric.objects.filter(
             timestamp__range=[period_start, period_end]
         ).aggregate(avg_time=Avg('response_time_ms'))['avg_time'] or 0
@@ -150,16 +112,16 @@ class AnalyticsService:
         error_rate_percent = (error_rate / total_requests * 100) if total_requests > 0 else 0
         
         metrics = {
-            'total_encounters': total_encounters,
-            'completed_encounters': completed_encounters,
-            'completion_rate': (completed_encounters / total_encounters * 100) if total_encounters > 0 else 0,
+            'total_orders': total_orders,
+            'completed_orders': completed_orders,
+            'order_completion_rate': (completed_orders / total_orders * 100) if total_orders > 0 else 0,
             'active_users': active_users,
             'avg_response_time_ms': round(avg_response_time, 2),
             'error_rate_percent': round(error_rate_percent, 2),
             'total_api_requests': total_requests
         }
         
-        # ذخیره متریک‌های کسب و کار
+        # Persist metrics to the DB
         for metric_name, value in metrics.items():
             BusinessMetric.objects.update_or_create(
                 metric_name=metric_name,
@@ -172,14 +134,7 @@ class AnalyticsService:
     
     def get_user_analytics(self, user_id: Optional[int] = None, days: int = 30) -> Dict[str, Any]:
         """
-        دریافت تحلیل‌های کاربر
-        
-        Args:
-            user_id: شناسه کاربر خاص (اختیاری)
-            days: تعداد روزهای تحلیل
-        
-        Returns:
-            دیکشنری شامل تحلیل‌های کاربر
+        Retrieve user activity and usage statistics.
         """
         cutoff_date = timezone.now() - timedelta(days=days)
         
@@ -187,24 +142,24 @@ class AnalyticsService:
         if user_id:
             queryset = queryset.filter(user_id=user_id)
         
-        # تفکیک فعالیت‌ها
+        # Activity breakdown
         activity_breakdown = queryset.values('action').annotate(
             count=Count('id')
         ).order_by('-count')
         
-        # استفاده از منابع
+        # Resource utilization
         resource_usage = queryset.exclude(resource='').values('resource').annotate(
             count=Count('id')
         ).order_by('-count')[:10]
         
-        # فعالیت روزانه
+        # Daily activity trends
         daily_activity = queryset.extra(
             select={'day': "DATE(timestamp)"}
         ).values('day').annotate(
             count=Count('id')
         ).order_by('day')
         
-        # مشارکت کاربر
+        # Engagement metrics
         unique_users = queryset.values('user').distinct().count()
         total_activities = queryset.count()
         avg_activities_per_user = total_activities / unique_users if unique_users > 0 else 0
@@ -221,42 +176,36 @@ class AnalyticsService:
     
     def get_performance_analytics(self, days: int = 7) -> Dict[str, Any]:
         """
-        دریافت تحلیل‌های عملکرد API
-        
-        Args:
-            days: تعداد روزهای تحلیل
-        
-        Returns:
-            دیکشنری شامل تحلیل‌های عملکرد
+        Retrieve API performance trends.
         """
         cutoff_date = timezone.now() - timedelta(days=days)
         
         metrics = PerformanceMetric.objects.filter(timestamp__gte=cutoff_date)
         
-        # آمار کلی
+        # Global stats
         total_requests = metrics.count()
         avg_response_time = metrics.aggregate(
             avg_time=Avg('response_time_ms')
         )['avg_time'] or 0
         
-        # تفکیک کد وضعیت
+        # HTTP Status code breakdown
         status_breakdown = metrics.values('status_code').annotate(
             count=Count('id')
         ).order_by('status_code')
         
-        # کندترین endpoints
+        # Slowest API endpoints
         slowest_endpoints = metrics.values('endpoint', 'method').annotate(
             avg_time=Avg('response_time_ms'),
             request_count=Count('id')
         ).order_by('-avg_time')[:10]
         
-        # تحلیل خطاها
+        # Failure analytics
         errors = metrics.filter(status_code__gte=400)
         error_breakdown = errors.values('endpoint', 'status_code').annotate(
             count=Count('id')
         ).order_by('-count')[:10]
         
-        # محاسبه percentile (ساده شده)
+        # Simple percentile calculation
         response_times = list(metrics.values_list('response_time_ms', flat=True))
         response_times.sort()
         
@@ -281,16 +230,12 @@ class AnalyticsService:
     
     def check_alert_rules(self) -> List[Dict[str, Any]]:
         """
-        بررسی قوانین هشدار در برابر متریک‌های فعلی
-        
-        Returns:
-            لیست هشدارهای تولید شده
+        Evaluate active alert rules against recent metrics.
         """
         triggered_alerts = []
         
         for rule in AlertRule.objects.filter(is_active=True):
             try:
-                # دریافت مقادیر متریک اخیر
                 recent_metrics = Metric.objects.filter(
                     name=rule.metric_name,
                     timestamp__gte=timezone.now() - timedelta(minutes=5)
@@ -299,11 +244,9 @@ class AnalyticsService:
                 if not recent_metrics.exists():
                     continue
                 
-                # دریافت آخرین مقدار
                 latest_metric = recent_metrics.latest('timestamp')
                 metric_value = latest_metric.value
                 
-                # بررسی آستانه
                 should_fire = False
                 if rule.operator == 'gt' and metric_value > rule.threshold:
                     should_fire = True
@@ -319,19 +262,17 @@ class AnalyticsService:
                     should_fire = True
                 
                 if should_fire:
-                    # بررسی اینکه آیا هشدار از قبل وجود دارد و در حال اجرا است
                     existing_alert = Alert.objects.filter(
                         rule=rule,
                         status='firing'
                     ).first()
                     
                     if not existing_alert:
-                        # ایجاد هشدار جدید
                         alert = Alert.objects.create(
                             rule=rule,
                             status='firing',
                             metric_value=metric_value,
-                            message=f"{rule.name}: {rule.metric_name} برابر {metric_value} است (آستانه: {rule.threshold})",
+                            message=f"{rule.name}: {rule.metric_name} is {metric_value} (threshold: {rule.threshold})",
                             metadata={
                                 'metric_timestamp': latest_metric.timestamp.isoformat(),
                                 'tags': latest_metric.tags
@@ -348,7 +289,6 @@ class AnalyticsService:
                         })
                 
                 else:
-                    # حل هشدارهای در حال اجرا برای این قانون
                     Alert.objects.filter(
                         rule=rule,
                         status='firing'
@@ -358,37 +298,34 @@ class AnalyticsService:
                     )
             
             except Exception as e:
-                logger.error(f"خطا در بررسی قانون هشدار {rule.name}: {str(e)}")
+                logger.error(f"Error checking alert rule {rule.name}: {str(e)}")
                 continue
         
         return triggered_alerts
     
     def get_system_overview(self) -> Dict[str, Any]:
         """
-        دریافت بررسی کلی سیستم
-        
-        Returns:
-            دیکشنری شامل بررسی کلی سیستم
+        Retrieve a general summary of active e-commerce and performance telemetry.
         """
         now = timezone.now()
         last_24h = now - timedelta(hours=24)
         last_7d = now - timedelta(days=7)
         
-        # متریک‌های encounter
+        # Order statistics
         try:
-            from encounters.models import Encounter
-            encounters_24h = Encounter.objects.filter(created_at__gte=last_24h).count()
-            encounters_7d = Encounter.objects.filter(created_at__gte=last_7d).count()
+            from apps.order.models import Order
+            orders_24h = Order.objects.filter(created_at__gte=last_24h).count()
+            orders_7d = Order.objects.filter(created_at__gte=last_7d).count()
         except ImportError:
-            encounters_24h = 0
-            encounters_7d = 0
+            orders_24h = 0
+            orders_7d = 0
         
-        # فعالیت کاربر
+        # User activity
         active_users_24h = UserActivity.objects.filter(
             timestamp__gte=last_24h
         ).values('user').distinct().count()
         
-        # متریک‌های عملکرد
+        # Performance
         avg_response_time_24h = PerformanceMetric.objects.filter(
             timestamp__gte=last_24h
         ).aggregate(avg_time=Avg('response_time_ms'))['avg_time'] or 0
@@ -403,13 +340,11 @@ class AnalyticsService:
         ).count()
         
         error_rate_percent = (error_rate_24h / total_requests_24h * 100) if total_requests_24h > 0 else 0
-        
-        # هشدارهای فعال
         active_alerts = Alert.objects.filter(status='firing').count()
         
         return {
-            'encounters_24h': encounters_24h,
-            'encounters_7d': encounters_7d,
+            'orders_24h': orders_24h,
+            'orders_7d': orders_7d,
             'active_users_24h': active_users_24h,
             'avg_response_time_24h_ms': round(avg_response_time_24h, 2),
             'error_rate_24h_percent': round(error_rate_percent, 2),
@@ -419,7 +354,7 @@ class AnalyticsService:
         }
     
     def _get_client_ip(self, request) -> Optional[str]:
-        """دریافت آدرس IP کلاینت از درخواست"""
+        """Retrieve client IP address from request metadata."""
         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
         if x_forwarded_for:
             ip = x_forwarded_for.split(',')[0]
@@ -430,14 +365,10 @@ class AnalyticsService:
 
 class MetricsService:
     """
-    سرویس کمینه برای رضایت تست‌ها جهت ردیابی متریک‌ها
+    Minimal metrics service wrapper for backward compatibility.
     """
 
     def track_metric(self, user, metric_type: str, value: float, metadata=None):
-        """
-        ردیابی متریک
-        """
-        # ذخیره metric_type در name برای سازگاری با مدل Metric ما
         return Metric.objects.create(
             name=metric_type,
             metric_type='gauge',
@@ -448,25 +379,18 @@ class MetricsService:
 
 class ReportingService:
     """
-    سرویس گزارش‌گیری کمینه برای تست‌ها
+    Minimal reporting service wrapper for backward compatibility.
     """
 
     def get_user_metrics(self, user_id, start_date, end_date):
-        """
-        دریافت متریک‌های کاربر
-        """
-        # بازگشت ساختار تجمیعی ساده
         count = Metric.objects.filter(timestamp__range=[start_date, end_date]).count()
         return {"total_metrics": count}
 
 
 class InsightsService:
     """
-    سرویس بینش‌ها برای تست‌های پوشش
+    Minimal dashboard insights service wrapper.
     """
 
     def get_dashboard_metrics(self):
-        """
-        دریافت متریک‌های داشبورد
-        """
         return {"uptime": 100, "users_active": 0}

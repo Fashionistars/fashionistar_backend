@@ -95,7 +95,7 @@ class InitiateScanView(APIView):
     # ── Rate limiting ─────────────────────────────────────────────────────────
     # Max 3 scan sessions per user per hour (Redis-backed, graceful fallback).
     # Prevents abuse — scan sessions trigger Celery ML tasks (CPU-intensive).
-    RATE_LIMIT_MAX   = 3
+    RATE_LIMIT_MAX   = 30
     RATE_LIMIT_WINDOW = 3600  # 1 hour in seconds
 
     def _check_rate_limit(self, user_id: int) -> tuple[bool, int]:

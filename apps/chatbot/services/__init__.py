@@ -3,14 +3,14 @@
 Chatbot Services
 """
 
-from .patient_chatbot import PatientChatbotService
-from .doctor_chatbot import DoctorChatbotService
+from .client_chatbot import ClientChatbotService
+from .vendor_chatbot import VendorChatbotService
 from .ai_integration import AIIntegrationService
 from .response_matcher import ResponseMatcherService
 
 __all__ = [
-    'PatientChatbotService',
-    'DoctorChatbotService', 
+    'ClientChatbotService',
+    'VendorChatbotService', 
     'AIIntegrationService',
     'ResponseMatcherService'
 ]

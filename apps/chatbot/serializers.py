@@ -1,6 +1,5 @@
 """
-سریالایزرهای سیستم چت‌بات
-Chatbot Serializers
+Chatbot Serializers for Fashionistar.
 """
 
 from rest_framework import serializers
@@ -12,17 +11,17 @@ User = get_user_model()
 
 class UserBasicSerializer(serializers.ModelSerializer):
     """
-    سریالایزر اطلاعات پایه کاربر
+    Serializer for basic user information.
     """
     class Meta:
         model = User
-        fields = ['id', 'first_name', 'last_name', 'phone_number']
-        read_only_fields = ['id', 'phone_number']
+        fields = ['id', 'first_name', 'last_name', 'phone']
+        read_only_fields = ['id', 'phone']
 
 
 class ChatbotSessionSerializer(serializers.ModelSerializer):
     """
-    سریالایزر جلسه چت‌بات
+    Serializer for chatbot sessions.
     """
     user = UserBasicSerializer(read_only=True)
     duration = serializers.ReadOnlyField()
@@ -41,21 +40,12 @@ class ChatbotSessionSerializer(serializers.ModelSerializer):
         ]
     
     def get_conversation_count(self, obj):
-        """
-        تعداد مکالمات مرتبط با یک جلسه چت‌بات را برمی‌گرداند.
-        
-        پارامترها:
-            obj (ChatbotSession): نمونه‌ی جلسه‌ای که شمارش مکالمات مرتبط با آن انجام می‌شود.
-        
-        برگردانده:
-            int: تعداد مدل‌های Conversation مرتبط با جلسه (استفاده از رابطه معکوس `conversations`).
-        """
         return obj.conversations.count()
 
 
 class MessageSerializer(serializers.ModelSerializer):
     """
-    سریالایزر پیام‌ها
+    Serializer for messages.
     """
     is_from_user = serializers.ReadOnlyField()
     is_from_bot = serializers.ReadOnlyField()
@@ -72,32 +62,18 @@ class MessageSerializer(serializers.ModelSerializer):
         ]
     
     def validate_content(self, value):
-        """
-        اعتبارسنجی و تمیزسازی محتوای پیام کاربر.
-        
-        این متد محتوای ورودی را بررسی می‌کند: مقدار باید غیرخالی پس از حذف فضاهای اطراف باشد و طول آن نباید از ۴۰۰۰ کاراکتر بیشتر باشد. در صورت معتبر بودن، رشتهٔ پیغام با حذف فاصله‌های انتها و ابتدا بازگردانده می‌شود.
-        
-        Parameters:
-            value (str): متن پیام ورودی که باید اعتبارسنجی و trim شود.
-        
-        Returns:
-            str: متن پیام پس از حذف فاصله‌های جانبی.
-        
-        Raises:
-            serializers.ValidationError: اگر پیام خالی باشد یا تنها شامل فضا باشد، یا طول آن بیش از ۴۰۰۰ کاراکتر باشد.
-        """
         if not value or not value.strip():
-            raise serializers.ValidationError("محتوای پیام نمی‌تواند خالی باشد.")
+            raise serializers.ValidationError("Message content cannot be empty.")
         
         if len(value) > 4000:
-            raise serializers.ValidationError("محتوای پیام نمی‌تواند بیشتر از ۴۰۰۰ کاراکتر باشد.")
+            raise serializers.ValidationError("Message content cannot exceed 4000 characters.")
         
         return value.strip()
 
 
 class ConversationSerializer(serializers.ModelSerializer):
     """
-    سریالایزر مکالمات
+    Serializer for conversations including message history.
     """
     session = ChatbotSessionSerializer(read_only=True)
     messages = MessageSerializer(many=True, read_only=True)
@@ -118,7 +94,7 @@ class ConversationSerializer(serializers.ModelSerializer):
 
 class ConversationListSerializer(serializers.ModelSerializer):
     """
-    سریالایزر فهرست مکالمات (بدون پیام‌ها)
+    Serializer for conversation list (excluding messages).
     """
     message_count = serializers.ReadOnlyField()
     last_message_time = serializers.ReadOnlyField()
@@ -133,7 +109,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
 
 class ChatbotResponseSerializer(serializers.ModelSerializer):
     """
-    سریالایزر پاسخ‌های چت‌بات
+    Serializer for chatbot responses.
     """
     class Meta:
         model = ChatbotResponse
@@ -145,220 +121,201 @@ class ChatbotResponseSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
-# سریالایزرهای درخواست و پاسخ
+# Request / Response Serializers
 
 
 class SendMessageRequestSerializer(serializers.Serializer):
     """
-    سریالایزر درخواست ارسال پیام
+    Serializer to validate sending a message.
     """
     message = serializers.CharField(
         max_length=4000,
-        help_text="محتوای پیام کاربر"
+        help_text="User message content"
     )
     message_type = serializers.ChoiceField(
         choices=Message.MESSAGE_TYPES,
         default='text',
-        help_text="نوع پیام"
+        help_text="Message type"
     )
     context = serializers.JSONField(
         required=False,
-        help_text="زمینه اضافی برای پردازش پیام"
+        help_text="Additional context for message processing"
     )
     
     def validate_message(self, value):
-        """
-        اعتبارسنجی متن پیام ارسال‌شده توسط کاربر.
-        
-        پارامترها:
-            value (str): متن پیام ورودی؛ امکان دارد شامل فضاهای خالی اطراف باشد.
-        
-        توضیحات:
-            پیام باید دارای حداقل یک کاراکتر غیرِ فاصله باشد. فضای خالی آغاز و پایان پیام حذف (strip) می‌شود
-            و مقدار مرتب‌شده بازگردانده می‌گردد.
-        
-        بازگشت:
-            str: متن پیام پردازش‌شده (بدون فاصله‌های زائد).
-        
-        خطاها:
-            serializers.ValidationError: اگر پیام خالی یا صرفاً شامل فاصله باشد، با پیام خطای فارسی پرتاب می‌شود.
-        """
         if not value or not value.strip():
-            raise serializers.ValidationError("پیام نمی‌تواند خالی باشد.")
+            raise serializers.ValidationError("Message cannot be empty.")
         return value.strip()
 
 
 class ChatbotResponseDataSerializer(serializers.Serializer):
     """
-    سریالایزر داده‌های پاسخ چت‌بات
+    Serializer for formatted chatbot responses.
     """
-    content = serializers.CharField(help_text="محتوای پاسخ")
-    message_type = serializers.CharField(help_text="نوع پیام")
+    content = serializers.CharField(help_text="Response content")
+    message_type = serializers.CharField(help_text="Message type")
     response_data = serializers.JSONField(
         required=False,
-        help_text="داده‌های ساختاریافته پاسخ"
+        help_text="Structured response data"
     )
     ai_confidence = serializers.FloatField(
         required=False,
-        help_text="درجه اطمینان AI"
+        help_text="AI confidence score"
     )
     processing_time = serializers.FloatField(
         required=False,
-        help_text="زمان پردازش به ثانیه"
+        help_text="Processing time in seconds"
     )
     quick_replies = serializers.ListField(
         child=serializers.DictField(),
         required=False,
-        help_text="پاسخ‌های سریع پیشنهادی"
+        help_text="Suggested quick replies"
     )
 
 
 class SendMessageResponseSerializer(serializers.Serializer):
     """
-    سریالایزر پاسخ ارسال پیام
+    Serializer for the response of sending a message.
     """
-    response = ChatbotResponseDataSerializer(help_text="پاسخ چت‌بات")
-    user_message_id = serializers.UUIDField(help_text="شناسه پیام کاربر")
-    bot_message_id = serializers.UUIDField(help_text="شناسه پیام ربات")
-    conversation_id = serializers.UUIDField(help_text="شناسه مکالمه")
-    session_id = serializers.UUIDField(help_text="شناسه جلسه")
+    response = ChatbotResponseDataSerializer(help_text="Chatbot response")
+    user_message_id = serializers.UUIDField(help_text="User message UUID")
+    bot_message_id = serializers.UUIDField(help_text="Bot message UUID")
+    conversation_id = serializers.UUIDField(help_text="Conversation UUID")
+    session_id = serializers.UUIDField(help_text="Session UUID")
 
 
 class StartSessionResponseSerializer(serializers.Serializer):
     """
-    سریالایزر پاسخ شروع جلسه
+    Serializer for starting a chatbot session.
     """
-    session = ChatbotSessionSerializer(help_text="اطلاعات جلسه")
+    session = ChatbotSessionSerializer(help_text="Session info")
     greeting_message = ChatbotResponseDataSerializer(
         required=False,
-        help_text="پیام خوشامدگویی"
+        help_text="Greeting message"
     )
     quick_replies = serializers.ListField(
         child=serializers.DictField(),
         required=False,
-        help_text="پاسخ‌های سریع اولیه"
+        help_text="Initial quick replies"
     )
 
 
-class SymptomAssessmentRequestSerializer(serializers.Serializer):
+class StyleAssessmentRequestSerializer(serializers.Serializer):
     """
-    سریالایزر درخواست ارزیابی علائم (بیمار)
+    Serializer for style and aesthetic assessment.
     """
-    main_symptom = serializers.CharField(help_text="علامت اصلی")
-    symptom_duration = serializers.CharField(help_text="مدت زمان علائم")
-    symptom_severity = serializers.IntegerField(
+    preferred_style = serializers.CharField(help_text="Primary style or aesthetic preference")
+    budget_range = serializers.CharField(help_text="Estimated budget range")
+    formality_level = serializers.IntegerField(
         min_value=1,
         max_value=10,
-        help_text="شدت علائم (۱-۱۰)"
+        help_text="Formality level (1-10)"
     )
-    additional_symptoms = serializers.ListField(
+    size_preferences = serializers.ListField(
         child=serializers.CharField(),
         required=False,
-        help_text="علائم اضافی"
+        help_text="Preferred sizing guidelines"
     )
-    medical_history = serializers.CharField(
+    sizing_notes = serializers.CharField(
         required=False,
-        help_text="سابقه پزشکی"
+        help_text="Specific details regarding styling/fit history"
     )
 
 
-class DiagnosisSupportRequestSerializer(serializers.Serializer):
+class SizeRecommendationRequestSerializer(serializers.Serializer):
     """
-    سریالایزر درخواست پشتیبانی تشخیصی (پزشک)
+    Serializer for sizing and fit recommendation requests.
     """
-    symptoms = serializers.ListField(
+    measurements = serializers.ListField(
         child=serializers.CharField(),
-        help_text="فهرست علائم"
+        help_text="List of body measurements"
     )
-    patient_age = serializers.IntegerField(
+    height_cm = serializers.IntegerField(
         required=False,
         min_value=0,
-        max_value=150,
-        help_text="سن بیمار"
+        max_value=250,
+        help_text="Client height in cm"
     )
-    patient_gender = serializers.ChoiceField(
-        choices=[('M', 'مرد'), ('F', 'زن'), ('O', 'سایر')],
+    gender = serializers.ChoiceField(
+        choices=[('M', 'Male'), ('F', 'Female'), ('O', 'Other')],
         required=False,
-        help_text="جنسیت بیمار"
+        help_text="Client gender"
     )
-    medical_history = serializers.CharField(
+    fit_preference = serializers.CharField(
         required=False,
-        help_text="سابقه پزشکی بیمار"
+        help_text="Preferred fit profile (e.g. slim, regular, loose)"
     )
-    current_medications = serializers.ListField(
+    prior_purchases = serializers.ListField(
         child=serializers.CharField(),
         required=False,
-        help_text="داروهای فعلی"
+        help_text="Known comfortable sizing in other brands"
     )
 
 
-class MedicationInfoRequestSerializer(serializers.Serializer):
+class ProductInquiryRequestSerializer(serializers.Serializer):
     """
-    سریالایزر درخواست اطلاعات دارو
+    Serializer for specific product inquiries.
     """
-    medication_name = serializers.CharField(help_text="نام دارو")
-    patient_age = serializers.IntegerField(
+    product_sku = serializers.CharField(help_text="Product SKU or Identifier")
+    client_size = serializers.CharField(
         required=False,
-        min_value=0,
-        max_value=150,
-        help_text="سن بیمار"
+        help_text="Preferred size"
     )
-    patient_weight = serializers.FloatField(
+    client_height = serializers.FloatField(
         required=False,
-        min_value=0,
-        help_text="وزن بیمار (کیلوگرم)"
+        help_text="Client height (cm)"
     )
-    allergies = serializers.ListField(
+    fabric_preferences = serializers.ListField(
         child=serializers.CharField(),
         required=False,
-        help_text="آلرژی‌های شناخته شده"
+        help_text="Preferred materials or material warnings (e.g. wool allergy)"
     )
-    current_medications = serializers.ListField(
+    similar_products = serializers.ListField(
         child=serializers.CharField(),
         required=False,
-        help_text="داروهای فعلی"
+        help_text="Similar SKUs of interest"
     )
 
 
-class AppointmentRequestSerializer(serializers.Serializer):
+class BespokeConsultationRequestSerializer(serializers.Serializer):
     """
-    سریالایزر درخواست نوبت
+    Serializer for booking bespoke tailoring consultation.
     """
-    specialty = serializers.CharField(
+    tailoring_type = serializers.CharField(
         required=False,
-        help_text="تخصص مورد نیاز"
+        help_text="Required bespoke item type (e.g. suit, gown, coat)"
     )
     preferred_date = serializers.DateField(
         required=False,
-        help_text="تاریخ ترجیحی"
+        help_text="Preferred date"
     )
     preferred_time = serializers.CharField(
         required=False,
-        help_text="زمان ترجیحی"
+        help_text="Preferred time slot"
     )
     urgency = serializers.ChoiceField(
         choices=[
-            ('low', 'کم'),
-            ('medium', 'متوسط'),
-            ('high', 'بالا'),
-            ('emergency', 'اورژانس')
+            ('low', 'Low'),
+            ('medium', 'Medium'),
+            ('high', 'High'),
+            ('rush', 'Rush')
         ],
         default='medium',
-        help_text="سطح فوریت"
+        help_text="Urgency level"
     )
-    reason = serializers.CharField(
+    design_details = serializers.CharField(
         required=False,
-        help_text="دلیل مراجعه"
+        help_text="Details of design ideas or reference requests"
     )
 
 
 class ConversationHistorySerializer(serializers.Serializer):
     """
-    سریالایزر تاریخچه مکالمه
+    Serializer for conversation message history.
     """
-    conversation = ConversationListSerializer(help_text="اطلاعات مکالمه")
-    messages = MessageSerializer(many=True, help_text="پیام‌های مکالمه")
-    total_messages = serializers.IntegerField(help_text="تعداد کل پیام‌ها")
+    conversation = ConversationListSerializer(help_text="Conversation summary")
+    messages = MessageSerializer(many=True, help_text="Messages list")
+    total_messages = serializers.IntegerField(help_text="Total messages count")
     has_more = serializers.BooleanField(
-        help_text="آیا پیام‌های بیشتری وجود دارد؟"
+        help_text="Whether more messages are available"
     )

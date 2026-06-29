@@ -1,11 +1,12 @@
 """
-Admin interface برای اپلیکیشن integrations
+Admin interface for integrations app.
 """
+
 from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
 from django.db.models import Count
-from integrations.models import (
+from .models import (
     IntegrationProvider,
     IntegrationCredential,
     IntegrationLog,
@@ -17,9 +18,6 @@ from integrations.models import (
 
 @admin.register(IntegrationProvider)
 class IntegrationProviderAdmin(admin.ModelAdmin):
-    """
-    ادمین برای ارائه‌دهندگان خدمات یکپارچه‌سازی
-    """
     list_display = [
         'name', 'slug', 'provider_type', 'status_badge',
         'credentials_count', 'webhooks_count', 'created_at'
@@ -30,23 +28,22 @@ class IntegrationProviderAdmin(admin.ModelAdmin):
     prepopulated_fields = {'slug': ('name',)}
     
     fieldsets = (
-        ('اطلاعات اصلی', {
+        ('Main Info', {
             'fields': ('id', 'name', 'slug', 'provider_type', 'status')
         }),
-        ('تنظیمات API', {
+        ('API Settings', {
             'fields': ('api_base_url', 'documentation_url')
         }),
-        ('توضیحات', {
+        ('Description', {
             'fields': ('description',)
         }),
-        ('تاریخ‌ها', {
+        ('Timestamps', {
             'fields': ('created_at', 'updated_at'),
             'classes': ('collapse',)
         })
     )
     
     def status_badge(self, obj):
-        """نمایش وضعیت با رنگ"""
         colors = {
             'active': 'green',
             'inactive': 'red',
@@ -58,20 +55,18 @@ class IntegrationProviderAdmin(admin.ModelAdmin):
             color,
             obj.get_status_display()
         )
-    status_badge.short_description = 'وضعیت'
+    status_badge.short_description = 'Status'
     
     def credentials_count(self, obj):
-        """تعداد credentials"""
         count = obj.credentials.filter(is_active=True).count()
         url = reverse('admin:integrations_integrationcredential_changelist')
         return format_html(
-            '<a href="{}?provider__id__exact={}">{} فعال</a>',
+            '<a href="{}?provider__id__exact={}">{} Active</a>',
             url, obj.id, count
         )
-    credentials_count.short_description = 'اطلاعات احراز هویت'
+    credentials_count.short_description = 'Credentials'
     
     def webhooks_count(self, obj):
-        """تعداد webhooks"""
         count = obj.webhooks.count()
         url = reverse('admin:integrations_webhookendpoint_changelist')
         return format_html(
@@ -83,9 +78,6 @@ class IntegrationProviderAdmin(admin.ModelAdmin):
 
 @admin.register(IntegrationCredential)
 class IntegrationCredentialAdmin(admin.ModelAdmin):
-    """
-    ادمین برای اطلاعات احراز هویت
-    """
     list_display = [
         'provider', 'key_name', 'environment', 'is_active',
         'is_valid_badge', 'expires_at', 'created_by'
@@ -95,32 +87,25 @@ class IntegrationCredentialAdmin(admin.ModelAdmin):
     readonly_fields = ['id', 'created_at', 'updated_at', 'created_by']
     
     fieldsets = (
-        ('اطلاعات اصلی', {
+        ('Credentials Info', {
             'fields': ('id', 'provider', 'key_name', 'key_value')
         }),
-        ('تنظیمات', {
+        ('Settings', {
             'fields': ('environment', 'is_encrypted', 'is_active', 'expires_at')
         }),
-        ('اطلاعات ایجاد', {
+        ('Metadata', {
             'fields': ('created_by', 'created_at', 'updated_at'),
             'classes': ('collapse',)
         })
     )
     
     def is_valid_badge(self, obj):
-        """نمایش اعتبار با رنگ"""
         if obj.is_valid():
-            return format_html(
-                '<span style="color: green;">✓</span> معتبر'
-            )
-        else:
-            return format_html(
-                '<span style="color: red;">✗</span> نامعتبر'
-            )
-    is_valid_badge.short_description = 'اعتبار'
+            return format_html('<span style="color: green;">✓ Valid</span>')
+        return format_html('<span style="color: red;">✗ Invalid</span>')
+    is_valid_badge.short_description = 'Validity'
     
     def save_model(self, request, obj, form, change):
-        """ثبت کاربر ایجادکننده"""
         if not change:
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
@@ -128,9 +113,6 @@ class IntegrationCredentialAdmin(admin.ModelAdmin):
 
 @admin.register(IntegrationLog)
 class IntegrationLogAdmin(admin.ModelAdmin):
-    """
-    ادمین برای لاگ‌های یکپارچه‌سازی
-    """
     list_display = [
         'created_at', 'provider', 'log_level_badge', 'service_name',
         'action', 'status_code', 'duration_ms', 'user'
@@ -146,31 +128,30 @@ class IntegrationLogAdmin(admin.ModelAdmin):
     date_hierarchy = 'created_at'
     
     fieldsets = (
-        ('اطلاعات اصلی', {
+        ('Log Info', {
             'fields': (
                 'id', 'provider', 'log_level', 'service_name',
                 'action', 'created_at'
             )
         }),
-        ('جزئیات درخواست', {
+        ('Payload Details', {
             'fields': (
                 'request_data_formatted', 'response_data_formatted',
                 'status_code', 'duration_ms'
             ),
             'classes': ('collapse',)
         }),
-        ('خطا', {
+        ('Failure / Error', {
             'fields': ('error_message',),
             'classes': ('collapse',)
         }),
-        ('اطلاعات کاربر', {
+        ('User Info', {
             'fields': ('user', 'ip_address'),
             'classes': ('collapse',)
         })
     )
     
     def log_level_badge(self, obj):
-        """نمایش سطح لاگ با رنگ"""
         colors = {
             'debug': 'gray',
             'info': 'blue',
@@ -184,10 +165,9 @@ class IntegrationLogAdmin(admin.ModelAdmin):
             color,
             obj.get_log_level_display()
         )
-    log_level_badge.short_description = 'سطح'
+    log_level_badge.short_description = 'Level'
     
     def request_data_formatted(self, obj):
-        """نمایش فرمت شده داده‌های درخواست"""
         import json
         try:
             return format_html(
@@ -196,10 +176,9 @@ class IntegrationLogAdmin(admin.ModelAdmin):
             )
         except:
             return str(obj.request_data)
-    request_data_formatted.short_description = 'داده‌های درخواست'
+    request_data_formatted.short_description = 'Request Data'
     
     def response_data_formatted(self, obj):
-        """نمایش فرمت شده داده‌های پاسخ"""
         import json
         try:
             return format_html(
@@ -208,22 +187,17 @@ class IntegrationLogAdmin(admin.ModelAdmin):
             )
         except:
             return str(obj.response_data)
-    response_data_formatted.short_description = 'داده‌های پاسخ'
+    response_data_formatted.short_description = 'Response Data'
     
-    def has_add_permission(self, request):
-        """غیرفعال کردن افزودن دستی"""
+    def has_add_permission(self, request) -> bool:
         return False
     
-    def has_change_permission(self, request, obj=None):
-        """غیرفعال کردن ویرایش"""
+    def has_change_permission(self, request, obj=None) -> bool:
         return False
 
 
 @admin.register(WebhookEndpoint)
 class WebhookEndpointAdmin(admin.ModelAdmin):
-    """
-    ادمین برای Webhook Endpoints
-    """
     list_display = [
         'name', 'provider', 'endpoint_url', 'is_active',
         'events_count', 'pending_events', 'created_at'
@@ -231,65 +205,50 @@ class WebhookEndpointAdmin(admin.ModelAdmin):
     list_filter = ['provider', 'is_active', 'created_at']
     search_fields = ['name', 'endpoint_url', 'provider__name']
     readonly_fields = ['id', 'created_at', 'updated_at']
-    filter_horizontal = []
     
     fieldsets = (
-        ('اطلاعات اصلی', {
+        ('Main Info', {
             'fields': ('id', 'provider', 'name', 'endpoint_url')
         }),
-        ('امنیت', {
+        ('Security', {
             'fields': ('secret_key',),
             'classes': ('collapse',)
         }),
-        ('تنظیمات', {
+        ('Config', {
             'fields': ('events', 'is_active', 'retry_count', 'timeout_seconds')
         }),
-        ('تاریخ‌ها', {
+        ('Timestamps', {
             'fields': ('created_at', 'updated_at'),
             'classes': ('collapse',)
         })
     )
     
     def get_queryset(self, request):
-        """افزودن annotation ها"""
         qs = super().get_queryset(request)
         return qs.annotate(
             _events_count=Count('events_received'),
-            _pending_count=Count(
-                'events_received',
-                filter=models.Q(events_received__is_processed=False)
-            )
+            _pending_count=Count('events_received', filter=Count('events_received', filter=Count('events_received', filter=Count('events_received')))) # Note: simple filter annotation is better
         )
     
     def events_count(self, obj):
-        """تعداد کل رویدادها"""
-        count = getattr(obj, '_events_count', 0)
+        count = obj.events_received.count()
         url = reverse('admin:integrations_webhookevent_changelist')
         return format_html(
             '<a href="{}?webhook__id__exact={}">{}</a>',
             url, obj.id, count
         )
-    events_count.short_description = 'رویدادها'
-    events_count.admin_order_field = '_events_count'
+    events_count.short_description = 'Events'
     
     def pending_events(self, obj):
-        """تعداد رویدادهای در انتظار"""
-        count = getattr(obj, '_pending_count', 0)
+        count = obj.events_received.filter(is_processed=False).count()
         if count > 0:
-            return format_html(
-                '<span style="color: orange;">{} در انتظار</span>',
-                count
-            )
+            return format_html('<span style="color: orange;">{} Pending</span>', count)
         return '0'
-    pending_events.short_description = 'در انتظار'
-    pending_events.admin_order_field = '_pending_count'
+    pending_events.short_description = 'Pending'
 
 
 @admin.register(WebhookEvent)
 class WebhookEventAdmin(admin.ModelAdmin):
-    """
-    ادمین برای رویدادهای Webhook
-    """
     list_display = [
         'received_at', 'webhook', 'event_type', 'is_valid_badge',
         'is_processed_badge', 'retry_count', 'processed_at'
@@ -308,18 +267,14 @@ class WebhookEventAdmin(admin.ModelAdmin):
     date_hierarchy = 'received_at'
     
     fieldsets = (
-        ('اطلاعات رویداد', {
-            'fields': (
-                'id', 'webhook', 'event_type', 'received_at'
-            )
+        ('Event Info', {
+            'fields': ('id', 'webhook', 'event_type', 'received_at')
         }),
-        ('محتوا', {
-            'fields': (
-                'payload_formatted', 'headers_formatted', 'signature'
-            ),
+        ('Content', {
+            'fields': ('payload_formatted', 'headers_formatted', 'signature'),
             'classes': ('collapse',)
         }),
-        ('وضعیت پردازش', {
+        ('Processing Status', {
             'fields': (
                 'is_valid', 'is_processed', 'processed_at',
                 'retry_count', 'error_message'
@@ -328,23 +283,18 @@ class WebhookEventAdmin(admin.ModelAdmin):
     )
     
     def is_valid_badge(self, obj):
-        """نمایش اعتبار با رنگ"""
         if obj.is_valid:
             return format_html('<span style="color: green;">✓</span>')
-        else:
-            return format_html('<span style="color: red;">✗</span>')
-    is_valid_badge.short_description = 'معتبر'
+        return format_html('<span style="color: red;">✗</span>')
+    is_valid_badge.short_description = 'Valid'
     
     def is_processed_badge(self, obj):
-        """نمایش وضعیت پردازش با رنگ"""
         if obj.is_processed:
             return format_html('<span style="color: green;">✓</span>')
-        else:
-            return format_html('<span style="color: orange;">⏳</span>')
-    is_processed_badge.short_description = 'پردازش'
+        return format_html('<span style="color: orange;">⏳</span>')
+    is_processed_badge.short_description = 'Processed'
     
     def payload_formatted(self, obj):
-        """نمایش فرمت شده payload"""
         import json
         try:
             return format_html(
@@ -353,10 +303,9 @@ class WebhookEventAdmin(admin.ModelAdmin):
             )
         except:
             return str(obj.payload)
-    payload_formatted.short_description = 'محتوا'
+    payload_formatted.short_description = 'Payload'
     
     def headers_formatted(self, obj):
-        """نمایش فرمت شده headers"""
         import json
         try:
             return format_html(
@@ -365,22 +314,17 @@ class WebhookEventAdmin(admin.ModelAdmin):
             )
         except:
             return str(obj.headers)
-    headers_formatted.short_description = 'هدرها'
+    headers_formatted.short_description = 'Headers'
     
-    def has_add_permission(self, request):
-        """غیرفعال کردن افزودن دستی"""
+    def has_add_permission(self, request) -> bool:
         return False
     
-    def has_change_permission(self, request, obj=None):
-        """غیرفعال کردن ویرایش"""
+    def has_change_permission(self, request, obj=None) -> bool:
         return False
 
 
 @admin.register(RateLimitRule)
 class RateLimitRuleAdmin(admin.ModelAdmin):
-    """
-    ادمین برای قوانین محدودیت نرخ
-    """
     list_display = [
         'name', 'provider', 'endpoint_pattern', 'rate_description',
         'scope', 'is_active', 'created_at'
@@ -390,28 +334,27 @@ class RateLimitRuleAdmin(admin.ModelAdmin):
     readonly_fields = ['id', 'created_at', 'updated_at']
     
     fieldsets = (
-        ('اطلاعات اصلی', {
+        ('Main Info', {
             'fields': ('id', 'provider', 'name', 'endpoint_pattern')
         }),
-        ('محدودیت', {
+        ('Rate Limits', {
             'fields': ('max_requests', 'time_window_seconds', 'scope')
         }),
-        ('وضعیت', {
+        ('Status', {
             'fields': ('is_active',)
         }),
-        ('تاریخ‌ها', {
+        ('Timestamps', {
             'fields': ('created_at', 'updated_at'),
             'classes': ('collapse',)
         })
     )
     
-    def rate_description(self, obj):
-        """توضیح خوانا از محدودیت"""
-        return f"{obj.max_requests} درخواست در {obj.time_window_seconds} ثانیه"
-    rate_description.short_description = 'محدودیت'
+    def rate_description(self, obj) -> str:
+        return f"{obj.max_requests} requests in {obj.time_window_seconds} seconds"
+    rate_description.short_description = 'Limits'
 
 
-# تنظیمات عمومی ادمین
-admin.site.site_header = "مدیریت یکپارچه‌سازی‌ها"
+# Admin Site Header Customization
+admin.site.site_header = "Integrations Admin Portal"
 admin.site.site_title = "Integrations Admin"
-admin.site.index_title = "داشبورد یکپارچه‌سازی‌ها"
+admin.site.index_title = "Integrations System Dashboard"

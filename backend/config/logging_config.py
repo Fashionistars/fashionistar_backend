@@ -880,11 +880,16 @@ def build_logging_config(
         },
     }
 
-    # Dynamic swap for SafeRotatingFileHandler to prevent WinError 32 on Windows in development/production
+    # Dynamic swap to standard FileHandler on Windows to prevent WinError 32 rollover locks, otherwise use SafeRotatingFileHandler
     suffix = get_log_suffix()
     for h_name, h_conf in handlers.items():
         if h_conf.get('class') == 'logging.handlers.RotatingFileHandler':
-            h_conf['class'] = 'backend.config.logging_config.SafeRotatingFileHandler'
+            if os.name == 'nt':
+                h_conf['class'] = 'logging.FileHandler'
+                h_conf.pop('maxBytes', None)
+                h_conf.pop('backupCount', None)
+            else:
+                h_conf['class'] = 'backend.config.logging_config.SafeRotatingFileHandler'
             if suffix and 'filename' in h_conf:
                 path = Path(h_conf['filename'])
                 h_conf['filename'] = str(path.with_name(f"{path.stem}{suffix}{path.suffix}"))

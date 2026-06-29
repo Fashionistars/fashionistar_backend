@@ -1,9 +1,10 @@
 """
-Serializers برای اپلیکیشن integrations
+Integrations Serializers for Fashionistar.
 """
+
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from integrations.models import (
+from .models import (
     IntegrationProvider,
     IntegrationCredential,
     IntegrationLog,
@@ -16,9 +17,6 @@ User = get_user_model()
 
 
 class IntegrationProviderSerializer(serializers.ModelSerializer):
-    """
-    Serializer برای ارائه‌دهندگان خدمات یکپارچه‌سازی
-    """
     credentials_count = serializers.SerializerMethodField()
     logs_count = serializers.SerializerMethodField()
     
@@ -32,23 +30,17 @@ class IntegrationProviderSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
     
-    def get_credentials_count(self, obj):
-        """تعداد credentials فعال"""
+    def get_credentials_count(self, obj) -> int:
         return obj.credentials.filter(is_active=True).count()
     
-    def get_logs_count(self, obj):
-        """تعداد لاگ‌های 24 ساعت اخیر"""
+    def get_logs_count(self, obj) -> int:
         from django.utils import timezone
         from datetime import timedelta
-        
         start_time = timezone.now() - timedelta(hours=24)
         return obj.logs.filter(created_at__gte=start_time).count()
 
 
 class IntegrationCredentialSerializer(serializers.ModelSerializer):
-    """
-    Serializer برای اطلاعات احراز هویت
-    """
     provider_name = serializers.CharField(source='provider.name', read_only=True)
     is_valid = serializers.SerializerMethodField()
     masked_value = serializers.SerializerMethodField()
@@ -64,17 +56,14 @@ class IntegrationCredentialSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'created_by']
         extra_kwargs = {
-            'key_value': {'write_only': True}  # مقدار واقعی فقط در نوشتن
+            'key_value': {'write_only': True}
         }
     
-    def get_is_valid(self, obj):
-        """بررسی اعتبار"""
+    def get_is_valid(self, obj) -> bool:
         return obj.is_valid()
     
-    def get_masked_value(self, obj):
-        """نمایش ماسک شده مقدار"""
+    def get_masked_value(self, obj) -> str:
         if obj.key_value:
-            # نمایش 4 کاراکتر اول و آخر
             value = obj.key_value
             if len(value) > 8:
                 return f"{value[:4]}{'*' * (len(value) - 8)}{value[-4:]}"
@@ -83,15 +72,11 @@ class IntegrationCredentialSerializer(serializers.ModelSerializer):
         return ''
     
     def create(self, validated_data):
-        """ایجاد credential با ثبت کاربر ایجادکننده"""
         validated_data['created_by'] = self.context['request'].user
         return super().create(validated_data)
 
 
 class IntegrationLogSerializer(serializers.ModelSerializer):
-    """
-    Serializer برای لاگ‌های یکپارچه‌سازی
-    """
     provider_name = serializers.CharField(source='provider.name', read_only=True)
     user_name = serializers.SerializerMethodField()
     
@@ -106,17 +91,13 @@ class IntegrationLogSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at']
     
-    def get_user_name(self, obj):
-        """نام کاربر"""
+    def get_user_name(self, obj) -> Optional[str]:
         if obj.user:
-            return obj.user.get_full_name() or obj.user.username
+            return obj.user.get_full_name() or obj.user.phone_number
         return None
 
 
 class WebhookEndpointSerializer(serializers.ModelSerializer):
-    """
-    Serializer برای Webhook Endpoints
-    """
     provider_name = serializers.CharField(source='provider.name', read_only=True)
     events_count = serializers.SerializerMethodField()
     pending_events = serializers.SerializerMethodField()
@@ -132,42 +113,26 @@ class WebhookEndpointSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
         extra_kwargs = {
-            'secret_key': {'write_only': True}  # کلید امنیتی فقط در نوشتن
+            'secret_key': {'write_only': True}
         }
     
-    def get_events_count(self, obj):
-        """تعداد کل رویدادها"""
+    def get_events_count(self, obj) -> int:
         return obj.events_received.count()
     
-    def get_pending_events(self, obj):
-        """تعداد رویدادهای در انتظار پردازش"""
+    def get_pending_events(self, obj) -> int:
         return obj.events_received.filter(is_processed=False).count()
     
-    def validate_endpoint_url(self, value):
-        """اعتبارسنجی آدرس endpoint"""
-        # بررسی یکتا بودن
+    def validate_endpoint_url(self, value: str) -> str:
         if self.instance:
-            # در حالت update
-            if WebhookEndpoint.objects.exclude(
-                pk=self.instance.pk
-            ).filter(endpoint_url=value).exists():
-                raise serializers.ValidationError(
-                    "این آدرس endpoint قبلاً ثبت شده است."
-                )
+            if WebhookEndpoint.objects.exclude(pk=self.instance.pk).filter(endpoint_url=value).exists():
+                raise serializers.ValidationError("This endpoint URL is already registered.")
         else:
-            # در حالت create
             if WebhookEndpoint.objects.filter(endpoint_url=value).exists():
-                raise serializers.ValidationError(
-                    "این آدرس endpoint قبلاً ثبت شده است."
-                )
-        
+                raise serializers.ValidationError("This endpoint URL is already registered.")
         return value
 
 
 class WebhookEventSerializer(serializers.ModelSerializer):
-    """
-    Serializer برای رویدادهای Webhook
-    """
     webhook_name = serializers.CharField(source='webhook.name', read_only=True)
     provider_name = serializers.CharField(source='webhook.provider.name', read_only=True)
     
@@ -186,9 +151,6 @@ class WebhookEventSerializer(serializers.ModelSerializer):
 
 
 class RateLimitRuleSerializer(serializers.ModelSerializer):
-    """
-    Serializer برای قوانین محدودیت نرخ
-    """
     provider_name = serializers.CharField(source='provider.name', read_only=True)
     rate_description = serializers.SerializerMethodField()
     
@@ -202,35 +164,22 @@ class RateLimitRuleSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
     
-    def get_rate_description(self, obj):
-        """توضیح خوانا از محدودیت"""
-        return f"{obj.max_requests} درخواست در {obj.time_window_seconds} ثانیه"
+    def get_rate_description(self, obj) -> str:
+        return f"{obj.max_requests} requests in {obj.time_window_seconds} seconds"
     
     def validate(self, attrs):
-        """اعتبارسنجی کلی"""
         if attrs.get('max_requests', 0) <= 0:
-            raise serializers.ValidationError(
-                "حداکثر درخواست باید بزرگتر از صفر باشد."
-            )
-        
+            raise serializers.ValidationError("Max requests must be greater than zero.")
         if attrs.get('time_window_seconds', 0) <= 0:
-            raise serializers.ValidationError(
-                "بازه زمانی باید بزرگتر از صفر باشد."
-            )
-        
+            raise serializers.ValidationError("Time window must be greater than zero.")
         return attrs
 
 
-# Serializers برای عملیات‌های خاص
-
 class SendSMSSerializer(serializers.Serializer):
-    """
-    Serializer برای ارسال پیامک
-    """
     receptor = serializers.CharField(
-        max_length=11,
-        min_length=11,
-        help_text="شماره موبایل گیرنده (09123456789)"
+        max_length=15,
+        min_length=10,
+        help_text="Recipient phone number"
     )
     message_type = serializers.ChoiceField(
         choices=['otp', 'pattern', 'simple'],
@@ -239,111 +188,91 @@ class SendSMSSerializer(serializers.Serializer):
     template = serializers.CharField(
         max_length=100,
         required=False,
-        help_text="نام قالب (برای otp و pattern)"
+        help_text="Template name for OTP and pattern"
     )
     token = serializers.CharField(
         max_length=10,
         required=False,
-        help_text="کد OTP"
+        help_text="OTP verification token"
     )
     tokens = serializers.DictField(
         required=False,
-        help_text="توکن‌ها برای قالب"
+        help_text="Custom pattern tokens map"
     )
     message = serializers.CharField(
         max_length=1000,
         required=False,
-        help_text="متن پیام (برای پیام ساده)"
+        help_text="Text content for simple messages"
     )
     
-    def validate_receptor(self, value):
-        """اعتبارسنجی شماره موبایل"""
-        if not value.startswith('09') or not value[1:].isdigit():
-            raise serializers.ValidationError(
-                "شماره موبایل باید با 09 شروع شود و 11 رقم باشد."
-            )
+    def validate_receptor(self, value: str) -> str:
+        if not value.isdigit():
+            raise serializers.ValidationError("Recipient phone number must contain digits only.")
         return value
     
     def validate(self, attrs):
-        """اعتبارسنجی کلی"""
         message_type = attrs.get('message_type')
-        
         if message_type == 'otp' and not attrs.get('token'):
-            raise serializers.ValidationError(
-                "برای ارسال OTP، فیلد token الزامی است."
-            )
-        
+            raise serializers.ValidationError("Token field is required for OTP messages.")
         if message_type == 'pattern' and not attrs.get('tokens'):
-            raise serializers.ValidationError(
-                "برای ارسال با قالب، فیلد tokens الزامی است."
-            )
-        
+            raise serializers.ValidationError("Tokens field is required for pattern-based messages.")
         if message_type == 'simple' and not attrs.get('message'):
-            raise serializers.ValidationError(
-                "برای ارسال پیام ساده، فیلد message الزامی است."
-            )
-        
+            raise serializers.ValidationError("Message content is required for simple messages.")
         return attrs
 
 
 class AIGenerateSerializer(serializers.Serializer):
-    """
-    Serializer برای تولید متن با AI
-    """
     prompt = serializers.CharField(
         max_length=5000,
-        help_text="متن ورودی"
+        help_text="Input query"
     )
     model = serializers.CharField(
         max_length=50,
         required=False,
-        help_text="مدل AI (اختیاری)"
+        help_text="Target AI model"
     )
     max_tokens = serializers.IntegerField(
         default=1000,
         min_value=1,
         max_value=4000,
-        help_text="حداکثر توکن‌های خروجی"
+        help_text="Maximum output tokens limit"
     )
     temperature = serializers.FloatField(
         default=0.7,
-        min_value=0,
-        max_value=2,
-        help_text="میزان خلاقیت (0-2)"
+        min_value=0.0,
+        max_value=2.0,
+        help_text="Creativity scale"
     )
     system_prompt = serializers.CharField(
         max_length=1000,
         required=False,
-        help_text="پرامپت سیستم"
+        help_text="System instructions"
     )
     analysis_type = serializers.ChoiceField(
-        choices=['general', 'symptoms', 'diagnosis', 'prescription'],
+        choices=['general', 'sizing', 'styling', 'catalog'],
         default='general',
         required=False,
-        help_text="نوع تحلیل پزشکی"
+        help_text="Fashion query analysis type"
     )
-    patient_context = serializers.DictField(
+    client_context = serializers.DictField(
         required=False,
-        help_text="اطلاعات بیمار"
+        help_text="Client height, size, and styling preferences"
     )
 
 
 class WebhookProcessSerializer(serializers.Serializer):
-    """
-    Serializer برای پردازش webhook
-    """
     endpoint_url = serializers.CharField(
         max_length=255,
-        help_text="آدرس endpoint"
+        help_text="Endpoint URL slug"
     )
     headers = serializers.DictField(
-        help_text="هدرهای درخواست"
+        help_text="Request HTTP headers"
     )
     payload = serializers.DictField(
-        help_text="محتوای درخواست"
+        help_text="Webhook payload body"
     )
     signature = serializers.CharField(
         max_length=255,
         required=False,
-        help_text="امضای webhook"
+        help_text="Webhook validation signature"
     )

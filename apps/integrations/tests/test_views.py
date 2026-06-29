@@ -1,35 +1,37 @@
 """
-تست‌های views اپلیکیشن integrations
+Integrations ViewSet and API Tests for Fashionistar.
 """
+
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework.test import APIClient
 from rest_framework import status
-from integrations.models import (
+from unittest.mock import patch, Mock
+import json
+import hmac
+import hashlib
+
+from ..models import (
     IntegrationProvider,
     IntegrationCredential,
     WebhookEndpoint,
     WebhookEvent
 )
-from unittest.mock import patch, Mock
 
 User = get_user_model()
 
 
 class IntegrationProviderViewSetTest(TestCase):
-    """تست ViewSet ارائه‌دهندگان"""
     
     def setUp(self):
-        """آماده‌سازی داده‌های تست"""
         self.client = APIClient()
         self.user = User.objects.create_user(
-            username='testuser',
+            email='testuser@fashionistar-test.io',
             password='testpass123'
         )
         self.client.force_authenticate(user=self.user)
         
-        # ایجاد provider
         self.provider = IntegrationProvider.objects.create(
             name='Test Provider',
             slug='test-provider',
@@ -38,7 +40,6 @@ class IntegrationProviderViewSetTest(TestCase):
         )
     
     def test_list_providers(self):
-        """تست لیست ارائه‌دهندگان"""
         url = reverse('integrations:provider-list')
         response = self.client.get(url)
         
@@ -47,7 +48,6 @@ class IntegrationProviderViewSetTest(TestCase):
         self.assertEqual(response.data['results'][0]['name'], 'Test Provider')
     
     def test_retrieve_provider(self):
-        """تست دریافت جزئیات ارائه‌دهنده"""
         url = reverse('integrations:provider-detail', kwargs={'slug': 'test-provider'})
         response = self.client.get(url)
         
@@ -56,8 +56,6 @@ class IntegrationProviderViewSetTest(TestCase):
         self.assertEqual(response.data['slug'], 'test-provider')
     
     def test_filter_by_type(self):
-        """تست فیلتر بر اساس نوع"""
-        # ایجاد provider دیگر
         IntegrationProvider.objects.create(
             name='AI Provider',
             slug='ai-provider',
@@ -72,20 +70,17 @@ class IntegrationProviderViewSetTest(TestCase):
         self.assertEqual(len(response.data['results']), 1)
         self.assertEqual(response.data['results'][0]['provider_type'], 'sms')
     
-    @patch('integrations.services.kavenegar_service.KavenegarService.health_check')
+    @patch('apps.integrations.services.sms_service.SMSService.health_check')
     def test_health_check_endpoint(self, mock_health_check):
-        """تست endpoint بررسی سلامت"""
-        # تنظیم provider
-        self.provider.slug = 'kavenegar'
+        self.provider.slug = 'sms_provider'
         self.provider.save()
         
-        # Mock response
         mock_health_check.return_value = {
             'status': 'healthy',
             'response_time_ms': 100
         }
         
-        url = reverse('integrations:provider-health-check', kwargs={'slug': 'kavenegar'})
+        url = reverse('integrations:provider-health-check', kwargs={'slug': 'sms_provider'})
         response = self.client.get(url)
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -93,21 +88,18 @@ class IntegrationProviderViewSetTest(TestCase):
 
 
 class SendSMSAPIViewTest(TestCase):
-    """تست API ارسال پیامک"""
     
     def setUp(self):
-        """آماده‌سازی داده‌های تست"""
         self.client = APIClient()
         self.user = User.objects.create_user(
-            username='testuser',
+            email='testuser@fashionistar-test.io',
             password='testpass123'
         )
         self.client.force_authenticate(user=self.user)
         
-        # ایجاد provider و credentials
         provider = IntegrationProvider.objects.create(
-            name='Kavenegar',
-            slug='kavenegar',
+            name='SMS Provider',
+            slug='sms_provider',
             provider_type='sms',
             status='active'
         )
@@ -119,14 +111,12 @@ class SendSMSAPIViewTest(TestCase):
             environment='production'
         )
     
-    @patch('integrations.services.kavenegar_service.KavenegarService.send_otp')
+    @patch('apps.integrations.services.sms_service.SMSService.send_otp')
     def test_send_otp(self, mock_send_otp):
-        """تست ارسال OTP"""
-        # Mock response
         mock_send_otp.return_value = {
             'success': True,
             'message_id': '123456',
-            'cost': 100
+            'cost': 0.05
         }
         
         url = reverse('integrations:send-sms')
@@ -143,23 +133,19 @@ class SendSMSAPIViewTest(TestCase):
         self.assertEqual(response.data['message_id'], '123456')
     
     def test_send_sms_validation(self):
-        """تست اعتبارسنجی ارسال پیامک"""
         url = reverse('integrations:send-sms')
         
-        # شماره نامعتبر
         data = {
-            'receptor': '123456',  # نامعتبر
+            'receptor': 'invalid_phone',
             'message_type': 'simple',
             'message': 'Test message'
         }
         
         response = self.client.post(url, data, format='json')
-        
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('receptor', response.data)
+        self.assertIn('receptor', response.data['errors'])
     
     def test_send_sms_unauthenticated(self):
-        """تست ارسال پیامک بدون احراز هویت"""
         self.client.force_authenticate(user=None)
         
         url = reverse('integrations:send-sms')
@@ -170,21 +156,17 @@ class SendSMSAPIViewTest(TestCase):
         }
         
         response = self.client.post(url, data, format='json')
-        
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
 class WebhookReceiveAPIViewTest(TestCase):
-    """تست API دریافت webhook"""
     
     def setUp(self):
-        """آماده‌سازی داده‌های تست"""
         self.client = APIClient()
         
-        # ایجاد provider و webhook
         provider = IntegrationProvider.objects.create(
             name='Payment Gateway',
-            slug='payment-gateway',
+            slug='webhook',
             provider_type='payment',
             status='active'
         )
@@ -198,7 +180,6 @@ class WebhookReceiveAPIViewTest(TestCase):
         )
     
     def test_receive_webhook_success(self):
-        """تست دریافت موفق webhook"""
         url = reverse('integrations:webhook-receive', kwargs={'endpoint_url': 'payment-webhook'})
         
         payload = {
@@ -206,11 +187,6 @@ class WebhookReceiveAPIViewTest(TestCase):
             'payment_id': '12345',
             'amount': 50000
         }
-        
-        # محاسبه امضا
-        import hmac
-        import hashlib
-        import json
         
         raw_body = json.dumps(payload).encode()
         signature = hmac.new(
@@ -221,22 +197,20 @@ class WebhookReceiveAPIViewTest(TestCase):
         
         response = self.client.post(
             url,
-            payload,
-            format='json',
+            raw_body,
+            content_type='application/json',
             HTTP_X_SIGNATURE=signature
         )
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data['success'])
         
-        # بررسی ثبت رویداد
         event = WebhookEvent.objects.first()
         self.assertIsNotNone(event)
         self.assertEqual(event.event_type, 'payment.success')
         self.assertTrue(event.is_valid)
     
     def test_receive_webhook_invalid_signature(self):
-        """تست دریافت webhook با امضای نامعتبر"""
         url = reverse('integrations:webhook-receive', kwargs={'endpoint_url': 'payment-webhook'})
         
         payload = {
@@ -254,15 +228,12 @@ class WebhookReceiveAPIViewTest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(response.data['success'])
         
-        # بررسی ثبت رویداد
         event = WebhookEvent.objects.first()
         self.assertIsNotNone(event)
         self.assertFalse(event.is_valid)
     
     def test_receive_webhook_unknown_endpoint(self):
-        """تست دریافت webhook با endpoint ناشناخته"""
         url = reverse('integrations:webhook-receive', kwargs={'endpoint_url': 'unknown-endpoint'})
-        
         response = self.client.post(url, {}, format='json')
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -271,28 +242,22 @@ class WebhookReceiveAPIViewTest(TestCase):
 
 
 class IntegrationCredentialViewSetTest(TestCase):
-    """تست ViewSet اطلاعات احراز هویت"""
     
     def setUp(self):
-        """آماده‌سازی داده‌های تست"""
         self.client = APIClient()
         
-        # ایجاد admin user
         self.admin_user = User.objects.create_superuser(
-            username='admin',
             password='admin123',
             email='admin@test.com'
         )
         self.client.force_authenticate(user=self.admin_user)
         
-        # ایجاد provider
         self.provider = IntegrationProvider.objects.create(
             name='Test Provider',
             slug='test-provider',
             provider_type='sms'
         )
         
-        # ایجاد credential
         self.credential = IntegrationCredential.objects.create(
             provider=self.provider,
             key_name='api_key',
@@ -302,27 +267,21 @@ class IntegrationCredentialViewSetTest(TestCase):
         )
     
     def test_list_credentials_admin_only(self):
-        """تست دسترسی فقط برای ادمین"""
-        # با کاربر عادی
         normal_user = User.objects.create_user(
-            username='normaluser',
+            email='normaluser@fashionistar-test.io',
             password='pass123'
         )
         self.client.force_authenticate(user=normal_user)
         
         url = reverse('integrations:credential-list')
         response = self.client.get(url)
-        
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         
-        # با ادمین
         self.client.force_authenticate(user=self.admin_user)
         response = self.client.get(url)
-        
         self.assertEqual(response.status_code, status.HTTP_200_OK)
     
     def test_rotate_credential(self):
-        """تست چرخش credential"""
         url = reverse('integrations:credential-rotate', kwargs={'pk': str(self.credential.id)})
         
         data = {
@@ -334,12 +293,10 @@ class IntegrationCredentialViewSetTest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data['success'])
         
-        # بررسی به‌روزرسانی
         self.credential.refresh_from_db()
         self.assertEqual(self.credential.key_value, 'new_secret_key_456')
         
-        # بررسی ثبت لاگ
-        from integrations.models import IntegrationLog
+        from ..models import IntegrationLog
         log = IntegrationLog.objects.filter(action='rotate_credential').first()
         self.assertIsNotNone(log)
         self.assertEqual(log.user, self.admin_user)

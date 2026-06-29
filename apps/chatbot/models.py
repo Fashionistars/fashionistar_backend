@@ -1,6 +1,5 @@
 """
-مدل‌های سیستم چت‌بات
-Chatbot System Models
+Chatbot System Models for Fashionistar.
 """
 
 from django.db import models
@@ -14,19 +13,19 @@ User = get_user_model()
 
 class ChatbotSession(models.Model):
     """
-    جلسه چت‌بات برای پیگیری مکالمات کاربر
+    Chatbot session to track conversation context per user.
     """
     
     SESSION_TYPES = [
-        ('patient', 'بیمار'),
-        ('doctor', 'پزشک'),
+        ('client', 'Client'),
+        ('vendor', 'Vendor'),
     ]
     
     STATUS_CHOICES = [
-        ('active', 'فعال'),
-        ('paused', 'متوقف'),
-        ('completed', 'تکمیل شده'),
-        ('expired', 'منقضی'),
+        ('active', 'Active'),
+        ('paused', 'Paused'),
+        ('completed', 'Completed'),
+        ('expired', 'Expired'),
     ]
     
     id = models.UUIDField(
@@ -39,60 +38,60 @@ class ChatbotSession(models.Model):
         User,
         on_delete=models.CASCADE,
         related_name='chatbot_sessions',
-        verbose_name='کاربر'
+        verbose_name='User'
     )
     
     session_type = models.CharField(
         max_length=10,
         choices=SESSION_TYPES,
-        verbose_name='نوع جلسه'
+        verbose_name='Session Type'
     )
     
     status = models.CharField(
         max_length=10,
         choices=STATUS_CHOICES,
         default='active',
-        verbose_name='وضعیت'
+        verbose_name='Status'
     )
     
     context_data = models.JSONField(
         default=dict,
         blank=True,
-        verbose_name='داده‌های زمینه',
-        help_text='اطلاعات زمینه‌ای برای حفظ وضعیت مکالمه'
+        verbose_name='Context Data',
+        help_text='Contextual info to maintain conversation state'
     )
     
     started_at = models.DateTimeField(
         auto_now_add=True,
-        verbose_name='زمان شروع'
+        verbose_name='Started At'
     )
     
     last_activity = models.DateTimeField(
         auto_now=True,
-        verbose_name='آخرین فعالیت'
+        verbose_name='Last Activity'
     )
     
     ended_at = models.DateTimeField(
         null=True,
         blank=True,
-        verbose_name='زمان پایان'
+        verbose_name='Ended At'
     )
     
     expires_at = models.DateTimeField(
         null=True,
         blank=True,
-        verbose_name='زمان انقضا'
+        verbose_name='Expires At'
     )
     
     metadata = models.JSONField(
         default=dict,
         blank=True,
-        verbose_name='اطلاعات اضافی'
+        verbose_name='Metadata'
     )
     
     class Meta:
-        verbose_name = 'جلسه چت‌بات'
-        verbose_name_plural = 'جلسات چت‌بات'
+        verbose_name = 'Chatbot Session'
+        verbose_name_plural = 'Chatbot Sessions'
         ordering = ['-started_at']
         indexes = [
             models.Index(fields=['user', 'status']),
@@ -102,48 +101,24 @@ class ChatbotSession(models.Model):
         ]
     
     def __str__(self):
-        """
-        نمایش متنیِ قابل‌خواندن از جلسه چت‌بات شامل نوع جلسه، نام/نمایش کاربر و وضعیت.
-        
-        این رشته برای نمایش در رابط‌های مدیریتی، لاگ‌ها و هنگام تبدیل شی به رشته استفاده می‌شود و فرمت آن:
-        "جلسه {session_type} - {user} ({status})" است.
-        
-        Returns:
-            str: نمایش خلاصه و مختصر جلسه
-        """
-        return f"جلسه {self.session_type} - {self.user} ({self.status})"
+        return f"Session {self.session_type} - {self.user} ({self.status})"
     
     @property
-    def is_active(self):
-        """
-        بررسی می‌کند که آیا جلسه‌ی چت‌بات در حال حاضر فعال است.
-        
-        این متد True برمی‌گرداند اگر وضعیت جلسه برابر 'active' باشد و زمان انقضا (expires_at) یا تعیین نشده باشد یا هنوز نگذشته باشد. در غیر این صورت False بازمی‌گردد.
-        
-        Returns:
-            bool: True اگر جلسه فعال و هنوز منقضی نشده باشد، در غیر این صورت False.
-        """
+    def is_session_active(self):
+        """Check if session is currently active and not expired."""
         return self.status == 'active' and (
             not self.expires_at or timezone.now() < self.expires_at
         )
     
     @property
     def duration(self):
-        """
-        یک خطی: مدت‌زمان جاری یا تکمیل‌شدهٔ جلسه را برمی‌گرداند.
-        
-        توضیح: اگر جلسه قبلاً پایان یافته باشد، اختلاف زمانی بین `ended_at` و `started_at` را بازمی‌گرداند؛ در غیر این صورت اختلاف بین زمان فعلی (با استفاده از `django.utils.timezone.now()`) و `started_at` را برمی‌گرداند. مقدار بازگردانده‌شده یک شیء `datetime.timedelta` است که نشان‌دهنده طول جلسه است.
-        """
+        """Get session duration."""
         if self.ended_at:
             return self.ended_at - self.started_at
         return timezone.now() - self.started_at
     
     def end_session(self):
-        """
-        پایان دادن به جلسهٔ جاری با علامت‌گذاری آن به‌عنوان تکمیل‌شده و ثبت زمان پایان.
-        
-        این متد وضعیت جلسه را به 'completed' تغییر می‌دهد، فیلد ended_at را با زمان فعلی سرور (timezone.now()) تنظیم می‌کند و فقط همین دو فیلد را در پایگاه‌داده ذخیره می‌کند (با استفاده از update_fields) تا از به‌روزرسانی غیرضروری سایر فیلدها جلوگیری شود. این عمل تغییر دائمی در مدل ایجاد می‌کند و مقداردهی مجدد ended_at را به زمان فراخوانی محدود می‌کند.
-        """
+        """End session, marking it completed."""
         self.status = 'completed'
         self.ended_at = timezone.now()
         self.save(update_fields=['status', 'ended_at'])
@@ -151,16 +126,16 @@ class ChatbotSession(models.Model):
 
 class Conversation(models.Model):
     """
-    مکالمه در چت‌بات
+    A specific conversation flow or topic inside a chatbot session.
     """
     
     CONVERSATION_TYPES = [
-        ('patient_inquiry', 'استعلام بیمار'),
-        ('doctor_consultation', 'مشاوره پزشک'),
-        ('symptom_check', 'بررسی علائم'),
-        ('medication_info', 'اطلاعات دارو'),
-        ('appointment', 'نوبت‌گیری'),
-        ('general', 'عمومی'),
+        ('style_advice', 'Style Advice'),
+        ('size_recommendation', 'Size Recommendation'),
+        ('product_search', 'Product Search'),
+        ('order_inquiry', 'Order Inquiry'),
+        ('general_support', 'General Support'),
+        ('general', 'General'),
     ]
     
     id = models.UUIDField(
@@ -173,57 +148,57 @@ class Conversation(models.Model):
         ChatbotSession,
         on_delete=models.CASCADE,
         related_name='conversations',
-        verbose_name='جلسه'
+        verbose_name='Session'
     )
     
     conversation_type = models.CharField(
-        max_length=20,
+        max_length=25,
         choices=CONVERSATION_TYPES,
         default='general',
-        verbose_name='نوع مکالمه'
+        verbose_name='Conversation Type'
     )
     
     title = models.CharField(
         max_length=200,
         blank=True,
-        verbose_name='عنوان'
+        verbose_name='Title'
     )
     
     is_active = models.BooleanField(
         default=True,
-        verbose_name='فعال'
+        verbose_name='Is Active'
     )
     
     started_at = models.DateTimeField(
         auto_now_add=True,
-        verbose_name='زمان شروع'
+        verbose_name='Started At'
     )
     
     updated_at = models.DateTimeField(
         auto_now=True,
-        verbose_name='آخرین بروزرسانی'
+        verbose_name='Updated At'
     )
     
     summary = models.TextField(
         blank=True,
-        verbose_name='خلاصه مکالمه'
+        verbose_name='Summary'
     )
     
     tags = models.JSONField(
         default=list,
         blank=True,
-        verbose_name='برچسب‌ها'
+        verbose_name='Tags'
     )
     
     metadata = models.JSONField(
         default=dict,
         blank=True,
-        verbose_name='اطلاعات اضافی'
+        verbose_name='Metadata'
     )
     
     class Meta:
-        verbose_name = 'مکالمه'
-        verbose_name_plural = 'مکالمات'
+        verbose_name = 'Conversation'
+        verbose_name_plural = 'Conversations'
         ordering = ['-started_at']
         indexes = [
             models.Index(fields=['session', 'is_active']),
@@ -232,60 +207,39 @@ class Conversation(models.Model):
         ]
     
     def __str__(self):
-        """
-        یک نمایش متنی قابل‌فهم از Conversation که برای رابط‌های مدیریتی و لاگ‌ها استفاده می‌شود.
-        
-        اگر عنوان (title) موجود باشد آن را نشان می‌دهد، در غیر این صورت از مقدار پیش‌فرض `مکالمه {conversation_type}` استفاده می‌کند و در انتها نام کاربر مرتبط با جلسه را می‌افزاید.
-        برمی‌گرداند:
-            رشته‌ای به صورت "<عنوان یا نوع مکالمه> - <کاربر جلسه>"
-        """
-        title = self.title or f"مکالمه {self.conversation_type}"
+        title = self.title or f"Conversation {self.conversation_type}"
         return f"{title} - {self.session.user}"
     
     @property
     def message_count(self):
-        """
-        تعداد کل پیام‌های مرتبط با این مکالمه را برمی‌گرداند.
-        
-        این property/متد تعداد رکوردهای مرتبط در رابطه `messages` را به‌صورت مستقیم از پایگاه‌داده می‌شمارد و یک عدد صحیح برمی‌گرداند.
-        
-        Returns:
-            int: تعداد پیام‌ها
-        """
+        """Count total messages in conversation."""
         return self.messages.count()
     
     @property
     def last_message_time(self):
-        """
-        بازگرداندن زمان آخرین پیام مرتبط با این Conversation.
-        
-        این متد زمان ایجاد آخرین پیام (با استفاده از رابطه‌ی related_name='messages' و مرتب‌سازی بر پایهٔ فیلد `created_at`) را برمی‌گرداند. اگر هیچ پیامی وجود نداشته باشد، مقدار `started_at` مکالمه بازگردانده می‌شود. مقدار برگشتی یک شیء datetime است (معمولاً timezone-aware مطابق تنظیمات Django).
-        
-        Returns:
-            datetime: زمان آخرین پیام یا زمان شروع مکالمه در صورت نبود پیام.
-        """
+        """Get timestamp of last message."""
         last_message = self.messages.order_by('-created_at').first()
         return last_message.created_at if last_message else self.started_at
 
 
 class Message(models.Model):
     """
-    پیام در مکالمه چت‌بات
+    Message inside a chatbot conversation.
     """
     
     SENDER_TYPES = [
-        ('user', 'کاربر'),
-        ('bot', 'ربات'),
-        ('system', 'سیستم'),
+        ('user', 'User'),
+        ('bot', 'Bot'),
+        ('system', 'System'),
     ]
     
     MESSAGE_TYPES = [
-        ('text', 'متن'),
-        ('quick_reply', 'پاسخ سریع'),
-        ('attachment', 'پیوست'),
-        ('card', 'کارت'),
-        ('carousel', 'کاروسل'),
-        ('typing', 'در حال تایپ'),
+        ('text', 'Text'),
+        ('quick_reply', 'Quick Reply'),
+        ('attachment', 'Attachment'),
+        ('card', 'Card'),
+        ('carousel', 'Carousel'),
+        ('typing', 'Typing'),
     ]
     
     id = models.UUIDField(
@@ -298,74 +252,74 @@ class Message(models.Model):
         Conversation,
         on_delete=models.CASCADE,
         related_name='messages',
-        verbose_name='مکالمه'
+        verbose_name='Conversation'
     )
     
     sender_type = models.CharField(
         max_length=10,
         choices=SENDER_TYPES,
-        verbose_name='نوع فرستنده'
+        verbose_name='Sender Type'
     )
     
     message_type = models.CharField(
         max_length=15,
         choices=MESSAGE_TYPES,
         default='text',
-        verbose_name='نوع پیام'
+        verbose_name='Message Type'
     )
     
     content = models.TextField(
         validators=[MinLengthValidator(1)],
-        verbose_name='محتوا'
+        verbose_name='Content'
     )
     
     response_data = models.JSONField(
         default=dict,
         blank=True,
-        verbose_name='داده‌های پاسخ',
-        help_text='پاسخ‌های ساختاریافته یا گزینه‌ها'
+        verbose_name='Response Data',
+        help_text='Structured options or response details'
     )
     
     ai_confidence = models.FloatField(
         null=True,
         blank=True,
-        verbose_name='اطمینان AI',
-        help_text='درجه اطمینان پاسخ هوش مصنوعی (0.0 تا 1.0)'
+        verbose_name='AI Confidence',
+        help_text='Confidence score of AI response (0.0 to 1.0)'
     )
     
     processing_time = models.FloatField(
         null=True,
         blank=True,
-        verbose_name='زمان پردازش',
-        help_text='زمان پردازش به ثانیه'
+        verbose_name='Processing Time',
+        help_text='Processing time in seconds'
     )
     
     is_sensitive = models.BooleanField(
         default=False,
-        verbose_name='حساس',
-        help_text='آیا پیام حاوی اطلاعات حساس است؟'
+        verbose_name='Is Sensitive',
+        help_text='Does the message contain sensitive info?'
     )
     
     created_at = models.DateTimeField(
         auto_now_add=True,
-        verbose_name='زمان ایجاد'
+        verbose_name='Created At'
     )
     
     edited_at = models.DateTimeField(
         null=True,
         blank=True,
-        verbose_name='زمان ویرایش'
+        verbose_name='Edited At'
     )
     
     metadata = models.JSONField(
         default=dict,
         blank=True,
-        verbose_name='اطلاعات اضافی'
+        verbose_name='Metadata'
     )
     
     class Meta:
-        verbose_name = 'پیام'
-        verbose_name_plural = 'پیام‌ها'
+        verbose_name = 'Message'
+        verbose_name_plural = 'Messages'
         ordering = ['created_at']
         indexes = [
             models.Index(fields=['conversation', 'created_at']),
@@ -375,58 +329,39 @@ class Message(models.Model):
         ]
     
     def __str__(self):
-        """
-        یک نمایش متنی مختصر از پیام.
-        
-        نمایش شامل نوع فرستنده (`sender_type`) و پیش‌نمایش محتوای پیام است. اگر طول `content` بیش از ۵۰ کاراکتر باشد، محتوای نمایش‌داده‌شده با `...` کوتاه می‌شود تا حداکثر ۵۰ کاراکتر اولیه نشان داده شود.
-        
-        Returns:
-            str: رشته‌ای به شکل "<sender_type>: <content_preview>" که برای نمایش در لیست‌ها یا لاگ‌ها مناسب است.
-        """
         content_preview = self.content[:50] + '...' if len(self.content) > 50 else self.content
         return f"{self.sender_type}: {content_preview}"
     
     @property
     def is_from_user(self):
-        """
-        بررسی می‌کند که فرستنده پیام کاربر است یا خیر.
-        
-        Returns:
-            bool: True اگر فیلد `sender_type` برابر رشته‌ی `'user'` باشد، در غیر این صورت False.
-        """
         return self.sender_type == 'user'
     
     @property
     def is_from_bot(self):
-        """
-        بررسی می‌کند که فرستنده پیام ربات باشد.
-        
-        این پراپرتی/متد بولی True برمی‌گرداند اگر فیلد `sender_type` برابر با رشته `'bot'` باشد و در غیر این صورت False بازمی‌گرداند.
-        """
         return self.sender_type == 'bot'
 
 
 class ChatbotResponse(models.Model):
     """
-    پاسخ‌های از پیش تعریف شده چت‌بات
+    Predefined responses mapped to categories.
     """
     
     RESPONSE_CATEGORIES = [
-        ('greeting', 'خوشامدگویی'),
-        ('symptom_inquiry', 'پرسش علائم'),
-        ('medication_info', 'اطلاعات دارو'),
-        ('appointment_booking', 'نوبت‌گیری'),
-        ('emergency', 'اورژانس'),
-        ('general_health', 'سلامت عمومی'),
-        ('farewell', 'خداحافظی'),
-        ('error', 'خطا'),
-        ('unknown', 'نامشخص'),
+        ('greeting', 'Greeting'),
+        ('sizing_inquiry', 'Sizing Inquiry'),
+        ('styling_recommendation', 'Styling Recommendation'),
+        ('order_help', 'Order Help'),
+        ('shipping_returns', 'Shipping & Returns'),
+        ('product_info', 'Product Info'),
+        ('farewell', 'Farewell'),
+        ('error', 'Error'),
+        ('unknown', 'Unknown'),
     ]
     
     TARGET_USERS = [
-        ('patient', 'بیمار'),
-        ('doctor', 'پزشک'),
-        ('both', 'هر دو'),
+        ('client', 'Client'),
+        ('vendor', 'Vendor'),
+        ('both', 'Both'),
     ]
     
     id = models.UUIDField(
@@ -436,57 +371,57 @@ class ChatbotResponse(models.Model):
     )
     
     category = models.CharField(
-        max_length=20,
+        max_length=25,
         choices=RESPONSE_CATEGORIES,
-        verbose_name='دسته‌بندی'
+        verbose_name='Category'
     )
     
     target_user = models.CharField(
         max_length=10,
         choices=TARGET_USERS,
         default='both',
-        verbose_name='کاربر هدف'
+        verbose_name='Target User'
     )
     
     trigger_keywords = models.JSONField(
         default=list,
-        verbose_name='کلمات کلیدی محرک'
+        verbose_name='Trigger Keywords'
     )
     
     response_text = models.TextField(
-        verbose_name='متن پاسخ'
+        verbose_name='Response Text'
     )
     
     response_data = models.JSONField(
         default=dict,
         blank=True,
-        verbose_name='داده‌های پاسخ'
+        verbose_name='Response Data'
     )
     
     is_active = models.BooleanField(
         default=True,
-        verbose_name='فعال'
+        verbose_name='Is Active'
     )
     
     priority = models.IntegerField(
         default=1,
-        verbose_name='اولویت',
-        help_text='عدد بالاتر = اولویت بیشتر'
+        verbose_name='Priority',
+        help_text='Higher number = higher priority'
     )
     
     created_at = models.DateTimeField(
         auto_now_add=True,
-        verbose_name='زمان ایجاد'
+        verbose_name='Created At'
     )
     
     updated_at = models.DateTimeField(
         auto_now=True,
-        verbose_name='آخرین بروزرسانی'
+        verbose_name='Updated At'
     )
     
     class Meta:
-        verbose_name = 'پاسخ چت‌بات'
-        verbose_name_plural = 'پاسخ‌های چت‌بات'
+        verbose_name = 'Chatbot Response'
+        verbose_name_plural = 'Chatbot Responses'
         ordering = ['-priority', '-created_at']
         indexes = [
             models.Index(fields=['category', 'is_active']),
@@ -495,12 +430,4 @@ class ChatbotResponse(models.Model):
         ]
     
     def __str__(self):
-        """
-        یک نمایش متنی خوانا از پاسخ بات را برمی‌گرداند.
-        
-        نمایش شامل دسته‌بندی (category)، کاربر هدف (target_user) و اولویت (priority) است و برای نمایش در رابط مدیریتی، گزارش‌ها یا لاگ‌ها مناسب است.
-        
-        Returns:
-            str: رشته‌ای به شکل "`<category> - <target_user> (اولویت: <priority>)`".
-        """
-        return f"{self.category} - {self.target_user} (اولویت: {self.priority})"
+        return f"{self.category} - {self.target_user} (Priority: {self.priority})"

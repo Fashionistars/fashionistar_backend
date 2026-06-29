@@ -11,8 +11,8 @@ class ChatbotConfig(AppConfig):
     پیکربندی اپ چت‌بات برای بیماران و پزشکان
     """
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'chatbot'
-    verbose_name = 'سیستم چت‌بات'
+    name = 'apps.chatbot'
+    verbose_name = 'Chatbot'
     
     def ready(self):
         """

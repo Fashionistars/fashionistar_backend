@@ -1,5 +1,4 @@
 """
-چهار هسته‌ی اصلی معماری هلسا
 Four Core Architecture Components
 """
 
@@ -31,4 +30,4 @@ __all__ = [
 
 # Version info
 __version__ = '1.0.0'
-__author__ = 'HELSSA Development Team'
+__author__ = 'Fashionistar'

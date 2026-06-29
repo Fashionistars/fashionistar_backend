@@ -1,6 +1,5 @@
 """
-مدل‌های پایه استاندارد
-Standard Base Models
+Standard Base Models for Fashionistar.
 """
 
 from django.db import models
@@ -14,22 +13,22 @@ User = get_user_model()
 
 class BaseModel(models.Model):
     """
-    مدل پایه برای تمام مدل‌های سیستم
-    شامل فیلدهای استاندارد timestamp و creator
+    Base model for all system models.
+    Includes standard UUID, timestamp, active status, and creator tracking.
     """
     id = models.UUIDField(
         primary_key=True,
         default=uuid.uuid4,
         editable=False,
-        verbose_name='شناسه یکتا'
+        verbose_name='UUID'
     )
     created_at = models.DateTimeField(
         auto_now_add=True,
-        verbose_name='تاریخ ایجاد'
+        verbose_name='Created At'
     )
     updated_at = models.DateTimeField(
         auto_now=True,
-        verbose_name='تاریخ آخرین تغییر'
+        verbose_name='Updated At'
     )
     created_by = models.ForeignKey(
         User,
@@ -37,11 +36,11 @@ class BaseModel(models.Model):
         null=True,
         blank=True,
         related_name='%(class)s_created',
-        verbose_name='ایجادکننده'
+        verbose_name='Created By'
     )
     is_active = models.BooleanField(
         default=True,
-        verbose_name='فعال'
+        verbose_name='Is Active'
     )
     
     class Meta:
@@ -53,77 +52,77 @@ class BaseModel(models.Model):
         ]
     
     def soft_delete(self):
-        """حذف نرم (غیرفعال‌سازی)"""
+        """Soft delete (deactivation)."""
         self.is_active = False
         self.save(update_fields=['is_active', 'updated_at'])
     
     def restore(self):
-        """بازیابی رکورد حذف شده"""
+        """Restore deleted record."""
         self.is_active = True
         self.save(update_fields=['is_active', 'updated_at'])
 
 
-class PatientRelatedModel(BaseModel):
+class ClientRelatedModel(BaseModel):
     """
-    مدل پایه برای موجودیت‌های مرتبط با بیمار
+    Base model for client-related entities.
     """
-    patient = models.ForeignKey(
+    client = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         related_name='%(class)s_records',
-        limit_choices_to={'user_type': 'patient'},
-        verbose_name='بیمار'
+        limit_choices_to={'role': 'client'},
+        verbose_name='Client'
     )
     
     class Meta:
         abstract = True
         indexes = [
-            models.Index(fields=['patient', '-created_at']),
+            models.Index(fields=['client', '-created_at']),
         ]
 
 
-class DoctorRelatedModel(BaseModel):
+class VendorRelatedModel(BaseModel):
     """
-    مدل پایه برای موجودیت‌های مرتبط با پزشک
+    Base model for vendor-related entities.
     """
-    doctor = models.ForeignKey(
+    vendor = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         related_name='%(class)s_records',
-        limit_choices_to={'user_type': 'doctor'},
-        verbose_name='پزشک'
+        limit_choices_to={'role': 'vendor'},
+        verbose_name='Vendor'
     )
     
     class Meta:
         abstract = True
         indexes = [
-            models.Index(fields=['doctor', '-created_at']),
+            models.Index(fields=['vendor', '-created_at']),
         ]
 
 
-class MedicalRecordModel(BaseModel):
+class CommerceRecordModel(BaseModel):
     """
-    مدل پایه برای سوابق پزشکی
+    Base model for commerce records involving clients and vendors.
     """
-    patient = models.ForeignKey(
+    client = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='%(class)s_medical_records',
-        limit_choices_to={'user_type': 'patient'},
-        verbose_name='بیمار'
+        related_name='%(class)s_commerce_records',
+        limit_choices_to={'role': 'client'},
+        verbose_name='Client'
     )
-    doctor = models.ForeignKey(
+    vendor = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='%(class)s_created_records',
-        limit_choices_to={'user_type': 'doctor'},
-        verbose_name='پزشک'
+        related_name='%(class)s_created_commerce_records',
+        limit_choices_to={'role': 'vendor'},
+        verbose_name='Vendor'
     )
     is_confidential = models.BooleanField(
         default=False,
-        verbose_name='محرمانه'
+        verbose_name='Is Confidential'
     )
     
     class Meta:
@@ -135,27 +134,27 @@ class MedicalRecordModel(BaseModel):
 
 class FileAttachmentModel(BaseModel):
     """
-    مدل پایه برای فایل‌های پیوست
+    Base model for file attachments.
     """
     file = models.FileField(
         upload_to='attachments/%Y/%m/%d/',
-        verbose_name='فایل'
+        verbose_name='File'
     )
     file_name = models.CharField(
         max_length=255,
-        verbose_name='نام فایل'
+        verbose_name='File Name'
     )
     file_size = models.IntegerField(
         validators=[MinValueValidator(0)],
-        verbose_name='حجم فایل (بایت)'
+        verbose_name='File Size (Bytes)'
     )
     file_type = models.CharField(
         max_length=50,
-        verbose_name='نوع فایل'
+        verbose_name='File Type'
     )
     description = models.TextField(
         blank=True,
-        verbose_name='توضیحات'
+        verbose_name='Description'
     )
     
     class Meta:
@@ -170,20 +169,20 @@ class FileAttachmentModel(BaseModel):
 
 class StatusModel(BaseModel):
     """
-    مدل پایه برای موجودیت‌های دارای وضعیت
+    Base model for entities with status lifecycle tracking.
     """
-    STATUS_CHOICES = []  # باید در کلاس فرزند تعریف شود
+    STATUS_CHOICES = []  # Must be defined in child class
     
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
         default='pending',
-        verbose_name='وضعیت'
+        verbose_name='Status'
     )
     status_changed_at = models.DateTimeField(
         null=True,
         blank=True,
-        verbose_name='زمان تغییر وضعیت'
+        verbose_name='Status Changed At'
     )
     status_changed_by = models.ForeignKey(
         User,
@@ -191,7 +190,7 @@ class StatusModel(BaseModel):
         null=True,
         blank=True,
         related_name='%(class)s_status_changes',
-        verbose_name='تغییردهنده وضعیت'
+        verbose_name='Status Changed By'
     )
     
     class Meta:
@@ -201,7 +200,7 @@ class StatusModel(BaseModel):
         ]
     
     def change_status(self, new_status, user=None):
-        """تغییر وضعیت با ثبت تاریخ و کاربر"""
+        """Change status, recording timestamp and user."""
         self.status = new_status
         self.status_changed_at = timezone.now()
         self.status_changed_by = user
@@ -210,28 +209,28 @@ class StatusModel(BaseModel):
 
 class RatingModel(models.Model):
     """
-    مدل پایه برای امتیازدهی
+    Base model for ratings and reviews.
     """
     rating = models.IntegerField(
         validators=[
             MinValueValidator(1),
             MaxValueValidator(5)
         ],
-        verbose_name='امتیاز'
+        verbose_name='Rating'
     )
     comment = models.TextField(
         blank=True,
-        verbose_name='نظر'
+        verbose_name='Comment'
     )
     rated_by = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         related_name='%(class)s_ratings',
-        verbose_name='امتیازدهنده'
+        verbose_name='Rated By'
     )
     rated_at = models.DateTimeField(
         auto_now_add=True,
-        verbose_name='تاریخ امتیازدهی'
+        verbose_name='Rated At'
     )
     
     class Meta:
@@ -244,15 +243,15 @@ class RatingModel(models.Model):
 
 class VersionedModel(BaseModel):
     """
-    مدل پایه برای موجودیت‌های دارای نسخه
+    Base model for versioned entities.
     """
     version = models.IntegerField(
         default=1,
-        verbose_name='نسخه'
+        verbose_name='Version'
     )
     is_current = models.BooleanField(
         default=True,
-        verbose_name='نسخه فعلی'
+        verbose_name='Is Current Version'
     )
     parent_version = models.ForeignKey(
         'self',
@@ -260,7 +259,7 @@ class VersionedModel(BaseModel):
         null=True,
         blank=True,
         related_name='child_versions',
-        verbose_name='نسخه والد'
+        verbose_name='Parent Version'
     )
     
     class Meta:
@@ -270,17 +269,17 @@ class VersionedModel(BaseModel):
         ]
     
     def create_new_version(self):
-        """ایجاد نسخه جدید"""
-        # غیرفعال کردن نسخه فعلی
+        """Create new version."""
+        # Deactivate current version
         self.is_current = False
         self.save(update_fields=['is_current'])
         
-        # ایجاد نسخه جدید
+        # Create new version
         new_version = self.__class__.objects.create(
             parent_version=self,
             version=self.version + 1,
             is_current=True,
-            # کپی سایر فیلدها
+            # Copy other fields
             **{f.name: getattr(self, f.name) 
                for f in self._meta.fields 
                if f.name not in ['id', 'version', 'is_current', 'parent_version', 'created_at', 'updated_at']}
@@ -290,46 +289,46 @@ class VersionedModel(BaseModel):
 
 class AuditLogModel(models.Model):
     """
-    مدل پایه برای ثبت تغییرات (Audit Log)
+    Base model for audit logs.
     """
     ACTION_CHOICES = [
-        ('create', 'ایجاد'),
-        ('update', 'بروزرسانی'),
-        ('delete', 'حذف'),
-        ('view', 'مشاهده'),
+        ('create', 'Create'),
+        ('update', 'Update'),
+        ('delete', 'Delete'),
+        ('view', 'View'),
     ]
     
     user = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
         null=True,
-        verbose_name='کاربر'
+        verbose_name='User'
     )
     action = models.CharField(
         max_length=10,
         choices=ACTION_CHOICES,
-        verbose_name='عملیات'
+        verbose_name='Action'
     )
     timestamp = models.DateTimeField(
         auto_now_add=True,
-        verbose_name='زمان'
+        verbose_name='Timestamp'
     )
     object_id = models.CharField(
         max_length=255,
-        verbose_name='شناسه موجودیت'
+        verbose_name='Object ID'
     )
     object_type = models.CharField(
         max_length=100,
-        verbose_name='نوع موجودیت'
+        verbose_name='Object Type'
     )
     changes = models.JSONField(
         default=dict,
-        verbose_name='تغییرات'
+        verbose_name='Changes'
     )
     ip_address = models.GenericIPAddressField(
         null=True,
         blank=True,
-        verbose_name='آدرس IP'
+        verbose_name='IP Address'
     )
     user_agent = models.TextField(
         blank=True,
@@ -346,12 +345,11 @@ class AuditLogModel(models.Model):
         ]
 
 
-# مثال استفاده
 class ExampleModel(BaseModel):
-    """نمونه استفاده از مدل پایه"""
+    """Example of standard base model usage."""
     title = models.CharField(max_length=200)
     description = models.TextField()
     
     class Meta:
-        verbose_name = 'نمونه'
-        verbose_name_plural = 'نمونه‌ها'
+        verbose_name = 'Example'
+        verbose_name_plural = 'Examples'

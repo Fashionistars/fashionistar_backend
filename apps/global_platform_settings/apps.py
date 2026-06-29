@@ -30,3 +30,10 @@ class GlobalPlatformSettingsConfig(AppConfig):
     def ready(self) -> None:
         """Import signal handlers when the application registry is ready."""
         import apps.global_platform_settings.signals  # noqa: F401  — registers post_migrate handler
+
+        # Warm up the cache synchronously to avoid async context ORM operations at runtime
+        try:
+            from apps.global_platform_settings.cache import get_platform_settings
+            get_platform_settings()
+        except Exception:
+            pass

@@ -1,10 +1,9 @@
 """
-مدل‌های اپلیکیشن integrations
-برای مدیریت یکپارچه‌سازی‌های خارجی
+Integrations Models for Fashionistar.
 """
+
 from django.db import models
 from django.contrib.auth import get_user_model
-from django.contrib.postgres.fields import JSONField
 from django.utils import timezone
 from django.core.validators import RegexValidator
 import uuid
@@ -14,64 +13,64 @@ User = get_user_model()
 
 class IntegrationProvider(models.Model):
     """
-    مدل ارائه‌دهندگان خدمات یکپارچه‌سازی
+    Integration Provider model representing external APIs and third-party services.
     """
     PROVIDER_TYPES = [
-        ('sms', 'پیامک'),
-        ('payment', 'پرداخت'),
-        ('ai', 'هوش مصنوعی'),
-        ('storage', 'ذخیره‌سازی'),
-        ('notification', 'اعلان'),
-        ('analytics', 'تحلیل'),
-        ('other', 'سایر'),
+        ('sms', 'SMS'),
+        ('payment', 'Payment Gateway'),
+        ('ai', 'Artificial Intelligence'),
+        ('storage', 'Cloud Storage'),
+        ('notification', 'Notification Services'),
+        ('analytics', 'Analytics Platforms'),
+        ('other', 'Other Services'),
     ]
     
     STATUS_CHOICES = [
-        ('active', 'فعال'),
-        ('inactive', 'غیرفعال'),
-        ('maintenance', 'در حال تعمیر'),
+        ('active', 'Active'),
+        ('inactive', 'Inactive'),
+        ('maintenance', 'Under Maintenance'),
     ]
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(
         max_length=100,
         unique=True,
-        verbose_name='نام ارائه‌دهنده'
+        verbose_name='Provider Name'
     )
     slug = models.SlugField(
         max_length=50,
         unique=True,
-        verbose_name='شناسه یکتا'
+        verbose_name='Unique Slug'
     )
     provider_type = models.CharField(
         max_length=20,
         choices=PROVIDER_TYPES,
-        verbose_name='نوع خدمات'
+        verbose_name='Service Type'
     )
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
         default='active',
-        verbose_name='وضعیت'
+        verbose_name='Status'
     )
     description = models.TextField(
         blank=True,
-        verbose_name='توضیحات'
+        verbose_name='Description'
     )
     api_base_url = models.URLField(
         blank=True,
-        verbose_name='آدرس پایه API'
+        verbose_name='API Base URL'
     )
     documentation_url = models.URLField(
         blank=True,
-        verbose_name='لینک مستندات'
+        verbose_name='Documentation URL'
     )
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name='تاریخ ایجاد')
-    updated_at = models.DateTimeField(auto_now=True, verbose_name='تاریخ بروزرسانی')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Created At')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Updated At')
     
     class Meta:
-        verbose_name = 'ارائه‌دهنده خدمات'
-        verbose_name_plural = 'ارائه‌دهندگان خدمات'
+        verbose_name = 'Integration Provider'
+        verbose_name_plural = 'Integration Providers'
         ordering = ['name']
     
     def __str__(self):
@@ -80,67 +79,66 @@ class IntegrationProvider(models.Model):
 
 class IntegrationCredential(models.Model):
     """
-    مدل ذخیره اطلاعات احراز هویت برای یکپارچه‌سازی‌ها
+    Credentials and API keys storage for Integration Providers.
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     provider = models.ForeignKey(
         IntegrationProvider,
         on_delete=models.CASCADE,
         related_name='credentials',
-        verbose_name='ارائه‌دهنده'
+        verbose_name='Provider'
     )
     key_name = models.CharField(
         max_length=100,
-        verbose_name='نام کلید'
+        verbose_name='Key Name'
     )
     key_value = models.TextField(
-        verbose_name='مقدار کلید',
-        help_text='این مقدار به صورت رمزنگاری شده ذخیره می‌شود'
+        verbose_name='Key Value',
+        help_text='Stored in encrypted format.'
     )
     is_encrypted = models.BooleanField(
         default=True,
-        verbose_name='رمزنگاری شده'
+        verbose_name='Is Encrypted'
     )
     environment = models.CharField(
         max_length=20,
         choices=[
-            ('development', 'توسعه'),
-            ('staging', 'آزمایشی'),
-            ('production', 'عملیاتی'),
+            ('development', 'Development'),
+            ('staging', 'Staging'),
+            ('production', 'Production'),
         ],
         default='production',
-        verbose_name='محیط'
+        verbose_name='Environment'
     )
     is_active = models.BooleanField(
         default=True,
-        verbose_name='فعال'
+        verbose_name='Is Active'
     )
     expires_at = models.DateTimeField(
         null=True,
         blank=True,
-        verbose_name='تاریخ انقضا'
+        verbose_name='Expires At'
     )
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name='تاریخ ایجاد')
-    updated_at = models.DateTimeField(auto_now=True, verbose_name='تاریخ بروزرسانی')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Created At')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Updated At')
     created_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
         null=True,
         related_name='created_credentials',
-        verbose_name='ایجاد کننده'
+        verbose_name='Created By'
     )
     
     class Meta:
-        verbose_name = 'اطلاعات احراز هویت'
-        verbose_name_plural = 'اطلاعات احراز هویت'
+        verbose_name = 'Integration Credential'
+        verbose_name_plural = 'Integration Credentials'
         unique_together = ['provider', 'key_name', 'environment']
         ordering = ['provider', 'key_name']
     
     def __str__(self):
         return f"{self.provider.name} - {self.key_name}"
     
-    def is_valid(self):
-        """بررسی اعتبار کلید"""
+    def is_valid(self) -> bool:
         if not self.is_active:
             return False
         if self.expires_at and self.expires_at < timezone.now():
@@ -150,14 +148,14 @@ class IntegrationCredential(models.Model):
 
 class IntegrationLog(models.Model):
     """
-    مدل ثبت لاگ‌های یکپارچه‌سازی
+    Logs API calls and transactions with integration providers.
     """
     LOG_LEVELS = [
-        ('debug', 'اشکال‌زدایی'),
-        ('info', 'اطلاعات'),
-        ('warning', 'هشدار'),
-        ('error', 'خطا'),
-        ('critical', 'بحرانی'),
+        ('debug', 'Debug'),
+        ('info', 'Info'),
+        ('warning', 'Warning'),
+        ('error', 'Error'),
+        ('critical', 'Critical'),
     ]
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -165,45 +163,45 @@ class IntegrationLog(models.Model):
         IntegrationProvider,
         on_delete=models.CASCADE,
         related_name='logs',
-        verbose_name='ارائه‌دهنده'
+        verbose_name='Provider'
     )
     log_level = models.CharField(
         max_length=20,
         choices=LOG_LEVELS,
         default='info',
-        verbose_name='سطح لاگ'
+        verbose_name='Log Level'
     )
     service_name = models.CharField(
         max_length=100,
-        verbose_name='نام سرویس'
+        verbose_name='Service Name'
     )
     action = models.CharField(
         max_length=100,
-        verbose_name='عملیات'
+        verbose_name='Action'
     )
     request_data = models.JSONField(
         default=dict,
         blank=True,
-        verbose_name='داده‌های درخواست'
+        verbose_name='Request Data'
     )
     response_data = models.JSONField(
         default=dict,
         blank=True,
-        verbose_name='داده‌های پاسخ'
+        verbose_name='Response Data'
     )
     error_message = models.TextField(
         blank=True,
-        verbose_name='پیام خطا'
+        verbose_name='Error Message'
     )
     status_code = models.IntegerField(
         null=True,
         blank=True,
-        verbose_name='کد وضعیت'
+        verbose_name='Status Code'
     )
     duration_ms = models.IntegerField(
         null=True,
         blank=True,
-        verbose_name='مدت زمان (میلی‌ثانیه)'
+        verbose_name='Duration (ms)'
     )
     user = models.ForeignKey(
         User,
@@ -211,22 +209,22 @@ class IntegrationLog(models.Model):
         null=True,
         blank=True,
         related_name='integration_logs',
-        verbose_name='کاربر'
+        verbose_name='User'
     )
     ip_address = models.GenericIPAddressField(
         null=True,
         blank=True,
-        verbose_name='آدرس IP'
+        verbose_name='IP Address'
     )
     created_at = models.DateTimeField(
         auto_now_add=True,
-        verbose_name='زمان ثبت',
+        verbose_name='Logged At',
         db_index=True
     )
     
     class Meta:
-        verbose_name = 'لاگ یکپارچه‌سازی'
-        verbose_name_plural = 'لاگ‌های یکپارچه‌سازی'
+        verbose_name = 'Integration Log'
+        verbose_name_plural = 'Integration Logs'
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['provider', 'created_at']),
@@ -239,54 +237,54 @@ class IntegrationLog(models.Model):
 
 class WebhookEndpoint(models.Model):
     """
-    مدل مدیریت Webhook endpoints
+    Webhook endpoints configured to receive external callbacks.
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     provider = models.ForeignKey(
         IntegrationProvider,
         on_delete=models.CASCADE,
         related_name='webhooks',
-        verbose_name='ارائه‌دهنده'
+        verbose_name='Provider'
     )
     name = models.CharField(
         max_length=100,
-        verbose_name='نام webhook'
+        verbose_name='Webhook Name'
     )
     endpoint_url = models.CharField(
         max_length=255,
         unique=True,
-        verbose_name='آدرس endpoint',
+        verbose_name='Endpoint URL',
         validators=[
             RegexValidator(
                 regex=r'^[a-zA-Z0-9-_/]+$',
-                message='آدرس endpoint فقط می‌تواند شامل حروف، اعداد، خط تیره و زیرخط باشد'
+                message='Endpoint URL can only contain letters, numbers, hyphens and underscores.'
             )
         ]
     )
     secret_key = models.CharField(
         max_length=255,
-        verbose_name='کلید امنیتی',
-        help_text='برای تأیید امضای webhook'
+        verbose_name='Secret Key',
+        help_text='Used to verify webhook payload signatures.'
     )
     events = models.JSONField(
         default=list,
-        verbose_name='رویدادهای مورد نظر',
-        help_text='لیست رویدادهایی که این webhook دریافت می‌کند'
+        verbose_name='Subscribed Events',
+        help_text='List of event slugs this webhook processes.'
     )
     is_active = models.BooleanField(
         default=True,
-        verbose_name='فعال'
+        verbose_name='Is Active'
     )
     retry_count = models.IntegerField(
         default=3,
-        verbose_name='تعداد تلاش مجدد'
+        verbose_name='Retry Count'
     )
     timeout_seconds = models.IntegerField(
         default=30,
-        verbose_name='زمان انتظار (ثانیه)'
+        verbose_name='Timeout (Seconds)'
     )
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name='تاریخ ایجاد')
-    updated_at = models.DateTimeField(auto_now=True, verbose_name='تاریخ بروزرسانی')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Created At')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Updated At')
     
     class Meta:
         verbose_name = 'Webhook Endpoint'
@@ -299,7 +297,7 @@ class WebhookEndpoint(models.Model):
 
 class WebhookEvent(models.Model):
     """
-    مدل ثبت رویدادهای دریافتی از Webhook
+    Captured webhook event data for processing.
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     webhook = models.ForeignKey(
@@ -310,50 +308,50 @@ class WebhookEvent(models.Model):
     )
     event_type = models.CharField(
         max_length=100,
-        verbose_name='نوع رویداد'
+        verbose_name='Event Type'
     )
     payload = models.JSONField(
         default=dict,
-        verbose_name='محتوای رویداد'
+        verbose_name='Payload'
     )
     headers = models.JSONField(
         default=dict,
-        verbose_name='هدرها'
+        verbose_name='Headers'
     )
     signature = models.CharField(
         max_length=255,
         blank=True,
-        verbose_name='امضای دریافتی'
+        verbose_name='Signature'
     )
     is_valid = models.BooleanField(
         default=True,
-        verbose_name='امضا معتبر است'
+        verbose_name='Is Signature Valid'
     )
     is_processed = models.BooleanField(
         default=False,
-        verbose_name='پردازش شده'
+        verbose_name='Is Processed'
     )
     processed_at = models.DateTimeField(
         null=True,
         blank=True,
-        verbose_name='زمان پردازش'
+        verbose_name='Processed At'
     )
     error_message = models.TextField(
         blank=True,
-        verbose_name='پیام خطا'
+        verbose_name='Error Message'
     )
     retry_count = models.IntegerField(
         default=0,
-        verbose_name='تعداد تلاش'
+        verbose_name='Retry Count'
     )
     received_at = models.DateTimeField(
         auto_now_add=True,
-        verbose_name='زمان دریافت'
+        verbose_name='Received At'
     )
     
     class Meta:
-        verbose_name = 'رویداد Webhook'
-        verbose_name_plural = 'رویدادهای Webhook'
+        verbose_name = 'Webhook Event'
+        verbose_name_plural = 'Webhook Events'
         ordering = ['-received_at']
         indexes = [
             models.Index(fields=['webhook', 'received_at']),
@@ -366,50 +364,50 @@ class WebhookEvent(models.Model):
 
 class RateLimitRule(models.Model):
     """
-    مدل قوانین محدودیت نرخ درخواست
+    System rules configuration for rate limiting external API integrations.
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     provider = models.ForeignKey(
         IntegrationProvider,
         on_delete=models.CASCADE,
         related_name='rate_limits',
-        verbose_name='ارائه‌دهنده'
+        verbose_name='Provider'
     )
     name = models.CharField(
         max_length=100,
-        verbose_name='نام قانون'
+        verbose_name='Rule Name'
     )
     endpoint_pattern = models.CharField(
         max_length=255,
-        verbose_name='الگوی endpoint',
-        help_text='می‌تواند شامل wildcard باشد'
+        verbose_name='Endpoint Pattern',
+        help_text='Supports wildcards like *'
     )
     max_requests = models.IntegerField(
-        verbose_name='حداکثر درخواست'
+        verbose_name='Max Requests'
     )
     time_window_seconds = models.IntegerField(
-        verbose_name='بازه زمانی (ثانیه)'
+        verbose_name='Time Window (Seconds)'
     )
     scope = models.CharField(
         max_length=20,
         choices=[
-            ('global', 'سراسری'),
-            ('user', 'کاربر'),
-            ('ip', 'آدرس IP'),
+            ('global', 'Global'),
+            ('user', 'User'),
+            ('ip', 'IP Address'),
         ],
         default='user',
-        verbose_name='محدوده'
+        verbose_name='Scope'
     )
     is_active = models.BooleanField(
         default=True,
-        verbose_name='فعال'
+        verbose_name='Is Active'
     )
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name='تاریخ ایجاد')
-    updated_at = models.DateTimeField(auto_now=True, verbose_name='تاریخ بروزرسانی')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Created At')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Updated At')
     
     class Meta:
-        verbose_name = 'قانون محدودیت نرخ'
-        verbose_name_plural = 'قوانین محدودیت نرخ'
+        verbose_name = 'Rate Limit Rule'
+        verbose_name_plural = 'Rate Limit Rules'
         ordering = ['provider', 'name']
     
     def __str__(self):

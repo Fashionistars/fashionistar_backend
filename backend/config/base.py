@@ -205,6 +205,11 @@ INSTALLED_APPS = [
         "apps.search",         # Search domain (hybrid FTS + semantic)
         "apps.scheduler",      # Task scheduler and time-based runner
         "apps.devops",         # DevOps environment control and health monitoring
+        "apps.chatbot",        # Chatbot system for customer / vendor style and support
+        "apps.integrations",   # Unified third-party API integration and webhook manager
+        "apps.app_standards",  # Standard abstract base models and orchestrator cores
+        "apps.analytics",      # System and business metrics telemetry and alerting
+        "apps.agent_tools",    # Agent developer tools (generation, progress, validation)
         # ── Third Party ──────────────────────────────────────────────────────────
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",  # JWT logout blacklisting
@@ -328,6 +333,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "apps.chatbot.middleware.rate_limiting.ChatbotRateLimitMiddleware",
+    "apps.chatbot.middleware.rate_limiting.ChatbotSecurityMiddleware",
 ]
 
 ROOT_URLCONF = "backend.urls"

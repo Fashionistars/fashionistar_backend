@@ -1,11 +1,12 @@
 """
-تست‌های مدل‌های اپلیکیشن integrations
+Integration Models Tests for Fashionistar.
 """
+
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from datetime import timedelta
-from integrations.models import (
+from ..models import (
     IntegrationProvider,
     IntegrationCredential,
     IntegrationLog,
@@ -18,28 +19,24 @@ User = get_user_model()
 
 
 class IntegrationProviderModelTest(TestCase):
-    """تست مدل IntegrationProvider"""
     
     def setUp(self):
-        """آماده‌سازی داده‌های تست"""
         self.provider = IntegrationProvider.objects.create(
-            name='Kavenegar',
-            slug='kavenegar',
+            name='SMS Provider',
+            slug='sms_provider',
             provider_type='sms',
             status='active',
-            description='سرویس پیامک کاوه‌نگار',
-            api_base_url='https://api.kavenegar.com/v1'
+            description='SMS service provider',
+            api_base_url='https://api.sms-provider.com/v1'
         )
     
     def test_provider_creation(self):
-        """تست ایجاد provider"""
         self.assertTrue(isinstance(self.provider, IntegrationProvider))
-        self.assertEqual(self.provider.name, 'Kavenegar')
-        self.assertEqual(self.provider.slug, 'kavenegar')
-        self.assertEqual(str(self.provider), 'Kavenegar (پیامک)')
+        self.assertEqual(self.provider.name, 'SMS Provider')
+        self.assertEqual(self.provider.slug, 'sms_provider')
+        self.assertEqual(str(self.provider), 'SMS Provider (SMS)')
     
     def test_provider_status_choices(self):
-        """تست وضعیت‌های مختلف provider"""
         self.provider.status = 'inactive'
         self.provider.save()
         self.assertEqual(self.provider.status, 'inactive')
@@ -50,12 +47,10 @@ class IntegrationProviderModelTest(TestCase):
 
 
 class IntegrationCredentialModelTest(TestCase):
-    """تست مدل IntegrationCredential"""
     
     def setUp(self):
-        """آماده‌سازی داده‌های تست"""
         self.user = User.objects.create_user(
-            username='testuser',
+            email='testuser@fashionistar-test.io',
             password='testpass123'
         )
         
@@ -74,29 +69,23 @@ class IntegrationCredentialModelTest(TestCase):
         )
     
     def test_credential_creation(self):
-        """تست ایجاد credential"""
         self.assertEqual(self.credential.key_name, 'api_key')
         self.assertEqual(self.credential.key_value, 'test_api_key_123')
         self.assertEqual(str(self.credential), 'Test Provider - api_key')
     
     def test_credential_validation(self):
-        """تست اعتبارسنجی credential"""
-        # credential فعال و بدون تاریخ انقضا
         self.assertTrue(self.credential.is_valid())
         
-        # غیرفعال کردن
         self.credential.is_active = False
         self.credential.save()
         self.assertFalse(self.credential.is_valid())
         
-        # فعال کردن و تنظیم تاریخ انقضا
         self.credential.is_active = True
         self.credential.expires_at = timezone.now() - timedelta(days=1)
         self.credential.save()
         self.assertFalse(self.credential.is_valid())
     
     def test_unique_constraint(self):
-        """تست محدودیت یکتا بودن"""
         with self.assertRaises(Exception):
             IntegrationCredential.objects.create(
                 provider=self.provider,
@@ -108,10 +97,8 @@ class IntegrationCredentialModelTest(TestCase):
 
 
 class IntegrationLogModelTest(TestCase):
-    """تست مدل IntegrationLog"""
     
     def setUp(self):
-        """آماده‌سازی داده‌های تست"""
         self.provider = IntegrationProvider.objects.create(
             name='Test Provider',
             slug='test-provider',
@@ -130,16 +117,13 @@ class IntegrationLogModelTest(TestCase):
         )
     
     def test_log_creation(self):
-        """تست ایجاد لاگ"""
         self.assertEqual(self.log.action, 'test_action')
         self.assertEqual(self.log.status_code, 200)
         self.assertEqual(self.log.duration_ms, 150)
         self.assertIn('Test Provider', str(self.log))
     
     def test_log_levels(self):
-        """تست سطوح مختلف لاگ"""
         levels = ['debug', 'info', 'warning', 'error', 'critical']
-        
         for level in levels:
             log = IntegrationLog.objects.create(
                 provider=self.provider,
@@ -151,10 +135,8 @@ class IntegrationLogModelTest(TestCase):
 
 
 class WebhookEndpointModelTest(TestCase):
-    """تست مدل WebhookEndpoint"""
     
     def setUp(self):
-        """آماده‌سازی داده‌های تست"""
         self.provider = IntegrationProvider.objects.create(
             name='Payment Gateway',
             slug='payment-gateway',
@@ -170,28 +152,24 @@ class WebhookEndpointModelTest(TestCase):
         )
     
     def test_webhook_creation(self):
-        """تست ایجاد webhook"""
         self.assertEqual(self.webhook.name, 'Payment Status')
         self.assertEqual(self.webhook.endpoint_url, 'payment-status')
         self.assertIn('payment.success', self.webhook.events)
         self.assertTrue(self.webhook.is_active)
     
     def test_webhook_unique_endpoint(self):
-        """تست یکتا بودن endpoint"""
         with self.assertRaises(Exception):
             WebhookEndpoint.objects.create(
                 provider=self.provider,
                 name='Another Webhook',
-                endpoint_url='payment-status',  # تکراری
+                endpoint_url='payment-status',
                 secret_key='another_secret'
             )
 
 
 class WebhookEventModelTest(TestCase):
-    """تست مدل WebhookEvent"""
     
     def setUp(self):
-        """آماده‌سازی داده‌های تست"""
         self.provider = IntegrationProvider.objects.create(
             name='Test Provider',
             slug='test-provider',
@@ -215,14 +193,12 @@ class WebhookEventModelTest(TestCase):
         )
     
     def test_event_creation(self):
-        """تست ایجاد رویداد"""
         self.assertEqual(self.event.event_type, 'test.event')
         self.assertEqual(self.event.payload['test'], 'data')
         self.assertTrue(self.event.is_valid)
         self.assertFalse(self.event.is_processed)
     
     def test_event_processing(self):
-        """تست پردازش رویداد"""
         self.event.is_processed = True
         self.event.processed_at = timezone.now()
         self.event.save()
@@ -232,10 +208,8 @@ class WebhookEventModelTest(TestCase):
 
 
 class RateLimitRuleModelTest(TestCase):
-    """تست مدل RateLimitRule"""
     
     def setUp(self):
-        """آماده‌سازی داده‌های تست"""
         self.provider = IntegrationProvider.objects.create(
             name='Test Provider',
             slug='test-provider',
@@ -252,13 +226,11 @@ class RateLimitRuleModelTest(TestCase):
         )
     
     def test_rule_creation(self):
-        """تست ایجاد قانون"""
         self.assertEqual(self.rule.name, 'SMS Rate Limit')
         self.assertEqual(self.rule.max_requests, 100)
         self.assertEqual(self.rule.time_window_seconds, 3600)
         self.assertTrue(self.rule.is_active)
     
     def test_rule_string_representation(self):
-        """تست نمایش رشته‌ای قانون"""
         expected = 'Test Provider - SMS Rate Limit (100/3600s)'
         self.assertEqual(str(self.rule), expected)
