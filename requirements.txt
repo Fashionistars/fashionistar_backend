@@ -252,11 +252,6 @@ nplusone                        # N+1 query detection in test suite
 django-debug-toolbar            # SQL query inspector in DEBUG mode (correct package name)
 
 
-# ============================================================================================
-# IN ORDER TO MAKE SURE DJANGO==6.0.2 INSTALLS AND PINNED AFTER BULK REQUIREMENTS.TXT INSTALLATION 
-# ============================================================================================
-
-Django==6.0.3
 openpyxl>=3.1.0  # Required for xlsx import/export in django-import-export
 
 
@@ -295,3 +290,9 @@ torchvision>=0.17.0             # Required by open_clip_torch
 
 # ── Background Processing (Celery result/beat already present — extras) ───────
 django-celery-results>=2.5.1    # Store Celery results in PostgreSQL for observability
+
+# ============================================================================================
+# IN ORDER TO MAKE SURE DJANGO==6.0.3 INSTALLS AND PINNED AFTER BULK REQUIREMENTS.TXT INSTALLATION 
+# ============================================================================================
+
+Django==6.0.3
