@@ -75,6 +75,10 @@ def read_debug_flag(default: bool = False) -> bool:
     return default
 
 
+FASHIONISTAR_COMPANY_WALLET_EMAIL_ADDRESS = env("FASHIONISTAR_COMPANY_WALLET_EMAIL_ADDRESS", default="fashionistarclothings@outlook.com")
+
+
+
 # =============================================================================
 # SECURITY
 # =============================================================================
@@ -82,6 +86,19 @@ SECRET_KEY = env(
     "SECRET_KEY",
     default="django-insecure-b*tuoe%^o+=^35$0fufrm=oamh^(o0tabn39(7ni12(i-oup+4",
 )
+
+# field-encryption-key for encrypted-model-fields in devops models
+import base64
+import hashlib
+raw_encryption_key = env("FIELD_ENCRYPTION_KEY", default=None)
+if not raw_encryption_key:
+    secret = SECRET_KEY.encode("utf-8")
+    salt = b"fashionistar-field-encryption-salt-v1"
+    dk = hashlib.pbkdf2_hmac("sha256", secret, salt, iterations=100_000)
+    FIELD_ENCRYPTION_KEY = base64.urlsafe_b64encode(dk).decode("utf-8")
+else:
+    FIELD_ENCRYPTION_KEY = raw_encryption_key
+
 
 # Base settings must always define DEBUG because this module is imported before
 # environment-specific overrides. Development/production settings can still
@@ -185,10 +202,19 @@ INSTALLED_APPS = [
         "apps.order",          # Phase 4: Order lifecycle, status machine, escrow trigger
         "apps.notification",   # Phase 4: In-app, email, push, SMS notification feed
         "apps.measurements",   # Phase 4: Body measurements, checkout gate for custom tailoring
+        "apps.ai",             # Phase 6: AI Orchestration Engine — measurement, recommendation, analytics
         "apps.chat",           # Phase 5 (P1): Buyer-Vendor real-time messaging, offers, moderation
         "apps.support",        # Phase 5 (P2): Customer dispute & ticket management domain
         "apps.kyc",            # Phase 6: Identity verification (KYC) domain
         "apps.custom_order",   # Phase 7: Bespoke commission (Custom Order) domain
+        "apps.search",         # Search domain (hybrid FTS + semantic)
+        "apps.scheduler",      # Task scheduler and time-based runner
+        "apps.devops",         # DevOps environment control and health monitoring
+        "apps.chatbot",        # Chatbot system for customer / vendor style and support
+        "apps.integrations",   # Unified third-party API integration and webhook manager
+        "apps.app_standards",  # Standard abstract base models and orchestrator cores
+        "apps.analytics",      # System and business metrics telemetry and alerting
+        "apps.agent_tools",    # Agent developer tools (generation, progress, validation)
         # ── Third Party ──────────────────────────────────────────────────────────
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",  # JWT logout blacklisting
@@ -205,6 +231,14 @@ INSTALLED_APPS = [
     "django_celery_beat",
     "cloudinary",
     "cloudinary_storage",
+    # ── Django Control Room ──────────────────────────────────────────────────
+    "dj_control_room_base",
+    "dj_redis_panel",
+    "dj_cache_panel",
+    "dj_urls_panel",
+    "dj_celery_panel",
+    "dj_signals_panel",
+    "dj_control_room",
 ]
 
 
@@ -304,6 +338,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "apps.chatbot.middleware.rate_limiting.ChatbotRateLimitMiddleware",
+    "apps.chatbot.middleware.rate_limiting.ChatbotSecurityMiddleware",
 ]
 
 ROOT_URLCONF = "backend.urls"
@@ -455,21 +491,37 @@ CLOUDINARY_SIGNATURE_TTL = int(env("CLOUDINARY_SIGNATURE_TTL", default=3300))
 CLOUDINARY_ADMIN_ASYNC = True   # Enable async Celery path (production)
 #CLOUDINARY_ADMIN_ASYNC = False  # Sync inline path (dev default)
 
+# =============================================================================
+# AI & EXTERNAL INTEGRATIONS
+# =============================================================================
+
+# ── Ollama Self-Hosted LLM Configuration ──────────────────────────────────────
+OLLAMA_ENABLED = env.bool("OLLAMA_ENABLED", default=True)
+OLLAMA_HOST = env("OLLAMA_HOST", default="http://localhost:11434")
+OLLAMA_MODEL = env("OLLAMA_MODEL", default="llama3.2:3b")
+OLLAMA_EMBED_MODEL = env("OLLAMA_EMBED_MODEL", default="nomic-embed-text")
+
+# ── OpenAI Integration Configuration ─────────────────────────────────────────
+OPENAI_API_KEY = env("OPENAI_API_KEY", default="")
+OPENAI_DEFAULT_MODEL = env("OPENAI_DEFAULT_MODEL", default="gpt-4")
+OPENAI_MAX_TOKENS = env.int("OPENAI_MAX_TOKENS", default=2000)
+OPENAI_TEMPERATURE = env.float("OPENAI_TEMPERATURE", default=0.7)
+
+# ── TalkBot Integration Configuration ────────────────────────────────────────
+TALKBOT_API_KEY = env("TALKBOT_API_KEY", default="")
+TALKBOT_BASE_URL = env("TALKBOT_BASE_URL", default="https://api.talkbot.ir/v1")
+
+# ── SMS / Kavenegar Configuration ───────────────────────────────────────────
+KAVENEGAR_API_KEY = env("KAVENEGAR_API_KEY", default="")
+KAVENEGAR_SENDER = env("KAVENEGAR_SENDER", default="10004346")
+
+# ── Integrations Settings ────────────────────────────────────────────────────
+INTEGRATION_ENVIRONMENT = env("INTEGRATION_ENVIRONMENT", default="production")
+CREDENTIAL_ENCRYPTION_KEY = env("CREDENTIAL_ENCRYPTION_KEY", default="bxc5%hug9u6twumy*utz#y=wcz!bs@4j")
 
 
-# MirrorSize / GetMeasured provider settings. Credentials must live in .env;
-# never hardcode the merchant API key in views or frontend code.
-MIRRORSIZE_API_KEY = env("MIRRORSIZE_API_KEY", default="")
-MIRRORSIZE_MERCHANT_ID = env("MIRRORSIZE_MERCHANT_ID", default="")
-MIRRORSIZE_PRODUCT_NAME = env("MIRRORSIZE_PRODUCT_NAME", default="GET_MEASURED")
-MIRRORSIZE_BROWSER_API_BASE_URL = env(
-    "MIRRORSIZE_BROWSER_API_BASE_URL",
-    default="https://api.user.mirrorsize.com",
-)
-MIRRORSIZE_USER_HOME_BASE_URL = env(
-    "MIRRORSIZE_USER_HOME_BASE_URL",
-    default="https://user.mirrorsize.com/home",
-)
+
+
 
 STORAGES = {
     "default": {
@@ -1570,3 +1622,17 @@ SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 # ==============================================================================
 # END OF OWASP SECURITY HEADERS
 # ==============================================================================
+
+# =============================================================================
+# DJANGO CONTROL ROOM CONFIGURATION
+# =============================================================================
+# Redis Panel settings: cursor-based pagination for large Redis datasets
+DJ_REDIS_PANEL_SETTINGS = {
+    "PAGINATION_METHOD": "CURSOR_PAGINATED_SCAN",
+}
+
+# Signals Panel settings: enable receiver source code viewing
+DJ_SIGNALS_PANEL_SETTINGS = {
+    "SHOW_SOURCE": True,
+}
+

@@ -3,7 +3,7 @@ from django.apps import AppConfig
 
 class SchedulerConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'scheduler'
+    name = 'apps.scheduler'
     verbose_name = 'برنامه‌ریزی کارها'
     
     def ready(self):

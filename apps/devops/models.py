@@ -2,7 +2,7 @@
 مدل‌های مدیریت DevOps و Environment Configuration
 """
 from django.db import models
-from django.contrib.auth.models import User
+from django.conf import settings
 from django.core.validators import RegexValidator
 from django.utils import timezone
 from django.core.exceptions import ValidationError
@@ -54,7 +54,7 @@ class EnvironmentConfig(models.Model):
         verbose_name="تاریخ به‌روزرسانی"
     )
     created_by = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -131,7 +131,7 @@ class SecretConfig(models.Model):
         verbose_name="تاریخ به‌روزرسانی"
     )
     created_by = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -211,7 +211,7 @@ class DeploymentHistory(models.Model):
         verbose_name="تکمیل در"
     )
     deployed_by = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,

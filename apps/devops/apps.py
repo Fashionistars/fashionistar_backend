@@ -8,7 +8,7 @@ class DevopsConfig(AppConfig):
     """پیکربندی اپلیکیشن DevOps"""
     
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'devops'
+    name = 'apps.devops'
     verbose_name = 'مدیریت DevOps'
     
     def ready(self):
