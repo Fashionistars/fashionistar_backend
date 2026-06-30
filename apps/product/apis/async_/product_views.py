@@ -1204,3 +1204,307 @@ async def record_product_view(
     except Exception as exc:
         logger.warning("ViewLog write failed for slug=%s: %s", slug, exc, exc_info=False)
         return {"logged": False, "reason": "write_error"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PHASE 8 — SIZE GUIDE · SHIPPING PROFILE · COMMISSION SNAPSHOT ENDPOINTS
+#
+# Architecture rules (enforced):
+#   - All handlers are async-native (Django 6.0 ASGI).
+#   - All reads delegate to selector functions (aget_* / aget_all_*).
+#   - asyncio.gather() used for parallel fetches where applicable.
+#   - RBAC: vendor → own records; admin → all records; client → read-only overlays.
+#   - Zero sync_to_async() wrappers — all selectors use Django 6.0 native async ORM.
+# ─────────────────────────────────────────────────────────────────────────────
+
+from apps.product.selectors.product_selectors import (
+    aget_size_guides_for_vendor,
+    aget_all_size_guides,
+    aget_size_guide_detail,
+    aget_size_guides_with_client_overlay,
+    aget_shipping_profiles_for_vendor,
+    aget_all_shipping_profiles,
+    aget_shipping_profile_detail,
+    aget_commission_snapshots_for_product,
+    aget_all_commission_snapshots,
+    aget_commission_snapshot_detail,
+)
+from apps.product.schemas.product_schemas import (
+    ProductSizeGuideListOut,
+    ProductSizeGuideDetailOut,
+    ClientMeasurementOverlayOut,
+    ProductShippingProfileListOut,
+    ProductShippingProfileDetailOut,
+    ProductCommissionSnapshotOut,
+)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# A. SIZE & MEASUREMENT GUIDE ENDPOINTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get(
+    "/size-guides/",
+    response=list[dict],
+    summary="List size & measurement guides",
+    description=(
+        "Vendor: returns own templates. Admin: returns all guides across all vendors. "
+        "Accepts optional vendor_id query param for admin drill-down."
+    ),
+)
+async def list_size_guides(request, vendor_id: str = None):
+    """Return measurement guide rows scoped to the calling user's role.
+
+    Args:
+        request: Ninja request with JWT auth context.
+        vendor_id: Admin-only optional filter. Ignored for vendor callers.
+
+    Returns:
+        list[dict] of guide rows.
+    """
+    user = getattr(request, "auth", None)
+    if user is None:
+        raise HttpError(401, "Authentication required.")
+
+    is_admin = getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)
+
+    if is_admin:
+        return await aget_all_size_guides(vendor_id=vendor_id)
+
+    # Vendor: scope to own profile
+    vendor_profile = await user.__class__.objects.filter(
+        pk=user.pk
+    ).values("vendor_profile_id").afirst()
+    vid = (vendor_profile or {}).get("vendor_profile_id")
+    if not vid:
+        raise HttpError(403, "Vendor profile not found.")
+    return await aget_size_guides_for_vendor(vid)
+
+
+@router.get(
+    "/size-guides/{guide_id}/",
+    response=dict,
+    summary="Get size guide detail",
+    description="Returns a single size guide row. Vendor sees own; admin sees any.",
+)
+async def get_size_guide(request, guide_id: str):
+    """Retrieve a single measurement guide by primary key.
+
+    Args:
+        request: Ninja request with JWT auth context.
+        guide_id: UUID string primary key of the guide row.
+
+    Returns:
+        dict row or 404.
+    """
+    user = getattr(request, "auth", None)
+    if user is None:
+        raise HttpError(401, "Authentication required.")
+
+    is_admin = getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)
+
+    if is_admin:
+        row = await aget_size_guide_detail(guide_id)
+    else:
+        vendor_profile = await user.__class__.objects.filter(
+            pk=user.pk
+        ).values("vendor_profile_id").afirst()
+        vid = (vendor_profile or {}).get("vendor_profile_id")
+        row = await aget_size_guide_detail(guide_id, vendor_id=vid)
+
+    if not row:
+        raise HttpError(404, "Size guide not found.")
+
+    # Coerce UUID/Decimal to str/string for JSON
+    row = {k: str(v) if hasattr(v, "hex") else v for k, v in row.items()}
+    return row
+
+
+@router.get(
+    "/size-guides/client-overlay/",
+    response=list[dict],
+    summary="Client size guide overlay",
+    description=(
+        "Client portal: returns vendor size guide rows enriched with the calling "
+        "client's own measurement profile data for side-by-side fit comparison."
+    ),
+)
+async def client_size_guide_overlay(
+    request,
+    vendor_id: str,
+    measurement_profile_id: str = None,
+):
+    """Return size guides with the client's measurement overlay.
+
+    Combines vendor size guide rows with the client's active MeasurementProfile
+    so the frontend can render a colour-coded fit comparison table.
+
+    Args:
+        request: Ninja request with JWT auth context.
+        vendor_id: VendorProfile PK to scope guide rows.
+        measurement_profile_id: Optional MeasurementProfile PK for overlay data.
+
+    Returns:
+        list[dict] each with ``guide`` and optional ``client_measurements`` keys.
+    """
+    user = getattr(request, "auth", None)
+    if user is None:
+        raise HttpError(401, "Authentication required.")
+
+    return await aget_size_guides_with_client_overlay(
+        vendor_id, measurement_profile_id=measurement_profile_id
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# B. SHIPPING PROFILE ENDPOINTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get(
+    "/shipping-profiles/",
+    response=list[dict],
+    summary="List shipping profiles",
+    description=(
+        "Vendor: returns own profiles. Admin: returns all profiles. "
+        "Accepts optional vendor_id query param for admin filtering."
+    ),
+)
+async def list_shipping_profiles(request, vendor_id: str = None):
+    """Return shipping profile rows scoped to the calling user's role.
+
+    Args:
+        request: Ninja request with JWT auth context.
+        vendor_id: Admin-only optional filter.
+
+    Returns:
+        list[dict] of shipping profile rows.
+    """
+    user = getattr(request, "auth", None)
+    if user is None:
+        raise HttpError(401, "Authentication required.")
+
+    is_admin = getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)
+
+    if is_admin:
+        return await aget_all_shipping_profiles(vendor_id=vendor_id)
+
+    vendor_profile = await user.__class__.objects.filter(
+        pk=user.pk
+    ).values("vendor_profile_id").afirst()
+    vid = (vendor_profile or {}).get("vendor_profile_id")
+    if not vid:
+        raise HttpError(403, "Vendor profile not found.")
+    return await aget_shipping_profiles_for_vendor(vid)
+
+
+@router.get(
+    "/shipping-profiles/{profile_id}/",
+    response=dict,
+    summary="Get shipping profile detail",
+    description="Returns a single shipping profile. Vendor sees own; admin sees any.",
+)
+async def get_shipping_profile(request, profile_id: str):
+    """Retrieve a single shipping profile by primary key.
+
+    Args:
+        request: Ninja request with JWT auth context.
+        profile_id: UUID string primary key of the shipping profile.
+
+    Returns:
+        dict row or 404.
+    """
+    user = getattr(request, "auth", None)
+    if user is None:
+        raise HttpError(401, "Authentication required.")
+
+    is_admin = getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)
+
+    if is_admin:
+        row = await aget_shipping_profile_detail(profile_id)
+    else:
+        vendor_profile = await user.__class__.objects.filter(
+            pk=user.pk
+        ).values("vendor_profile_id").afirst()
+        vid = (vendor_profile or {}).get("vendor_profile_id")
+        row = await aget_shipping_profile_detail(profile_id, vendor_id=vid)
+
+    if not row:
+        raise HttpError(404, "Shipping profile not found.")
+    return row
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# C. COMMISSION SNAPSHOT ENDPOINTS (admin only)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get(
+    "/commission-snapshots/",
+    response=list[dict],
+    summary="List commission snapshots (admin only)",
+    description=(
+        "Admin only. Returns commission rate history for a product or across all "
+        "products. Accepts optional product_id or vendor_id query params."
+    ),
+)
+async def list_commission_snapshots(
+    request,
+    product_id: str = None,
+    vendor_id: str = None,
+    limit: int = 100,
+):
+    """Return commission snapshot rows. Restricted to admin and superuser roles.
+
+    Args:
+        request: Ninja request with JWT auth context.
+        product_id: Optional product filter.
+        vendor_id: Optional vendor filter (resolves through product.vendor).
+        limit: Maximum number of rows to return.
+
+    Returns:
+        list[dict] commission snapshot rows ordered newest first.
+    """
+    user = getattr(request, "auth", None)
+    if user is None:
+        raise HttpError(401, "Authentication required.")
+
+    is_admin = getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)
+    if not is_admin:
+        raise HttpError(403, "Admin access required.")
+
+    return await aget_all_commission_snapshots(
+        product_id=product_id,
+        vendor_id=vendor_id,
+        limit=limit,
+    )
+
+
+@router.get(
+    "/commission-snapshots/{snapshot_id}/",
+    response=dict,
+    summary="Get commission snapshot detail (admin only)",
+    description="Admin only. Returns a single commission snapshot record.",
+)
+async def get_commission_snapshot(request, snapshot_id: str):
+    """Retrieve a single commission snapshot by primary key.
+
+    Restricted to admin and superuser roles only.
+
+    Args:
+        request: Ninja request with JWT auth context.
+        snapshot_id: UUID string primary key of the snapshot.
+
+    Returns:
+        dict row or 404.
+    """
+    user = getattr(request, "auth", None)
+    if user is None:
+        raise HttpError(401, "Authentication required.")
+
+    is_admin = getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)
+    if not is_admin:
+        raise HttpError(403, "Admin access required.")
+
+    row = await aget_commission_snapshot_detail(snapshot_id)
+    if not row:
+        raise HttpError(404, "Commission snapshot not found.")
+    return row
