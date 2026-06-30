@@ -957,7 +957,7 @@ CELERY_BEAT_SCHEDULE = {
     # ── Keep Render.com service awake (free-tier cold-start prevention) ────────
     "keep-render-service-awake": {
         "task": "keep_service_awake",  # matches @shared_task name
-        "schedule": 60.0,  # every 1 minutes
+        "schedule": 60.0,  # every 1 minute
     },
 
     # ── NDPR/PCI-DSS Compliance: Audit log retention enforcement ──────────────
@@ -976,9 +976,50 @@ CELERY_BEAT_SCHEDULE = {
 
 
 
+
 #                       =========================
 # ----------------------CELERY CONFIGURATION ENDS HERE ------------------------------
 #                       =========================
+
+
+# =============================================================================
+# AI ENGINE CONFIGURATION  (apps/ai — Phase 6)
+# =============================================================================
+
+# ── Ollama (Local LLM — self-hosted, no cloud cost) ───────────────────────────
+# Production: set OLLAMA_BASE_URL to your VPS/server URL
+# Local dev:  "http://localhost:11434" (default Ollama port)
+OLLAMA_BASE_URL = env("OLLAMA_BASE_URL", default="http://localhost:11434")
+OLLAMA_DEFAULT_MODEL = env("OLLAMA_DEFAULT_MODEL", default="llama3.2:3b")
+OLLAMA_EMBED_MODEL  = env("OLLAMA_EMBED_MODEL",  default="nomic-embed-text")
+OLLAMA_TIMEOUT_SECONDS = int(env("OLLAMA_TIMEOUT_SECONDS", default="30"))
+OLLAMA_REQUEST_TIMEOUT = int(env("OLLAMA_REQUEST_TIMEOUT", default="120"))
+
+# ── FashionSigLIP Recommendation Engine ───────────────────────────────────────
+# Model: marqo/marqo-FashionSigLIP (from HuggingFace — apache 2.0 license)
+# Embedding dimension: 512 (ViT-B-16 variant) or 768 (ViT-L-14 variant)
+FASHION_CLIP_MODEL   = env("FASHION_CLIP_MODEL",   default="hf-hub:Marqo/marqo-fashionSigLIP")
+FASHION_CLIP_PRETRAINED = env("FASHION_CLIP_PRETRAINED", default="")  # Empty = from HF hub
+FASHION_CLIP_EMBEDDING_DIM = int(env("FASHION_CLIP_EMBEDDING_DIM", default="512"))
+
+# ── pgvector (PostgreSQL vector extension) ────────────────────────────────────
+# Enable pgvector for HNSW approximate nearest-neighbour search
+# Requires: pip install django-pgvector
+# DB migration: CREATE EXTENSION IF NOT EXISTS vector;
+PGVECTOR_ENABLED = True
+PGVECTOR_EMBEDDING_DIM = FASHION_CLIP_EMBEDDING_DIM   # Must match embedding model
+
+# ── Measurement AI Engine ─────────────────────────────────────────────────────
+# Minimum landmark visibility score to accept a pose as valid
+AI_MEASUREMENT_MIN_VISIBILITY  = float(env("AI_MEASUREMENT_MIN_VISIBILITY", default="0.6"))
+# Tolerance (±cm) for size-fit filtering in recommendations
+AI_SIZE_FIT_TOLERANCE_CM       = float(env("AI_SIZE_FIT_TOLERANCE_CM", default="5.0"))
+
+# ── AI Analytics ──────────────────────────────────────────────────────────────
+# Max report cache TTL in seconds (default: 24 hours)
+AI_ANALYTICS_CACHE_TTL = int(env("AI_ANALYTICS_CACHE_TTL", default="86400"))
+# Recommendation cache TTL (default: 1 hour)
+AI_RECOMMENDATION_CACHE_TTL = int(env("AI_RECOMMENDATION_CACHE_TTL", default="3600"))
 
 
 # =============================================================================
@@ -1123,6 +1164,8 @@ JAZZMIN_SETTINGS = {
         # Audit
         "audit_logs",
         "audit_logs.auditeventlog",
+        # Django Control Room
+        "dj_control_room",
         # Django internals
         "auth",
     ],
@@ -1238,6 +1281,13 @@ JAZZMIN_SETTINGS = {
         "client":                                  "fas fa-user",
         "client.clientprofile":                    "fas fa-user-circle",
         "client.clientaddress":                    "fas fa-map-marker-alt",
+        # Django Control Room
+        "dj_control_room":                         "fas fa-tools",
+        "dj_control_room.cachepanel":              "fas fa-database",
+        "dj_control_room.celerypanel":             "fas fa-tasks",
+        "dj_control_room.redispanel":              "fas fa-server",
+        "dj_control_room.signalspanel":            "fas fa-broadcast-tower",
+        "dj_control_room.urlspanel":               "fas fa-link",
     },
     "default_icon_parents":  "fas fa-chevron-circle-right",
     "default_icon_children": "fas fa-circle",
