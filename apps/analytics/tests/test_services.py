@@ -24,7 +24,7 @@ class AnalyticsServiceTest(TestCase):
         """
         self.analytics_service = AnalyticsService()
         self.user = User.objects.create_user(
-            username='testuser',
+            email='testuser1@analytics.test',
             password='testpass123'
         )
     
@@ -213,7 +213,7 @@ class MetricsServiceTest(TestCase):
         """
         self.metrics_service = MetricsService()
         self.user = User.objects.create_user(
-            username='testuser',
+            email='testuser1@analytics.test',
             password='testpass123'
         )
     

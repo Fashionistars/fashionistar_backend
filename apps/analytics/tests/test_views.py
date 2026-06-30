@@ -21,7 +21,7 @@ class AnalyticsAPITestCase(APITestCase):
         تنظیمات اولیه برای تست‌ها
         """
         self.user = User.objects.create_user(
-            username='testuser',
+            email='testuser1@analytics.test',
             password='testpass123'
         )
         self.admin_user = User.objects.create_superuser(
@@ -151,7 +151,7 @@ class UserAnalyticsViewTest(AnalyticsAPITestCase):
         تست دریافت تحلیل‌های کاربر با فیلتر کاربر خاص
         """
         other_user = User.objects.create_user(
-            username='otheruser',
+            email='testuser1@analytics.test',
             password='testpass123'
         )
         

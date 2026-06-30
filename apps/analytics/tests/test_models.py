@@ -54,7 +54,7 @@ class UserActivityModelTest(TestCase):
         تنظیمات اولیه برای تست‌ها
         """
         self.user = User.objects.create_user(
-            username='testuser',
+            email='testuser@analytics.test',
             password='testpass123'
         )
     
@@ -99,7 +99,7 @@ class PerformanceMetricModelTest(TestCase):
         تنظیمات اولیه برای تست‌ها
         """
         self.user = User.objects.create_user(
-            username='testuser',
+            email='testuser@analytics.test',
             password='testpass123'
         )
     
