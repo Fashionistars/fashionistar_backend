@@ -82,9 +82,13 @@ def _sanitize_celery_redis_url(url: str) -> str:
 
 if hasattr(app.conf, "broker_url") and app.conf.broker_url:
     app.conf.broker_url = _sanitize_celery_redis_url(app.conf.broker_url)
+    if app.conf.broker_url.startswith("rediss://"):
+        app.conf.broker_use_ssl = {"ssl_cert_reqs": "CERT_NONE"}
+
 if hasattr(app.conf, "result_backend") and app.conf.result_backend:
     app.conf.result_backend = _sanitize_celery_redis_url(app.conf.result_backend)
-
+    if app.conf.result_backend.startswith("rediss://"):
+        app.conf.redis_backend_use_ssl = {"ssl_cert_reqs": "CERT_NONE"}
 # Auto-discover tasks from all INSTALLED_APPS.
 # Explicit list ensures future apps added to INSTALLED_APPS are auto-include.
 app.autodiscover_tasks()
