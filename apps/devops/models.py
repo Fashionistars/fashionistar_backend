@@ -8,7 +8,7 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 from django.db import models
-from django.contrib.auth import get_user_model
+from django.conf import settings
 from django.core.validators import RegexValidator
 from django.utils import timezone
 from django.core.exceptions import ValidationError
@@ -63,7 +63,7 @@ class EnvironmentConfig(SoftDeleteModel):
         verbose_name="Updated At"
     )
     created_by = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -142,7 +142,7 @@ class SecretConfig(SoftDeleteModel):
         verbose_name="Updated At"
     )
     created_by = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -224,7 +224,7 @@ class DeploymentHistory(models.Model):
         verbose_name="Completed At"
     )
     deployed_by = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,

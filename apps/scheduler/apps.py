@@ -10,7 +10,7 @@ class SchedulerConfig(AppConfig):
     
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'apps.scheduler'
-    verbose_name = 'Task Scheduler'
+    verbose_name = 'برنامه‌ریزی کارها'
     
     def ready(self):
         """Prepare the app when loaded."""

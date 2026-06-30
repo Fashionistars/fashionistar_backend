@@ -1004,7 +1004,7 @@ CELERY_BEAT_SCHEDULE = {
     # ── Keep Render.com service awake (free-tier cold-start prevention) ────────
     "keep-render-service-awake": {
         "task": "keep_service_awake",  # matches @shared_task name
-        "schedule": 30.0,  # every 30 seconds
+        "schedule": 60.0,  # every 1 minute
     },
 
     # ── NDPR/PCI-DSS Compliance: Audit log retention enforcement ──────────────
