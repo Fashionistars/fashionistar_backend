@@ -17,7 +17,6 @@ from encrypted_model_fields.fields import EncryptedTextField
 
 from apps.common.models import SoftDeleteModel
 
-User = get_user_model()
 
 
 class EnvironmentConfig(models.Model):
