@@ -77,24 +77,20 @@ app.conf.worker_hijack_root_logger = False
 def _sanitize_celery_redis_url(url: str) -> str:
     if not url or not url.startswith("rediss://"):
         return url
-    
-    import re
-    if "ssl_cert_reqs" in url:
-        url = re.sub(r"ssl_cert_reqs=(none|None)", "ssl_cert_reqs=CERT_NONE", url)
-    else:
+    if "ssl_cert_reqs" not in url:
         separator = "&" if "?" in url else "?"
-        url = f"{url}{separator}ssl_cert_reqs=CERT_NONE"
+        url = f"{url}{separator}ssl_cert_reqs=none"
     return url
 
 if hasattr(app.conf, "broker_url") and app.conf.broker_url:
     app.conf.broker_url = _sanitize_celery_redis_url(app.conf.broker_url)
     if app.conf.broker_url.startswith("rediss://"):
-        app.conf.broker_use_ssl = {"ssl_cert_reqs": "CERT_NONE"}
+        app.conf.broker_use_ssl = {"ssl_cert_reqs": "none"}
 
 if hasattr(app.conf, "result_backend") and app.conf.result_backend:
     app.conf.result_backend = _sanitize_celery_redis_url(app.conf.result_backend)
     if app.conf.result_backend.startswith("rediss://"):
-        app.conf.redis_backend_use_ssl = {"ssl_cert_reqs": "CERT_NONE"}
+        app.conf.redis_backend_use_ssl = {"ssl_cert_reqs": "none"}
 # Auto-discover tasks from all INSTALLED_APPS.
 # Explicit list ensures future apps added to INSTALLED_APPS are auto-include.
 app.autodiscover_tasks()

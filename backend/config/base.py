@@ -498,13 +498,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 def _sanitize_redis_url(url: str) -> str:
     if not url or not url.startswith("rediss://"):
         return url
-    
-    import re
-    if "ssl_cert_reqs" in url:
-        url = re.sub(r"ssl_cert_reqs=(none|None)", "ssl_cert_reqs=CERT_NONE", url)
-    else:
+    if "ssl_cert_reqs" not in url:
         separator = "&" if "?" in url else "?"
-        url = f"{url}{separator}ssl_cert_reqs=CERT_NONE"
+        url = f"{url}{separator}ssl_cert_reqs=none"
     return url
 
 
@@ -904,12 +900,12 @@ CELERY_RESULT_BACKEND = _sanitize_redis_url(env("CELERY_RESULT_BACKEND", default
 
 if CELERY_BROKER_URL.startswith("rediss://"):
     CELERY_BROKER_USE_SSL = {
-        "ssl_cert_reqs": "CERT_NONE"
+        "ssl_cert_reqs": "none"
     }
 
 if CELERY_RESULT_BACKEND.startswith("rediss://"):
     CELERY_REDIS_BACKEND_USE_SSL = {
-        "ssl_cert_reqs": "CERT_NONE"
+        "ssl_cert_reqs": "none"
     }
 
 # Fast-fail: 1s timeouts so dead Redis fails immediately, not after 60s
