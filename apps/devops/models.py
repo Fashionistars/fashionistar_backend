@@ -1,6 +1,11 @@
 """
-مدل‌های مدیریت DevOps و Environment Configuration
+DevOps and Environment Configuration models.
 """
+
+from __future__ import annotations
+
+import uuid
+from typing import Optional
 from django.db import models
 from django.conf import settings
 from django.core.validators import RegexValidator
@@ -9,7 +14,10 @@ from django.core.exceptions import ValidationError
 import json
 from typing import Dict, Any, Optional
 from encrypted_model_fields.fields import EncryptedTextField
-import uuid
+
+from apps.common.models import SoftDeleteModel
+
+User = get_user_model()
 
 
 class EnvironmentConfig(models.Model):
