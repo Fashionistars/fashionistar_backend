@@ -899,6 +899,16 @@ REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/1")
 CELERY_BROKER_URL = env("CELERY_BROKER_URL", default=REDIS_URL)
 CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default=REDIS_URL)
 
+if CELERY_BROKER_URL.startswith("rediss://"):
+    CELERY_BROKER_USE_SSL = {
+        "ssl_cert_reqs": "CERT_NONE"
+    }
+
+if CELERY_RESULT_BACKEND.startswith("rediss://"):
+    CELERY_REDIS_BACKEND_USE_SSL = {
+        "ssl_cert_reqs": "CERT_NONE"
+    }
+
 # Fast-fail: 1s timeouts so dead Redis fails immediately, not after 60s
 CELERY_BROKER_TRANSPORT_OPTIONS = {
     "socket_connect_timeout": 1,
