@@ -164,6 +164,56 @@ app.conf.task_queues = (
         routing_key="bulk",
         queue_arguments={"x-max-priority": 2},
     ),
+    # ── Scheduler queues ──────────────────────────────────────────────────────
+    Queue(
+        "scheduler",
+        Exchange("scheduler", type="direct"),
+        routing_key="scheduler",
+        queue_arguments={"x-max-priority": 5},
+    ),
+    Queue(
+        "maintenance",
+        Exchange("maintenance", type="direct"),
+        routing_key="maintenance",
+        queue_arguments={"x-max-priority": 3},
+    ),
+    Queue(
+        "monitoring",
+        Exchange("monitoring", type="direct"),
+        routing_key="monitoring",
+        queue_arguments={"x-max-priority": 3},
+    ),
+    Queue(
+        "notifications",
+        Exchange("notifications", type="direct"),
+        routing_key="notifications",
+        queue_arguments={"x-max-priority": 10},
+    ),
+    # ── DevOps queues ─────────────────────────────────────────────────────────
+    Queue(
+        "devops",
+        Exchange("devops", type="direct"),
+        routing_key="devops",
+        queue_arguments={"x-max-priority": 3},
+    ),
+    # ── AI / ML queue — CPU-bound MediaPipe, CLIP, LangGraph ─────────────────
+    # Workers: celery -A backend worker -Q ai --concurrency=1 --loglevel=info
+    # (Low concurrency — ML models are CPU-intensive; 1-2 workers per machine)
+    Queue(
+        "ai",
+        Exchange("ai", type="direct"),
+        routing_key="ai",
+        queue_arguments={"x-max-priority": 6},
+    ),
+    # ── AI Ingestion — high-frequency, lightweight signal-driven tasks ────────
+    # Workers: celery -A backend worker -Q ai_ingestion --concurrency=4
+    # (Higher concurrency than 'ai' — tasks are lightweight DB cache invalidations)
+    Queue(
+        "ai_ingestion",
+        Exchange("ai_ingestion", type="direct"),
+        routing_key="ai_ingestion",
+        queue_arguments={"x-max-priority": 4},
+    ),
     # ── Default catch-all ─────────────────────────────────────────────────────
     Queue(
         "default",
@@ -210,9 +260,52 @@ app.conf.task_routes = {
     "apps.common.tasks.send_account_status_email": {"queue": "emails"},
     "apps.common.tasks.send_account_status_sms":   {"queue": "emails"},
 
+    # ── Scheduler App tasks ───────────────────────────────────────────────────
+    "scheduler.execute_task": {"queue": "scheduler"},
+    "scheduler.run_scheduled_task": {"queue": "scheduler"},
+    "scheduler.cleanup_old_executions": {"queue": "maintenance"},
+    "scheduler.check_missing_executions": {"queue": "monitoring"},
+    "scheduler.monitor_task_performance": {"queue": "monitoring"},
+    "scheduler.send_task_alerts": {"queue": "notifications"},
+
+    # ── DevOps App tasks ──────────────────────────────────────────────────────
+    "apps.devops.tasks.run_health_checks": {"queue": "devops"},
+    "apps.devops.tasks.cleanup_old_health_checks": {"queue": "devops"},
+    "apps.devops.tasks.generate_uptime_report": {"queue": "devops"},
+    "apps.devops.tasks.check_deployment_status": {"queue": "devops"},
+    "apps.devops.tasks.backup_deployment_logs": {"queue": "devops"},
+
     # ── Payment tasks (future — pre-wire so no code change needed) ────────────
     # "process_payment_webhook": {"queue": "payments"},
     # "send_payment_receipt":    {"queue": "emails"},
+
+    # ── AI / ML tasks — routed to dedicated `ai` queue ────────────────────────
+    # Worker: celery -A backend worker -Q ai --concurrency=1 --loglevel=info
+    # Measurement pipeline
+    "apps.ai.tasks.measurement_tasks.process_body_scan":    {"queue": "ai"},
+    "apps.ai.tasks.measurement_tasks.prepare_scan_session": {"queue": "ai"},
+    # Recommendation pipeline
+    "apps.ai.tasks.recommendation_tasks.run_profile_recommendations":  {"queue": "ai"},
+    "apps.ai.tasks.recommendation_tasks.generate_product_recommendations": {"queue": "ai"},
+    "apps.ai.tasks.recommendation_tasks.run_product_embedding":         {"queue": "ai"},
+    # Embedding generation (async, background — lower priority)
+    "apps.ai.tasks.embedding_tasks.generate_product_embedding":         {"queue": "ai"},
+    "apps.ai.tasks.embedding_tasks.batch_generate_embeddings":          {"queue": "ai"},
+    "apps.ai.tasks.embedding_tasks.backfill_missing_embeddings":        {"queue": "ai"},
+    # Analytics pipeline
+    "apps.ai.tasks.analytics_tasks.run_platform_analytics":             {"queue": "ai"},
+    "apps.ai.tasks.analytics_tasks.run_user_behavior_analysis":         {"queue": "ai"},
+    "apps.ai.tasks.analytics_tasks.run_product_performance_analysis":   {"queue": "ai"},
+    "apps.ai.tasks.analytics_tasks.generate_daily_report":              {"queue": "ai"},
+    # DB ingestion — triggered by Django signals on model saves
+    "apps.ai.tasks.ingestion_tasks.ingest_db_change":                   {"queue": "ai_ingestion"},
+    "apps.ai.tasks.ingestion_tasks.refresh_trending_cache":             {"queue": "ai_ingestion"},
+    "apps.ai.tasks.ingestion_tasks.cleanup_old_events":                 {"queue": "ai_ingestion"},
+    "apps.ai.tasks.ingestion_tasks.rebuild_ai_context_cache":           {"queue": "ai_ingestion"},
+    # Recommendation tasks
+    "apps.ai.tasks.recommendation_tasks.run_profile_recommendations":   {"queue": "ai"},
+    "apps.ai.tasks.recommendation_tasks.embed_product":                 {"queue": "ai"},
+    "apps.ai.tasks.recommendation_tasks.embed_unembedded_products":     {"queue": "ai"},
 }
 
 
@@ -242,6 +335,35 @@ app.conf.beat_schedule = {
         "options":  {"queue": "audit"},
     },
 
+    # ── Scheduler App Periodic Tasks ──────────────────────────────────────────
+    "cleanup-old-executions": {
+        "task": "scheduler.cleanup_old_executions",
+        "schedule": crontab(hour=2, minute=0),
+        "options": {"queue": "maintenance"},
+    },
+    "check-missing-executions": {
+        "task": "scheduler.check_missing_executions",
+        "schedule": crontab(minute="*/5"),
+        "options": {"queue": "monitoring"},
+    },
+    "monitor-task-performance": {
+        "task": "scheduler.monitor_task_performance",
+        "schedule": crontab(minute=0),
+        "options": {"queue": "monitoring"},
+    },
+    "send-task-alerts": {
+        "task": "scheduler.send_task_alerts",
+        "schedule": crontab(minute="*/10"),
+        "options": {"queue": "notifications"},
+    },
+
+    # ── DevOps App Periodic Tasks ─────────────────────────────────────────────
+    "run-devops-health-checks": {
+        "task": "apps.devops.tasks.run_health_checks",
+        "schedule": crontab(minute="*/5"),
+        "options": {"queue": "devops"},
+    },
+
     # ── Future periodic tasks (pre-register; activate by uncommenting) ────────
     # "nightly-bulk-cloudinary-sync": {
     #     "task":     "bulk_sync_cloudinary_urls",
@@ -253,6 +375,39 @@ app.conf.beat_schedule = {
     #     "schedule": crontab(minute=0),
     #     "options":  {"queue": "cleanup"},
     # },
+
+    # ── AI / ML Periodic Tasks (apps/ai — Phase 6) ────────────────────────────
+
+    # Daily platform analytics — runs at 02:30 UTC (after audit cleanup at 02:00)
+    # Generates 1-day, 7-day, and 30-day rolling reports
+    "ai-daily-analytics-report": {
+        "task":     "apps.ai.tasks.analytics_tasks.generate_daily_report",
+        "schedule": crontab(hour=2, minute=30),
+        "options":  {"queue": "ai"},
+    },
+
+    # Weekly embedding backfill — Sunday 03:00 UTC
+    # Finds all active products without ProductEmbedding and generates them
+    "ai-weekly-embedding-backfill": {
+        "task":     "apps.ai.tasks.recommendation_tasks.embed_unembedded_products",
+        "schedule": crontab(hour=3, minute=0, day_of_week=0),   # Sunday
+        "options":  {"queue": "ai"},
+    },
+
+    # Hourly trending products cache rebuild
+    "ai-refresh-trending-cache": {
+        "task":    "apps.ai.tasks.ingestion_tasks.refresh_trending_cache",
+        "schedule": crontab(minute=0),   # Every hour on the hour
+        "options": {"queue": "ai_ingestion"},
+    },
+
+    # Weekly DBChangeEvent cleanup — Monday 04:00 UTC (30-day retention)
+    "ai-cleanup-old-events": {
+        "task":    "apps.ai.tasks.ingestion_tasks.cleanup_old_events",
+        "schedule": crontab(hour=4, minute=0, day_of_week=1),   # Monday
+        "options": {"queue": "ai_ingestion"},
+        "kwargs":  {"days": 30},
+    },
 }
 
 app.conf.beat_scheduler = "django_celery_beat.schedulers:DatabaseScheduler"
