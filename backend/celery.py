@@ -72,6 +72,19 @@ app = Celery("backend")
 app.config_from_object("django.conf:settings", namespace="CELERY")
 app.conf.worker_hijack_root_logger = False
 
+# Force-sanitize rediss:// broker and backend URLs to ensure ssl_cert_reqs is set.
+# Celery's result backend throws ValueError if rediss:// URL is missing ssl_cert_reqs.
+def _sanitize_celery_redis_url(url: str) -> str:
+    if url and url.startswith("rediss://") and "ssl_cert_reqs" not in url:
+        separator = "&" if "?" in url else "?"
+        return f"{url}{separator}ssl_cert_reqs=CERT_NONE"
+    return url
+
+if hasattr(app.conf, "broker_url") and app.conf.broker_url:
+    app.conf.broker_url = _sanitize_celery_redis_url(app.conf.broker_url)
+if hasattr(app.conf, "result_backend") and app.conf.result_backend:
+    app.conf.result_backend = _sanitize_celery_redis_url(app.conf.result_backend)
+
 # Auto-discover tasks from all INSTALLED_APPS.
 # Explicit list ensures future apps added to INSTALLED_APPS are auto-include.
 app.autodiscover_tasks()
