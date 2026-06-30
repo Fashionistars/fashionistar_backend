@@ -75,9 +75,15 @@ app.conf.worker_hijack_root_logger = False
 # Force-sanitize rediss:// broker and backend URLs to ensure ssl_cert_reqs is set.
 # Celery's result backend throws ValueError if rediss:// URL is missing ssl_cert_reqs.
 def _sanitize_celery_redis_url(url: str) -> str:
-    if url and url.startswith("rediss://") and "ssl_cert_reqs" not in url:
+    if not url or not url.startswith("rediss://"):
+        return url
+    
+    import re
+    if "ssl_cert_reqs" in url:
+        url = re.sub(r"ssl_cert_reqs=(none|None)", "ssl_cert_reqs=CERT_NONE", url)
+    else:
         separator = "&" if "?" in url else "?"
-        return f"{url}{separator}ssl_cert_reqs=CERT_NONE"
+        url = f"{url}{separator}ssl_cert_reqs=CERT_NONE"
     return url
 
 if hasattr(app.conf, "broker_url") and app.conf.broker_url:
