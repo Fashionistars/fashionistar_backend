@@ -5,6 +5,7 @@ Integration Services Tests for Fashionistar.
 from unittest.mock import patch, Mock
 from django.test import TestCase
 from django.contrib.auth import get_user_model
+from django.conf import settings
 from ..models import IntegrationProvider, IntegrationCredential
 from ..services import (
     SMSService,
@@ -18,6 +19,8 @@ User = get_user_model()
 class SMSServiceTest(TestCase):
     
     def setUp(self):
+        """آماده‌سازی داده‌های تست"""
+        # ایجاد provider
         self.provider = IntegrationProvider.objects.create(
             name='SMS Provider',
             slug='sms_provider',
@@ -25,18 +28,20 @@ class SMSServiceTest(TestCase):
             status='active'
         )
         
+        env_name = getattr(settings, 'INTEGRATION_ENVIRONMENT', 'production')
+        
         IntegrationCredential.objects.create(
             provider=self.provider,
             key_name='api_key',
             key_value='test_api_key',
-            environment='production'
+            environment=env_name
         )
         
         IntegrationCredential.objects.create(
             provider=self.provider,
             key_name='sender_number',
             key_value='10004346',
-            environment='production'
+            environment=env_name
         )
         
         self.service = SMSService()
@@ -47,6 +52,7 @@ class SMSServiceTest(TestCase):
             token='12345'
         )
         
+        # بررسی نتیجه
         self.assertTrue(result['success'])
         self.assertEqual(result['message_id'], 'msg-123')
         self.assertEqual(result['cost'], 0.05)
@@ -58,6 +64,7 @@ class SMSServiceTest(TestCase):
             tokens={'token': 'Jane', 'token2': 'Streetwear'}
         )
         
+        # بررسی نتیجه
         self.assertTrue(result['success'])
         self.assertEqual(result['message_id'], 'msg-pattern-123')
     
@@ -76,18 +83,23 @@ class SMSServiceTest(TestCase):
             is_active=True
         )
         
+        # تلاش برای ارسال
         result = self.service.send_otp(
             receptor='09123456789',
             token='12345'
         )
         
+        # بررسی نتیجه
         self.assertFalse(result['success'])
         self.assertIn('limit exceeded', result['error'].lower())
 
 
 class AIIntegrationServiceTest(TestCase):
+    """تست سرویس AI Integration"""
     
     def setUp(self):
+        """آماده‌سازی داده‌های تست"""
+        # ایجاد provider
         self.provider = IntegrationProvider.objects.create(
             name='OpenAI',
             slug='openai',
@@ -96,17 +108,21 @@ class AIIntegrationServiceTest(TestCase):
             api_base_url='https://api.openai.com/v1'
         )
         
+        env_name = getattr(settings, 'INTEGRATION_ENVIRONMENT', 'production')
+        
         IntegrationCredential.objects.create(
             provider=self.provider,
             key_name='api_key',
             key_value='test_openai_key',
-            environment='production'
+            environment=env_name
         )
         
         self.service = AIIntegrationService('openai')
     
     @patch('requests.post')
     def test_generate_text_success(self, mock_post):
+        """تست تولید موفق متن"""
+        # Mock response
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
@@ -118,11 +134,13 @@ class AIIntegrationServiceTest(TestCase):
         }
         mock_post.return_value = mock_response
         
+        # تولید متن
         result = self.service.generate_text(
             prompt='Hello, how are you?',
             max_tokens=100
         )
         
+        # بررسی نتیجه
         self.assertTrue(result['success'])
         self.assertEqual(result['text'], 'This is a test response')
         self.assertEqual(result['usage']['total_tokens'], 50)
@@ -146,13 +164,17 @@ class AIIntegrationServiceTest(TestCase):
             client_context={'size': 'M', 'height': '180cm'}
         )
         
+        # بررسی نتیجه
         self.assertTrue(result['success'])
         self.assertIn('Analysis', result['text'])
     
     def test_get_default_base_url(self):
+        """تست دریافت آدرس پایه پیش‌فرض"""
+        # OpenAI
         url = self.service._get_default_base_url()
         self.assertEqual(url, 'https://api.openai.com/v1')
         
+        # TalkBot
         talkbot_service = AIIntegrationService('talkbot')
         talkbot_service.provider_slug = 'talkbot'
         url = talkbot_service._get_default_base_url()
@@ -160,8 +182,11 @@ class AIIntegrationServiceTest(TestCase):
 
 
 class WebhookServiceTest(TestCase):
+    """تست سرویس Webhook"""
     
     def setUp(self):
+        """آماده‌سازی داده‌های تست"""
+        # ایجاد provider
         self.provider = IntegrationProvider.objects.create(
             name='Webhook Provider',
             slug='webhook',
@@ -172,9 +197,11 @@ class WebhookServiceTest(TestCase):
         self.service = WebhookService()
     
     def test_verify_signature_valid(self):
+        """تست تأیید امضای معتبر"""
         secret_key = 'test_secret'
         payload = b'{"test": "data"}'
         
+        # محاسبه امضای صحیح
         import hmac
         import hashlib
         correct_signature = hmac.new(
@@ -183,6 +210,7 @@ class WebhookServiceTest(TestCase):
             hashlib.sha256
         ).hexdigest()
         
+        # تأیید امضا
         result = self.service.verify_signature(
             secret_key,
             payload,
@@ -192,10 +220,12 @@ class WebhookServiceTest(TestCase):
         self.assertTrue(result)
     
     def test_verify_signature_invalid(self):
+        """تست تأیید امضای نامعتبر"""
         secret_key = 'test_secret'
         payload = b'{"test": "data"}'
         wrong_signature = 'wrong_signature_123'
         
+        # تأیید امضا
         result = self.service.verify_signature(
             secret_key,
             payload,
@@ -205,6 +235,7 @@ class WebhookServiceTest(TestCase):
         self.assertFalse(result)
     
     def test_register_webhook(self):
+        """تست ثبت webhook جدید"""
         result = self.service.register_webhook(
             provider_slug='webhook',
             name='Test Webhook',
@@ -212,6 +243,7 @@ class WebhookServiceTest(TestCase):
             events=['payment.success', 'payment.failed']
         )
         
+        # بررسی نتیجه
         self.assertTrue(result['success'])
         self.assertIn('webhook_id', result)
         self.assertIn('secret_key', result)
@@ -238,7 +270,9 @@ class WebhookServiceTest(TestCase):
             is_processed=False
         )
         
+        # بررسی سلامت
         result = self.service.health_check()
+        
         self.assertEqual(result['status'], 'healthy')
         self.assertEqual(result['active_webhooks'], 1)
         self.assertEqual(result['pending_events'], 1)

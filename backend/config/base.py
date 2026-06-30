@@ -543,13 +543,14 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # =============================================================================
 
 def normalize_redis_ssl_url(url: str) -> str:
-    """Detects if a Redis URL uses TLS (rediss://) and appends ?ssl_cert_reqs=none if missing."""
+    """Detects if a Redis URL uses TLS (rediss://) and appends ?ssl_cert_reqs=CERT_NONE if missing."""
     if not url:
         return url
     if url.startswith("rediss://") and "ssl_cert_reqs" not in url:
         separator = "&" if "?" in url else "?"
-        url = f"{url}{separator}ssl_cert_reqs=none"
+        url = f"{url}{separator}ssl_cert_reqs=CERT_NONE"
     return url
+
 
 
 def change_redis_db(url: str, db_num: int) -> str:
@@ -946,7 +947,7 @@ REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/1")
 def _sanitize_redis_url(url: str) -> str:
     if url.startswith("rediss://") and "ssl_cert_reqs" not in url:
         separator = "&" if "?" in url else "?"
-        return f"{url}{separator}ssl_cert_reqs=none"
+        return f"{url}{separator}ssl_cert_reqs=CERT_NONE"
     return url
 
 REDIS_URL = _sanitize_redis_url(REDIS_URL)
