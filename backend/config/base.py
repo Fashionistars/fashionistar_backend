@@ -943,8 +943,16 @@ ZOHO_ZEPTOMAIL_HOSTED_REGION = env(
 
 REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/1")
 
-CELERY_BROKER_URL = env("CELERY_BROKER_URL", default=REDIS_URL)
-CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default=REDIS_URL)
+def _sanitize_redis_url(url: str) -> str:
+    if url.startswith("rediss://") and "ssl_cert_reqs" not in url:
+        separator = "&" if "?" in url else "?"
+        return f"{url}{separator}ssl_cert_reqs=none"
+    return url
+
+REDIS_URL = _sanitize_redis_url(REDIS_URL)
+
+CELERY_BROKER_URL = _sanitize_redis_url(env("CELERY_BROKER_URL", default=REDIS_URL))
+CELERY_RESULT_BACKEND = _sanitize_redis_url(env("CELERY_RESULT_BACKEND", default=REDIS_URL))
 
 # Fast-fail: 1s timeouts so dead Redis fails immediately, not after 60s
 CELERY_BROKER_TRANSPORT_OPTIONS = {

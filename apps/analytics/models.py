@@ -121,7 +121,8 @@ class UserActivity(models.Model):
         ]
     
     def __str__(self):
-        return f"{self.user.phone_number}: {self.action} ({self.timestamp})"
+        user_ident = self.user.email or self.user.phone or "Unknown"
+        return f"{user_ident}: {self.action} ({self.timestamp})"
 
 
 class PerformanceMetric(models.Model):

@@ -132,7 +132,7 @@ class AnalyticsService:
         
         return metrics
     
-    def get_user_analytics(self, user_id: Optional[int] = None, days: int = 30) -> Dict[str, Any]:
+    def get_user_analytics(self, user_id: Optional[Any] = None, days: int = 30) -> Dict[str, Any]:
         """
         Retrieve user activity and usage statistics.
         """

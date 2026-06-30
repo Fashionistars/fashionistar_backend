@@ -85,7 +85,7 @@ class UserActivityModelTest(TestCase):
             action='view_profile'
         )
         
-        expected = f"{self.user.phone}: view_profile ({activity.timestamp})"
+        expected = f"{self.user.email}: view_profile ({activity.timestamp})"
         self.assertEqual(str(activity), expected)
 
 

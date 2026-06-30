@@ -96,7 +96,7 @@ class RecordMetricSerializer(serializers.Serializer):
 
 
 class UserAnalyticsQuerySerializer(serializers.Serializer):
-    user_id = serializers.IntegerField(required=False)
+    user_id = serializers.UUIDField(required=False)
     days = serializers.IntegerField(default=30, min_value=1, max_value=365)
 
 
