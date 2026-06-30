@@ -504,6 +504,7 @@ def _sanitize_redis_url(url: str) -> str:
     return url
 
 
+
 def change_redis_db(url: str, db_num: int) -> str:
     """Updates the Redis database index (e.g. /0 to /1) while keeping query params."""
     if not url:
@@ -956,7 +957,7 @@ CELERY_BEAT_SCHEDULE = {
     # ── Keep Render.com service awake (free-tier cold-start prevention) ────────
     "keep-render-service-awake": {
         "task": "keep_service_awake",  # matches @shared_task name
-        "schedule": 300.0,  # every 5 minutes
+        "schedule": 60.0,  # every 1 minutes
     },
 
     # ── NDPR/PCI-DSS Compliance: Audit log retention enforcement ──────────────
