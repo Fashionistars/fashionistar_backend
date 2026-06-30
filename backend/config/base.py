@@ -495,13 +495,16 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # CACHING (Redis)
 # =============================================================================
 
-def normalize_redis_ssl_url(url: str) -> str:
-    """Detects if a Redis URL uses TLS (rediss://) and appends ?ssl_cert_reqs=none if missing."""
-    if not url:
+def _sanitize_redis_url(url: str) -> str:
+    if not url or not url.startswith("rediss://"):
         return url
-    if url.startswith("rediss://") and "ssl_cert_reqs" not in url:
+    
+    import re
+    if "ssl_cert_reqs" in url:
+        url = re.sub(r"ssl_cert_reqs=(none|None)", "ssl_cert_reqs=CERT_NONE", url)
+    else:
         separator = "&" if "?" in url else "?"
-        url = f"{url}{separator}ssl_cert_reqs=none"
+        url = f"{url}{separator}ssl_cert_reqs=CERT_NONE"
     return url
 
 
@@ -527,7 +530,7 @@ def change_redis_db(url: str, db_num: int) -> str:
 
 # Single-source normalized Redis base URL (default DB 0)
 _RAW_REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/0")
-REDIS_URL = normalize_redis_ssl_url(_RAW_REDIS_URL)
+REDIS_URL = _sanitize_redis_url(_RAW_REDIS_URL)
 
 
 # Configure Django's CACHES
@@ -894,10 +897,10 @@ ZOHO_ZEPTOMAIL_HOSTED_REGION = env(
 #   backend/celery.py   ← Queue topology, task routes, beat schedule  ← YOU
 #   backend/config/base.py ← Broker URL, serialiser, reliability flags ← THIS FILE
 
-REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/1")
+REDIS_URL = _sanitize_redis_url(env("REDIS_URL", default="redis://127.0.0.1:6379/1"))
 
-CELERY_BROKER_URL = env("CELERY_BROKER_URL", default=REDIS_URL)
-CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default=REDIS_URL)
+CELERY_BROKER_URL = _sanitize_redis_url(env("CELERY_BROKER_URL", default=REDIS_URL))
+CELERY_RESULT_BACKEND = _sanitize_redis_url(env("CELERY_RESULT_BACKEND", default=REDIS_URL))
 
 if CELERY_BROKER_URL.startswith("rediss://"):
     CELERY_BROKER_USE_SSL = {
