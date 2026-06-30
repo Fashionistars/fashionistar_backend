@@ -128,3 +128,4 @@ class SearchResult(models.Model):
 
     def __str__(self) -> str:
         return f"Result {self.rank} for query {self.query.id}"
+
