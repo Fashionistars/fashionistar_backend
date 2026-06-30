@@ -27,7 +27,7 @@ class SearchableContent(models.Model):
 
     # توجه: مدل encounters.Encounter ممکن است در این پروژه موجود نباشد.
     # برای جلوگیری از وابستگی سخت، از ForeignKey به رشته استفاده می‌کنیم.
-    encounter = models.IntegerField(
+    encounter_id = models.IntegerField(
         null=True,
         blank=True,
         verbose_name="Encounter ID"
