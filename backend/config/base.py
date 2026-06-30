@@ -486,6 +486,34 @@ CLOUDINARY_SIGNATURE_TTL = int(env("CLOUDINARY_SIGNATURE_TTL", default=3300))
 CLOUDINARY_ADMIN_ASYNC = True   # Enable async Celery path (production)
 #CLOUDINARY_ADMIN_ASYNC = False  # Sync inline path (dev default)
 
+# =============================================================================
+# AI & EXTERNAL INTEGRATIONS
+# =============================================================================
+
+# ── Ollama Self-Hosted LLM Configuration ──────────────────────────────────────
+OLLAMA_ENABLED = env.bool("OLLAMA_ENABLED", default=True)
+OLLAMA_HOST = env("OLLAMA_HOST", default="http://localhost:11434")
+OLLAMA_MODEL = env("OLLAMA_MODEL", default="llama3.2:3b")
+OLLAMA_EMBED_MODEL = env("OLLAMA_EMBED_MODEL", default="nomic-embed-text")
+
+# ── OpenAI Integration Configuration ─────────────────────────────────────────
+OPENAI_API_KEY = env("OPENAI_API_KEY", default="")
+OPENAI_DEFAULT_MODEL = env("OPENAI_DEFAULT_MODEL", default="gpt-4")
+OPENAI_MAX_TOKENS = env.int("OPENAI_MAX_TOKENS", default=2000)
+OPENAI_TEMPERATURE = env.float("OPENAI_TEMPERATURE", default=0.7)
+
+# ── TalkBot Integration Configuration ────────────────────────────────────────
+TALKBOT_API_KEY = env("TALKBOT_API_KEY", default="")
+TALKBOT_BASE_URL = env("TALKBOT_BASE_URL", default="https://api.talkbot.ir/v1")
+
+# ── SMS / Kavenegar Configuration ───────────────────────────────────────────
+KAVENEGAR_API_KEY = env("KAVENEGAR_API_KEY", default="")
+KAVENEGAR_SENDER = env("KAVENEGAR_SENDER", default="10004346")
+
+# ── Integrations Settings ────────────────────────────────────────────────────
+INTEGRATION_ENVIRONMENT = env("INTEGRATION_ENVIRONMENT", default="production")
+CREDENTIAL_ENCRYPTION_KEY = env("CREDENTIAL_ENCRYPTION_KEY", default="bxc5%hug9u6twumy*utz#y=wcz!bs@4j")
+
 
 
 
