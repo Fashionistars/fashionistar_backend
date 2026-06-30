@@ -94,6 +94,8 @@ if hasattr(app.conf, "result_backend") and app.conf.result_backend:
 # Auto-discover tasks from all INSTALLED_APPS.
 # Explicit list ensures future apps added to INSTALLED_APPS are auto-include.
 app.autodiscover_tasks()
+app.autodiscover_tasks(related_name="task")
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
