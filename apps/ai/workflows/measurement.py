@@ -25,8 +25,6 @@ Graph:
 from __future__ import annotations
 
 import logging
-import operator
-from typing import Annotated, Any
 
 from django.utils import timezone
 from langgraph.graph import StateGraph, END

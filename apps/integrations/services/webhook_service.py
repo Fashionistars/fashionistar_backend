@@ -5,10 +5,8 @@ Webhook Service for managing external webhooks and event processing.
 from typing import Dict, Any, Optional, List
 import hmac
 import hashlib
-import json
 import logging
-from datetime import datetime, timedelta
-from django.conf import settings
+from datetime import timedelta
 from django.utils import timezone
 from django.db import models
 from ..models import WebhookEndpoint, WebhookEvent

@@ -3,7 +3,7 @@
 Central Orchestrator Core - Standard Pattern
 """
 
-from typing import Dict, List, Any, Optional, Callable
+from typing import Dict, List, Any, Callable
 from enum import Enum
 from dataclasses import dataclass
 import logging

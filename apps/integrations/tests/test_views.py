@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework.test import APIClient
 from rest_framework import status
-from unittest.mock import patch, Mock
+from unittest.mock import patch
 import json
 import hmac
 import hashlib

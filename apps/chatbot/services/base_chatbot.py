@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Any
 from django.utils import timezone
 from django.contrib.auth import get_user_model
-from ..models import ChatbotSession, Conversation, Message, ChatbotResponse
+from ..models import ChatbotSession, Conversation, Message
 
 User = get_user_model()
 

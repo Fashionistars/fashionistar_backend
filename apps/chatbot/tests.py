@@ -14,7 +14,7 @@ from datetime import timedelta
 from .models import ChatbotSession, Conversation, Message, ChatbotResponse
 from .services import ClientChatbotService, VendorChatbotService, AIIntegrationService
 from .serializers import (
-    ChatbotSessionSerializer, ConversationSerializer, MessageSerializer,
+    ChatbotSessionSerializer, MessageSerializer,
     SendMessageRequestSerializer
 )
 

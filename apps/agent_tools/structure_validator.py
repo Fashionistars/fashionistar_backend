@@ -4,9 +4,8 @@ Structure Validator for Agents
 
 import os
 import json
-import ast
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List
 from dataclasses import dataclass
 
 

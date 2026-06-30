@@ -188,7 +188,7 @@ def with_api_ingress(rate_limit=100, rate_window=60):
                 
                 return response
                 
-            except Exception as e:
+            except Exception:
                 execution_time = time.time() - start_time
                 ingress.log_request(request, 500, execution_time)
                 logger.exception("Unhandled exception in API endpoint")

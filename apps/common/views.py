@@ -288,7 +288,7 @@ async def _acheck_email() -> dict[str, Any]:
 
 class HealthCheckView(View):
     """
-    GET /api/health/ — System Vital Signs.
+    GET /api/v1/health/ — System Vital Signs.
 
     Flow:
       1. Aggregates check results from DB, Redis, Celery, and Migrations.

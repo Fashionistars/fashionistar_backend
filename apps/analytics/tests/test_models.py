@@ -4,8 +4,7 @@
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from datetime import timedelta
-from ..models import Metric, UserActivity, PerformanceMetric, BusinessMetric, AlertRule, Alert
+from ..models import Metric, UserActivity, PerformanceMetric, AlertRule, Alert
 
 User = get_user_model()
 

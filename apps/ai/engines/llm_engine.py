@@ -25,7 +25,6 @@ Graceful degradation:
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from django.conf import settings
 

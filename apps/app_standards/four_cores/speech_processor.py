@@ -3,7 +3,7 @@
 Speech Processing Core - Standard Pattern
 """
 
-from typing import Dict, List, Any, Optional, BinaryIO
+from typing import Dict, List, Any, BinaryIO
 from dataclasses import dataclass
 import logging
 import os
@@ -13,7 +13,6 @@ from django.conf import settings
 from django.core.files.storage import default_storage
 from unified_ai.services import STTService, TTSService
 from django.core.cache import cache
-from django.core.files.storage import default_storage
 from pydub import AudioSegment
 
 

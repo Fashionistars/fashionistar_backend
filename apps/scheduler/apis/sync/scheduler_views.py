@@ -7,7 +7,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from django.utils import timezone
-from django.db.models import Avg, Count, Q, Min, Max
+from django.db.models import Avg, Count, Q
 from celery.result import AsyncResult
 from datetime import timedelta
 import logging

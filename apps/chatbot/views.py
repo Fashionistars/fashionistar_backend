@@ -6,21 +6,17 @@ from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
-from django.shortcuts import get_object_or_404
-from django.utils import timezone
 from django.contrib.auth import get_user_model
-from django.db.models import Q
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
 
-from .models import ChatbotSession, Conversation, Message, ChatbotResponse
+from .models import ChatbotSession, Conversation, Message
 from .serializers import (
     ChatbotSessionSerializer, ConversationSerializer, ConversationListSerializer,
-    MessageSerializer, ChatbotResponseSerializer, SendMessageRequestSerializer,
+    MessageSerializer, SendMessageRequestSerializer,
     SendMessageResponseSerializer, StartSessionResponseSerializer,
     StyleAssessmentRequestSerializer, SizeRecommendationRequestSerializer,
-    ProductInquiryRequestSerializer, BespokeConsultationRequestSerializer,
-    ConversationHistorySerializer
+    ProductInquiryRequestSerializer, BespokeConsultationRequestSerializer
 )
 from .services import ClientChatbotService, VendorChatbotService
 

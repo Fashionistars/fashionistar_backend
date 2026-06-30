@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
 
 from django.core.cache import cache
 from ninja import Router, Schema

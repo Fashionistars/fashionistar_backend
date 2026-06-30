@@ -1225,17 +1225,8 @@ from apps.product.selectors.product_selectors import (
     aget_shipping_profiles_for_vendor,
     aget_all_shipping_profiles,
     aget_shipping_profile_detail,
-    aget_commission_snapshots_for_product,
     aget_all_commission_snapshots,
     aget_commission_snapshot_detail,
-)
-from apps.product.schemas.product_schemas import (
-    ProductSizeGuideListOut,
-    ProductSizeGuideDetailOut,
-    ClientMeasurementOverlayOut,
-    ProductShippingProfileListOut,
-    ProductShippingProfileDetailOut,
-    ProductCommissionSnapshotOut,
 )
 
 

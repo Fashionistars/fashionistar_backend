@@ -30,7 +30,6 @@ from apps.common.renderers import CustomJSONRenderer, error_response, success_re
 from apps.product.models import Product, ProductCommissionSnapshot
 from apps.product.selectors.product_selectors import (
     get_all_commission_snapshots,
-    get_commission_snapshots_for_product,
 )
 
 logger = logging.getLogger(__name__)

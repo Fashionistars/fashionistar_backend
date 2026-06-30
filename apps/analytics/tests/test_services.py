@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from datetime import timedelta
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 
 from ..services import AnalyticsService, MetricsService, ReportingService, InsightsService
 from ..models import Metric, UserActivity, PerformanceMetric, AlertRule, Alert

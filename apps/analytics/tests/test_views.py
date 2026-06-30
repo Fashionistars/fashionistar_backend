@@ -1,13 +1,10 @@
 """
 تست‌های مربوط به views اپ Analytics
 """
-from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework.test import APITestCase
 from rest_framework import status
-from datetime import timedelta
-from django.utils import timezone
 
 from ..models import Metric, UserActivity, PerformanceMetric, AlertRule, Alert
 

@@ -4,7 +4,6 @@ DevOps application settings.
 All logging is handled centrally by backend.apps.BackendConfig.
 """
 from django.conf import settings
-import os
 
 # Docker Settings
 DOCKER_COMPOSE_FILE = getattr(settings, 'DOCKER_COMPOSE_FILE', 'docker-compose.yml')

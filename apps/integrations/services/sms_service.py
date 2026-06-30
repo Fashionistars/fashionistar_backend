@@ -3,10 +3,8 @@ Generic SMS integration service for Fashionistar.
 """
 
 from typing import Dict, Any, Optional, List
-import requests
 import logging
 import time
-from django.conf import settings
 from .base_service import BaseIntegrationService
 
 logger = logging.getLogger(__name__)

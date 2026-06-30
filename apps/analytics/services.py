@@ -5,7 +5,7 @@ Analytics Services for telemetry and performance monitoring.
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
-from django.db.models import Count, Avg, Sum, Q
+from django.db.models import Count, Avg
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 

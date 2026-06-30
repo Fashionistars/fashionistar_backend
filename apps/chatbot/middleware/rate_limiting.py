@@ -3,11 +3,11 @@ Rate Limiting and Security Middleware for Chatbot.
 """
 
 import logging
+from typing import Optional
 from django.utils.deprecation import MiddlewareMixin
 from django.core.cache import cache
 from django.http import JsonResponse
 from django.utils import timezone
-from django.conf import settings
 
 logger = logging.getLogger(__name__)
 

@@ -2,12 +2,10 @@
 AI Integration Service for external LLM APIs.
 """
 
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 import requests
 import logging
 import time
-import json
-from django.conf import settings
 from .base_service import BaseIntegrationService
 
 logger = logging.getLogger(__name__)

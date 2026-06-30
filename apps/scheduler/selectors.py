@@ -4,7 +4,7 @@ Fashionistar — Scheduler App Selectors.
 Provides read-only database query logic and statistics aggregations.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any
 from django.db.models import QuerySet, Avg, Count, Q, Min, Max
 from django.utils import timezone
 from datetime import timedelta

@@ -146,7 +146,7 @@ class PatientChatView(BaseAPIView):
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
                 
-        except Exception as e:
+        except Exception:
             logger.exception("Chat processing error")
             return Response(
                 self.ingress.build_error_response('internal'),

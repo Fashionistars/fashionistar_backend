@@ -5,7 +5,7 @@ Chart Generator for Agents
 import json
 import math
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict
 
 
 class ChartGenerator:

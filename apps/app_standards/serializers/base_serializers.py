@@ -9,7 +9,6 @@ from django.utils import timezone
 from django.core.validators import RegexValidator
 from decimal import Decimal
 import re
-from typing import Dict, Any
 
 User = get_user_model()
 
