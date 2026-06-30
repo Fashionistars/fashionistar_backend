@@ -508,37 +508,9 @@ class ProductWishlistAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
 # COMMISSION SNAPSHOT ADMIN (READ-ONLY FINANCIAL RECORD)
 # ─────────────────────────────────────────────────────────────────────────────
 
-@admin.register(ProductCommissionSnapshot)
-class ProductCommissionSnapshotAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
-    """
-    Immutable financial snapshot taken at order placement time.
-    Preserves the commission_rate and sale_price at the exact moment of sale,
-    even if the product is later repriced or deleted.
-    """
-
-    list_display = [
-        "product", "commission_rate", "effective_from",
-        "commission_amount_display", "created_at",
-    ]
-    search_fields = ["product__title"]
-    # NOTE: product__sku removed — SKU lives on ProductVariantGalleryMedia, not Product
-    readonly_fields = [
-        f.name for f in ProductCommissionSnapshot._meta.get_fields()
-        if hasattr(f, "name")
-    ]
-    list_select_related = ["product"]
-    date_hierarchy = "created_at"
-    ordering = ["-created_at"]
-
-    def commission_amount_display(self, obj):
-        """Displays effective_from → effective_to range for readability."""
-        try:
-            eff_from = obj.effective_from.strftime("%Y-%m-%d") if obj.effective_from else "—"
-            eff_to = obj.effective_to.strftime("%Y-%m-%d") if obj.effective_to else "ongoing"
-            return f"{eff_from} → {eff_to} @ {obj.commission_rate}%"
-        except Exception:
-            return "—"
-    commission_amount_display.short_description = "Effective Period"
+# NOTE: ProductCommissionSnapshotAdmin is registered below (Phase 8 enterprise version).
+# Duplicate legacy registration removed to prevent AlreadyRegistered error.
+# The commission_amount_display helper has been merged into the Phase 8 version.
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -572,22 +544,8 @@ class ProductFabricAdmin(admin.ModelAdmin):
     )
 
 
-@admin.register(ProductSizeAndMeasurementGuide)
-class ProductSizeAndMeasurementGuideAdmin(admin.ModelAdmin):
-    """
-    Reusable size-guide templates owned by vendors.
-    Each row defines measurement ranges per size label.
-    """
-
-    list_display = [
-        "name", "vendor", "size_label", "chest_cm",
-        "waist_cm", "hip_cm", "sort_order",
-    ]
-    list_filter = ["size_label", "description"]
-    search_fields = ["name", "vendor__store_name", "size_label"]
-    raw_id_fields = ["vendor"]
-    readonly_fields = ["created_at", "updated_at"]
-    ordering = ["name", "sort_order"]
+# NOTE: ProductSizeAndMeasurementGuideAdmin is registered below (Phase 8 enterprise version).
+# Duplicate legacy registration removed to prevent AlreadyRegistered error.
 
 
 # @admin.register(ProductCertification)
@@ -630,39 +588,8 @@ class ProductSizeAndMeasurementGuideAdmin(admin.ModelAdmin):
 #     badge_preview.short_description = "Badge"
 
 
-@admin.register(ProductShippingProfile)
-class ProductShippingProfileAdmin(admin.ModelAdmin):
-    """
-    Per-product shipping configuration — overrides platform defaults.
-    Critical for heavy fabrics (Aso-oke), fragile accessories, oversized items.
-    """
-
-    list_display = [
-        "product", "weight_kg", "length_cm", "width_cm", "height_cm",
-        "is_fragile", "requires_signature", "processing_days",
-    ]
-    list_filter = ["is_fragile", "requires_signature"]
-    search_fields = ["product_shipping_profiles__title", "vendor__store_name"]
-    raw_id_fields = ["vendor"]
-    readonly_fields = ["created_at", "updated_at"]
-    filter_horizontal = ["preferred_couriers"]
-    fieldsets = (
-        (_("Vendor"), {"fields": ("vendor",)}),
-        (_("Dimensions"), {"fields": ("weight_kg", "length_cm", "width_cm", "height_cm")}),
-        (_("Rules"), {"fields": (
-            "is_fragile", "requires_signature", "processing_days",
-            "free_shipping_threshold", "restricted_countries",
-        )}),
-        (_("Couriers"), {"fields": ("preferred_couriers",)}),
-        (_("Timestamps"), {"fields": ("created_at", "updated_at"), "classes": ("collapse",)}),
-    )
-
-    def product(self, obj):
-        try:
-            return getattr(obj, "product_shipping_profiles", None)
-        except Exception:
-            return None
-    product.short_description = "Product"
+# NOTE: ProductShippingProfileAdmin is registered below (Phase 8 enterprise version).
+# Duplicate legacy registration removed to prevent AlreadyRegistered error.
 
 
 @admin.register(ProductPriceHistory)
@@ -812,3 +739,162 @@ class ProductVariantGalleryMediaAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
 
 
 logger = logging.getLogger(__name__)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PHASE 8 — META-ENTITY ADMINS
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@admin.register(ProductSizeAndMeasurementGuide)
+class ProductSizeAndMeasurementGuideAdmin(admin.ModelAdmin):
+    """
+    Enterprise admin for vendor measurement templates.
+
+    Each row represents one size label in a vendor's guide (e.g. "M", "L", "XL").
+    Vendors manage these via the vendor portal — the admin provides override access
+    and bulk-review tooling for the platform team.
+
+    Note: model inherits TimeStampedModel only (no SoftDelete).
+    """
+
+    list_display = [
+        "name", "vendor", "size_label", "sort_order",
+        "chest_cm", "waist_cm", "hip_cm", "created_at",
+    ]
+    list_filter = ["size_label"]
+    search_fields = ["name", "vendor__store_name", "size_label", "description"]
+    list_select_related = ["vendor"]
+    raw_id_fields = ["vendor"]
+    ordering = ["vendor", "sort_order", "name"]
+    list_per_page = 50
+    show_full_result_count = False
+    readonly_fields = ["id", "created_at", "updated_at"]
+    fieldsets = (
+        (_("Identity"), {
+            "fields": ("id", "vendor", "name", "description", "size_label", "sort_order"),
+        }),
+        (_("Upper Body (cm)"), {
+            "fields": ("chest_cm", "waist_cm", "hip_cm", "shoulder_cm", "sleeve_cm"),
+        }),
+        (_("Lower Body (cm)"), {
+            "fields": ("length_cm", "inseam_cm", "foot_length_cm"),
+        }),
+        (_("Lifecycle"), {
+            "fields": ("created_at", "updated_at"),
+            "classes": ("collapse",),
+        }),
+    )
+
+
+@admin.register(ProductShippingProfile)
+class ProductShippingProfileAdmin(admin.ModelAdmin):
+    """
+    Enterprise admin for vendor shipping profiles.
+
+    Each profile captures package dimensions, fragility flags, and processing
+    rules that govern how a product is shipped.  Vendors manage their own
+    profiles; the admin provides platform-wide oversight, bulk audit, and
+    emergency override.
+
+    Note: model inherits TimeStampedModel only (no SoftDelete).
+    """
+
+    list_display = [
+        "vendor", "weight_kg", "length_cm", "width_cm", "height_cm",
+        "is_fragile", "requires_signature",
+        "free_shipping_threshold", "processing_days", "created_at",
+    ]
+    list_filter = ["is_fragile", "requires_signature"]
+    search_fields = ["vendor__store_name"]
+    list_select_related = ["vendor"]
+    raw_id_fields = ["vendor"]
+    ordering = ["vendor", "-created_at"]
+    list_per_page = 50
+    show_full_result_count = False
+    readonly_fields = ["id", "created_at", "updated_at"]
+    fieldsets = (
+        (_("Identity"), {
+            "fields": ("id", "vendor"),
+        }),
+        (_("Package Dimensions"), {
+            "fields": ("weight_kg", "length_cm", "width_cm", "height_cm"),
+        }),
+        (_("Handling Rules"), {
+            "fields": (
+                "is_fragile", "requires_signature",
+                "free_shipping_threshold", "processing_days",
+            ),
+        }),
+        (_("Lifecycle"), {
+            "fields": ("created_at", "updated_at"),
+            "classes": ("collapse",),
+        }),
+    )
+
+
+@admin.register(ProductCommissionSnapshot)
+class ProductCommissionSnapshotAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
+    """
+    Append-only financial ledger for product commission rates.
+
+    IMMUTABLE RECORDS: Commission snapshots record the effective rate at a
+    point in time.  No existing row should ever be mutated — only new snapshots
+    are added when the rate changes.  ReadOnlyAdminMixin enforces this at the
+    admin layer.
+
+    Accessible only to ADMIN / SUPERUSER roles.  Vendors and clients cannot
+    see commission data.
+    """
+
+    list_display = [
+        "product", "commission_rate", "effective_from", "effective_to",
+        "commission_amount_display", "set_by", "created_at",
+    ]
+    list_filter = ["effective_from", "effective_to"]
+    search_fields = [
+        "product__title", "product__slug",
+        "set_by__email", "note",
+    ]
+    list_select_related = ["product", "set_by"]
+    raw_id_fields = ["product", "set_by"]
+    ordering = ["product", "-effective_from"]
+    date_hierarchy = "effective_from"
+    list_per_page = 50
+    show_full_result_count = False
+    readonly_fields = [
+        f.name for f in ProductCommissionSnapshot._meta.get_fields()
+        if hasattr(f, "name")
+    ]
+    fieldsets = (
+        (_("Rate Record"), {
+            "fields": ("product", "commission_rate", "effective_from", "effective_to"),
+        }),
+        (_("Audit"), {
+            "fields": ("set_by", "note", "created_at"),
+        }),
+    )
+
+    def has_add_permission(self, request):
+        # Commission snapshots are created only via the admin commission service.
+        # Direct admin creation is blocked; use the write API endpoint instead.
+        return request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        # Immutable — no edits ever permitted.
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        # Financial ledger — hard-delete is forbidden at the admin layer.
+        return False
+
+    def commission_amount_display(self, obj):
+        """Colour-coded effective date range + rate for the list display."""
+        try:
+            eff_from = obj.effective_from.strftime("%Y-%m-%d") if obj.effective_from else "—"
+            eff_to = obj.effective_to.strftime("%Y-%m-%d") if obj.effective_to else "ongoing"
+            return f"{eff_from} → {eff_to} @ {obj.commission_rate}%"
+        except Exception:
+            return "—"
+    commission_amount_display.short_description = "Effective Period"
+
