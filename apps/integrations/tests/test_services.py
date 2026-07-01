@@ -170,15 +170,15 @@ class AIIntegrationServiceTest(TestCase):
     
     def test_get_default_base_url(self):
         """تست دریافت آدرس پایه پیش‌فرض"""
-        # OpenAI
+        # OpenAI (Self-hosted default)
         url = self.service._get_default_base_url()
-        self.assertEqual(url, 'https://api.openai.com/v1')
+        self.assertEqual(url, 'http://localhost:11434/v1')
         
-        # TalkBot
-        talkbot_service = AIIntegrationService('talkbot')
-        talkbot_service.provider_slug = 'talkbot'
-        url = talkbot_service._get_default_base_url()
-        self.assertEqual(url, 'https://api.talkbot.ir/v1')
+        # OpenRouter
+        openrouter_service = AIIntegrationService('openrouter')
+        openrouter_service.provider_slug = 'openrouter'
+        url = openrouter_service._get_default_base_url()
+        self.assertEqual(url, 'https://openrouter.ai/api/v1')
 
 
 class WebhookServiceTest(TestCase):

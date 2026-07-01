@@ -496,19 +496,21 @@ OLLAMA_HOST = env("OLLAMA_HOST", default="http://localhost:11434")
 OLLAMA_MODEL = env("OLLAMA_MODEL", default="llama3.2:3b")
 OLLAMA_EMBED_MODEL = env("OLLAMA_EMBED_MODEL", default="nomic-embed-text")
 
-# ── OpenAI Integration Configuration ─────────────────────────────────────────
+# ── OpenAI & Self-Hosted compatibility Configuration ──────────────────────────
 OPENAI_API_KEY = env("OPENAI_API_KEY", default="")
-OPENAI_DEFAULT_MODEL = env("OPENAI_DEFAULT_MODEL", default="gpt-4")
+OPENAI_API_BASE_URL = env("OPENAI_API_BASE_URL", default="http://localhost:11434/v1")
+OPENAI_DEFAULT_MODEL = env("OPENAI_DEFAULT_MODEL", default="llama3.2:3b")
 OPENAI_MAX_TOKENS = env.int("OPENAI_MAX_TOKENS", default=2000)
 OPENAI_TEMPERATURE = env.float("OPENAI_TEMPERATURE", default=0.7)
 
-# ── TalkBot Integration Configuration ────────────────────────────────────────
-TALKBOT_API_KEY = env("TALKBOT_API_KEY", default="")
-TALKBOT_BASE_URL = env("TALKBOT_BASE_URL", default="https://api.talkbot.ir/v1")
+# ── OpenRouter & Groq Integration Configurations ──────────────────────────────
+OPENROUTER_API_KEY = env("OPENROUTER_API_KEY", default="")
+OPENROUTER_BASE_URL = env("OPENROUTER_BASE_URL", default="https://openrouter.ai/api/v1")
+GROQ_API_KEY = env("GROQ_API_KEY", default="")
 
-# ── SMS / Kavenegar Configuration ───────────────────────────────────────────
-KAVENEGAR_API_KEY = env("KAVENEGAR_API_KEY", default="")
-KAVENEGAR_SENDER = env("KAVENEGAR_SENDER", default="10004346")
+# ── Termii SMS Integration Configuration ──────────────────────────────────────
+TERMII_API_KEY = env("TERMII_API_KEY", default="")
+TERMII_SENDER_ID = env("TERMII_SENDER_ID", default="Fashionistar")
 
 # ── Integrations Settings ────────────────────────────────────────────────────
 INTEGRATION_ENVIRONMENT = env("INTEGRATION_ENVIRONMENT", default="production")

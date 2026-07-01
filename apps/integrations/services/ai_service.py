@@ -16,6 +16,7 @@ class AIIntegrationService(BaseIntegrationService):
     Service for integrating with external LLMs and AI APIs.
     """
     
+
     def __init__(self, provider_slug: str = 'openai'):
         super().__init__(provider_slug)
         self._api_key = None
@@ -25,7 +26,12 @@ class AIIntegrationService(BaseIntegrationService):
     @property
     def api_key(self) -> str:
         if not self._api_key:
-            self._api_key = self.get_credential('api_key')
+            try:
+                self._api_key = self.get_credential('api_key')
+            except ValueError:
+                # If running self-hosted, we don't need a real OpenAI key; fall back to setting or dummy
+                from django.conf import settings
+                self._api_key = getattr(settings, 'OPENAI_API_KEY', '') or 'self-hosted-dummy-key'
         return self._api_key
     
     @property
@@ -37,32 +43,40 @@ class AIIntegrationService(BaseIntegrationService):
     @property
     def default_model(self) -> str:
         if not self._model:
-            self._model = self.get_credential('default_model', required=False) or 'gpt-4'
+            try:
+                self._model = self.get_credential('default_model', required=False)
+            except ValueError:
+                self._model = None
+            if not self._model:
+                from django.conf import settings
+                self._model = getattr(settings, 'OPENAI_DEFAULT_MODEL', 'llama3.2:3b') or 'llama3.2:3b'
         return self._model
     
     def _get_default_base_url(self) -> str:
+        from django.conf import settings
+        default_openai = getattr(settings, 'OPENAI_API_BASE_URL', 'http://localhost:11434/v1')
         urls = {
-            'openai': 'https://api.openai.com/v1',
-            'talkbot': 'https://api.talkbot.ir/v1',
+            'openai': default_openai,
+            'openrouter': 'https://openrouter.ai/api/v1',
+            'talkbot': 'https://api.talkbot.ir/v1',  # Keep for compatibility in tests
             'anthropic': 'https://api.anthropic.com/v1'
         }
         return urls.get(self.provider_slug, '')
     
     def validate_config(self) -> bool:
         try:
-            if not self.api_key:
-                return False
-            
             if self.provider_slug == 'openai':
+                # Bypass validation key check for local Ollama server if no key required
                 response = self._make_request('GET', 'models')
                 return response.get('success', False)
-            
+            if not self.api_key:
+                return False
             return True
             
         except Exception as e:
             logger.error(f"Config validation failed: {str(e)}")
             return False
-    
+
     def health_check(self) -> Dict[str, Any]:
         start_time = time.time()
         
