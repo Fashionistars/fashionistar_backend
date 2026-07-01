@@ -113,10 +113,15 @@ class OllamaService:
             raise RuntimeError("Ollama daemon failed to launch on port 11434.")
 
         # Pre-pull model weights during startup to ensure instant request resolution
-        # These will run on A10G GPU in production
-        subprocess.run(["ollama", "pull", "llama3.2:3b"], check=True)
-        subprocess.run(["ollama", "pull", "llama3.2"], check=True)
-        subprocess.run(["ollama", "pull", "nomic-embed-text"], check=True)
+        # ─────────────────────────────────────────────────────────────────────────
+        # MODEL ENVIRONMENT MATRIX:
+        #   LOCAL DEVELOPMENT  → llama3.2:3b  (2.0GB, fast cold start, CPU-friendly)
+        #   PRODUCTION (GPU)   → llama3.2     (full precision, A10G 24GB VRAM optimal)
+        #   EMBEDDING          → nomic-embed-text (both environments)
+        # ─────────────────────────────────────────────────────────────────────────
+        subprocess.run(["ollama", "pull", "llama3.2:3b"], check=True)    # Dev model
+        subprocess.run(["ollama", "pull", "llama3.2"], check=True)       # Production model (full precision)
+        subprocess.run(["ollama", "pull", "nomic-embed-text"], check=True)  # Embedding model (shared)
 
     @modal.exit()
     def stop_ollama(self):
