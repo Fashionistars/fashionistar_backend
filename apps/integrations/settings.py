@@ -8,12 +8,14 @@ INTEGRATIONS_DEFAULTS = {
     # محیط پیش‌فرض برای credentials
     'INTEGRATION_ENVIRONMENT': 'production',
     
-    # تنظیمات Twilio & Termii
+    # تنظیمات Twilio & Termii & Kudi
     'TWILIO_ACCOUNT_SID': '',
     'TWILIO_AUTH_TOKEN': '',
     'TWILIO_PHONE_NUMBER': '',
     'TERMII_API_KEY': '',
     'TERMII_SENDER_ID': 'Fashionistar',
+    'KUDI_API_KEY': '',
+    'KUDI_SENDER_ID': 'fashionistar',
     
     # تنظیمات OpenAI / Self-hosted LLM
     'OPENAI_API_KEY': '',
@@ -154,8 +156,8 @@ def validate_integration_settings():
     errors = []
     
     # بررسی API keys
-    if not get_integration_setting('TWILIO_ACCOUNT_SID') and not get_integration_setting('TERMII_API_KEY'):
-        errors.append('Neither TWILIO_ACCOUNT_SID nor TERMII_API_KEY is configured')
+    if not get_integration_setting('TWILIO_ACCOUNT_SID') and not get_integration_setting('TERMII_API_KEY') and not get_integration_setting('KUDI_API_KEY'):
+        errors.append('Neither TWILIO_ACCOUNT_SID nor TERMII_API_KEY nor KUDI_API_KEY is configured')
     
     if not get_integration_setting('WEBHOOK_SECRET'):
         errors.append('WEBHOOK_SECRET is not configured')

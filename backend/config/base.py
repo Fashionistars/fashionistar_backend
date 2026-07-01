@@ -20,6 +20,12 @@ import os
 from decouple import config
 import dj_database_url
 
+# field-encryption-key for encrypted-model-fields in devops models
+import base64
+import hashlib
+
+from backend.config.logging_config import build_logging_config
+
 # ── Environment loader ────────────────────────────────────────────────
 env = Env()
 env_file_path = os.environ.get("ENV_FILE_PATH")
@@ -84,8 +90,7 @@ SECRET_KEY = env(
 )
 
 # field-encryption-key for encrypted-model-fields in devops models
-import base64
-import hashlib
+
 raw_encryption_key = env("FIELD_ENCRYPTION_KEY", default=None)
 if not raw_encryption_key:
     secret = SECRET_KEY.encode("utf-8")
@@ -511,6 +516,10 @@ GROQ_API_KEY = env("GROQ_API_KEY", default="")
 # ── Termii SMS Integration Configuration ──────────────────────────────────────
 TERMII_API_KEY = env("TERMII_API_KEY", default="")
 TERMII_SENDER_ID = env("TERMII_SENDER_ID", default="Fashionistar")
+
+# ── Kudi SMS Integration Configuration ──────────────────────────────────────
+KUDI_API_KEY = env("KUDI_API_KEY", default="")
+KUDI_SENDER_ID = env("KUDI_SENDER_ID", default="fashionistar")
 
 # ── Integrations Settings ────────────────────────────────────────────────────
 INTEGRATION_ENVIRONMENT = env("INTEGRATION_ENVIRONMENT", default="production")
@@ -1444,7 +1453,6 @@ JAZZMIN_UI_TWEAKS = {
 # Production: use_json=True emits structured JSON for Datadog / ELK / Loki.
 # See: backend/config/logging_config.py for full documentation.
 
-from backend.config.logging_config import build_logging_config
 
 # LOGGING is computed in base so Django and Celery can boot even when this
 # module is imported directly. Environment-specific settings still rebuild the

@@ -57,6 +57,8 @@ class AIIntegrationService(BaseIntegrationService):
         default_openai = getattr(settings, 'OPENAI_API_BASE_URL', 'http://localhost:11434/v1')
         urls = {
             'openai': default_openai,
+            'localllm': default_openai,
+            'ollama': default_openai,
             'openrouter': 'https://openrouter.ai/api/v1',
             'talkbot': 'https://api.talkbot.ir/v1',  # Keep for compatibility in tests
             'anthropic': 'https://api.anthropic.com/v1'
@@ -65,7 +67,7 @@ class AIIntegrationService(BaseIntegrationService):
     
     def validate_config(self) -> bool:
         try:
-            if self.provider_slug == 'openai':
+            if self.provider_slug in ('openai', 'localllm', 'ollama'):
                 # Bypass validation key check for local Ollama server if no key required
                 response = self._make_request('GET', 'models')
                 return response.get('success', False)
@@ -121,7 +123,7 @@ class AIIntegrationService(BaseIntegrationService):
         start_time = time.time()
         
         try:
-            if self.provider_slug == 'openai':
+            if self.provider_slug in ('openai', 'localllm', 'ollama'):
                 data = self._prepare_openai_request(
                     prompt, model, max_tokens, temperature, system_prompt, **kwargs
                 )
@@ -296,7 +298,7 @@ class AIIntegrationService(BaseIntegrationService):
         }
     
     def _parse_generation_response(self, response: Dict) -> Dict[str, Any]:
-        if self.provider_slug == 'openai':
+        if self.provider_slug in ('openai', 'localllm', 'ollama'):
             choices = response.get('data', {}).get('choices', [])
             if choices:
                 return {

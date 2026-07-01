@@ -38,6 +38,7 @@ Direct usage (for testing)::
 from apps.providers.SMS.bulksmsNG import BulksmsNGSMSProvider
 from apps.providers.SMS.termii import TermiiSMSProvider
 from apps.providers.SMS.twilio import TwilioSMSProvider
+from apps.providers.SMS.kudi import KudiSMSProvider
 
 # ── Django Admin Choices ───────────────────────────────────────────────────────
 
@@ -45,6 +46,7 @@ SMS_BACKEND_CHOICES: list[tuple[str, str]] = [
     ("apps.providers.SMS.termii.TermiiSMSProvider", "Termii (Nigerian-first)"),
     ("apps.providers.SMS.twilio.TwilioSMSProvider", "Twilio (Global / WhatsApp)"),
     ("apps.providers.SMS.bulksmsNG.BulksmsNGSMSProvider", "BulkSMS Nigeria"),
+    ("apps.providers.SMS.kudi.KudiSMSProvider", "Kudi SMS"),
 ]
 
 _SMS_LABEL_LOOKUP: dict[str, str] = dict(SMS_BACKEND_CHOICES)
@@ -69,6 +71,7 @@ __all__ = [
     "TermiiSMSProvider",
     "TwilioSMSProvider",
     "BulksmsNGSMSProvider",
+    "KudiSMSProvider",
     # Registry helpers (consumed by SMSProviderConfig)
     "SMS_BACKEND_CHOICES",
     "get_sms_provider_label",
