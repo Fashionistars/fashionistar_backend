@@ -53,13 +53,17 @@ def _load_fashion_model():
     try:
         import torch
         import open_clip
+        from huggingface_hub import hf_hub_download
 
         _device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         logger.info("[FashionEngine] Loading marqo-FashionSigLIP on %s", _device)
 
+        # Download checkpoint file from HF Hub to ensure local path loading works
+        checkpoint_path = hf_hub_download("Marqo/marqo-FashionSigLIP", "open_clip_pytorch_model.bin")
+
         _fashion_model, _, _fashion_preprocess = open_clip.create_model_and_transforms(
             "ViT-B-16-SigLIP",
-            pretrained="hf-hub:Marqo/marqo-FashionSigLIP",
+            pretrained=checkpoint_path,
         )
         _fashion_tokenizer = open_clip.get_tokenizer("ViT-B-16-SigLIP")
         _fashion_model.eval()
@@ -68,7 +72,7 @@ def _load_fashion_model():
         logger.info("[FashionEngine] marqo-FashionSigLIP loaded successfully on %s", _device)
         return True
     except ImportError as exc:
-        logger.warning("[FashionEngine] open_clip/torch not installed — fashion embeddings disabled: %s", exc)
+        logger.warning("[FashionEngine] open_clip/torch/huggingface_hub not installed — fashion embeddings disabled: %s", exc)
         return False
     except Exception as exc:
         logger.error("[FashionEngine] Failed to load marqo-FashionSigLIP: %s", exc)
