@@ -34,6 +34,8 @@ class BaseChatbotViewSet(viewsets.ModelViewSet):
     pagination_class = StandardResultsSetPagination
     
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False) or self.request.user.is_anonymous:
+            return self.queryset.none()
         return self.queryset.filter(user=self.request.user)
 
 
@@ -44,6 +46,23 @@ class ClientChatbotViewSet(viewsets.GenericViewSet):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_chatbot_service(self):
+        """
+        یک خطی:
+        سرویس چت‌بات مربوط به بیمار را برای کاربر جاری فراهم می‌کند.
+        
+        توضیحات:
+        این متد یک نمونه از PatientChatbotService را که به کاربر احراز هویت‌شده جاری متصل است برمی‌گرداند. سرویس بازگشتی مسئول عملیات سطح بالای چت‌بات بیمار است، از جمله:
+        - مدیریت و بازیابی جلسات فعال و ذخیره‌سازی وضعیت جلسه،
+        - پردازش و تحلیل پیام‌های کاربر (شامل ارسال پیام به مدل‌های هوش مصنوعی و دریافت پاسخ‌های ساخت‌یافته)،
+        - آغاز و پردازش ارزیابی علائم، تحلیل نتایج و ارائه توصیه‌های اولیه،
+        - درخواست زمان ملاقات و هماهنگی اطلاعات مربوط به نوبت،
+        - فراهم‌سازی پیام‌های خوش‌آمدگویی و گزینه‌های پاسخ سریع.
+        
+        این متد خود عملیاتی جانبی (side effect) انجام نمی‌دهد؛ تنها سرویسِ مرتبط با self.request.user را سازنده‌سازی و بازمی‌گرداند.
+        
+        Returns:
+            PatientChatbotService: نمونه‌ای از سرویس چت‌بات که برای کاربر جاری پیکربندی شده است.
+        """
         return ClientChatbotService(self.request.user)
     
     @extend_schema(
@@ -53,6 +72,30 @@ class ClientChatbotViewSet(viewsets.GenericViewSet):
     )
     @action(detail=False, methods=['post'])
     def start_session(self, request):
+        """
+        ایجاد یا بازیابی یک جلسه چت‌بات فعال برای کاربر جاری و برگرداندن داده‌های اولیه UI مانند پیام خوشامدگویی و پاسخ‌های سریع.
+        
+        این عمل:
+        - از سرویس چت‌بات (get_chatbot_service) برای ایجاد یا بازیابی یک ChatbotSession استفاده می‌کند (در صورت نبودن، جلسه جدید ساخته می‌شود).
+        - از لایه هوش مصنوعی سرویس چت‌بات (ai_service.response_matcher) تلاش می‌کند یک پیام خوشامدگویی مناسب را دریافت کند و در صورت وجود آن را به شکل یک دیکشنری ساختار یافته برمی‌گرداند:
+          - content: متن پیام
+          - message_type: نوع پیام (مثلاً 'text')
+          - response_data: داده‌های اضافی مربوط به پاسخ AI
+        - از سرویس چت‌بات لیست پاسخ‌های سریع اولیه (quick_replies) را تهیه می‌کند تا برای رابط کاربری ارسال شود.
+        - در صورت بروز استثناء، پاسخ HTTP 500 با پیام خطای فارسی بازگردانده می‌شود.
+        
+        پارامترها:
+            request: درخواست HTTP دریافتی — باید کاربر احراز هویت‌شده باشد (نماگر عملکرد وابسته به self.request.user است).
+        
+        مقدار بازگشتی:
+            شی Response حاوی ساختار JSON با کلیدهای:
+              - session: داده‌های سریال‌شده جلسه (ChatbotSessionSerializer)
+              - greeting_message: دیکشنری پیام خوشامدگویی یا None
+              - quick_replies: فهرست پاسخ‌های سریع آماده برای نمایش در رابط
+        
+        عوارض جانبی:
+            - ممکن است یک جلسه جدید در پایگاه داده ایجاد شود (از طریق chatbot_service.get_or_create_session).
+        """
         try:
             chatbot_service = self.get_chatbot_service()
             session = chatbot_service.get_or_create_session()
@@ -89,12 +132,24 @@ class ClientChatbotViewSet(viewsets.GenericViewSet):
     )
     @action(detail=False, methods=['post'])
     def send_message(self, request):
+        """
+        ارسال و پردازش پیام کاربر به چت‌بات و بازگشت پاسخ ساخت‌یافته‌ی سرویس هوش‌مصنوعی.
+        
+        این متد یک درخواست POST را می‌پذیرد که باید حداقل شامل فیلد `message` (رشته) باشد و می‌تواند فیلد اختیاری `context` (شی یا دیکشنری) برای ارائه زمینهٔ گفتگو ارسال کند. ورودی ابتدا با `SendMessageRequestSerializer` اعتبارسنجی می‌شود؛ در صورت نامعتبر بودن، خطاهای اعتبارسنجی با وضعیت HTTP 400 بازگردانده می‌شوند. سپس از سرویس چت‌بات (از طریق `self.get_chatbot_service()`) برای پردازش پیام استفاده می‌شود و متد `process_message(message, context)` فراخوانی می‌گردد؛ نتیجهٔ بازگشتی این سرویس مستقیماً در بدنهٔ پاسخ HTTP قرار می‌گیرد.
+        
+        بازگشت‌ها:
+        - HTTP 200: پاسخ پردازش شدهٔ سرویس چت‌بات (معمولاً JSON ساخت‌یافته شامل پیام/اقدامات/گزینه‌های بعدی).
+        - HTTP 400: خطاهای اعتبارسنجی ورودی.
+        - HTTP 500: خطاهای غیرمنتظره در زمان پردازش پیام؛ پیام خطا در بدنه بازگردانده می‌شود.
+        """
         serializer = SendMessageRequestSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         try:
             chatbot_service = self.get_chatbot_service()
+            
+            # پردازش پیام
             result = chatbot_service.process_message(
                 message=serializer.validated_data['message'],
                 context=serializer.validated_data.get('context')
@@ -113,6 +168,14 @@ class ClientChatbotViewSet(viewsets.GenericViewSet):
     )
     @action(detail=False, methods=['post'])
     def start_style_assessment(self, request):
+        """
+        شروع یک ارزیابی علائم جدید از طرف چت‌بات و بازگرداندن داده‌های اولیه ارزیابی.
+        
+        این متد یک جلسهٔ ارزیابی علائم را از طریق سرویس چت‌بات مرتبط با کاربر جاری آغاز می‌کند (تماس با متد `start_symptom_assessment` در سرویس). در پاسخ دادهٔ ارزیابی اولیه را برمی‌گرداند که معمولاً شامل پرسش‌های مرحله‌ای، شناسهٔ نشست/ارزیابی و متادیتا لازم برای ادامهٔ ارزیابی توسط کلاینت است.
+        
+        بازگشت:
+            Response: یک شیٔ DRF Response حاوی داده‌های ارزیابی در صورت موفقیت یا در صورت بروز خطا یک ساختار شامل کلید `error` و وضعیت HTTP 500.
+        """
         try:
             chatbot_service = self.get_chatbot_service()
             assessment = chatbot_service.start_style_assessment()
@@ -131,6 +194,11 @@ class ClientChatbotViewSet(viewsets.GenericViewSet):
     )
     @action(detail=False, methods=['post'])
     def submit_style_assessment(self, request):
+        """
+        ارسال پاسخ‌های ارزیابی استایل و دریافت توصیه‌های لباس.
+        
+        این متد پاسخ‌های کاربر به ارزیابی استایل را از طریق `StyleAssessmentRequestSerializer` اعتبارسنجی کرده و سپس از طریق سرویس چت‌بات مرتبط با کاربر جاری (متد `process_style_response`) پردازش می‌کند. در صورت موفقیت، ساختاری حاوی نتایج ارزیابی و توصیه‌های لباس برگردانده می‌شود؛ در غیر این صورت، خطا با وضعیت HTTP 500 نشان داده می‌شود.
+        """
         serializer = StyleAssessmentRequestSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -380,6 +448,11 @@ class ConversationViewSet(BaseChatbotViewSet):
     queryset = Conversation.objects.all()
     serializer_class = ConversationSerializer
     
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False) or self.request.user.is_anonymous:
+            return self.queryset.none()
+        return self.queryset.filter(session__user=self.request.user)
+    
     @action(detail=True, methods=['get'])
     def history(self, request, pk=None):
         conversation = self.get_object()
@@ -396,3 +469,8 @@ class ConversationViewSet(BaseChatbotViewSet):
 class MessageViewSet(BaseChatbotViewSet):
     queryset = Message.objects.all()
     serializer_class = MessageSerializer
+    
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False) or self.request.user.is_anonymous:
+            return self.queryset.none()
+        return self.queryset.filter(conversation__session__user=self.request.user)
