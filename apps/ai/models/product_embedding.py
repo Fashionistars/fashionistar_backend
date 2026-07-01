@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+import pgvector.django
 
 from apps.common.models import TimeStampedModel
 
@@ -61,19 +62,22 @@ class ProductEmbedding(TimeStampedModel):
     # Using JSONField as a portable fallback if pgvector extension isn't installed.
     # The Celery tasks use raw SQL for actual vector operations.
     # When pgvector is confirmed available, these can be swapped to VectorField.
-    image_vector = models.JSONField(
+    image_vector = pgvector.django.VectorField(
+        dimensions=VECTOR_DIM,
         null=True,
         blank=True,
         verbose_name=_("Image Vector"),
         help_text=_(f"marqo-FashionSigLIP image embedding ({VECTOR_DIM}d). L2-normalized."),
     )
-    text_vector = models.JSONField(
+    text_vector = pgvector.django.VectorField(
+        dimensions=VECTOR_DIM,
         null=True,
         blank=True,
         verbose_name=_("Text Vector"),
         help_text=_(f"marqo-FashionSigLIP text embedding ({VECTOR_DIM}d). L2-normalized."),
     )
-    combined_vector = models.JSONField(
+    combined_vector = pgvector.django.VectorField(
+        dimensions=VECTOR_DIM,
         null=True,
         blank=True,
         verbose_name=_("Combined Vector"),

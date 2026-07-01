@@ -20,6 +20,12 @@ import os
 from decouple import config
 import dj_database_url
 
+# field-encryption-key for encrypted-model-fields in devops models
+import base64
+import hashlib
+
+from backend.config.logging_config import build_logging_config
+
 # ── Environment loader ────────────────────────────────────────────────
 env = Env()
 env_file_path = os.environ.get("ENV_FILE_PATH")
@@ -84,8 +90,7 @@ SECRET_KEY = env(
 )
 
 # field-encryption-key for encrypted-model-fields in devops models
-import base64
-import hashlib
+
 raw_encryption_key = env("FIELD_ENCRYPTION_KEY", default=None)
 if not raw_encryption_key:
     secret = SECRET_KEY.encode("utf-8")
@@ -496,19 +501,25 @@ OLLAMA_HOST = env("OLLAMA_HOST", default="http://localhost:11434")
 OLLAMA_MODEL = env("OLLAMA_MODEL", default="llama3.2:3b")
 OLLAMA_EMBED_MODEL = env("OLLAMA_EMBED_MODEL", default="nomic-embed-text")
 
-# ── OpenAI Integration Configuration ─────────────────────────────────────────
+# ── OpenAI & Self-Hosted compatibility Configuration ──────────────────────────
 OPENAI_API_KEY = env("OPENAI_API_KEY", default="")
-OPENAI_DEFAULT_MODEL = env("OPENAI_DEFAULT_MODEL", default="gpt-4")
+OPENAI_API_BASE_URL = env("OPENAI_API_BASE_URL", default="http://localhost:11434/v1")
+OPENAI_DEFAULT_MODEL = env("OPENAI_DEFAULT_MODEL", default="llama3.2:3b")
 OPENAI_MAX_TOKENS = env.int("OPENAI_MAX_TOKENS", default=2000)
 OPENAI_TEMPERATURE = env.float("OPENAI_TEMPERATURE", default=0.7)
 
-# ── TalkBot Integration Configuration ────────────────────────────────────────
-TALKBOT_API_KEY = env("TALKBOT_API_KEY", default="")
-TALKBOT_BASE_URL = env("TALKBOT_BASE_URL", default="https://api.talkbot.ir/v1")
+# ── OpenRouter & Groq Integration Configurations ──────────────────────────────
+OPENROUTER_API_KEY = env("OPENROUTER_API_KEY", default="")
+OPENROUTER_BASE_URL = env("OPENROUTER_BASE_URL", default="https://openrouter.ai/api/v1")
+GROQ_API_KEY = env("GROQ_API_KEY", default="")
 
-# ── SMS / Kavenegar Configuration ───────────────────────────────────────────
-KAVENEGAR_API_KEY = env("KAVENEGAR_API_KEY", default="")
-KAVENEGAR_SENDER = env("KAVENEGAR_SENDER", default="10004346")
+# ── Termii SMS Integration Configuration ──────────────────────────────────────
+TERMII_API_KEY = env("TERMII_API_KEY", default="")
+TERMII_SENDER_ID = env("TERMII_SENDER_ID", default="Fashionistar")
+
+# ── Kudi SMS Integration Configuration ──────────────────────────────────────
+KUDI_API_KEY = env("KUDI_API_KEY", default="")
+KUDI_SENDER_ID = env("KUDI_SENDER_ID", default="fashionistar")
 
 # ── Integrations Settings ────────────────────────────────────────────────────
 INTEGRATION_ENVIRONMENT = env("INTEGRATION_ENVIRONMENT", default="production")
@@ -1442,7 +1453,6 @@ JAZZMIN_UI_TWEAKS = {
 # Production: use_json=True emits structured JSON for Datadog / ELK / Loki.
 # See: backend/config/logging_config.py for full documentation.
 
-from backend.config.logging_config import build_logging_config
 
 # LOGGING is computed in base so Django and Celery can boot even when this
 # module is imported directly. Environment-specific settings still rebuild the

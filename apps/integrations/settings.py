@@ -8,21 +8,24 @@ INTEGRATIONS_DEFAULTS = {
     # محیط پیش‌فرض برای credentials
     'INTEGRATION_ENVIRONMENT': 'production',
     
-    # تنظیمات Kavenegar
-    'KAVENEGAR_API_KEY': '',
-    'KAVENEGAR_SENDER': '10004346',
-    'KAVENEGAR_OTP_TEMPLATE': 'verify',
-    'KAVENEGAR_APPOINTMENT_TEMPLATE': 'appointment-reminder',
+    # تنظیمات Twilio & Termii & Kudi
+    'TWILIO_ACCOUNT_SID': '',
+    'TWILIO_AUTH_TOKEN': '',
+    'TWILIO_PHONE_NUMBER': '',
+    'TERMII_API_KEY': '',
+    'TERMII_SENDER_ID': 'Fashionistar',
+    'KUDI_API_KEY': '',
+    'KUDI_SENDER_ID': 'fashionistar',
     
-    # تنظیمات OpenAI
+    # تنظیمات OpenAI / Self-hosted LLM
     'OPENAI_API_KEY': '',
-    'OPENAI_DEFAULT_MODEL': 'gpt-4',
+    'OPENAI_DEFAULT_MODEL': 'llama3.2:3b',
     'OPENAI_MAX_TOKENS': 2000,
     'OPENAI_TEMPERATURE': 0.7,
     
-    # تنظیمات TalkBot
-    'TALKBOT_API_KEY': '',
-    'TALKBOT_BASE_URL': 'https://api.talkbot.ir/v1',
+    # تنظیمات OpenRouter (AI Gateway)
+    'OPENROUTER_API_KEY': '',
+    'OPENROUTER_BASE_URL': 'https://openrouter.ai/api/v1',
     
     # تنظیمات Webhook
     'WEBHOOK_SECRET': '',
@@ -61,7 +64,7 @@ INTEGRATIONS_DEFAULTS = {
     
     # تنظیمات پیش‌فرض providers
     'DEFAULT_PROVIDERS': {
-        'sms': 'kavenegar',
+        'sms': 'twilio',
         'ai': 'openai',
         'payment': 'zarinpal',
         'storage': 'minio'
@@ -70,7 +73,7 @@ INTEGRATIONS_DEFAULTS = {
     # تنظیمات اعلان‌ها
     'NOTIFICATION_CHANNELS': {
         'sms': {
-            'provider': 'kavenegar',
+            'provider': 'twilio',
             'priority': 1
         },
         'push': {
@@ -153,8 +156,8 @@ def validate_integration_settings():
     errors = []
     
     # بررسی API keys
-    if not get_integration_setting('KAVENEGAR_API_KEY'):
-        errors.append('KAVENEGAR_API_KEY is not configured')
+    if not get_integration_setting('TWILIO_ACCOUNT_SID') and not get_integration_setting('TERMII_API_KEY') and not get_integration_setting('KUDI_API_KEY'):
+        errors.append('Neither TWILIO_ACCOUNT_SID nor TERMII_API_KEY nor KUDI_API_KEY is configured')
     
     if not get_integration_setting('WEBHOOK_SECRET'):
         errors.append('WEBHOOK_SECRET is not configured')
