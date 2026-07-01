@@ -445,7 +445,7 @@ async def get_ai_health(request) -> dict:
         try:
             from apps.ai.engines.recommendation_engine import FashionEmbeddingEngine
             eng = FashionEmbeddingEngine()
-            results["siglip_available"] = eng.model is not None
+            results["siglip_available"] = eng.is_available
         except Exception:
             pass
 
