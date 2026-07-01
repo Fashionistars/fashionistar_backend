@@ -269,6 +269,9 @@ langchain-ollama>=0.2.0         # Ollama LLM integration node
 
 # ── Local LLM (Ollama — self-hosted, no cloud cost) ───────────────────────────
 ollama>=0.3.3                   # Python client for Ollama server
+# Model Configuration Details:
+#   - Local Dev Model:   llama3.2:3b
+#   - Production Model:  llama3.2
 
 # ── Measurement Engine ────────────────────────────────────────────────────────
 mediapipe>=0.10.14              # MediaPipe Pose (server-side landmark validation)

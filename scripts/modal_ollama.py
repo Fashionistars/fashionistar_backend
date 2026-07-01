@@ -115,6 +115,7 @@ class OllamaService:
         # Pre-pull model weights during startup to ensure instant request resolution
         # These will run on A10G GPU in production
         subprocess.run(["ollama", "pull", "llama3.2:3b"], check=True)
+        subprocess.run(["ollama", "pull", "llama3.2"], check=True)
         subprocess.run(["ollama", "pull", "nomic-embed-text"], check=True)
 
     @modal.exit()
