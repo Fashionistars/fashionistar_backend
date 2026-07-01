@@ -115,6 +115,7 @@ dependencies = [
     "django-celery-beat",
     "Django==6.0.3",
     "django-auditlog>=3.4.1",
+    "ollama>=0.6.2",
 ]
 
 [project.optional-dependencies]
