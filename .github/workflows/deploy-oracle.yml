@@ -25,7 +25,7 @@ on:
       - 'entrypoint.sh'
       - 'deploy/**'
       - '.github/workflows/deploy-oracle.yml'
-  workflow_dispatch:
+  workflow_dispatch:  # Allow manual trigger from GitHub UI
     inputs:
       force_rebuild:
         description: 'Force Docker image rebuild (skip cache)'
@@ -39,8 +39,7 @@ env:
   PYTHON_VERSION: "3.13"
 
 jobs:
-
-  # ── Job 1: Run Tests ─────────────────────────────────────────────────────────
+  # ── Job 1: Run tests before deploying ─────────────────────────────────────
   test:
     name: 🧪 Run Tests
     runs-on: ubuntu-latest
@@ -108,7 +107,7 @@ jobs:
           name: test-results
           path: test-results.xml
 
-  # ── Job 2: Build ARM64 Docker Image ─────────────────────────────────────────
+  # ── Job 2: Build & Push ARM64 Docker image ─────────────────────────────────
   build:
     name: 🏗️ Build ARM64 + AMD64 Image
     runs-on: ubuntu-latest
@@ -162,6 +161,7 @@ jobs:
         with:
           context: .
           file: Dockerfile.production
+          # Build ARM64 for Oracle Cloud + AMD64 for local dev/CI
           platforms: linux/arm64,linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
@@ -206,6 +206,7 @@ jobs:
             echo "   Commit: ${{ github.sha }}"
             echo "   Branch: ${{ github.ref_name }}"
 
+            # Navigate to project directory
             cd /home/ubuntu/fashionistar_backend
 
             # Pull latest code
@@ -213,7 +214,7 @@ jobs:
             git reset --hard origin/main
             echo "✅ Code updated"
 
-            # Authenticate to GHCR to pull latest image
+            # Authenticate to GHCR to pull latest new Docker image (ARM64 from GHCR)
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
             # Pull the new ARM64 image
