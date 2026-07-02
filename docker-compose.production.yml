@@ -1,0 +1,212 @@
+# ============================================================================
+# FASHIONISTAR — Production Docker Compose (Oracle Cloud Always Free VM)
+# ============================================================================
+# Deploys on: Oracle Cloud VM.Standard.A1.Flex (2 OCPUs / 12 GB RAM / ARM64)
+#
+# Services:
+#   nginx      — Reverse proxy + SSL termination (Let's Encrypt)
+#   api        — Django ASGI via Gunicorn + UvicornWorker
+#   postgres   — PostgreSQL 17 (persistent, uses 200GB block storage)
+#   redis      — Redis 7 (cache + Celery broker for local workers)
+#
+# Usage:
+#   docker compose -f docker-compose.production.yml up -d
+#   docker compose -f docker-compose.production.yml pull && docker compose -f docker-compose.production.yml up -d --no-deps api
+#
+# NOTE: Celery workers run on Northflank (see northflank.yml), NOT here.
+#       They connect to Redis on this VM via CELERY_BROKER_URL.
+# ============================================================================
+
+version: '3.9'
+
+services:
+
+  # ── Nginx: Reverse proxy + SSL + Static files ───────────────────────────────
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: fashionistar_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx/conf.d:/etc/nginx/conf.d:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - static_files:/app/staticfiles:ro
+      - media_files:/app/mediafiles:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: always
+    networks:
+      - fashionistar_net
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Django ASGI API Gateway ─────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+    image: ghcr.io/${GITHUB_REPOSITORY:-fashionistar/fashionistar_backend}/api:${IMAGE_TAG:-latest}
+    container_name: fashionistar_api
+    env_file:
+      - .env.production
+    environment:
+      - DJANGO_SETTINGS_MODULE=backend.config.production
+      - PORT=8001
+      # Oracle Cloud: 2 OCPUs → 4 Gunicorn workers (2 × CPU + 1 formula)
+      - GUNICORN_WORKERS=4
+      - GUNICORN_TIMEOUT=300
+      - GUNICORN_KEEPALIVE=75
+      - GUNICORN_LOG_LEVEL=info
+    volumes:
+      - static_files:/app/staticfiles
+      - media_files:/app/mediafiles
+      - api_logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 6G
+        reservations:
+          cpus: '0.5'
+          memory: 2G
+    networks:
+      - fashionistar_net
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8001/health/"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+
+  # ── PostgreSQL 17 ────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:17-alpine
+    container_name: fashionistar_postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-fashionistar}
+      POSTGRES_USER: ${POSTGRES_USER:-fashionistar}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Performance tuning for 12 GB RAM Oracle VM
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    command: >
+      postgres
+      -c shared_buffers=2GB
+      -c effective_cache_size=6GB
+      -c maintenance_work_mem=512MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=64MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c work_mem=64MB
+      -c min_wal_size=1GB
+      -c max_wal_size=4GB
+      -c max_connections=100
+      -c log_min_duration_statement=1000
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 3G
+        reservations:
+          cpus: '0.1'
+          memory: 1G
+    networks:
+      - fashionistar_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fashionistar} -d ${POSTGRES_DB:-fashionistar}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ── Redis 7 (Cache + Celery Broker) ─────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: fashionistar_redis
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 1gb
+      --maxmemory-policy allkeys-lru
+      --bind 0.0.0.0
+      --requirepass ${REDIS_PASSWORD}
+      --tcp-keepalive 300
+    volumes:
+      - redis_data:/data
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 1.2G
+        reservations:
+          cpus: '0.05'
+          memory: 256M
+    networks:
+      - fashionistar_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Oracle Keep-Alive Service ────────────────────────────────────────────────
+  # Oracle reclaims idle instances. This pings the health endpoint every 4 minutes
+  # to keep CPU utilization above the idle threshold.
+  keepalive:
+    image: curlimages/curl:latest
+    container_name: fashionistar_keepalive
+    command: >
+      sh -c "while true; do
+        curl -fsS http://api:8001/health/ > /dev/null 2>&1 || true;
+        sleep 240;
+      done"
+    depends_on:
+      - api
+    restart: always
+    networks:
+      - fashionistar_net
+
+# ── Volumes ──────────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    name: fashionistar_postgres_data
+    # Maps to Oracle VM's block storage (/var/lib/docker/volumes/)
+    # Total: 200 GB available from Oracle Always Free
+  redis_data:
+    name: fashionistar_redis_data
+  static_files:
+    name: fashionistar_static_files
+  media_files:
+    name: fashionistar_media_files
+  api_logs:
+    name: fashionistar_api_logs
+  nginx_logs:
+    name: fashionistar_nginx_logs
+
+# ── Networks ─────────────────────────────────────────────────────────────────
+networks:
+  fashionistar_net:
+    name: fashionistar_production_net
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16

@@ -1,16 +1,14 @@
 # ============================================================================
-# FASHIONISTAR — Celery Worker Dockerfile (Northflank / Multi-arch)
+# FASHIONISTAR — Production Dockerfile (Oracle Cloud ARM64 / Multi-arch)
 # ============================================================================
-# Target:     Northflank Free Sandbox (linux/amd64 — Northflank's default)
-# Also works: linux/arm64 if Northflank ever supports ARM
+# Target:     Oracle Cloud Always Free (VM.Standard.A1.Flex — linux/arm64)
+# Also works: linux/amd64 for local dev / CI
 #
-# Celery queues handled:
-#   - default          : General async tasks
-#   - ai_tasks         : AI/ML measurement computation
-#   - measurements     : Body measurement processing
-#   - analytics        : Reporting & aggregation
-#   - notifications    : Email / SMS / Push
-#   - webhooks         : Incoming webhook processing
+# Build for Oracle (ARM64):
+#   docker buildx build --platform linux/arm64 -f Dockerfile.production -t fashionistar/api:latest .
+#
+# Build multi-arch (CI / GitHub Actions):
+#   docker buildx build --platform linux/arm64,linux/amd64 -f Dockerfile.production --push -t ghcr.io/ORG/REPO/api:latest .
 # ============================================================================
 
 ARG PYTHON_VERSION=3.13-slim
@@ -28,6 +26,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_PROJECT_ENVIRONMENT=/opt/venv
 
+# Build-time system dependencies (libpq-dev for psycopg compilation)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
@@ -36,25 +35,31 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=uvbin /uv /uvx /bin/
 
 WORKDIR /app
+
+# Copy dependency manifests first (layer caching — only rebuilds if these change)
 COPY pyproject.toml uv.lock ./
+
+# Install production dependencies into /opt/venv
 RUN uv sync --frozen --no-dev --no-editable --no-install-project
 
-# ── Stage 3: runtime ─────────────────────────────────────────────────────────
+# ── Stage 3: production runtime (minimal image) ──────────────────────────────
 FROM python:${PYTHON_VERSION} AS runner
 
+# Runtime environment
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_LINK_MODE=copy \
     UV_PROJECT_ENVIRONMENT=/opt/venv \
     PATH="/opt/venv/bin:$PATH" \
     DJANGO_SETTINGS_MODULE=backend.config.production \
-    # Celery concurrency: 4 workers per container (tune to Northflank limits)
-    CELERY_CONCURRENCY=4 \
-    # Queues this worker handles
-    CELERY_QUEUES=default,ai_tasks,measurements,analytics,notifications,webhooks \
-    # Prevent worker process from accumulating memory leaks
-    CELERY_MAX_TASKS_PER_CHILD=100
+    PORT=8001 \
+    UVICORN_WORKERS=4 \
+    UVICORN_KEEP_ALIVE=120 \
+    UVICORN_WS=auto \
+    # ARM64 Oracle Cloud: use 4 workers for 2 OCPUs (I/O-bound formula)
+    GUNICORN_WORKERS=4
 
+# Runtime system dependencies only (no build tools — keeps image small)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     postgresql-client \
@@ -64,35 +69,32 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=uvbin /uv /uvx /bin/
 COPY --from=builder /opt/venv /opt/venv
 
-# Create non-root user
+# Create non-root app user (security best practice)
 RUN useradd --create-home --uid 1000 --shell /bin/sh appuser && \
     mkdir -p /app/staticfiles /app/media /app/logs && \
     chown -R appuser:appuser /app
 
 WORKDIR /app
 
+# Copy application source (after deps — maximizes layer cache hits)
 COPY --chown=appuser:appuser . .
 
+# Copy entrypoint and make executable
 COPY --chown=appuser:appuser entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 USER appuser
 
-# Celery worker has no HTTP port — it only connects outbound to Redis broker
-# Northflank handles port 0 for worker-type services
+EXPOSE ${PORT}
+
+# Health check — polls /health/ endpoint to verify Django is responsive
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -fsS "http://127.0.0.1:${PORT}/health/" || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]
 
-# Celery worker command
-# --without-gossip --without-mingle: disable inter-worker discovery (saves resources)
-# --max-tasks-per-child: prevent memory leaks in long-running workers
-# -Q: consume all FASHIONISTAR task queues
+# Production: Gunicorn + UvicornWorker (process manager + async event loop)
+# Gunicorn handles: graceful restarts, worker supervision, SIGTERM handling
+# UvicornWorker handles: async I/O, WebSockets, ASGI protocol
 CMD ["sh", "-c", \
-    "exec celery -A backend worker \
-    --loglevel=info \
-    --concurrency=${CELERY_CONCURRENCY:-4} \
-    -Q ${CELERY_QUEUES:-default,ai_tasks,measurements,analytics,notifications,webhooks} \
-    --max-tasks-per-child=${CELERY_MAX_TASKS_PER_CHILD:-100} \
-    --without-gossip \
-    --without-mingle \
-    --events"]
+    "exec gunicorn -c gunicorn.conf.py backend.asgi:application"]
