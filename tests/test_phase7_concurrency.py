@@ -123,17 +123,9 @@ class TestPasswordResetIdempotency(TestCase):
         email = f"idemp_reset_{uuid.uuid4().hex[:8]}@fashionistar.io"
         _make_active_user(email=email, password="IdempReset#2026")
 
-        audit_calls = []
-        lock = threading.Lock()
-
-        def _mock_audit(*args, **kwargs):
-            with lock:
-                audit_calls.append(1)
-
         with patch(
-            "apps.authentication.apis.password_views.sync_views._audit_log",
-            side_effect=_mock_audit,
-        ), patch(
+            "apps.authentication.services.password_service.sync_service.auth_audit"
+        ) as mock_auth_audit, patch(
             "apps.common.managers.email.EmailManager.send_mail"
         ):
             client = APIClient()
@@ -155,9 +147,10 @@ class TestPasswordResetIdempotency(TestCase):
             )
 
         # Audit calls must be ≤ 3 (exactly 1 per request, no explosion)
+        call_count = mock_auth_audit.log_password_reset_requested.call_count
         self.assertLessEqual(
-            len(audit_calls), 3,
-            f"Audit log explosion: {len(audit_calls)} calls for 3 requests"
+            call_count, 3,
+            f"Audit log explosion: {call_count} calls for 3 requests"
         )
 
 
@@ -208,7 +201,7 @@ class TestConcurrentPasswordChangeAtomic(TestCase):
         lock = threading.Lock()
 
         with patch(
-            "apps.authentication.apis.password_views.sync_views._audit_log"
+            "apps.authentication.services.password_service.sync_service.auth_audit"
         ), patch(
             "apps.authentication.tasks.send_email_task.delay"
         ):
