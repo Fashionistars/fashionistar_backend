@@ -131,7 +131,9 @@ class TestHealthCheckConcurrency(TestCase):
 
 @override_settings(
     REST_FRAMEWORK={"DEFAULT_THROTTLE_CLASSES": [], "DEFAULT_THROTTLE_RATES": {}},
-    CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}},
+    # Use DummyCache so sequential presign calls generate fresh signatures (not cached).
+    # This class tests signature *uniqueness*, not caching behaviour.
+    CACHES={"default": {"BACKEND": "django.core.cache.backends.dummy.DummyCache"}},
     CELERY_TASK_ALWAYS_EAGER=True,
 )
 class TestCloudinaryPresign(TestCase):
