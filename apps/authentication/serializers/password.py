@@ -68,9 +68,8 @@ class PasswordResetRequestSerializer(serializers.Serializer):
             raise
         except Exception as exc:
             logger.warning(
-                "Password reset request validation error for %s: %s",
-                data.get("email_or_phone"), exc,
-                ~"Returning success response to prevent account enumeration."
+                "Password reset request validation error for %s: %s. Returning success response to prevent account enumeration.",
+                data.get("email_or_phone"), exc
             )            
             return data  # Always pass validation — prevents enumeration attacks by giving same response for existing vs non-existing users
 
