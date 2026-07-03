@@ -83,6 +83,7 @@ class TestWebhookRouting(TestCase):
             "secure_url": self.avatar_url,
             "resource_type": "image",
             "notification_type": "upload",
+            "created_at": timestamp,
         }
         
         # Act 1: First webhook
@@ -94,7 +95,7 @@ class TestWebhookRouting(TestCase):
         first_updated_at = self.user.updated_at
         
         # Act 2: Same webhook again (duplicate)
-        is_dup = is_duplicate(idempotency_key)
+        is_dup = is_duplicate(idempotency_key, check_database=True)
         if not is_dup:
             mark_processed(
                 idempotency_key=idempotency_key,
@@ -107,11 +108,11 @@ class TestWebhookRouting(TestCase):
             )
         
         # Replaying should detect as duplicate
-        assert is_duplicate(idempotency_key)
+        assert is_duplicate(idempotency_key, check_database=True)
         
         # Updated_at should not change
         self.user.refresh_from_db()
-        assert self.user.avatar == first_avatar
+        assert str(self.user.avatar) == str(first_avatar)
     
     def test_webhook_creates_audit_trail(self):
         """Webhook processing creates CloudinaryProcessedWebhook record."""
