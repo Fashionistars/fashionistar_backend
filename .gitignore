@@ -172,3 +172,6 @@ temp_interactive_push.bat
 # Oracle production secrets (NEVER COMMIT)
 .env.production
 .env.production.local
+fashionistar_backend_production
+fashionistar_backend_production.env
+fashionistar_backend_production*.env
