@@ -6,19 +6,17 @@
 # Services on Oracle (THIS FILE):
 #   nginx      — Reverse proxy + SSL termination (Let's Encrypt)
 #   api        — Django ASGI via Gunicorn + UvicornWorker  (separate API logs)
-#   redis      — Redis 7 (cache + Celery broker for Northflank workers)
 #   keepalive  — Oracle idle-prevention pinger (every 4 minutes)
+#
+# ❌ NO postgres container — uses Neon PostgreSQL (DATABASE_URL in .env.production)
+# ❌ NO redis container   — uses Aiven Redis (REDIS_URL=rediss://... in .env.production)
 #
 # Services on Northflank (northflank.json):
 #   celery_worker  — All background task queues  (separate Celery logs)
 #   celery_beat    — Celery Beat scheduler (cron job)
-#   managed_redis  — Northflank Redis addon (optional secondary broker)
 #
-# IMPORTANT:
-#   ❌ NO postgres container here — use your EXTERNAL production database
-#      (Neon, Supabase, Railway Postgres, or Oracle ADB) via DATABASE_URL
-#   ✅ Separate log volume for API logs (/app/logs/api/)
-#   ✅ Redis is the Celery broker — Northflank workers connect via REDIS_URL
+# Both API (Oracle) and Celery (Northflank) share the SAME Aiven Redis
+# for broker/cache — no cross-cloud Redis setup needed!
 #
 # Usage:
 #   docker compose -f docker-compose.production.yml up -d
@@ -61,42 +59,51 @@ services:
       retries: 3
 
   # ── Django ASGI API Gateway ─────────────────────────────────────────────────
+  # PORT=10000 (matches fashionistar_backend_production.env)
+  # Uses Aiven Redis (TLS rediss://) from .env.production — NO local Redis needed
+  # Uses Neon PostgreSQL (DATABASE_URL) from .env.production — NO local DB needed
   # Separate from Celery — has its own log volume (api_logs)
-  # All API request/error logs go to: /app/logs/api/
   api:
     image: ghcr.io/${GITHUB_REPOSITORY:-fashionistar-clothings/fashionistar_backend}/api:${IMAGE_TAG:-latest}
     container_name: fashionistar_api
     pull_policy: always
+    # Load ALL production secrets from .env.production (mirrors fashionistar_backend_production.env)
     env_file:
       - .env.production
     environment:
+      # ── Core Settings ───────────────────────────────────────────────────────
       - DJANGO_SETTINGS_MODULE=backend.config.production
-      - PORT=8001
-      # Oracle Cloud: 2 OCPUs → 4 Gunicorn workers (2×CPU formula for I/O-bound)
+      # PORT must be 10000 to match your fashionistar_backend_production.env
+      - PORT=10000
+      # ── Oracle Cloud VM: 2 OCPUs → 4 Gunicorn workers (2×CPU, I/O-bound) ──
       - GUNICORN_WORKERS=4
       - GUNICORN_TIMEOUT=300
       - GUNICORN_KEEPALIVE=75
       - GUNICORN_LOG_LEVEL=info
-      # Redis (local Oracle Redis — also exposed to Northflank Celery workers)
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
-      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
-      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/2
-      # Log to separate directory so API logs don't mix with Celery logs
+      # ── Updated Hosts — include Oracle domain ───────────────────────────────
+      - ALLOWED_HOSTS=api.fashionistar.net,fashionistar.net,fashionistar-frontend.vercel.app,localhost,127.0.0.1
+      - BACKEND_URL=https://api.fashionistar.net
+      - BACKEND_TUNNEL_URL=https://api.fashionistar.net
+      - SITE_URL=https://api.fashionistar.net
+      - HEALTH_URL_ENDPOINT=https://api.fashionistar.net/api/v1/health
+      # ── CORS / CSRF — include Oracle domain ────────────────────────────────
+      - CORS_ALLOWED_ORIGINS=https://fashionistar.net,https://fashionistar-frontend.vercel.app,https://api.fashionistar.net
+      - CSRF_TRUSTED_ORIGINS=https://fashionistar.net,https://fashionistar-frontend.vercel.app,https://api.fashionistar.net
+      # ── Log directory — separate from Celery ───────────────────────────────
       - LOG_DIR=/app/logs/api
     volumes:
       - static_files:/app/staticfiles
       - media_files:/app/mediafiles
-      # Dedicated API log volume — separate from Celery
+      # Dedicated API log volume — Celery logs are separate (on Northflank)
       - api_logs:/app/logs/api
-    depends_on:
-      redis:
-        condition: service_healthy
+    # No depends_on redis or postgres — both are external managed services
     restart: always
     deploy:
       resources:
         limits:
-          cpus: '1.5'
-          memory: 6G
+          # Oracle 2 OCPU / 12 GB RAM — reserve headroom for OS + logging
+          cpus: '1.8'
+          memory: 9G
         reservations:
           cpus: '0.5'
           memory: 2G
@@ -109,67 +116,22 @@ services:
         max-file: "10"
         tag: "fashionistar-api"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8001/health/"]
+      # PORT=10000 (matches production env)
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:10000/api/v1/health/"]
       interval: 30s
       timeout: 10s
-      start_period: 60s
-      retries: 3
-
-  # ── Redis 7 (Django Cache + Celery Broker) ───────────────────────────────────
-  # Also serves as the Celery broker that Northflank workers connect to.
-  # Northflank workers must use: CELERY_BROKER_URL=redis://:PASSWORD@<ORACLE_IP>:6379/1
-  # Ensure port 6379 is open in Oracle VCN Security List for Northflank IPs.
-  redis:
-    image: redis:7-alpine
-    container_name: fashionistar_redis
-    # Expose port 6379 publicly so Northflank Celery workers can connect as broker
-    ports:
-      - "6379:6379"
-    command: >
-      redis-server
-      --appendonly yes
-      --appendfsync everysec
-      --maxmemory 1gb
-      --maxmemory-policy allkeys-lru
-      --bind 0.0.0.0
-      --requirepass ${REDIS_PASSWORD}
-      --tcp-keepalive 300
-      --loglevel notice
-      --logfile /data/redis.log
-    volumes:
-      - redis_data:/data
-    restart: always
-    deploy:
-      resources:
-        limits:
-          cpus: '0.2'
-          memory: 1.2G
-        reservations:
-          cpus: '0.05'
-          memory: 256M
-    networks:
-      - fashionistar_net
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "20m"
-        max-file: "3"
-        tag: "fashionistar-redis"
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
-      interval: 10s
-      timeout: 5s
+      start_period: 90s
       retries: 5
 
   # ── Oracle Keep-Alive (Idle Prevention) ─────────────────────────────────────
   # Oracle reclaims Always Free instances if CPU < 10% for 7 consecutive days.
-  # This lightweight pinger prevents idle reclamation at zero CPU cost.
+  # This lightweight pinger on PORT=10000 prevents idle reclamation.
   keepalive:
     image: curlimages/curl:8-alpine
     container_name: fashionistar_keepalive
     command: >
       sh -c "while true; do
-        curl -fsS http://api:8001/health/ > /dev/null 2>&1 || true;
+        curl -fsS http://api:10000/api/v1/health/ > /dev/null 2>&1 || true;
         sleep 240;
       done"
     depends_on:
@@ -190,13 +152,11 @@ services:
 
 # ── Volumes ──────────────────────────────────────────────────────────────────
 volumes:
-  redis_data:
-    name: fashionistar_redis_data
   static_files:
     name: fashionistar_static_files
   media_files:
     name: fashionistar_media_files
-  # Dedicated API log volume (Django ASGI gateway logs only)
+  # Dedicated API log volume (Django ASGI gateway logs only — Celery logs on Northflank)
   api_logs:
     name: fashionistar_api_logs
     driver: local
