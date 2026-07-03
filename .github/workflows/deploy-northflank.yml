@@ -49,6 +49,10 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}/celery-worker
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
 
   # ── Job 1: Build Celery Worker Image (AMD64 — Northflank's platform) ─────────
