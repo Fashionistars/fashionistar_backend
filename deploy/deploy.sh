@@ -41,7 +41,7 @@ SSH_CMD="ssh -i $ORACLE_SSH_KEY -o StrictHostKeyChecking=no ubuntu@$ORACLE_HOST"
 health_check() {
     log_info "Running health check on $API_URL..."
     for i in 1 2 3 4 5; do
-        if curl -fsS --max-time 10 "$API_URL/health/" > /dev/null 2>&1; then
+        if curl -fsS --max-time 10 "$API_URL/api/v1/health/" > /dev/null 2>&1; then
             log_success "Health check passed! ✅"
             return 0
         fi
