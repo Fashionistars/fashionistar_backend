@@ -134,7 +134,7 @@ class TestPasswordResetIdempotency(TestCase):
             "apps.authentication.apis.password_views.sync_views._audit_log",
             side_effect=_mock_audit,
         ), patch(
-            "apps.authentication.services.password_service.sync_service.EmailManager.send_mail"
+            "apps.common.managers.email.EmailManager.send_mail"
         ):
             client = APIClient()
             statuses = []
