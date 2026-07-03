@@ -48,7 +48,7 @@ worker_class = "uvicorn.workers.UvicornWorker"
 # ─── Binding ───────────────────────────────────────────────────────────────────
 # Bind to all interfaces so Nginx/load-balancer can reach the container.
 # Override with GUNICORN_BIND env var in orchestration (Kubernetes, Render, AWS).
-bind = os.environ.get("GUNICORN_BIND", "0.0.0.0:8001")
+bind = os.environ.get("GUNICORN_BIND", f"0.0.0.0:{os.environ.get('PORT', '10000')}")
 
 # ─── Request timeouts ──────────────────────────────────────────────────────────
 # Timeout (seconds): kill and restart a worker that doesn't respond in time.
