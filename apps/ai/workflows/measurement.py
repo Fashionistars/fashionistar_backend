@@ -29,26 +29,26 @@ import logging
 from django.utils import timezone
 from langgraph.graph import StateGraph, END
 
+from typing import TypedDict, List, Dict, Any, Optional
+
 logger = logging.getLogger(__name__)
 
 
 # ── LangGraph state definition ──────────────────────────────────────────────────
 
-class MeasurementState(dict):
+class MeasurementState(TypedDict):
     """
     Typed state dictionary for the MeasurementWorkflow graph.
-
-    Keys:
-        session_id: str         BodyScanSession UUID
-        user_id: int            Owner user PK
-        user_height_cm: float   User-provided height in cm (required for calibration)
-        user_weight_kg: float   Optional user-provided weight in kg
-        landmarks: list         33 MediaPipe world landmarks from browser
-        scale_factor: float     Computed calibration factor
-        measurement_result: dict Full result from geometry.run_full_measurement_pipeline()
-        profile_id: str | None  Created MeasurementProfile ID
-        errors: list            Accumulated error messages
     """
+    session_id: str
+    user_id: int
+    user_height_cm: float
+    user_weight_kg: Optional[float]
+    landmarks: List[Dict[str, float]]
+    scale_factor: float
+    measurement_result: Dict[str, Any]
+    profile_id: Optional[str]
+    errors: List[str]
 
 
 # ── Workflow class ──────────────────────────────────────────────────────────────

@@ -32,29 +32,30 @@ import logging
 from typing import Any
 
 from django.utils import timezone
+from langgraph.graph import StateGraph, END
+
+from typing import TypedDict, List, Dict, Tuple, Any, Optional
 
 logger = logging.getLogger(__name__)
 
 # ── State definition ───────────────────────────────────────────────────────────
 
 
-class RecommendationState(dict):
+class RecommendationState(TypedDict):
     """
     Typed state dictionary for the RecommendationWorkflow graph.
-
-    Keys populated through the graph:
-        profile_id:       MeasurementProfile PK
-        user_id:          User PK
-        user_context:     Dict with user purchase history, preferences, etc.
-        measurements:     Dict of normalized body measurements in cm
-        candidate_products: List of Product dicts from candidate pool
-        user_embedding:   List[float] — FashionSigLIP embedding of user query
-        similar_products: List of (product_id, similarity_score) from pgvector
-        filtered_products: After size-fit filter applied
-        ranked_products:  Final ordered list with scores
-        recommendation_ids: List[int] — persisted product PKs
-        errors:           Accumulated error messages
     """
+    profile_id: str
+    user_id: int
+    user_context: Dict[str, Any]
+    measurements: Dict[str, Any]
+    candidate_products: List[Dict[str, Any]]
+    user_embedding: List[float]
+    similar_products: List[Tuple[int, float]]
+    filtered_products: List[Tuple[int, float]]
+    ranked_products: List[Tuple[int, float]]
+    recommendation_ids: List[int]
+    errors: List[str]
 
 
 # ── Main workflow class ────────────────────────────────────────────────────────
@@ -85,17 +86,79 @@ class RecommendationWorkflow:
     workflow_type = "recommendation"
     model_version = "marqo-FashionSigLIP-ViT-L-14"
 
+    def __init__(self):
+        """Initialize the workflow and build the LangGraph state machine."""
+        self.graph = self._build_graph()
+
+    def _build_graph(self) -> StateGraph:
+        """Build the LangGraph state machine with nodes and edges."""
+        workflow = StateGraph(RecommendationState)
+
+        # Add nodes
+        workflow.add_node("load_user_context", self._load_user_context)
+        workflow.add_node("load_measurement_profile", self._load_measurement_profile)
+        workflow.add_node("fetch_candidate_products", self._fetch_candidate_products)
+        workflow.add_node("embed_user_preferences", self._embed_user_preferences)
+        workflow.add_node("pgvector_similarity_search", self._pgvector_similarity_search)
+        workflow.add_node("apply_size_filter", self._apply_size_filter)
+        workflow.add_node("contextual_rerank", self._contextual_rerank)
+        workflow.add_node("persist_recommendations", self._persist_recommendations)
+
+        # Add edges
+        workflow.set_entry_point("load_user_context")
+        workflow.add_edge("load_user_context", "load_measurement_profile")
+        workflow.add_conditional_edges(
+            "load_measurement_profile",
+            self._should_continue_after_profile,
+            {
+                "continue": "fetch_candidate_products",
+                "fail": END
+            }
+        )
+        workflow.add_conditional_edges(
+            "fetch_candidate_products",
+            self._should_continue_after_candidates,
+            {
+                "continue": "embed_user_preferences",
+                "fail": END
+            }
+        )
+        workflow.add_edge("embed_user_preferences", "pgvector_similarity_search")
+        workflow.add_edge("pgvector_similarity_search", "apply_size_filter")
+        workflow.add_edge("apply_size_filter", "contextual_rerank")
+        workflow.add_edge("contextual_rerank", "persist_recommendations")
+        workflow.add_edge("persist_recommendations", END)
+
+        return workflow.compile()
+
+    def _should_continue_after_profile(self, state: dict) -> str:
+        """Check if profile was loaded successfully without errors."""
+        if state.get("errors"):
+            logger.warning(
+                "[RecommendationWorkflow] Aborted — profile not found: %s",
+                state["errors"],
+            )
+            return "fail"
+        return "continue"
+
+    def _should_continue_after_candidates(self, state: dict) -> str:
+        """Check if any candidate products exist."""
+        if not state.get("candidate_products"):
+            logger.info("[RecommendationWorkflow] No candidate products found; exiting.")
+            return "fail"
+        return "continue"
+
     # ─ Public entry point ──────────────────────────────────────────────────────
 
     def execute(self, input_data: dict) -> dict:
-        """Run the full recommendation pipeline end-to-end."""
+        """Run the full recommendation pipeline end-to-end using the compiled LangGraph."""
         from apps.ai.workflows.base import BaseWorkflow
 
         base = BaseWorkflow()
         base.workflow_type = self.workflow_type
         base.model_version = self.model_version
 
-        state: dict[str, Any] = {
+        state = {
             "profile_id":          input_data.get("profile_id"),
             "user_id":             int(input_data.get("user_id", 0)),
             "user_context":        {},
@@ -118,45 +181,19 @@ class RecommendationWorkflow:
         )
 
         try:
-            # ── Step 1: Load user context ───────────────────────────────────
-            state = self._load_user_context(state)
+            # Execute the LangGraph state machine
+            result = self.graph.invoke(state)
 
-            # ── Step 2: Load measurement profile ───────────────────────────
-            state = self._load_measurement_profile(state)
-            if state["errors"]:
-                logger.warning(
-                    "[RecommendationWorkflow] Aborted — profile not found: %s",
-                    state["errors"],
-                )
-                base.fail_execution("; ".join(state["errors"]))
-                return self._build_output(state)
-
-            # ── Step 3: Fetch candidate products ───────────────────────────
-            state = self._fetch_candidate_products(state)
-            if not state["candidate_products"]:
-                logger.info("[RecommendationWorkflow] No candidate products found; exiting.")
-                base.complete_execution({"recommendation_ids": []})
-                return self._build_output(state)
-
-            # ── Step 4: Embed user preferences ─────────────────────────────
-            state = self._embed_user_preferences(state)
-
-            # ── Step 5: pgvector similarity search ─────────────────────────
-            state = self._pgvector_similarity_search(state)
-
-            # ── Step 6: Size-fit filter ─────────────────────────────────────
-            state = self._apply_size_filter(state)
-
-            # ── Step 7: Contextual re-rank ──────────────────────────────────
-            state = self._contextual_rerank(state)
-
-            # ── Step 8: Persist recommendations ────────────────────────────
-            state = self._persist_recommendations(state)
-
-            base.complete_execution(output_snapshot={
-                "recommendation_count": len(state["recommendation_ids"]),
-                "top_product_ids": state["recommendation_ids"][:5],
-            })
+            # Update workflow execution tracking based on terminal state
+            if result.get("errors"):
+                base.fail_execution("; ".join(result["errors"]))
+            elif not result.get("candidate_products"):
+                base.complete_execution(output_snapshot={"recommendation_ids": []})
+            else:
+                base.complete_execution(output_snapshot={
+                    "recommendation_count": len(result["recommendation_ids"]),
+                    "top_product_ids": result["recommendation_ids"][:5],
+                })
 
         except Exception as exc:
             logger.exception(
@@ -165,8 +202,9 @@ class RecommendationWorkflow:
             )
             state["errors"].append(str(exc))
             base.fail_execution(exc)
+            result = state
 
-        return self._build_output(state)
+        return self._build_output(result)
 
     # ── Workflow nodes ─────────────────────────────────────────────────────────
 

@@ -27,6 +27,8 @@ python-decouple                 # settings.py: from decouple import config
 # ═══════════════════════════════════════════════════════════
 psycopg[binary,pool]                 # PostgreSQL adapter
 dj-database-url                 # DATABASE_URL parsing
+pgvector==0.3.0                 # Django pgvector adapter
+
 
 
 # ═══════════════════════════════════════════════════════════
