@@ -231,7 +231,7 @@ jobs:
             echo "⏳ Waiting for API health check..."
             for i in $(seq 1 12); do
               if docker compose -f docker-compose.production.yml exec -T api \
-                  curl -fsS http://127.0.0.1:8001/health/ > /dev/null 2>&1; then
+                  curl -fsS http://127.0.0.1:10000/api/v1/health/ > /dev/null 2>&1; then
                 echo "✅ API container healthy!"
                 break
               fi
@@ -266,7 +266,7 @@ jobs:
           sleep 15
           for i in 1 2 3 4 5; do
             echo "  Attempt $i/5..."
-            if curl -fsS https://api.fashionistar.net/health/; then
+            if curl -fsS https://api.fashionistar.net/api/v1/health/; then
               echo "✅ External health check PASSED!"
               exit 0
             fi

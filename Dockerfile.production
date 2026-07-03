@@ -52,7 +52,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_PROJECT_ENVIRONMENT=/opt/venv \
     PATH="/opt/venv/bin:$PATH" \
     DJANGO_SETTINGS_MODULE=backend.config.production \
-    PORT=8001 \
+    PORT=10000 \
     UVICORN_WORKERS=4 \
     UVICORN_KEEP_ALIVE=120 \
     UVICORN_WS=auto \
@@ -89,7 +89,7 @@ EXPOSE ${PORT}
 
 # Health check — polls /health/ endpoint to verify Django is responsive
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -fsS "http://127.0.0.1:${PORT}/health/" || exit 1
+    CMD curl -fsS "http://127.0.0.1:${PORT}/api/v1/health/" || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]
 
