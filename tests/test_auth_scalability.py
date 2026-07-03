@@ -375,7 +375,7 @@ class TestPasswordResetAtomicity(TestCase):
         client = APIClient()
         payload = {"password": "NewPass#2026!", "password2": "NewPass#2026!"}
 
-        with patch("apps.authentication.services.password_service.sync_service.EmailManager.send_mail"):
+        with patch("apps.common.managers.email.EmailManager.send_mail"):
             resp1 = client.post(f"/api/v1/password/reset-confirm/{uidb64}/{token}/", payload, format="json")
             resp2 = client.post(f"/api/v1/password/reset-confirm/{uidb64}/{token}/", payload, format="json")
 
