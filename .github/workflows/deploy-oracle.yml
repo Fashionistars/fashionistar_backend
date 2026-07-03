@@ -38,6 +38,10 @@ env:
   IMAGE_NAME: ${{ github.repository }}/api
   PYTHON_VERSION: "3.13"
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   # ── Job 1: Run tests before deploying ─────────────────────────────────────
   test:
@@ -83,7 +87,7 @@ jobs:
         run: pip install uv --quiet
 
       - name: Install dependencies
-        run: uv sync --frozen --no-dev
+        run: uv sync --frozen
 
       - name: Run critical test suite (fast — excludes E2E and stress)
         env:
