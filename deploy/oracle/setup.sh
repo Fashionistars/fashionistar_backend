@@ -13,7 +13,7 @@
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
-REPO_URL="https://github.com/FASHIONISTAR-CLOTHINGS/fashionistar_backend.git"
+REPO_URL="https://github.com/Fashionistars/fashionistar_backend.git"
 APP_DIR="/home/ubuntu/fashionistar_backend"
 
 echo "============================================="
@@ -61,12 +61,12 @@ docker compose version || sudo apt-get install -y docker-compose-plugin
 echo "🔒 [5/12] Configuring UFW firewall..."
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
-sudo ufw allow ssh           # Port 22
-sudo ufw allow 80/tcp        # HTTP
-sudo ufw allow 443/tcp       # HTTPS
-sudo ufw allow 6379/tcp      # Redis (Northflank Celery workers connect here)
-# WARNING: For extra security, restrict Redis port to Northflank IP ranges only:
-# sudo ufw allow from <NORTHFLANK_IP_RANGE> to any port 6379
+sudo ufw allow ssh           # Port 22 (SSH access)
+sudo ufw allow 80/tcp        # HTTP (redirect to HTTPS)
+sudo ufw allow 443/tcp       # HTTPS (Nginx reverse proxy)
+# NOTE: Port 6379 (Redis) is NOT opened — FASHIONISTAR uses Aiven Redis (TLS)
+#       over the public internet (rediss://...aivencloud.com:23100) — no local Redis.
+#       Northflank Celery workers also connect directly to Aiven Redis.
 echo "y" | sudo ufw enable
 sudo ufw status verbose
 
