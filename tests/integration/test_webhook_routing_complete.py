@@ -66,7 +66,7 @@ class TestWebhookRouting(TestCase):
         
         # Assert
         self.user.refresh_from_db()
-        assert self.user.avatar == self.avatar_url
+        assert str(self.user.avatar) == self.avatar_url
         assert metadata.is_valid
         assert metadata.model_target == ModelTarget.AVATAR
     
