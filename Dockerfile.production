@@ -1,15 +1,21 @@
-# ============================================================================
-# FASHIONISTAR — Production Dockerfile (Oracle Cloud ARM64 / Multi-arch)
-# ============================================================================
-# Target:     Oracle Cloud Always Free (VM.Standard.A1.Flex — linux/arm64)
-# Also works: linux/amd64 for local dev / CI
+# =============================================================================
+# FASHIONISTAR — Production Dockerfile (Hugging Face Spaces + Multi-Platform)
+# =============================================================================
+# Primary Target:  Hugging Face Spaces (Docker SDK — linux/amd64)
+# Also Works:      Northflank, Render, Railway, Oracle Cloud, local dev
 #
-# Build for Oracle (ARM64):
-#   docker buildx build --platform linux/arm64 -f Dockerfile.production -t fashionistar/api:latest .
+# Hugging Face Constraints (mandatory):
+#   ✓ Port must be 7860  (overridable via PORT env for other platforms)
+#   ✓ Run as non-root UID 1000 (appuser)
+#   ✓ No local disk writes — use Cloudinary/S3
 #
-# Build multi-arch (CI / GitHub Actions):
-#   docker buildx build --platform linux/arm64,linux/amd64 -f Dockerfile.production --push -t ghcr.io/ORG/REPO/api:latest .
-# ============================================================================
+# Build for HF Spaces (AMD64 — HF default):
+#   docker buildx build --platform linux/amd64 -f Dockerfile.production -t fashionistar/api:latest .
+#
+# Build multi-arch (for Oracle Cloud ARM64 + HF AMD64):
+#   docker buildx build --platform linux/arm64,linux/amd64 -f Dockerfile.production --push \
+#     -t ghcr.io/fashionistars/fashionistar_backend/api:latest .
+# =============================================================================
 
 ARG PYTHON_VERSION=3.13-slim
 ARG UV_IMAGE_TAG=0.8.22
@@ -46,18 +52,24 @@ RUN uv sync --frozen --no-dev --no-editable --no-install-project
 FROM python:${PYTHON_VERSION} AS runner
 
 # Runtime environment
+# PORT=7860 is mandatory for Hugging Face Spaces.
+# The entrypoint.sh auto-detects the platform and overrides PORT if needed
+# for other platforms (e.g. Northflank=8080, Render=10000, Oracle=10000).
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_LINK_MODE=copy \
     UV_PROJECT_ENVIRONMENT=/opt/venv \
     PATH="/opt/venv/bin:$PATH" \
     DJANGO_SETTINGS_MODULE=backend.config.production \
-    PORT=10000 \
-    UVICORN_WORKERS=4 \
-    UVICORN_KEEP_ALIVE=120 \
+    WORKING_ENVIRONMENT=production \
+    PORT=7860 \
     UVICORN_WS=auto \
-    # ARM64 Oracle Cloud: use 4 workers for 2 OCPUs (I/O-bound formula)
-    GUNICORN_WORKERS=4
+    GUNICORN_WORKERS=3 \
+    GUNICORN_TIMEOUT=900 \
+    GUNICORN_KEEPALIVE=900 \
+    GUNICORN_MAX_REQUESTS=1000 \
+    GUNICORN_MAX_REQUESTS_JITTER=100 \
+    GUNICORN_LOG_LEVEL=info
 
 # Runtime system dependencies only (no build tools — keeps image small)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -69,7 +81,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=uvbin /uv /uvx /bin/
 COPY --from=builder /opt/venv /opt/venv
 
-# Create non-root app user (security best practice)
+# Create non-root app user:
+# UID 1000 is MANDATORY for Hugging Face Spaces [HF Platform Requirement].
+# Also matches best practices for all other platforms.
 RUN useradd --create-home --uid 1000 --shell /bin/sh appuser && \
     mkdir -p /app/staticfiles /app/media /app/logs && \
     chown -R appuser:appuser /app
@@ -79,22 +93,23 @@ WORKDIR /app
 # Copy application source (after deps — maximizes layer cache hits)
 COPY --chown=appuser:appuser . .
 
-# Copy entrypoint and make executable
+# Copy entrypoint and make executable (must be done as root before USER switch)
 COPY --chown=appuser:appuser entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 USER appuser
 
-EXPOSE ${PORT}
+# Expose port 7860 (Hugging Face standard).
+# For other platforms, Docker ignores EXPOSE — actual port is set via PORT env var.
+EXPOSE 7860
 
-# Health check — polls /health/ endpoint to verify Django is responsive
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -fsS "http://127.0.0.1:${PORT}/api/v1/health/" || exit 1
+# Health check — polls /api/v1/health/ endpoint
+HEALTHCHECK --interval=30s --timeout=15s --start-period=90s --retries=3 \
+    CMD curl -fsS "http://127.0.0.1:${PORT:-7860}/api/v1/health/" || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]
 
-# Production: Gunicorn + UvicornWorker (process manager + async event loop)
-# Gunicorn handles: graceful restarts, worker supervision, SIGTERM handling
-# UvicornWorker handles: async I/O, WebSockets, ASGI protocol
-CMD ["sh", "-c", \
-    "exec gunicorn -c gunicorn.conf.py backend.asgi:application"]
+# Default command: start the production API server.
+# The entrypoint.sh auto-detects platform + port.
+# For Celery: override with CMD ["celery-worker"] or CMD ["celery-beat"]
+CMD ["api"]

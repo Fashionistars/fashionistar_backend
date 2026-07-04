@@ -1,0 +1,226 @@
+name: 🤗 Deploy API to Hugging Face Spaces (Production)
+
+# =============================================================================
+# Deploys the FASHIONISTAR Django ASGI API to Hugging Face Spaces
+#
+# Triggered: push to main (any Python/Docker/config changes)
+# Target:    huggingface.co/spaces/zichdan1999/fashionistar-api (Docker SDK)
+# Port:      7860 (Hugging Face mandatory — handled in entrypoint.sh)
+# User:      UID 1000 (appuser — HF mandatory)
+# Hardware:  CPU basic • 2 vCPU • 16GB RAM (FREE)
+#
+# Strategy:
+#   1. Checkout code from GitHub
+#   2. Add HF README.md header (Space metadata: title, emoji, sdk, port)
+#   3. Push entire repository to HF Spaces git endpoint
+#   4. Hugging Face auto-builds the Docker image from Dockerfile.production
+#   5. HF exposes the service at: https://zichdan1999-fashionistar-api.hf.space
+#
+# Secrets required:
+#   HF_TOKEN        — Hugging Face access token (write access to space)
+#   ALLOWED_HOSTS   — Comma-separated list of allowed Django hosts (adds HF URL)
+#
+# HF Space URL: https://zichdan1999-fashionistar-api.hf.space
+# =============================================================================
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**.py'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'Dockerfile.production'
+      - 'entrypoint.sh'
+      - 'gunicorn.conf.py'
+      - 'backend/**'
+      - 'apps/**'
+      - '.github/workflows/deploy-hf.yml'
+  workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: 'Force full rebuild on Hugging Face'
+        required: false
+        default: 'false'
+        type: boolean
+      space_id:
+        description: 'Hugging Face Space ID (username/space-name)'
+        required: false
+        default: 'fashionistar/fashionistar-api'
+
+env:
+  HF_SPACE_ID: ${{ github.event.inputs.space_id || 'fashionistar/fashionistar-api' }}
+  HF_SPACE_URL: 'https://fashionistar-fashionistar-api.hf.space'
+
+permissions:
+  contents: read
+
+jobs:
+
+  # ── Job 1: Push code to Hugging Face Spaces ────────────────────────────────
+  deploy-to-hf:
+    name: 🚀 Push to Hugging Face Spaces
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: false
+
+      # ── Configure git for HF push ─────────────────────────────────────────
+      - name: Configure git
+        run: |
+          git config --global user.email "fashionistar.home.beauty@gmail.com"
+          git config --global user.name "FASHIONISTAR CI/CD"
+          git config --global init.defaultBranch main
+
+      # ── Add Hugging Face Space README.md (Space config header) ────────────
+      # The README.md must contain YAML front-matter for HF Space metadata.
+      # This overrides any local README with the correct HF Space configuration.
+      - name: Prepare HF Space README.md
+        run: |
+          cat > README.md << 'HFREADME'
+          ---
+          title: FASHIONISTAR API Gateway
+          emoji: 👗
+          colorFrom: purple
+          colorTo: pink
+          sdk: docker
+          pinned: true
+          license: mit
+          app_port: 7860
+          short_description: FASHIONISTAR AI Fashion Platform — Django ASGI API
+          ---
+
+          # 🎀 FASHIONISTAR AI — Django API Gateway
+
+          **Production ASGI Backend for the FASHIONISTAR AI Fashion Platform**
+
+          ## API Endpoints
+
+          | Endpoint | Description |
+          |----------|-------------|
+          | `/api/v1/health/` | Health check |
+          | `/api/v1/products/` | Product catalogue |
+          | `/api/v1/measurements/` | AI body measurements |
+          | `/api/v1/orders/` | Order management |
+          | `/api/docs/` | OpenAPI Swagger UI |
+
+          ## Tech Stack
+
+          - **Framework**: Django 6.0 LTS + Django Ninja (ASGI)
+          - **Server**: Gunicorn + UvicornWorker (3 workers)
+          - **Database**: Neon Serverless PostgreSQL 17
+          - **Cache/Queue**: Redis (Northflank managed)
+          - **Storage**: Cloudinary (media files — HF disk is ephemeral)
+          - **Auth**: JWT + Google OAuth
+
+          ## Service Status
+
+          - 🟢 **API**: Running on port 7860
+          - 🟢 **Celery Worker**: Hosted on Northflank
+          - 🟢 **Celery Beat**: Hosted on Northflank
+          HFREADME
+
+          echo "✅ README.md prepared for Hugging Face"
+
+      # ── Rename Dockerfile.production → Dockerfile for HF ─────────────────
+      # HF Docker SDK looks for "Dockerfile" at the repo root.
+      # We copy Dockerfile.production → Dockerfile for the HF push.
+      - name: Prepare Dockerfile for HF Spaces
+        run: |
+          cp Dockerfile.production Dockerfile
+          # Set PORT=7860 in Dockerfile ENV just to be explicit
+          echo "✅ Dockerfile prepared from Dockerfile.production"
+
+      # ── Push to Hugging Face Spaces ───────────────────────────────────────
+      - name: Push to Hugging Face Spaces
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          echo "🤗 Pushing to Hugging Face Spaces..."
+          echo "   Space: ${{ env.HF_SPACE_ID }}"
+          echo "   Commit: ${{ github.sha }}"
+
+          # Add HF remote
+          git remote add huggingface "https://fashionistar:${HF_TOKEN}@huggingface.co/spaces/${{ env.HF_SPACE_ID }}"
+
+          # Stage all changes (including the new Dockerfile + README.md)
+          git add -A
+          git commit -m "🚀 Deploy: $(echo ${{ github.sha }} | head -c 7) - $(git log -1 --pretty=%s)" --allow-empty
+
+          # Force push to HF Spaces main branch (HF rebuilds on every push)
+          git push huggingface main --force
+
+          echo "✅ Code pushed to Hugging Face!"
+          echo "   HF will now build the Docker image. Build takes ~5-10 minutes."
+          echo "   Space URL: ${{ env.HF_SPACE_URL }}"
+
+      # ── Wait for HF Space to come online ─────────────────────────────────
+      - name: Wait for HF Space health check
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          echo "⏳ Waiting for Hugging Face Space to build and start (up to 10 minutes)..."
+          HEALTH_URL="${{ env.HF_SPACE_URL }}/api/v1/health/"
+          MAX_ATTEMPTS=40
+          SLEEP_INTERVAL=15
+
+          for i in $(seq 1 $MAX_ATTEMPTS); do
+            echo "  Attempt $i/$MAX_ATTEMPTS — checking $HEALTH_URL"
+
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+              --connect-timeout 10 \
+              --max-time 20 \
+              "$HEALTH_URL" || echo "000")
+
+            echo "  HTTP Status: $HTTP_CODE"
+
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "🎉 FASHIONISTAR API is LIVE on Hugging Face!"
+              echo "   URL: ${{ env.HF_SPACE_URL }}"
+              echo "   Health: $HEALTH_URL"
+              break
+            elif [ "$HTTP_CODE" = "503" ]; then
+              echo "  Space is building (503)... waiting ${SLEEP_INTERVAL}s"
+            elif [ "$HTTP_CODE" = "000" ]; then
+              echo "  Space not yet reachable... waiting ${SLEEP_INTERVAL}s"
+            else
+              echo "  Unexpected status $HTTP_CODE... waiting ${SLEEP_INTERVAL}s"
+            fi
+
+            sleep $SLEEP_INTERVAL
+          done
+
+          # Final check
+          FINAL_HTTP=$(curl -s -o /dev/null -w "%{http_code}" \
+            --connect-timeout 10 \
+            --max-time 20 \
+            "$HEALTH_URL" || echo "000")
+
+          if [ "$FINAL_HTTP" != "200" ]; then
+            echo "⚠️  Space may still be starting (HTTP $FINAL_HTTP)."
+            echo "   Check: https://huggingface.co/spaces/${{ env.HF_SPACE_ID }}"
+            # Don't fail — HF build can take longer
+          fi
+
+      # ── Print deployment summary ──────────────────────────────────────────
+      - name: Deployment summary
+        if: always()
+        run: |
+          echo ""
+          echo "════════════════════════════════════════════════"
+          echo "  🎀 FASHIONISTAR HF Deployment Summary"
+          echo "════════════════════════════════════════════════"
+          echo "  Space ID:     ${{ env.HF_SPACE_ID }}"
+          echo "  Space URL:    ${{ env.HF_SPACE_URL }}"
+          echo "  Health URL:   ${{ env.HF_SPACE_URL }}/api/v1/health/"
+          echo "  API Docs:     ${{ env.HF_SPACE_URL }}/api/docs/"
+          echo "  Commit:       ${{ github.sha }}"
+          echo "  Triggered by: ${{ github.actor }}"
+          echo "  HF Build:     https://huggingface.co/spaces/${{ env.HF_SPACE_ID }}"
+          echo "  NF Dashboard: https://app.northflank.com/t/fashionistars-team/project/fashionistar"
+          echo "════════════════════════════════════════════════"

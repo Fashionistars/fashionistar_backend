@@ -1,17 +1,22 @@
-# ============================================================================
-# FASHIONISTAR — Celery Worker Dockerfile (Northflank / Multi-arch)
-# ============================================================================
-# Target:     Northflank Free Sandbox (linux/amd64 — Northflank's default)
-# Also works: linux/arm64 if Northflank ever supports ARM
+# =============================================================================
+# FASHIONISTAR — Celery Worker Dockerfile (Northflank + Multi-Platform)
+# =============================================================================
+# Primary Target:  Northflank Free Sandbox (linux/amd64)
+# Also Works:      Render, Railway, GCP Cloud Run Jobs, local dev
 #
 # Celery queues handled:
 #   - default          : General async tasks
-#   - ai_tasks         : AI/ML measurement computation
+#   - ai_tasks         : AI/ML body measurement computation
 #   - measurements     : Body measurement processing
 #   - analytics        : Reporting & aggregation
 #   - notifications    : Email / SMS / Push
 #   - webhooks         : Incoming webhook processing
-# ============================================================================
+#
+# Start modes (via CMD or entrypoint arg):
+#   celery-worker   → Full Celery worker (default)
+#   celery-beat     → Celery Beat scheduler only
+#   celery-all      → Worker + Beat combined (saves resources on small tiers)
+# =============================================================================
 
 ARG PYTHON_VERSION=3.13-slim
 ARG UV_IMAGE_TAG=0.8.22
@@ -48,12 +53,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_PROJECT_ENVIRONMENT=/opt/venv \
     PATH="/opt/venv/bin:$PATH" \
     DJANGO_SETTINGS_MODULE=backend.config.production \
-    # Celery concurrency: 4 workers per container (tune to Northflank limits)
+    WORKING_ENVIRONMENT=production \
+    # Celery concurrency: 4 workers per container (tune to Northflank free limits)
     CELERY_CONCURRENCY=4 \
     # Queues this worker handles
     CELERY_QUEUES=default,ai_tasks,measurements,analytics,notifications,webhooks \
     # Prevent worker process from accumulating memory leaks
-    CELERY_MAX_TASKS_PER_CHILD=100
+    CELERY_MAX_TASKS_PER_CHILD=100 \
+    CELERY_LOG_LEVEL=info
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
@@ -64,7 +71,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=uvbin /uv /uvx /bin/
 COPY --from=builder /opt/venv /opt/venv
 
-# Create non-root user
+# Create non-root user (UID 1000 — matches Hugging Face + general best practice)
 RUN useradd --create-home --uid 1000 --shell /bin/sh appuser && \
     mkdir -p /app/staticfiles /app/media /app/logs && \
     chown -R appuser:appuser /app
@@ -78,21 +85,10 @@ RUN chmod +x /entrypoint.sh
 
 USER appuser
 
-# Celery worker has no HTTP port — it only connects outbound to Redis broker
-# Northflank handles port 0 for worker-type services
+# Celery worker has no HTTP port — only connects outbound to Redis broker
+# No EXPOSE needed for worker-type services (Northflank handles this correctly)
 
 ENTRYPOINT ["/entrypoint.sh"]
 
-# Celery worker command
-# --without-gossip --without-mingle: disable inter-worker discovery (saves resources)
-# --max-tasks-per-child: prevent memory leaks in long-running workers
-# -Q: consume all FASHIONISTAR task queues
-CMD ["sh", "-c", \
-    "exec celery -A backend worker \
-    --loglevel=info \
-    --concurrency=${CELERY_CONCURRENCY:-4} \
-    -Q ${CELERY_QUEUES:-default,ai_tasks,measurements,analytics,notifications,webhooks} \
-    --max-tasks-per-child=${CELERY_MAX_TASKS_PER_CHILD:-100} \
-    --without-gossip \
-    --without-mingle \
-    --events"]
+# Default: Celery worker mode. Override with "celery-beat" for the Beat scheduler.
+CMD ["celery-worker"]

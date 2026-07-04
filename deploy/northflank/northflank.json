@@ -1,0 +1,123 @@
+{
+  "$schema": "https://schema.northflank.com/v1/northflank-spec",
+  "apiVersion": "v1",
+  "spec": {
+    "kind": "Spec",
+    "spec": {
+      "projectId": "fashionistar-backend",
+      "services": [
+        {
+          "apiVersion": "v1",
+          "spec": {
+            "kind": "DeploymentService",
+            "metadata": {
+              "name": "fashionistar-celery-worker",
+              "description": "FASHIONISTAR Celery Worker — handles AI/ML, notifications, webhooks queues",
+              "projectId": "fashionistar-backend"
+            },
+            "spec": {
+              "deployment": {
+                "docker": {
+                  "buildArguments": {},
+                  "configType": "customDockerfile",
+                  "dockerFilePath": "Dockerfile.celery",
+                  "dockerWorkDir": "/"
+                },
+                "instances": 1,
+                "internal": {
+                  "id": "",
+                  "repo": "fashionistar_backend",
+                  "branch": "main"
+                },
+                "regions": ["europe-west"],
+                "storage": {
+                  "ephemeralStorage": {
+                    "storageSize": 1024
+                  }
+                }
+              },
+              "runtimeEnvironment": {
+                "from": [
+                  {
+                    "inheritedSecretRef": {
+                      "id": "production-secrets"
+                    }
+                  }
+                ],
+                "variables": [
+                  {
+                    "key": "CELERY_CONCURRENCY",
+                    "value": "4"
+                  },
+                  {
+                    "key": "CELERY_QUEUES",
+                    "value": "default,ai_tasks,measurements,analytics,notifications,webhooks"
+                  },
+                  {
+                    "key": "CELERY_LOG_LEVEL",
+                    "value": "info"
+                  },
+                  {
+                    "key": "NORTHFLANK_SERVICE_ID",
+                    "value": "fashionistar-celery-worker"
+                  }
+                ]
+              },
+              "billing": {
+                "deploymentPlan": "nf-compute-10"
+              }
+            }
+          }
+        },
+        {
+          "apiVersion": "v1",
+          "spec": {
+            "kind": "CronJob",
+            "metadata": {
+              "name": "fashionistar-celery-beat",
+              "description": "FASHIONISTAR Celery Beat — periodic task scheduler",
+              "projectId": "fashionistar-backend"
+            },
+            "spec": {
+              "runOnStartup": true,
+              "concurrencyPolicy": "Forbid",
+              "activeDeadlineSeconds": 3600,
+              "schedule": "* * * * *",
+              "deployment": {
+                "docker": {
+                  "buildArguments": {},
+                  "configType": "customDockerfile",
+                  "dockerFilePath": "Dockerfile.celery",
+                  "dockerWorkDir": "/"
+                },
+                "internal": {
+                  "id": "",
+                  "repo": "fashionistar_backend",
+                  "branch": "main"
+                }
+              },
+              "runtimeEnvironment": {
+                "from": [
+                  {
+                    "inheritedSecretRef": {
+                      "id": "production-secrets"
+                    }
+                  }
+                ],
+                "variables": [
+                  {
+                    "key": "NORTHFLANK_SERVICE_ID",
+                    "value": "fashionistar-celery-beat"
+                  }
+                ]
+              },
+              "runtimeCommand": {
+                "cmd": ["celery-beat"]
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,5 +1,18 @@
 steps:
+# Step 1: Build the Django/Gunicorn/Uvicorn image
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'europe-west1-docker.pkg.dev/fashionistar-498122/fashionistar-repo/api:latest', '-f', 'Dockerfile.backend', '.']
+
+# Step 2: Build the Celery image
 - name: 'gcr.io/cloud-builders/docker'
   args: ['build', '-t', 'europe-west1-docker.pkg.dev/fashionistar-498122/fashionistar-repo/celery:latest', '-f', 'Dockerfile.celery', '.']
+
+# Step 3: Build the Redis image
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'europe-west1-docker.pkg.dev/fashionistar-498122/fashionistar-repo/redis:latest', '-f', 'Dockerfile.redis', '.']
+
+# Step 4: Push all images
 images:
+- 'europe-west1-docker.pkg.dev/fashionistar-498122/fashionistar-repo/api:latest'
 - 'europe-west1-docker.pkg.dev/fashionistar-498122/fashionistar-repo/celery:latest'
+- 'europe-west1-docker.pkg.dev/fashionistar-498122/fashionistar-repo/redis:latest'
