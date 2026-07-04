@@ -255,7 +255,7 @@ case "$COMMAND" in
             --worker-class uvicorn.workers.UvicornWorker \
             --bind "0.0.0.0:${PORT}" \
             --timeout "${GUNICORN_TIMEOUT:-900}" \
-            --keepalive "${GUNICORN_KEEPALIVE:-900}" \
+            --keep-alive "${GUNICORN_KEEPALIVE:-900}" \
             --max-requests "${GUNICORN_MAX_REQUESTS:-1000}" \
             --max-requests-jitter "${GUNICORN_MAX_REQUESTS_JITTER:-100}" \
             --preload \
