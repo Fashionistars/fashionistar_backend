@@ -141,21 +141,34 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          echo "🤗 Pushing to Hugging Face Spaces..."
+          echo "🤗 Preparing clean deployment tree..."
           echo "   Space: ${{ env.HF_SPACE_ID }}"
           echo "   Commit: ${{ github.sha }}"
 
-          # Add HF remote
-          git remote add huggingface "https://__token__:${HF_TOKEN}@huggingface.co/spaces/${{ env.HF_SPACE_ID }}"
-
-          # Stage all changes (including the new Dockerfile + README.md)
+          # Create a clean deployment folder outside of the checked out git tree
+          mkdir -p ../hf_deploy
+          
+          # Copy all files to the clean folder, excluding .git, .github, and other system folders
+          rsync -av --exclude='.git' --exclude='.github' --exclude='.venv' --exclude='node_modules' --exclude='logs' ./ ../hf_deploy/
+          
+          # Move to the clean directory
+          cd ../hf_deploy
+          
+          # Initialize a completely clean repository with NO history
+          git init
+          git config user.name "FASHIONISTAR CI/CD"
+          git config user.email "fashionistar.home.beauty@gmail.com"
+          git checkout -b main
+          
+          # Commit the clean files
           git add -A
-          git commit -m "🚀 Deploy: $(echo ${{ github.sha }} | head -c 7) - $(git log -1 --pretty=%s)" --allow-empty
-
-          # Force push to HF Spaces main branch (HF rebuilds on every push)
+          git commit -m "🚀 Deploy: $(echo ${{ github.sha }} | head -c 7) - Clean Orphan Build"
+          
+          # Add Hugging Face remote and force push to main
+          git remote add huggingface "https://__token__:${HF_TOKEN}@huggingface.co/spaces/${{ env.HF_SPACE_ID }}"
           git push huggingface main --force
 
-          echo "✅ Code pushed to Hugging Face!"
+          echo "✅ Code pushed to Hugging Face successfully!"
           echo "   HF will now build the Docker image. Build takes ~5-10 minutes."
           echo "   Space URL: ${{ env.HF_SPACE_URL }}"
 
