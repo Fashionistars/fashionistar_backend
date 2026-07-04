@@ -46,11 +46,11 @@ on:
       space_id:
         description: 'Hugging Face Space ID (username/space-name)'
         required: false
-        default: 'fashionistar/fashionistar-api'
+        default: 'fashionistar/fashionistar-api-v2'
 
 env:
-  HF_SPACE_ID: ${{ github.event.inputs.space_id || 'fashionistar/fashionistar-api' }}
-  HF_SPACE_URL: 'https://fashionistar-fashionistar-api.hf.space'
+  HF_SPACE_ID: ${{ github.event.inputs.space_id || 'fashionistar/fashionistar-api-v2' }}
+  HF_SPACE_URL: 'https://fashionistar-fashionistar-api-v2.hf.space'
 
 permissions:
   contents: read

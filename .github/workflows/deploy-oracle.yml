@@ -17,20 +17,20 @@ on:
   push:
     branches: [main]
     paths:
-      - '**.py'
-      - 'pyproject.toml'
-      - 'uv.lock'
-      - 'Dockerfile.production'
-      - 'gunicorn.conf.py'
-      - 'entrypoint.sh'
-      - 'deploy/**'
-      - '.github/workflows/deploy-oracle.yml'
-  workflow_dispatch:  # Allow manual trigger from GitHub UI
+      - "**.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "Dockerfile.production"
+      - "gunicorn.conf.py"
+      - "entrypoint.sh"
+      - "deploy/**"
+      - ".github/workflows/deploy-oracle.yml"
+  workflow_dispatch: # Allow manual trigger from GitHub UI
     inputs:
       force_rebuild:
-        description: 'Force Docker image rebuild (skip cache)'
+        description: "Force Docker image rebuild (skip cache)"
         required: false
-        default: 'false'
+        default: "false"
         type: boolean
 
 env:

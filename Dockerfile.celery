@@ -42,7 +42,8 @@ COPY --from=uvbin /uv /uvx /bin/
 
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-editable --no-install-project
+RUN uv sync --frozen --no-dev --no-editable --no-install-project && \
+    uv pip uninstall -y torch torchvision mediapipe open-clip-torch sentence-transformers opencv-python-headless opencv-contrib-python nvidia-cuda-nvrtc-cu12 nvidia-cuda-runtime-cu12 nvidia-cuda-cupti-cu12 nvidia-cudnn-cu12 nvidia-cublas-cu12 nvidia-cufft-cu12 nvidia-curand-cu12 nvidia-cusolver-cu12 nvidia-cusparse-cu12 nvidia-nccl-cu12 nvidia-nvtx-cu12 nvidia-nvjitlink-cu12 triton
 
 # ── Stage 3: runtime ─────────────────────────────────────────────────────────
 FROM python:${PYTHON_VERSION} AS runner
