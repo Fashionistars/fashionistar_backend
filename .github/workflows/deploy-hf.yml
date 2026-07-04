@@ -148,8 +148,8 @@ jobs:
           # Create a clean deployment folder outside of the checked out git tree
           mkdir -p ../hf_deploy
           
-          # Copy all files to the clean folder, excluding .git, .github, and other system folders
-          rsync -av --exclude='.git' --exclude='.github' --exclude='.venv' --exclude='node_modules' --exclude='logs' ./ ../hf_deploy/
+          # Copy all files to the clean folder, excluding .git, .git_disabled, .github, and other system folders
+          rsync -av --exclude='.git' --exclude='.git_disabled' --exclude='.github' --exclude='.venv' --exclude='node_modules' --exclude='logs' --exclude='.pytest_cache' --exclude='.uv-cache' ./ ../hf_deploy/
           
           # Move to the clean directory
           cd ../hf_deploy
