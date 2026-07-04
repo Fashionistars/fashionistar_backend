@@ -217,3 +217,70 @@ PUBLIC/*
 public/*
 media/*
 staticfiles/*
+
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+
+# Ignore compiled Python bytecode
+*.py[codz]
+__pycache__/
+*.pyc
+
+# Ignore virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Ignore IDE files
+.idea/
+.vscode/
+
+# Ignore logs
+*.log
+logs/
+
+# Ignore database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Ignore temporary files
+*.tmp
+*.temp
+
+# Ignore requirements files (only lock if you want reproducibility)
+#requirements.txt
+#requirements/*.txt
+
+
+
+# Ignore Docker files
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Ignore static and media files
+/static/
+/media/
+
+# Ignore Python cache
+__pycache__/
+*.pyc
+
+# Ignore test reports
+.coverage
+htmlcov/
+.tox/
+
+# Ignore environment files (CRITICAL - Never commit secrets)
+.env
+.env.*.local
+
+# Ignore IDE settings
+.idea/
+.vscode/
+*.swp
