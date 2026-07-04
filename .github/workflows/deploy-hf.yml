@@ -149,7 +149,7 @@ jobs:
           mkdir -p ../hf_deploy
           
           # Copy all files to the clean folder, excluding .git, .git_disabled, .github, and other system folders
-          rsync -av --exclude='.git' --exclude='.git_disabled' --exclude='.github' --exclude='.venv' --exclude='node_modules' --exclude='logs' --exclude='.pytest_cache' --exclude='.uv-cache' ./ ../hf_deploy/
+          rsync -av --exclude='.git' --exclude='.git_disabled' --exclude='.github' --exclude='.venv' --exclude='node_modules' --exclude='logs' --exclude='.pytest_cache' --exclude='.uv-cache' --exclude='staticfiles' --exclude='scratch' ./ ../hf_deploy/
           
           # Move to the clean directory
           cd ../hf_deploy
