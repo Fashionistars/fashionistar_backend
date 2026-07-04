@@ -148,8 +148,41 @@ jobs:
           # Create a clean deployment folder outside of the checked out git tree
           mkdir -p ../hf_deploy
           
-          # Copy all files to the clean folder, excluding .git, .git_disabled, .github, and other system folders
-          rsync -av --exclude='.git' --exclude='.git_disabled' --exclude='.github' --exclude='.venv' --exclude='node_modules' --exclude='logs' --exclude='.pytest_cache' --exclude='.uv-cache' --exclude='staticfiles' --exclude='scratch' ./ ../hf_deploy/
+          # Copy all files to the clean folder, excluding system, cached, and binary files
+          rsync -av \
+            --exclude='.git' \
+            --exclude='.git_disabled' \
+            --exclude='.github' \
+            --exclude='.venv' \
+            --exclude='node_modules' \
+            --exclude='logs' \
+            --exclude='.pytest_cache' \
+            --exclude='.uv-cache' \
+            --exclude='staticfiles' \
+            --exclude='scratch' \
+            --exclude='media' \
+            --exclude='public' \
+            --exclude='db.sqlite3' \
+            --exclude='*.sqlite3' \
+            --exclude='*.db' \
+            --exclude='*.png' \
+            --exclude='*.jpg' \
+            --exclude='*.jpeg' \
+            --exclude='*.webp' \
+            --exclude='*.ico' \
+            --exclude='*.gif' \
+            --exclude='*.ttf' \
+            --exclude='*.woff' \
+            --exclude='*.woff2' \
+            --exclude='*.eot' \
+            --exclude='*.zip' \
+            --exclude='*.gz' \
+            --exclude='*.tar' \
+            --exclude='*.tgz' \
+            --exclude='*.exe' \
+            --exclude='*.dll' \
+            --exclude='*.so' \
+            ./ ../hf_deploy/
           
           # Move to the clean directory
           cd ../hf_deploy
