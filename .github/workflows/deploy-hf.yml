@@ -193,8 +193,9 @@ jobs:
           git config user.email "fashionistar.home.beauty@gmail.com"
           git checkout -b main
           
-          # Commit the clean files
+          # Commit the clean files (force-adding Dockerfile and .dockerignore which are ignored in main repo gitignore)
           git add -A
+          git add -f Dockerfile .dockerignore || true
           git commit -m "🚀 Deploy: $(echo ${{ github.sha }} | head -c 7) - Clean Orphan Build"
           
           # Add Hugging Face remote and force push to main
