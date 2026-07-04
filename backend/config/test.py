@@ -26,8 +26,9 @@ else:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': ':memory:',
+            'NAME': 'file:sharedmem?mode=memory&cache=shared',
             'OPTIONS': {
+                'uri': True,
                 'timeout': 60,
             }
         }

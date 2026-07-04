@@ -91,6 +91,7 @@ jobs:
 
       - name: Run critical test suite (fast — excludes E2E and stress)
         env:
+          FORCE_DB: postgres
           DATABASE_URL: postgres://fashionistar_test:test_password_ci@localhost:5432/fashionistar_test
           REDIS_URL: redis://localhost:6379/0
           CELERY_BROKER_URL: redis://localhost:6379/1
