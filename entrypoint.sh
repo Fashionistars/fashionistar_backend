@@ -45,16 +45,16 @@ log_section() { echo -e "\n${BOLD}${CYAN}═════════════
 detect_platform() {
     if [ -n "${SPACE_ID:-}" ] || [ -n "${SPACE_AUTHOR_NAME:-}" ]; then
         echo "huggingface"
-    elif [ -n "${NORTHFLANK_APP_ID:-}" ] || [ -n "${NORTHFLANK_SERVICE_ID:-}" ]; then
+    elif env | grep -q '^NORTHFLANK_'; then
         echo "northflank"
-    elif [ -n "${IS_RENDER_ENV:-}" ] || [ -n "${RENDER:-}" ]; then
+    elif [ -n "${RENDER:-}" ] || [ -n "${IS_RENDER_ENV:-}" ]; then
         echo "render"
+    elif [ "${PORT:-}" = "10000" ] || [ "${ORACLE_CLOUD:-}" = "true" ] || [ -n "${ORACLE_CLOUD_INSTANCE_ID:-}" ]; then
+        echo "oracle"
     elif [ -n "${RAILWAY_ENVIRONMENT:-}" ] || [ -n "${RAILWAY_PROJECT_ID:-}" ]; then
         echo "railway"
     elif [ -n "${FLY_APP_NAME:-}" ]; then
         echo "fly"
-    elif [ -n "${ORACLE_CLOUD_INSTANCE_ID:-}" ]; then
-        echo "oracle"
     else
         echo "generic"
     fi
@@ -160,6 +160,12 @@ configure_workers
 
 # Handle explicit mode commands
 COMMAND="${1:-api}"
+
+# On Northflank, if command is 'api', default to 'celery-worker'
+if [ "$PLATFORM" = "northflank" ] && [ "$COMMAND" = "api" ]; then
+    log_info "Northflank environment detected. Overriding default command 'api' to 'celery-worker'."
+    COMMAND="celery-worker"
+fi
 
 case "$COMMAND" in
 

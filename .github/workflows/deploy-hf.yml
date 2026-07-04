@@ -146,7 +146,7 @@ jobs:
           echo "   Commit: ${{ github.sha }}"
 
           # Add HF remote
-          git remote add huggingface "https://fashionistar:${HF_TOKEN}@huggingface.co/spaces/${{ env.HF_SPACE_ID }}"
+          git remote add huggingface "https://__token__:${HF_TOKEN}@huggingface.co/spaces/${{ env.HF_SPACE_ID }}"
 
           # Stage all changes (including the new Dockerfile + README.md)
           git add -A
