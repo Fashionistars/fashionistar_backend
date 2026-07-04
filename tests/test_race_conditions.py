@@ -37,6 +37,10 @@ class TestWalletRaceConditions:
 
     def test_concurrent_credits_are_atomic(self, transactional_db):
         """10 concurrent ₦100 credits → final balance must be exactly ₦1,000."""
+        from django.db import connection
+        if connection.vendor == 'sqlite':
+            pytest.skip("SQLite does not support concurrent multi-threaded connections in tests")
+
         from apps.authentication.models import UnifiedUser
         from apps.wallet.services.wallet_service import WalletService
 
@@ -83,6 +87,10 @@ class TestWalletRaceConditions:
 
     def test_concurrent_debits_prevent_negative_balance(self, transactional_db):
         """10 concurrent ₦100 debits on ₦500 wallet → exactly 5 succeed, 5 raise InsufficientFunds."""
+        from django.db import connection
+        if connection.vendor == 'sqlite':
+            pytest.skip("SQLite does not support concurrent multi-threaded connections in tests")
+
         from apps.authentication.models import UnifiedUser
         from apps.wallet.services.wallet_service import WalletService, InsufficientFundsError
 
@@ -167,6 +175,10 @@ class TestWalletIdempotency:
 
     def test_concurrent_duplicate_credits_only_one_succeeds(self, transactional_db):
         """Simulate payment webhook retry: only 1 of 5 concurrent identical calls succeeds."""
+        from django.db import connection
+        if connection.vendor == 'sqlite':
+            pytest.skip("SQLite does not support concurrent multi-threaded connections in tests")
+
         from apps.authentication.models import UnifiedUser
         from apps.wallet.services.wallet_service import WalletService, DuplicateTransactionError
 
@@ -283,7 +295,7 @@ class TestTransactionAtomicRollback:
 
         wallet_before = Wallet.objects.get(user=user)
         avail_before = wallet_before.available_balance
-        held_before = wallet_before.held_balance
+        escrow_before = wallet_before.escrow_balance
 
         # Try to hold ₦500 (more than available)
         with pytest.raises(InsufficientFundsError):
@@ -294,4 +306,4 @@ class TestTransactionAtomicRollback:
 
         wallet_after = Wallet.objects.get(user=user)
         assert wallet_after.available_balance == avail_before, "available_balance changed after failed escrow hold"
-        assert wallet_after.held_balance == held_before, "held_balance changed after failed escrow hold"
+        assert wallet_after.escrow_balance == escrow_before, "escrow_balance changed after failed escrow hold"

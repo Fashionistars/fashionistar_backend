@@ -180,13 +180,11 @@ def vendor_user(db):
 #  REDIS MOCK FIXTURE
 # ─────────────────────────────────────────────────────────────────────────────
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def mock_redis(mocker):
     """
-    Replace get_redis_connection_safe with an in-memory mock.
-    Prevents tests from requiring a live Redis instance.
-
-    Returns a MagicMock pre-configured with common Redis operations.
+    Replace get_redis_connection_safe and redis.from_url globally with in-memory mocks
+    when a live Redis is not available, preventing tests from failing on health checks.
     """
     mock_client = mocker.MagicMock()
     mock_client.exists.return_value = True
@@ -194,11 +192,23 @@ def mock_redis(mocker):
     mock_client.set.return_value = True
     mock_client.delete.return_value = True
     mock_client.setex.return_value = True
+    mock_client.ping.return_value = True
 
+    # Suppress outbound Redis connectivity globally for tests
     mocker.patch(
         'apps.common.utils.get_redis_connection_safe',
         return_value=mock_client,
     )
+    
+    if not _REDIS_AVAILABLE:
+        mocker.patch(
+            'redis.from_url',
+            return_value=mock_client,
+        )
+        mocker.patch(
+            'redis.Redis.from_url',
+            return_value=mock_client,
+        )
     return mock_client
 
 

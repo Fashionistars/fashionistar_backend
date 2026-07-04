@@ -95,6 +95,10 @@ class TestUserLifecycleRegistryRaceCondition(TransactionTestCase):
         50 concurrent threads trying to create a registry row for the same
         user_uuid should result in exactly ONE row — not 50.
         """
+        from django.db import connection
+        if connection.vendor == 'sqlite':
+            self.skipTest("SQLite does not support concurrent multi-threaded connections in tests")
+
         from apps.common.models import UserLifecycleRegistry
         from django.db import IntegrityError as _IE
 
@@ -207,6 +211,10 @@ class TestModelAnalyticsAtomicCounters(TransactionTestCase):
         100 concurrent threads each calling record_created() must result in
         total_created == 100. No lost updates allowed under concurrent load.
         """
+        from django.db import connection
+        if connection.vendor == 'sqlite':
+            self.skipTest("SQLite does not support concurrent multi-threaded connections in tests")
+
         from apps.common.models import ModelAnalytics
 
         model_name = f"ConcurrentTestModel_{uuid.uuid4().hex[:6]}"
@@ -753,6 +761,10 @@ class TestConcurrentLoginLoad(TransactionTestCase):
         PostgreSQL handles 100+ concurrent connections fine.
         Each thread uses a unique REMOTE_ADDR to avoid throttle bucketing.
         """
+        from django.db import connection
+        if connection.vendor == 'sqlite':
+            self.skipTest("SQLite does not support concurrent multi-threaded connections in tests")
+
         user = make_user(email="load_test_user@fashionistar.io", password="LoadTest#2026")
         results = {"success": 0, "errors": []}
         lock = threading.Lock()
@@ -787,6 +799,10 @@ class TestConcurrentLoginLoad(TransactionTestCase):
         """100 concurrent failed logins — no deadlock, system stays alive.
         Each thread uses a unique REMOTE_ADDR to avoid throttle bucketing.
         """
+        from django.db import connection
+        if connection.vendor == 'sqlite':
+            self.skipTest("SQLite does not support concurrent multi-threaded connections in tests")
+
         results = {"expected_fail": 0, "unexpected": []}
         lock = threading.Lock()
 
