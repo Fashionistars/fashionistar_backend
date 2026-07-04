@@ -224,44 +224,51 @@ async def _acheck_email() -> dict[str, Any]:
             if email_backend.endswith("DatabaseConfiguredEmailBackend"):
                 from apps.providers.models import EmailProviderConfig
 
-                config = EmailProviderConfig.objects.only(
-                    "email_backend", "email_host", "email_port",
-                    "email_use_tls", "email_use_ssl",
-                ).first()
+                config = EmailProviderConfig.objects.only("email_backend").first()
 
                 if not config:
                     return {"status": "warning", "provider": "database-configured (unset)"}
 
-                slug = get_email_backend_label(config.email_backend)
-                host = getattr(config, "email_host", "") or getattr(settings, "EMAIL_HOST", "")
-                port = getattr(config, "email_port", None) or getattr(settings, "EMAIL_PORT", 587)
-                use_ssl = getattr(config, "email_use_ssl", False)
+                active_backend = config.email_backend
+                slug = get_email_backend_label(active_backend)
 
-                if not host:
-                    return {"status": "warning", "provider": slug, "note": "EMAIL_HOST not configured"}
+                # Only run live SMTP probe if the active backend is standard SMTP
+                if active_backend == "django.core.mail.backends.smtp.EmailBackend":
+                    host = getattr(settings, "EMAIL_HOST", "")
+                    port = getattr(settings, "EMAIL_PORT", 587)
+                    use_ssl = getattr(settings, "EMAIL_USE_SSL", False)
 
-                # Live SMTP EHLO probe (3-second hard timeout)
-                try:
-                    cls = smtplib.SMTP_SSL if use_ssl else smtplib.SMTP
-                    with cls(host=host, port=int(port), timeout=3) as conn:
-                        conn.ehlo()
-                    latency_ms = round((time.monotonic() - t0) * 1000, 2)
+                    if not host:
+                        return {"status": "warning", "provider": slug, "note": "EMAIL_HOST not configured"}
+
+                    # Live SMTP EHLO probe (3-second hard timeout)
+                    try:
+                        cls = smtplib.SMTP_SSL if use_ssl else smtplib.SMTP
+                        with cls(host=host, port=int(port), timeout=3) as conn:
+                            conn.ehlo()
+                        latency_ms = round((time.monotonic() - t0) * 1000, 2)
+                        return {
+                            "status": "ok",
+                            "provider": slug,
+                            "healthy": True,
+                            "latency_ms": latency_ms,
+                            "host": host,
+                        }
+                    except OSError as smtp_exc:
+                        latency_ms = round((time.monotonic() - t0) * 1000, 2)
+                        logger.warning("Health check — SMTP probe failed (%s:%s): %s", host, port, smtp_exc)
+                        return {
+                            "status": "warning",
+                            "provider": slug,
+                            "healthy": False,
+                            "latency_ms": latency_ms,
+                            "message": str(smtp_exc),
+                        }
+                else:
+                    # Non-SMTP active backends (Anymail/Zoho) do not use SMTP settings
                     return {
                         "status": "ok",
                         "provider": slug,
-                        "healthy": True,
-                        "latency_ms": latency_ms,
-                        "host": host,
-                    }
-                except OSError as smtp_exc:
-                    latency_ms = round((time.monotonic() - t0) * 1000, 2)
-                    logger.warning("Health check — SMTP probe failed (%s:%s): %s", host, port, smtp_exc)
-                    return {
-                        "status": "warning",
-                        "provider": slug,
-                        "healthy": False,
-                        "latency_ms": latency_ms,
-                        "message": str(smtp_exc),
                     }
 
             if "anymail" in email_backend.lower():
