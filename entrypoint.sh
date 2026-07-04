@@ -172,6 +172,10 @@ case "$COMMAND" in
     # ── Celery Worker Mode ───────────────────────────────────────────────────
     celery-worker|worker)
         log_section "Starting Celery Worker (${PLATFORM})"
+        if [ "$PLATFORM" = "huggingface" ]; then
+            log_info "Hugging Face platform detected. Starting background HTTP health server on port 7860..."
+            python hf_health_server.py &
+        fi
         export CELERY_CONCURRENCY="${CELERY_CONCURRENCY:-4}"
         export CELERY_QUEUES="${CELERY_QUEUES:-default,ai_tasks,measurements,analytics,notifications,webhooks}"
         exec celery -A backend worker \
@@ -187,6 +191,10 @@ case "$COMMAND" in
     # ── Celery Beat Mode ─────────────────────────────────────────────────────
     celery-beat|beat)
         log_section "Starting Celery Beat Scheduler (${PLATFORM})"
+        if [ "$PLATFORM" = "huggingface" ]; then
+            log_info "Hugging Face platform detected. Starting background HTTP health server on port 7860..."
+            python hf_health_server.py &
+        fi
         exec celery -A backend beat \
             --loglevel="${CELERY_LOG_LEVEL:-info}" \
             --scheduler django_celery_beat.schedulers:DatabaseScheduler \
