@@ -150,6 +150,24 @@ run_collectstatic() {
     log_info "Static files collected"
 }
 
+# ── Ollama Server Startup ─────────────────────────────────────────────────────
+start_ollama() {
+    if [ "${OLLAMA_ENABLED:-True}" = "True" ] && command -v ollama >/dev/null 2>&1; then
+        log_section "Starting Ollama Server (Background)"
+        ollama serve >/dev/null 2>&1 &
+        local retry=0
+        until curl -s http://127.0.0.1:11434/api/tags >/dev/null || [ $retry -eq 30 ]; do
+            sleep 1
+            retry=$((retry + 1))
+        done
+        if curl -s http://127.0.0.1:11434/api/tags >/dev/null; then
+            log_info "Ollama Server is online and responding."
+        else
+            log_warn "Ollama Server failed to start in 30 seconds."
+        fi
+    fi
+}
+
 # ── Main Entrypoint Logic ─────────────────────────────────────────────────────
 log_section "FASHIONISTAR Universal Entrypoint"
 log_info "Platform detected: ${PLATFORM}"
@@ -176,6 +194,10 @@ case "$COMMAND" in
             log_info "Hugging Face platform detected. Starting background HTTP health server on port 7860..."
             python hf_health_server.py &
         fi
+        
+        # Start Ollama service if enabled
+        start_ollama
+
         export CELERY_CONCURRENCY="${CELERY_CONCURRENCY:-4}"
         export CELERY_QUEUES="${CELERY_QUEUES:-default,ai_tasks,measurements,analytics,notifications,webhooks}"
         exec celery -A backend worker \
@@ -248,6 +270,9 @@ case "$COMMAND" in
         log_section "Starting FASHIONISTAR API Server (${PLATFORM})"
         log_info "Bind address: 0.0.0.0:${PORT}"
         log_info "Workers: ${GUNICORN_WORKERS}"
+
+        # Start Ollama service if enabled
+        start_ollama
 
         # Run migrations before starting (idempotent — safe to run each deploy)
         run_migrations
