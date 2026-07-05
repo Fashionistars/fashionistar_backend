@@ -150,21 +150,56 @@ run_collectstatic() {
     log_info "Static files collected"
 }
 
-# ── Ollama Server Startup ─────────────────────────────────────────────────────
+# ── Ollama Server Startup + Model Pull ───────────────────────────────────────
 start_ollama() {
     if [ "${OLLAMA_ENABLED:-True}" = "True" ] && command -v ollama >/dev/null 2>&1; then
         log_section "Starting Ollama Server (Background)"
+
+        # Set Ollama home to a writable location for the appuser
+        export OLLAMA_HOME="${OLLAMA_HOME:-/home/appuser/.ollama}"
+        export OLLAMA_MODELS="${OLLAMA_MODELS:-/home/appuser/.ollama/models}"
+
         ollama serve >/dev/null 2>&1 &
         local retry=0
-        until curl -s http://127.0.0.1:11434/api/tags >/dev/null || [ $retry -eq 30 ]; do
+        until curl -s http://127.0.0.1:11434/api/tags >/dev/null 2>&1 || [ $retry -eq 30 ]; do
             sleep 1
             retry=$((retry + 1))
         done
-        if curl -s http://127.0.0.1:11434/api/tags >/dev/null; then
+
+        if curl -s http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
             log_info "Ollama Server is online and responding."
+
+            # Pull models if not already cached — runs in background to avoid blocking startup
+            local OLLAMA_LLM_MODEL="${OLLAMA_MODEL:-llama3.2}"
+            local OLLAMA_EMBED="${OLLAMA_EMBED_MODEL:-nomic-embed-text}"
+
+            (
+                # Check if LLM model exists, pull if not
+                if ! ollama list 2>/dev/null | grep -q "${OLLAMA_LLM_MODEL}"; then
+                    log_info "Pulling Ollama LLM model: ${OLLAMA_LLM_MODEL} (background)..."
+                    ollama pull "${OLLAMA_LLM_MODEL}" >/dev/null 2>&1 && \
+                        log_info "Ollama model '${OLLAMA_LLM_MODEL}' ready." || \
+                        log_warn "Failed to pull Ollama model '${OLLAMA_LLM_MODEL}'."
+                else
+                    log_info "Ollama model '${OLLAMA_LLM_MODEL}' already cached."
+                fi
+
+                # Check if embed model exists, pull if not
+                if ! ollama list 2>/dev/null | grep -q "${OLLAMA_EMBED}"; then
+                    log_info "Pulling Ollama embed model: ${OLLAMA_EMBED} (background)..."
+                    ollama pull "${OLLAMA_EMBED}" >/dev/null 2>&1 && \
+                        log_info "Ollama model '${OLLAMA_EMBED}' ready." || \
+                        log_warn "Failed to pull Ollama embed model '${OLLAMA_EMBED}'."
+                else
+                    log_info "Ollama embed model '${OLLAMA_EMBED}' already cached."
+                fi
+            ) &
+
         else
-            log_warn "Ollama Server failed to start in 30 seconds."
+            log_warn "Ollama Server failed to start in 30 seconds. AI features will degrade gracefully."
         fi
+    else
+        log_info "Ollama disabled (OLLAMA_ENABLED=${OLLAMA_ENABLED:-True}) or not installed — skipping."
     fi
 }
 

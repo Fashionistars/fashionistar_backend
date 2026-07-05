@@ -100,12 +100,10 @@ RUN chmod +x /entrypoint.sh
 
 USER appuser
 
-# Pre-pull Ollama models during build to keep startup instant
-RUN ollama serve & \
-    sleep 5 && \
-    ollama pull llama3.2 && \
-    ollama pull nomic-embed-text && \
-    pkill -f ollama
+# NOTE: Ollama models (llama3.2, nomic-embed-text) are pulled at runtime
+# by entrypoint.sh on first start. HF Spaces persistent disk caches them
+# so subsequent restarts are instant. Pre-pulling here would make the
+# Docker build take 30+ minutes and risk build timeouts.
 
 # Expose port 7860 (Hugging Face standard).
 # For other platforms, Docker ignores EXPOSE — actual port is set via PORT env var.
