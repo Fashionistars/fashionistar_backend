@@ -76,6 +76,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     postgresql-client \
     curl \
+    zstd \
+    && curl -fsSL https://ollama.com/install.sh | sh \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=uvbin /uv /uvx /bin/
@@ -85,8 +87,8 @@ COPY --from=builder /opt/venv /opt/venv
 # UID 1000 is MANDATORY for Hugging Face Spaces [HF Platform Requirement].
 # Also matches best practices for all other platforms.
 RUN useradd --create-home --uid 1000 --shell /bin/sh appuser && \
-    mkdir -p /app/staticfiles /app/media /app/logs && \
-    chown -R appuser:appuser /app
+    mkdir -p /app/staticfiles /app/media /app/logs /home/appuser/.ollama && \
+    chown -R appuser:appuser /app /home/appuser
 
 WORKDIR /app
 
@@ -98,6 +100,13 @@ COPY --chown=appuser:appuser entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 USER appuser
+
+# Pre-pull Ollama models during build to keep startup instant
+RUN ollama serve & \
+    sleep 5 && \
+    ollama pull llama3.2 && \
+    ollama pull nomic-embed-text && \
+    pkill -f ollama
 
 # Expose port 7860 (Hugging Face standard).
 # For other platforms, Docker ignores EXPOSE — actual port is set via PORT env var.
