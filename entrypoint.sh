@@ -138,9 +138,17 @@ configure_workers() {
 # ── Pre-flight Database Migrations ────────────────────────────────────────────
 run_migrations() {
     log_section "Running Database Migrations"
-    python manage.py migrate --noinput
-    log_info "Migrations complete"
+    # Non-fatal: if DB is unreachable (SSL error, connection refused) we continue
+    # so Gunicorn starts and can serve health checks. Django's health endpoint
+    # handles DB failure gracefully via the checks system.
+    if python manage.py migrate --noinput; then
+        log_info "Migrations complete"
+    else
+        log_warn "Migrations failed (DB may be unreachable) — continuing with Gunicorn anyway"
+        log_warn "The API will start but DB operations may fail until DB is accessible"
+    fi
 }
+
 
 # ── Static Files Collection ───────────────────────────────────────────────────
 run_collectstatic() {
