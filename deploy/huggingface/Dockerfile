@@ -1,25 +1,19 @@
 # =============================================================================
-# FASHIONISTAR — Production Dockerfile (Hugging Face Spaces + Multi-Platform)
+# FASHIONISTAR — Production Dockerfile (Hugging Face Spaces)
 # =============================================================================
-# Primary Target:  Hugging Face Spaces (Docker SDK — linux/amd64)
-# Also Works:      Northflank, Render, Railway, Oracle Cloud, local dev
+# Target:  Hugging Face Spaces (Docker SDK — linux/amd64)
+# Port:    7860 (HF mandatory) | UID: 1000 (HF mandatory)
 #
-# Hugging Face Constraints (mandatory):
-#   ✓ Port must be 7860  (overridable via PORT env for other platforms)
-#   ✓ Run as non-root UID 1000 (appuser)
-#   ✓ No local disk writes — use Cloudinary/S3
-#
-# Build for HF Spaces (AMD64 — HF default):
-#   docker buildx build --platform linux/amd64 -f Dockerfile.production -t fashionistar/api:latest .
-#
-# Build multi-arch (for Oracle Cloud ARM64 + HF AMD64):
-#   docker buildx build --platform linux/arm64,linux/amd64 -f Dockerfile.production --push \
-#     -t ghcr.io/fashionistars/fashionistar_backend/api:latest .
+# HF Spaces Dev Mode requirements (PRO plan):
+#   ✓ bash, git, git-lfs, curl, wget, procps installed
+#   ✓ /app owned by UID 1000
+#   ✓ CMD instruction present
+#   ✓ Debian-based image (python:3.13-slim ✓)
 # =============================================================================
 
 # ── Stage 1: uv binary ───────────────────────────────────────────────────────
-# NOTE: Versions are hardcoded (not ARG) because HF Spaces injects secrets
-# as Docker build args, which override ARG defaults and cause build failures.
+# Versions are hardcoded (NOT ARG) because HF Spaces injects Space secrets as
+# Docker build args, overriding ARG defaults and causing build failures.
 FROM ghcr.io/astral-sh/uv:0.8.22 AS uvbin
 
 # ── Stage 2: dependency builder ──────────────────────────────────────────────
@@ -47,13 +41,10 @@ COPY pyproject.toml uv.lock ./
 # Install production dependencies into /opt/venv
 RUN uv sync --frozen --no-dev --no-editable --no-install-project
 
-# ── Stage 3: production runtime (minimal image) ──────────────────────────────
+# ── Stage 3: production runtime ───────────────────────────────────────────────
 FROM python:3.13-slim AS runner
 
 # Runtime environment
-# PORT=7860 is mandatory for Hugging Face Spaces.
-# The entrypoint.sh auto-detects the platform and overrides PORT if needed
-# for other platforms (e.g. Northflank=8080, Render=10000, Oracle=10000).
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_LINK_MODE=copy \
@@ -62,6 +53,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     DJANGO_SETTINGS_MODULE=backend.config.production \
     WORKING_ENVIRONMENT=production \
     PORT=7860 \
+    OLLAMA_ENABLED=True \
     UVICORN_WS=auto \
     GUNICORN_WORKERS=3 \
     GUNICORN_TIMEOUT=900 \
@@ -70,22 +62,29 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     GUNICORN_MAX_REQUESTS_JITTER=100 \
     GUNICORN_LOG_LEVEL=info
 
-# Runtime system dependencies only (no build tools — keeps image small)
+# Runtime system dependencies
+# IMPORTANT: bash, git, git-lfs, wget, procps are REQUIRED for HF Spaces Dev Mode (PRO plan).
+# Without them, Dev Mode injects `RUN git config ...` steps that fail with "git: not found".
+# curl + zstd needed for Ollama install. libpq5 for psycopg runtime.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     postgresql-client \
     curl \
+    wget \
     zstd \
+    bash \
+    git \
+    git-lfs \
+    procps \
+    && git lfs install \
     && curl -fsSL https://ollama.com/install.sh | sh \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=uvbin /uv /uvx /bin/
 COPY --from=builder /opt/venv /opt/venv
 
-# Create non-root app user:
-# UID 1000 is MANDATORY for Hugging Face Spaces [HF Platform Requirement].
-# Also matches best practices for all other platforms.
-RUN useradd --create-home --uid 1000 --shell /bin/sh appuser && \
+# Create non-root app user (UID 1000 — MANDATORY for HF Spaces)
+RUN useradd --create-home --uid 1000 --shell /bin/bash appuser && \
     mkdir -p /app/staticfiles /app/media /app/logs /home/appuser/.ollama && \
     chown -R appuser:appuser /app /home/appuser
 
@@ -100,22 +99,16 @@ RUN chmod +x /entrypoint.sh
 
 USER appuser
 
-# NOTE: Ollama models (llama3.2, nomic-embed-text) are pulled at runtime
-# by entrypoint.sh on first start. HF Spaces persistent disk caches them
-# so subsequent restarts are instant. Pre-pulling here would make the
-# Docker build take 30+ minutes and risk build timeouts.
+# NOTE: Ollama models (llama3.2, nomic-embed-text) are pulled at RUNTIME
+# by entrypoint.sh on first start, in a background process so the API
+# starts immediately. HF persistent disk caches them for instant restarts.
 
-# Expose port 7860 (Hugging Face standard).
-# For other platforms, Docker ignores EXPOSE — actual port is set via PORT env var.
+# Port 7860 — mandatory for HF Spaces
 EXPOSE 7860
 
-# Health check — polls /api/v1/health/ endpoint
-HEALTHCHECK --interval=30s --timeout=15s --start-period=90s --retries=3 \
+# Health check
+HEALTHCHECK --interval=30s --timeout=15s --start-period=120s --retries=3 \
     CMD curl -fsS "http://127.0.0.1:${PORT:-7860}/api/v1/health/" || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]
-
-# Default command: start the production API server.
-# The entrypoint.sh auto-detects platform + port.
-# For Celery: override with CMD ["celery-worker"] or CMD ["celery-beat"]
 CMD ["api"]

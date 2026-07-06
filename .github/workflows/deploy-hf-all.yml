@@ -1,0 +1,349 @@
+name: 🤗 Deploy ALL to Hugging Face Spaces
+
+# =============================================================================
+# FASHIONISTAR — Master HF Deployment Workflow
+# Deploys all 3 services in parallel:
+#   1. fashionistar/fashionistar-api-v2     (Django ASGI API Gateway)
+#   2. fashionistar/fashionistar-celery-queues (Celery Worker)
+#   3. fashionistar/fashionistar-celery-beat   (Celery Beat Scheduler)
+#
+# Triggered: push to main branch (any relevant file change)
+# GitHub Secrets Required:
+#   HF_TOKEN  — Hugging Face write access token
+# =============================================================================
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**.py'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'Dockerfile*'
+      - 'entrypoint.sh'
+      - 'hf_health_server.py'
+      - 'gunicorn.conf.py'
+      - 'backend/**'
+      - 'apps/**'
+      - 'deploy/**'
+      - '.github/workflows/deploy-hf*.yml'
+  workflow_dispatch:
+    inputs:
+      service:
+        description: 'Which service to deploy'
+        required: false
+        default: 'all'
+        type: choice
+        options: [all, api, celery-queues, celery-beat]
+
+concurrency:
+  group: hf-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+
+  # ── Job 1: Deploy API Gateway ───────────────────────────────────────────────
+  deploy-api:
+    name: 🚀 API Gateway → fashionistar-api-v2
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: ${{ github.event.inputs.service == 'all' || github.event.inputs.service == 'api' || github.event_name == 'push' }}
+
+    env:
+      SPACE_ID: fashionistar/fashionistar-api-v2
+      SPACE_URL: https://fashionistar-fashionistar-api-v2.hf.space
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          lfs: false
+
+      - name: Configure git
+        run: |
+          git config --global user.email "fashionistar.home.beauty@gmail.com"
+          git config --global user.name "FASHIONISTAR CI/CD"
+          git config --global init.defaultBranch main
+
+      - name: Prepare README for HF Space
+        run: |
+          cat > README.md << 'EOF'
+          ---
+          title: FASHIONISTAR API Gateway
+          emoji: 👗
+          colorFrom: purple
+          colorTo: pink
+          sdk: docker
+          pinned: true
+          license: mit
+          app_port: 7860
+          short_description: FASHIONISTAR AI Fashion Platform — Django ASGI API
+          ---
+
+          # 🎀 FASHIONISTAR AI — Django API Gateway
+
+          Production ASGI Backend for the FASHIONISTAR AI Fashion Platform.
+
+          | Endpoint | Description |
+          |---|---|
+          | `/api/v1/health/` | Health check |
+          | `/api/v1/products/` | Product catalogue |
+          | `/api/v1/ninja/ai/health/` | AI services health |
+          | `/api/docs/` | OpenAPI Swagger UI |
+          EOF
+
+      - name: Prepare Dockerfile (copy .production → Dockerfile)
+        run: cp Dockerfile.production Dockerfile
+
+      - name: Push to HF Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          mkdir -p ../hf_api_deploy
+          rsync -a \
+            --exclude='.git' --exclude='.github' --exclude='.venv' \
+            --exclude='node_modules' --exclude='logs' --exclude='.pytest_cache' \
+            --exclude='staticfiles' --exclude='scratch' --exclude='media' \
+            --exclude='*.sqlite3' --exclude='*.db' --exclude='*.png' \
+            --exclude='*.jpg' --exclude='*.jpeg' --exclude='*.webp' \
+            --exclude='*.gif' --exclude='*.zip' --exclude='*.gz' \
+            ./ ../hf_api_deploy/
+          cd ../hf_api_deploy
+          git init && git checkout -b main
+          git config user.name "FASHIONISTAR CI/CD"
+          git config user.email "fashionistar.home.beauty@gmail.com"
+          git add -A
+          git add -f Dockerfile
+          git commit -m "🚀 API Deploy: $(echo ${{ github.sha }} | cut -c1-7) [GitHub Actions]"
+          git remote add hf "https://__token__:${HF_TOKEN}@huggingface.co/spaces/${SPACE_ID}"
+          git push hf main --force
+          echo "✅ API Gateway pushed to HF!"
+
+      - name: Wait & health check
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          echo "⏳ Waiting for API build (up to 15min)..."
+          for i in $(seq 1 60); do
+            STATUS=$(curl -s -H "Authorization: Bearer ${HF_TOKEN}" \
+              "https://huggingface.co/api/spaces/${SPACE_ID}" | \
+              python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('runtime',{}).get('stage','unknown'))" 2>/dev/null || echo "unknown")
+            echo "  Attempt $i/60 — Space status: $STATUS"
+            if [ "$STATUS" = "RUNNING" ]; then
+              echo "🎉 API is RUNNING!"
+              HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "${SPACE_URL}/api/v1/health/" || echo "000")
+              echo "  Health check HTTP: $HTTP"
+              break
+            elif [ "$STATUS" = "BUILD_ERROR" ]; then
+              echo "❌ Build failed! Check: https://huggingface.co/spaces/${SPACE_ID}"
+              exit 1
+            fi
+            sleep 15
+          done
+
+  # ── Job 2: Deploy Celery Worker ─────────────────────────────────────────────
+  deploy-celery-queues:
+    name: 🔄 Celery Worker → fashionistar-celery-queues
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: ${{ github.event.inputs.service == 'all' || github.event.inputs.service == 'celery-queues' || github.event_name == 'push' }}
+
+    env:
+      SPACE_ID: fashionistar/fashionistar-celery-queues
+      SPACE_URL: https://fashionistar-fashionistar-celery-queues.hf.space
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          lfs: false
+
+      - name: Configure git
+        run: |
+          git config --global user.email "fashionistar.home.beauty@gmail.com"
+          git config --global user.name "FASHIONISTAR CI/CD"
+          git config --global init.defaultBranch main
+
+      - name: Prepare Dockerfile and README
+        run: |
+          cp deploy/huggingface-celery-queues/Dockerfile.production Dockerfile
+          cp deploy/huggingface-celery-queues/README.md README.md 2>/dev/null || cat > README.md << 'EOF'
+          ---
+          title: FASHIONISTAR Celery Worker
+          emoji: ⚙️
+          colorFrom: blue
+          colorTo: purple
+          sdk: docker
+          pinned: true
+          license: mit
+          app_port: 7860
+          short_description: FASHIONISTAR Celery Task Worker
+          ---
+          # ⚙️ FASHIONISTAR — Celery Task Worker
+          Processes background tasks: AI measurements, notifications, orders.
+          EOF
+
+      - name: Push to HF Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          mkdir -p ../hf_queues_deploy
+          rsync -a \
+            --exclude='.git' --exclude='.github' --exclude='.venv' \
+            --exclude='node_modules' --exclude='logs' --exclude='.pytest_cache' \
+            --exclude='staticfiles' --exclude='scratch' --exclude='media' \
+            --exclude='*.sqlite3' --exclude='*.db' --exclude='*.png' \
+            --exclude='*.jpg' --exclude='*.jpeg' --exclude='*.webp' \
+            --exclude='*.gif' --exclude='*.zip' --exclude='*.gz' \
+            ./ ../hf_queues_deploy/
+          cd ../hf_queues_deploy
+          git init && git checkout -b main
+          git config user.name "FASHIONISTAR CI/CD"
+          git config user.email "fashionistar.home.beauty@gmail.com"
+          git add -A
+          git add -f Dockerfile
+          git commit -m "🔄 Celery Worker Deploy: $(echo ${{ github.sha }} | cut -c1-7) [GitHub Actions]"
+          git remote add hf "https://__token__:${HF_TOKEN}@huggingface.co/spaces/${SPACE_ID}"
+          git push hf main --force
+          echo "✅ Celery Worker pushed to HF!"
+
+      - name: Wait & verify
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          echo "⏳ Waiting for Celery Worker build..."
+          for i in $(seq 1 40); do
+            STATUS=$(curl -s -H "Authorization: Bearer ${HF_TOKEN}" \
+              "https://huggingface.co/api/spaces/${SPACE_ID}" | \
+              python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('runtime',{}).get('stage','unknown'))" 2>/dev/null || echo "unknown")
+            echo "  Attempt $i/40 — Status: $STATUS"
+            if [ "$STATUS" = "RUNNING" ]; then
+              echo "🎉 Celery Worker is RUNNING!"
+              break
+            elif [ "$STATUS" = "BUILD_ERROR" ]; then
+              echo "❌ Build failed! Check: https://huggingface.co/spaces/${SPACE_ID}"
+              exit 1
+            fi
+            sleep 15
+          done
+
+  # ── Job 3: Deploy Celery Beat ───────────────────────────────────────────────
+  deploy-celery-beat:
+    name: ⏰ Celery Beat → fashionistar-celery-beat
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: ${{ github.event.inputs.service == 'all' || github.event.inputs.service == 'celery-beat' || github.event_name == 'push' }}
+
+    env:
+      SPACE_ID: fashionistar/fashionistar-celery-beat
+      SPACE_URL: https://fashionistar-fashionistar-celery-beat.hf.space
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          lfs: false
+
+      - name: Configure git
+        run: |
+          git config --global user.email "fashionistar.home.beauty@gmail.com"
+          git config --global user.name "FASHIONISTAR CI/CD"
+          git config --global init.defaultBranch main
+
+      - name: Prepare Dockerfile and README
+        run: |
+          cp deploy/huggingface-celery-beat/Dockerfile.production Dockerfile
+          cp deploy/huggingface-celery-beat/README.md README.md 2>/dev/null || cat > README.md << 'EOF'
+          ---
+          title: FASHIONISTAR Celery Beat
+          emoji: ⏰
+          colorFrom: green
+          colorTo: blue
+          sdk: docker
+          pinned: true
+          license: mit
+          app_port: 7860
+          short_description: FASHIONISTAR Celery Beat Scheduler
+          ---
+          # ⏰ FASHIONISTAR — Celery Beat Scheduler
+          Triggers periodic tasks: analytics, cleanup, health checks.
+          EOF
+
+      - name: Push to HF Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          mkdir -p ../hf_beat_deploy
+          rsync -a \
+            --exclude='.git' --exclude='.github' --exclude='.venv' \
+            --exclude='node_modules' --exclude='logs' --exclude='.pytest_cache' \
+            --exclude='staticfiles' --exclude='scratch' --exclude='media' \
+            --exclude='*.sqlite3' --exclude='*.db' --exclude='*.png' \
+            --exclude='*.jpg' --exclude='*.jpeg' --exclude='*.webp' \
+            --exclude='*.gif' --exclude='*.zip' --exclude='*.gz' \
+            ./ ../hf_beat_deploy/
+          cd ../hf_beat_deploy
+          git init && git checkout -b main
+          git config user.name "FASHIONISTAR CI/CD"
+          git config user.email "fashionistar.home.beauty@gmail.com"
+          git add -A
+          git add -f Dockerfile
+          git commit -m "⏰ Celery Beat Deploy: $(echo ${{ github.sha }} | cut -c1-7) [GitHub Actions]"
+          git remote add hf "https://__token__:${HF_TOKEN}@huggingface.co/spaces/${SPACE_ID}"
+          git push hf main --force
+          echo "✅ Celery Beat pushed to HF!"
+
+      - name: Wait & verify
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          echo "⏳ Waiting for Celery Beat build..."
+          for i in $(seq 1 40); do
+            STATUS=$(curl -s -H "Authorization: Bearer ${HF_TOKEN}" \
+              "https://huggingface.co/api/spaces/${SPACE_ID}" | \
+              python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('runtime',{}).get('stage','unknown'))" 2>/dev/null || echo "unknown")
+            echo "  Attempt $i/40 — Status: $STATUS"
+            if [ "$STATUS" = "RUNNING" ]; then
+              echo "🎉 Celery Beat is RUNNING!"
+              break
+            elif [ "$STATUS" = "BUILD_ERROR" ]; then
+              echo "❌ Build failed! Check: https://huggingface.co/spaces/${SPACE_ID}"
+              exit 1
+            fi
+            sleep 15
+          done
+
+  # ── Job 4: Final Summary ─────────────────────────────────────────────────────
+  summary:
+    name: 📊 Deployment Summary
+    runs-on: ubuntu-latest
+    needs: [deploy-api, deploy-celery-queues, deploy-celery-beat]
+    if: always()
+    steps:
+      - name: Print summary
+        run: |
+          echo ""
+          echo "════════════════════════════════════════════════════════════"
+          echo "  🎀 FASHIONISTAR — HF Spaces Deployment Summary"
+          echo "════════════════════════════════════════════════════════════"
+          echo "  API Gateway:    https://fashionistar-fashionistar-api-v2.hf.space"
+          echo "  Health Check:   https://fashionistar-fashionistar-api-v2.hf.space/api/v1/health/"
+          echo "  AI Health:      https://fashionistar-fashionistar-api-v2.hf.space/api/v1/ninja/ai/health/"
+          echo "  API Docs:       https://fashionistar-fashionistar-api-v2.hf.space/api/docs/"
+          echo "  Celery Worker:  https://huggingface.co/spaces/fashionistar/fashionistar-celery-queues"
+          echo "  Celery Beat:    https://huggingface.co/spaces/fashionistar/fashionistar-celery-beat"
+          echo "  GitHub Commit:  ${{ github.sha }}"
+          echo "  Triggered by:   ${{ github.actor }}"
+          echo "════════════════════════════════════════════════════════════"
+          echo ""
+          echo "  Job Results:"
+          echo "    API Gateway:     ${{ needs.deploy-api.result }}"
+          echo "    Celery Worker:   ${{ needs.deploy-celery-queues.result }}"
+          echo "    Celery Beat:     ${{ needs.deploy-celery-beat.result }}"
+          echo "════════════════════════════════════════════════════════════"
