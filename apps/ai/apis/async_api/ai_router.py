@@ -430,8 +430,6 @@ async def get_ai_health(request) -> dict:
     from asgiref.sync import sync_to_async
     from django.utils import timezone
     from django.conf import settings
-    import httpx
-
     @sync_to_async
     def check_health():
         results = {
@@ -589,8 +587,10 @@ async def get_ai_health(request) -> dict:
         all_ok = pgvector_ok and llm_ok and siglip_ok and mediapipe_ok
         any_ok = any([pgvector_ok, llm_ok, siglip_ok, mediapipe_ok])
 
+        from django.utils import timezone as _tz
         return {
             "status":            "healthy" if all_ok else ("degraded" if any_ok else "unavailable"),
+            "checked_at":        _tz.now().isoformat(),
             "llm_available":     llm_ok,
             "ollama_available":  results.get("ollama_available", False),
             "siglip_available":  siglip_ok,
