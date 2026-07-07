@@ -285,7 +285,13 @@ with gr.Blocks(
     with gr.Tab("Health"):
         health_btn    = gr.Button("🩺 Check Health", variant="primary")
         health_output = gr.JSON(label="Health Status")
-        health_btn.click(fn=health_check_fn, inputs=[], outputs=[health_output])
+        # api_name exposes this as POST /run/health_check
+        health_btn.click(
+            fn=health_check_fn,
+            inputs=[],
+            outputs=[health_output],
+            api_name="health_check",
+        )
 
     with gr.Tab("Body Measurements"):
         gr.Markdown("Upload a base64-encoded body photo and user height for measurement extraction.")
@@ -293,17 +299,29 @@ with gr.Blocks(
         height_input = gr.Number(label="Height (cm)", value=170, minimum=100, maximum=250)
         meas_btn     = gr.Button("Extract Measurements", variant="primary")
         meas_output  = gr.JSON(label="Measurements")
-        meas_btn.click(fn=body_measurements_fn, inputs=[img_input, height_input], outputs=[meas_output])
+        # api_name exposes this as POST /run/body_measurements
+        meas_btn.click(
+            fn=body_measurements_fn,
+            inputs=[img_input, height_input],
+            outputs=[meas_output],
+            api_name="body_measurements",
+        )
 
     with gr.Tab("Fashion Embedding"):
         gr.Markdown("Generate a 512-dim fashion visual embedding using marqo-FashionSigLIP.")
         emb_img_input = gr.Textbox(label="Base64 Product Image", placeholder="data:image/jpeg;base64,...")
         emb_btn       = gr.Button("Generate Embedding", variant="primary")
         emb_output    = gr.JSON(label="Embedding Result")
-        emb_btn.click(fn=fashion_embedding_fn, inputs=[emb_img_input], outputs=[emb_output])
+        # api_name exposes this as POST /run/fashion_embedding
+        emb_btn.click(
+            fn=fashion_embedding_fn,
+            inputs=[emb_img_input],
+            outputs=[emb_output],
+            api_name="fashion_embedding",
+        )
 
     with gr.Tab("Fashion LLM"):
-        gr.Markdown("Generate fashion AI advice via Groq / Llama-3.3-70B-Versatile.")
+        gr.Markdown("Generate fashion AI advice via multi-provider LLM waterfall (SambaNova → Cerebras → Groq).")
         llm_system_input = gr.Textbox(
             label="System Prompt",
             value="You are a professional fashion advisor for FASHIONISTAR.",
@@ -317,10 +335,12 @@ with gr.Blocks(
         llm_temperature  = gr.Slider(0.0, 1.0, value=0.7, step=0.1, label="Temperature")
         llm_btn          = gr.Button("Generate", variant="primary")
         llm_output       = gr.JSON(label="LLM Response")
+        # api_name exposes this as POST /run/llm_fashion
         llm_btn.click(
             fn=llm_fashion_fn,
             inputs=[llm_prompt_input, llm_system_input, llm_max_tokens, llm_temperature],
             outputs=[llm_output],
+            api_name="llm_fashion",
         )
 
     with gr.Tab("Warmup"):
@@ -330,42 +350,18 @@ with gr.Blocks(
         )
         warmup_btn    = gr.Button("🔥 Run GPU Warmup", variant="secondary")
         warmup_output = gr.JSON(label="Warmup Result")
-        warmup_btn.click(fn=warmup_fn, inputs=[], outputs=[warmup_output])
+        # api_name exposes this as POST /run/warmup
+        warmup_btn.click(
+            fn=warmup_fn,
+            inputs=[],
+            outputs=[warmup_output],
+            api_name="warmup",
+        )
 
 
-# ── Named API endpoints (accessible via /run/<api_name>) ──────────────────────
-# These are the machine-to-machine endpoints called by fashionistar-api-v1.
-
-demo.add_api(
-    fn=health_check_fn,
-    inputs=[],
-    outputs=[gr.Textbox()],
-    api_name="health_check",
-)
-demo.add_api(
-    fn=body_measurements_fn,
-    inputs=[gr.Textbox(), gr.Number()],
-    outputs=[gr.Textbox()],
-    api_name="body_measurements",
-)
-demo.add_api(
-    fn=fashion_embedding_fn,
-    inputs=[gr.Textbox()],
-    outputs=[gr.Textbox()],
-    api_name="fashion_embedding",
-)
-demo.add_api(
-    fn=llm_fashion_fn,
-    inputs=[gr.Textbox(), gr.Textbox(), gr.Number(), gr.Number()],
-    outputs=[gr.Textbox()],
-    api_name="llm_fashion",
-)
-demo.add_api(
-    fn=warmup_fn,
-    inputs=[],
-    outputs=[gr.Textbox()],
-    api_name="warmup",
-)
+# ── Named API endpoints are declared via api_name= on each .click() handler ────
+# Gradio 5.x exposes these as POST /run/<api_name> automatically.
+# demo.add_api() does NOT exist in Gradio 5.x — do not use it.
 
 if __name__ == "__main__":
     demo.launch(
