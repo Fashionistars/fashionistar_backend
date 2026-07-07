@@ -601,3 +601,5 @@ async def get_ai_health(request) -> dict:
             "ai_engine_version": results.get("ai_engine_version", "unknown"),
             "llm_provider":      results.get("llm_provider", "unknown"),
         }
+
+    return await check_health()
