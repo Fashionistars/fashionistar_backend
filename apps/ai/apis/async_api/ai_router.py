@@ -340,10 +340,10 @@ async def get_size_advice(request, product_id: int) -> dict:
             "size_chart": [],   # TODO: load from ProductVariant size chart
         }
 
-        # Get LLM advice
+        # Get LLM advice via multi-provider waterfall (SambaNova → Cerebras → Groq → Ollama)
         try:
-            from apps.ai.engines.llm_engine import OllamaLLMEngine
-            engine = OllamaLLMEngine()
+            from apps.ai.engines.llm_engine import get_llm_engine
+            engine = get_llm_engine()
             if engine.is_available():
                 advice_text = engine.generate_size_recommendation(
                     measurements=measurements,
@@ -360,7 +360,7 @@ async def get_size_advice(request, product_id: int) -> dict:
                 result = {
                     "product_id":       product_id,
                     "recommended_size": None,
-                    "advice_text":      "AI size advisor is warming up. Please try again shortly.",
+                    "advice_text":      "AI size advisor unavailable. Set SAMBANOVA_API_KEY, CEREBRAS_API_KEY, or GROQ_API_KEY.",
                     "confidence":       0.0,
                     "llm_generated":    False,
                 }
@@ -397,13 +397,16 @@ class VendorAnalyticsSchema(Schema):
 
 class AIHealthSchema(Schema):
     status:           str          # "healthy" | "degraded" | "unavailable"
-    ollama_available: bool
+    llm_available:    bool         # True if any LLM provider is active
+    llm_provider:     str  = ""   # e.g. "sambanova/Meta-Llama-3.3-70B-Instruct"
     siglip_available: bool
     pgvector_ready:   bool
     mediapipe_ready:  bool
     checked_at:       str
     ai_engine_url:    str = ""    # URL of the remote AI Engine space (for debugging)
     ai_engine_status: str = ""    # "ok" | "unreachable" | "cold_starting"
+    # Legacy field kept for backward-compat with older clients
+    ollama_available: bool = False
 
 
 # ─── Health Check Endpoint ─────────────────────────────────────────────────────
@@ -414,9 +417,9 @@ class AIHealthSchema(Schema):
     response=AIHealthSchema,
     summary="AI engine sub-system health check",
     description=(
-        "Reports availability of all AI sub-systems: Ollama LLM, "
-        "FashionSigLIP text encoder, pgvector HNSW index, and MediaPipe. "
-        "SigLIP and MediaPipe live in the remote HF AI Engine ZeroGPU space. "
+        "Reports availability of all AI sub-systems: multi-provider LLM "
+        "(SambaNova/Cerebras/Groq), FashionSigLIP text encoder, pgvector HNSW index, "
+        "and MediaPipe. SigLIP and MediaPipe live in the remote HF AI Engine ZeroGPU space. "
         "No auth required — safe for monitoring probes."
     ),
     operation_id="ai_health",
@@ -432,7 +435,9 @@ async def get_ai_health(request) -> dict:
     @sync_to_async
     def check_health():
         results = {
-            "ollama_available": False,
+            "llm_available":  False,
+            "llm_provider":   "",
+            "ollama_available": False,   # Legacy compat
             "siglip_available": False,
             "pgvector_ready":   False,
             "mediapipe_ready":  False,
@@ -440,11 +445,14 @@ async def get_ai_health(request) -> dict:
             "ai_engine_status": "unknown",
         }
 
-        # ── 1. Check Ollama LLM (local/remote LLM — runs on API gateway) ────────
+        # ── 1. Check LLM (multi-provider waterfall: SambaNova → Cerebras → Groq → Ollama) ──
         try:
-            from apps.ai.engines.llm_engine import OllamaLLMEngine
-            engine = OllamaLLMEngine()
-            results["ollama_available"] = engine.is_available()
+            from apps.ai.engines.llm_engine import get_llm_engine
+            engine = get_llm_engine()
+            results["llm_available"]    = engine.is_available()
+            results["ollama_available"] = engine.is_available()   # Legacy compat
+            # Report active provider name
+            results["llm_provider"] = type(engine).__name__.replace("LLMEngine", "").lower()
         except Exception:
             pass
 
@@ -529,13 +537,14 @@ async def get_ai_health(request) -> dict:
 
     checks = await check_health()
     # Determine overall status:
-    # - healthy  = pgvector + at least one AI model up
-    # - degraded = partial services
+    # - healthy    = pgvector + at least one AI model + LLM available
+    # - degraded   = partial services (pgvector or AI models)
     # - unavailable = nothing works
-    pgvector_ok = checks["pgvector_ready"]
+    pgvector_ok  = checks["pgvector_ready"]
     ai_models_ok = checks["siglip_available"] or checks["mediapipe_ready"]
-    all_ok = pgvector_ok and ai_models_ok and checks["ollama_available"]
-    any_ok = any([pgvector_ok, ai_models_ok])
+    llm_ok       = checks["llm_available"]
+    all_ok  = pgvector_ok and ai_models_ok and llm_ok
+    any_ok  = any([pgvector_ok, ai_models_ok, llm_ok])
 
     return {
         "status":           "healthy" if all_ok else ("degraded" if any_ok else "unavailable"),
