@@ -537,11 +537,19 @@ async def get_ai_health(request) -> dict:
                     results["ai_engine_status"]  = "ok"
                     results["ai_engine_version"] = health_data.get("version", "unknown")
                     results["llm_provider"]      = health_data.get("llm_provider", "unknown")
+                    # AI engine is the authoritative source for LLM status.
+                    # It runs SambaNova/Cerebras/Groq directly and reports back.
+                    # Override the local Django check (which may lack API keys in HF secrets).
+                    ai_llm_ok = bool(models.get("llm_available", False))
+                    if ai_llm_ok:
+                        results["llm_available"]    = True
+                        results["ollama_available"] = True  # Legacy compat
                     _log.info(
-                        "AI Engine OK: siglip=%s mediapipe=%s llm=%s gpu=%s",
+                        "AI Engine OK: siglip=%s mediapipe=%s llm=%s(ai=%s) gpu=%s",
                         results["siglip_available"],
                         results["mediapipe_ready"],
                         results["llm_provider"],
+                        ai_llm_ok,
                         health_data.get("gpu_available"),
                     )
                 else:
