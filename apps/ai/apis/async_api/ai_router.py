@@ -402,6 +402,8 @@ class AIHealthSchema(Schema):
     pgvector_ready:   bool
     mediapipe_ready:  bool
     checked_at:       str
+    ai_engine_url:    str = ""    # URL of the remote AI Engine space (for debugging)
+    ai_engine_status: str = ""    # "ok" | "unreachable" | "cold_starting"
 
 
 # ─── Health Check Endpoint ─────────────────────────────────────────────────────
@@ -414,6 +416,7 @@ class AIHealthSchema(Schema):
     description=(
         "Reports availability of all AI sub-systems: Ollama LLM, "
         "FashionSigLIP text encoder, pgvector HNSW index, and MediaPipe. "
+        "SigLIP and MediaPipe live in the remote HF AI Engine ZeroGPU space. "
         "No auth required — safe for monitoring probes."
     ),
     operation_id="ai_health",
@@ -423,6 +426,8 @@ async def get_ai_health(request) -> dict:
     """GET /api/v1/ninja/ai/health/"""
     from asgiref.sync import sync_to_async
     from django.utils import timezone
+    from django.conf import settings
+    import httpx
 
     @sync_to_async
     def check_health():
@@ -431,9 +436,11 @@ async def get_ai_health(request) -> dict:
             "siglip_available": False,
             "pgvector_ready":   False,
             "mediapipe_ready":  False,
+            "ai_engine_url":    "",
+            "ai_engine_status": "unknown",
         }
 
-        # Check Ollama LLM
+        # ── 1. Check Ollama LLM (local/remote LLM — runs on API gateway) ────────
         try:
             from apps.ai.engines.llm_engine import OllamaLLMEngine
             engine = OllamaLLMEngine()
@@ -441,15 +448,7 @@ async def get_ai_health(request) -> dict:
         except Exception:
             pass
 
-        # Check FashionSigLIP (CLIP model)
-        try:
-            from apps.ai.engines.recommendation_engine import FashionEmbeddingEngine
-            eng = FashionEmbeddingEngine()
-            results["siglip_available"] = eng.is_available
-        except Exception:
-            pass
-
-        # Check pgvector (ProductEmbedding table + extension)
+        # ── 2. Check pgvector (ProductEmbedding table + extension) ─────────────
         try:
             from apps.ai.models.product_embedding import ProductEmbedding
             ProductEmbedding.objects.count()
@@ -457,21 +456,62 @@ async def get_ai_health(request) -> dict:
         except Exception:
             pass
 
-        # Check MediaPipe availability (library import test)
+        # ── 3. Check AI Engine ZeroGPU Space (SigLIP + MediaPipe live there) ──
+        # The AI Engine is a separate HF ZeroGPU Gradio space. We call its
+        # health endpoint to get the real SigLIP / MediaPipe availability.
+        ai_engine_url = getattr(
+            settings, "AI_ENGINE_URL",
+            "https://fashionistar-fashionistar-ai-engine.hf.space"
+        )
+        results["ai_engine_url"] = ai_engine_url
+
         try:
-            import mediapipe  # noqa: F401
-            results["mediapipe_ready"] = True
-        except ImportError:
-            pass
+            import requests as _req
+            resp = _req.get(
+                f"{ai_engine_url}/api/predict",
+                json={"data": []},
+                headers={"Content-Type": "application/json"},
+                timeout=8,
+            )
+            # If the space is running and serving, try the dedicated health fn
+            health_resp = _req.post(
+                f"{ai_engine_url}/run/health_check",
+                json={"data": []},
+                timeout=8,
+            )
+            if health_resp.status_code == 200:
+                payload = health_resp.json().get("data", [{}])
+                if payload and isinstance(payload[0], dict):
+                    engine_health = payload[0]
+                    models = engine_health.get("models", {})
+                    results["siglip_available"] = models.get("siglip", False)
+                    results["mediapipe_ready"]  = models.get("mediapipe", False)
+                    results["ai_engine_status"] = "ok"
+                else:
+                    # Space is up but health fn not ready (cold start)
+                    results["ai_engine_status"] = "cold_starting"
+            else:
+                results["ai_engine_status"] = f"http_{health_resp.status_code}"
+        except Exception as exc:
+            logger = __import__("logging").getLogger(__name__)
+            logger.warning(f"AI Engine space unreachable: {exc}")
+            results["ai_engine_status"] = "unreachable"
 
         return results
 
     checks = await check_health()
-    all_ok = checks["ollama_available"] and checks["siglip_available"] and checks["pgvector_ready"]
-    degraded = any(checks.values()) and not all_ok
+    # Determine overall status:
+    # - healthy  = pgvector + at least one AI model up
+    # - degraded = partial services
+    # - unavailable = nothing works
+    pgvector_ok = checks["pgvector_ready"]
+    ai_models_ok = checks["siglip_available"] or checks["mediapipe_ready"]
+    all_ok = pgvector_ok and ai_models_ok and checks["ollama_available"]
+    any_ok = any([pgvector_ok, ai_models_ok])
 
     return {
-        "status":           "healthy" if all_ok else ("degraded" if degraded else "unavailable"),
+        "status":           "healthy" if all_ok else ("degraded" if any_ok else "unavailable"),
         "checked_at":       timezone.now().isoformat(),
         **checks,
     }
+

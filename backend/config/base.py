@@ -967,10 +967,14 @@ if CELERY_RESULT_BACKEND.startswith("rediss://"):
         "ssl_cert_reqs": "none"
     }
 
-# Fast-fail: 1s timeouts so dead Redis fails immediately, not after 60s
+# Fast-fail for local Redis; use longer timeouts for cloud/TLS Redis (Aiven on HF Spaces)
+# The TLS handshake from HF cross-region can take 2–5s, so we give a generous window.
+_celery_is_cloud_redis = (
+    CELERY_BROKER_URL.startswith("rediss://") and "aivencloud.com" in CELERY_BROKER_URL
+)
 CELERY_BROKER_TRANSPORT_OPTIONS = {
-    "socket_connect_timeout": 1,
-    "socket_timeout": 1,
+    "socket_connect_timeout": 10 if _celery_is_cloud_redis else 2,
+    "socket_timeout": 30 if _celery_is_cloud_redis else 2,
     "socket_keepalive": True,
 }
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
