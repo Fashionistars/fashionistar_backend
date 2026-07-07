@@ -483,16 +483,48 @@ async def get_ai_health(request) -> dict:
 
             session_hash = uuid.uuid4().hex
 
-            # Strategy 1: Gradio 5.x — use api_name (stable), NOT fn_index (fragile)
+            # ── Discover fn_index via /gradio_api/info (most reliable) ─────────
+            # Gradio 5.37: /gradio_api/info returns named_endpoints dict.
+            # "//health_check" is how Gradio 5.x displays auto-named endpoints.
+            # We try api_name="/health_check" first; if that 422s, discover fn_index.
+            fn_index_to_use = None
+            try:
+                info_resp = _req.get(
+                    f"{ai_engine_url}/gradio_api/info", timeout=8
+                )
+                if info_resp.status_code == 200:
+                    info_data = info_resp.json()
+                    # Build fn_index map from named_endpoints
+                    endpoints = info_data.get("named_endpoints", {})
+                    for name, details in endpoints.items():
+                        if "health" in name.lower():
+                            fn_index_to_use = details.get("id", None)
+                            break
+            except Exception:
+                pass
+
+            # ── Strategy 1: api_name approach (Gradio 5.x preferred) ──────────
+            join_body = {
+                "data": [],
+                "api_name": "/health_check",
+                "session_hash": session_hash,
+            }
             join_resp = _req.post(
                 f"{ai_engine_url}/gradio_api/queue/join",
-                json={
-                    "data": [],
-                    "api_name": "/health_check",
-                    "session_hash": session_hash,
-                },
+                json=join_body,
                 timeout=10,
             )
+
+            # If api_name doesn't work, try fn_index
+            if join_resp.status_code in (404, 422) and fn_index_to_use is not None:
+                _log.info("api_name failed (%d) — retrying with fn_index=%s",
+                          join_resp.status_code, fn_index_to_use)
+                session_hash = uuid.uuid4().hex
+                join_resp = _req.post(
+                    f"{ai_engine_url}/gradio_api/queue/join",
+                    json={"data": [], "fn_index": fn_index_to_use, "session_hash": session_hash},
+                    timeout=10,
+                )
 
             if join_resp.status_code == 200:
                 # Stream SSE events from /gradio_api/queue/data
@@ -500,7 +532,7 @@ async def get_ai_health(request) -> dict:
                     f"{ai_engine_url}/gradio_api/queue/data",
                     params={"session_hash": session_hash},
                     stream=True,
-                    timeout=20,  # 20s: handles ZeroGPU cold-start latency
+                    timeout=35,  # 35s: handles ZeroGPU cold-start latency
                 )
                 health_data = None
                 for raw_line in sse_resp.iter_lines():
@@ -518,33 +550,37 @@ async def get_ai_health(request) -> dict:
                         data_list = output.get("data", [])
                         if data_list:
                             first = data_list[0]
-                            # In Gradio 5.x the output of a gr.JSON component
-                            # comes back as a plain dict (already parsed)
                             if isinstance(first, dict):
                                 health_data = first
                             elif isinstance(first, str):
-                                # Fallback: JSON-encoded string
                                 try:
                                     health_data = _json.loads(first)
                                 except _json.JSONDecodeError:
                                     pass
                         break
-                    if msg.get("msg") == "process_generating":
-                        # Streaming function — accumulate last value
-                        pass
 
                 if health_data and isinstance(health_data, dict):
+                    # health_check_fn returns flat dict:
+                    # {status, siglip_available, mediapipe_ready, llm_provider, ...}
+                    # Legacy format also supported: {models: {siglip, mediapipe}}
                     models = health_data.get("models", {})
-                    results["siglip_available"] = models.get("siglip", False)
-                    results["mediapipe_ready"]  = models.get("mediapipe", False)
+                    results["siglip_available"] = (
+                        health_data.get("siglip_available")
+                        or models.get("siglip", False)
+                    )
+                    results["mediapipe_ready"] = (
+                        health_data.get("mediapipe_ready")
+                        or models.get("mediapipe", False)
+                    )
                     results["ai_engine_status"] = "ok"
+                    results["ai_engine_version"] = health_data.get("ai_engine_version", "unknown")
                     _log.info(
-                        "AI Engine health OK: llm=%s siglip=%s mediapipe=%s",
+                        "AI Engine health OK: siglip=%s mediapipe=%s llm=%s",
+                        results["siglip_available"],
+                        results["mediapipe_ready"],
                         health_data.get("llm_provider", "?"),
-                        models.get("siglip"), models.get("mediapipe"),
                     )
                 elif join_resp.status_code == 200:
-                    # Space is running but health data wasn't parsed — still counts
                     results["ai_engine_status"] = "running_no_data"
 
             elif join_resp.status_code in (404, 422):
@@ -554,44 +590,43 @@ async def get_ai_health(request) -> dict:
                     json={"data": []},
                     timeout=8,
                 )
-                ct_leg = legacy.headers.get("content-type", "")
-                if legacy.status_code == 200 and "application/json" in ct_leg:
-                    payload = legacy.json().get("data", [{}])
-                    first = payload[0] if payload else {}
-                    if isinstance(first, str):
-                        try:
-                            first = _json.loads(first)
-                        except _json.JSONDecodeError:
-                            first = {}
-                    models = first.get("models", {}) if isinstance(first, dict) else {}
-                    results["siglip_available"] = models.get("siglip", False)
-                    results["mediapipe_ready"]  = models.get("mediapipe", False)
-                    results["ai_engine_status"] = "ok_legacy"
+                if legacy.status_code == 200:
+                    try:
+                        ld = legacy.json()
+                        d0 = ld.get("data", [{}])[0]
+                        if isinstance(d0, str):
+                            d0 = _json.loads(d0)
+                        results["siglip_available"] = d0.get("siglip_available", False)
+                        results["mediapipe_ready"]  = d0.get("mediapipe_ready", False)
+                        results["ai_engine_status"] = "ok"
+                    except Exception:
+                        results["ai_engine_status"] = "legacy_ok"
                 else:
                     results["ai_engine_status"] = "api_not_found"
             else:
-                results["ai_engine_status"] = f"http_{join_resp.status_code}"
+                results["ai_engine_status"] = f"join_error_{join_resp.status_code}"
 
         except Exception as exc:
-            _log.warning(f"AI Engine space unreachable: {exc}")
+            _log.warning("AI Engine health check failed: %s", exc)
             results["ai_engine_status"] = "unreachable"
+            results["ai_engine_error"]  = str(exc)[:200]
 
-        return results
-
-    checks = await check_health()
-    # Determine overall status:
-    # - healthy    = pgvector + at least one AI model + LLM available
-    # - degraded   = partial services (pgvector or AI models)
-    # - unavailable = nothing works
-    pgvector_ok  = checks["pgvector_ready"]
-    ai_models_ok = checks["siglip_available"] or checks["mediapipe_ready"]
-    llm_ok       = checks["llm_available"]
-    all_ok  = pgvector_ok and ai_models_ok and llm_ok
-    any_ok  = any([pgvector_ok, ai_models_ok, llm_ok])
-
-    return {
-        "status":           "healthy" if all_ok else ("degraded" if any_ok else "unavailable"),
-        "checked_at":       timezone.now().isoformat(),
-        **checks,
-    }
+        # ── 4. Build final response ───────────────────────────────────────────
+        overall = (
+            "healthy"
+            if results.get("pgvector_ready") and results.get("llm_available")
+            else "degraded"
+        )
+        return {
+            "status":             overall,
+            "llm_available":      results.get("llm_available", False),
+            "ollama_available":   results.get("ollama_available", False),
+            "siglip_available":   results.get("siglip_available", False),
+            "mediapipe_ready":    results.get("mediapipe_ready", False),
+            "pgvector_ready":     results.get("pgvector_ready", False),
+            "ai_engine_status":   results.get("ai_engine_status", "not_checked"),
+            "ai_engine_url":      ai_engine_url,
+            "ai_engine_version":  results.get("ai_engine_version", "unknown"),
+            "llm_provider":       results.get("llm_provider", "unknown"),
+        }
 

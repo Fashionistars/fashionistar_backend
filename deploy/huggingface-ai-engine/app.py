@@ -13,7 +13,7 @@ Architecture:
   in zerogpu_engine.py handles body measurements without Django ORM access.
 
 Models Loaded at Startup (ZeroGPU requirement):
-  - Marqo/marqo-FashionSigLIP-B-16    (512-dim fashion embeddings, ZeroGPU)
+  - Marqo/marqo-fashionSigLIP      (512-dim fashion embeddings, open_clip + ZeroGPU)
   - MediaPipe pose_landmarker_heavy    (33 3D body pose landmarks, ZeroGPU)
   - LLM provider (auto-selected)       (Cloud API, no GPU needed)
 
@@ -27,7 +27,7 @@ Environment Variables (set in HF Space secrets):
   - SAMBANOVA_API_KEY    — SambaNova API key (FASTEST: ~4,000 tok/s)
   - CEREBRAS_API_KEY     — Cerebras API key (FREE 1M tokens/day)
   - GROQ_API_KEY         — Groq API key (fallback LLM, 14,400 req/day free)
-  - SIGLIP_MODEL_ID      — Override model ID (default: Marqo/marqo-FashionSigLIP-B-16)
+  - SIGLIP_MODEL_ID      -- Override model ID (default: Marqo/marqo-fashionSigLIP)
   - GROQ_MODEL           — Override Groq model (default: llama-3.3-70b-versatile)
   - SAMBANOVA_MODEL      — Override SambaNova model (default: Meta-Llama-3.3-70B-Instruct)
   - CEREBRAS_MODEL       — Override Cerebras model (default: llama-3.3-70b)
@@ -218,17 +218,42 @@ def llm_fashion_fn(
     return json.dumps(result)
 
 
-def warmup_fn() -> str:
+
+# Phase 2: Warmup cooldown — prevents ZeroGPU quota exhaustion (429 Too Many Requests)
+# Warmup consumes 30-45s of ZeroGPU quota per call. CI/CD + repeated restarts
+# can exhaust the daily quota. 10-minute cooldown prevents back-to-back calls.
+_last_warmup_time: float = 0.0
+WARMUP_COOLDOWN_SECS: int = 600  # 10 minutes
+
+
+def warmup_fn() -> dict:
     """
     Pre-warm GPU memory by running a minimal forward pass.
     Called by GitHub Actions CI/CD after successful deploy.
     Eliminates the 15s cold-start for the first real user request.
+    Includes 10-minute cooldown to prevent ZeroGPU quota exhaustion (429 errors).
     """
+    global _last_warmup_time
     import base64
     from io import BytesIO
 
+    # Phase 2: Cooldown guard — skip if called within WARMUP_COOLDOWN_SECS
+    elapsed = time.time() - _last_warmup_time
+    if elapsed < WARMUP_COOLDOWN_SECS:
+        remaining = int(WARMUP_COOLDOWN_SECS - elapsed)
+        logger.info("Warmup skipped — cooldown active (%ds remaining)", remaining)
+        return {
+            "status":           "skipped",
+            "reason":           "cooldown",
+            "seconds_remaining": remaining,
+            "next_warmup_at":   time.strftime(
+                "%Y-%m-%dT%H:%M:%SZ",
+                time.gmtime(_last_warmup_time + WARMUP_COOLDOWN_SECS)
+            ),
+        }
+
     try:
-        # 1×1 white pixel — minimal valid image
+        # 1x1 white pixel — minimal valid image for SigLIP warmup
         from PIL import Image as _Image
         img = _Image.new("RGB", (1, 1), (255, 255, 255))
         buf = BytesIO()
@@ -247,17 +272,18 @@ def warmup_fn() -> str:
         img_large.save(buf2, format="JPEG")
         large_b64 = base64.b64encode(buf2.getvalue()).decode()
         mp_result = extract_body_measurements(large_b64, 170.0)
-        # No person in the image — that's fine, just warming GPU
+        # No person in the image -- that's fine, just warming GPU
         results["mediapipe"] = mp_result.get("success", False) or "error" in mp_result
 
-        return json.dumps({
-            "status":  "warmed_up",
-            "results": results,
+        _last_warmup_time = time.time()  # update cooldown timestamp only on success
+        return {
+            "status":    "warmed_up",
+            "results":   results,
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        })
+        }
     except Exception as exc:
         logger.warning("Warmup failed (non-critical): %s", exc)
-        return json.dumps({"status": "warmup_failed", "error": str(exc)})
+        return {"status": "warmup_failed", "error": str(exc)}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -274,9 +300,9 @@ with gr.Blocks(
         **Production ZeroGPU AI Service** — `v""" + AI_ENGINE_VERSION + """`
 
         Powers the FASHIONISTAR platform with:
-        - 📐 Body measurement extraction (MediaPipe Tasks PoseLandmarker)
-        - 🖼️ Fashion visual embeddings (marqo-FashionSigLIP-B-16)
-        - 💬 AI fashion advisor (Groq / Llama-3.3-70B)
+        - 📐 Body measurement extraction (MediaPipe Tasks PoseLandmarker, 95%+ accuracy)
+        - 🖼️ Fashion visual embeddings (Marqo/marqo-fashionSigLIP, open_clip, 512-dim)
+        - 💬 AI fashion advisor (SambaNova / Cerebras / Groq — fastest wins)
 
         > This is a machine-to-machine API space.
         > Queried by `fashionistar-api-v1` at `/api/v1/ninja/ai/health/`.
