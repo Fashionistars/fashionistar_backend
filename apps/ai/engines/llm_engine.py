@@ -385,3 +385,147 @@ In 2 sentences, encourage them and suggest 1 specific thing to improve accuracy 
                 best_size  = variant.get("size")
 
         return best_size
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# GroqLLMEngine — Production LLM for HF Spaces (replaces Ollama on ZeroGPU)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class GroqLLMEngine:
+    """
+    Interface to Groq API — ultra-fast LLM inference via Groq LPU chips.
+
+    Why Groq instead of Ollama on HF Spaces:
+      - Ollama requires a persistent daemon (incompatible with HF cold-start)
+      - Groq free tier: 14,400 req/day, Llama-3.3-70B-Versatile
+      - Response time: <200ms (faster than local 7B on CPU)
+      - Zero infrastructure — one API key, works from any container
+
+    API: https://console.groq.com/keys
+    Free tier: 14,400 requests/day (Llama-3.3-70B-Versatile)
+    Paid tier: pay-per-token with no rate limit
+
+    Implements the same public interface as OllamaLLMEngine for drop-in use:
+      llm.generate(system, prompt) -> str
+      llm.is_available() -> bool
+
+    Domain methods inherit from OllamaLLMEngine by delegation to share
+    prompt templates (size recommendation, analytics insights, etc).
+    """
+
+    def __init__(self):
+        self.enabled   = getattr(settings, "GROQ_ENABLED", True)
+        self.api_key   = getattr(settings, "GROQ_API_KEY", "")
+        self.model     = getattr(settings, "GROQ_MODEL",   "llama-3.3-70b-versatile")
+        self._client   = None
+
+    @property
+    def client(self):
+        if self._client is None:
+            if not self.api_key:
+                return None
+            try:
+                from groq import Groq
+                self._client = Groq(api_key=self.api_key)
+            except ImportError:
+                logger.debug("groq package not installed — Groq LLM disabled")
+            except Exception as exc:
+                logger.warning("Failed to create Groq client: %s", exc)
+        return self._client
+
+    def is_available(self) -> bool:
+        """True if GROQ_API_KEY is set and the groq package is installed."""
+        if not self.enabled or not self.api_key:
+            return False
+        return self.client is not None
+
+    def generate(
+        self,
+        system: str,
+        prompt: str,
+        temperature: float = 0.3,
+        max_tokens: int    = 500,
+    ) -> str:
+        """
+        Generate text using Groq API.
+        Returns empty string if Groq is unavailable (graceful degradation).
+        """
+        if not self.enabled:
+            return ""
+        client = self.client
+        if client is None:
+            return ""
+        try:
+            response = client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user",   "content": prompt},
+                ],
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as exc:
+            logger.warning("[GroqLLMEngine] generate failed: %s", exc)
+            return ""
+
+    # ── Delegate domain methods to OllamaLLMEngine (shared prompt templates) ──
+
+    def generate_size_recommendation_reasoning(
+        self, measurements: dict, product_specs: dict, recommended_size: str
+    ) -> str:
+        return OllamaLLMEngine.generate_size_recommendation_reasoning(
+            self, measurements, product_specs, recommended_size  # type: ignore[arg-type]
+        )
+
+    def generate_platform_insights(self, analytics_data: dict) -> str:
+        return OllamaLLMEngine.generate_platform_insights(self, analytics_data)  # type: ignore[arg-type]
+
+    def generate_measurement_advice(self, measurements: dict, quality_score: float) -> str:
+        return OllamaLLMEngine.generate_measurement_advice(self, measurements, quality_score)  # type: ignore[arg-type]
+
+    def generate_size_recommendation(self, measurements: dict, product_info: dict) -> str:
+        return OllamaLLMEngine.generate_size_recommendation(self, measurements, product_info)  # type: ignore[arg-type]
+
+    @staticmethod
+    def load_product_size_chart(product_id: int | str) -> list[dict]:
+        return OllamaLLMEngine.load_product_size_chart(product_id)
+
+    @staticmethod
+    def _format_measurements(m: dict) -> str:
+        return OllamaLLMEngine._format_measurements(m)
+
+    @staticmethod
+    def _format_product_specs(specs: dict) -> str:
+        return OllamaLLMEngine._format_product_specs(specs)
+
+    @staticmethod
+    def _pick_best_size(measurements: dict, size_chart: list[dict]) -> str | None:
+        return OllamaLLMEngine._pick_best_size(measurements, size_chart)
+
+
+def get_llm_engine() -> OllamaLLMEngine | GroqLLMEngine:
+    """
+    Factory: returns the best available LLM engine.
+
+    Priority:
+      1. GroqLLMEngine — if GROQ_API_KEY is set in settings/env
+      2. OllamaLLMEngine — if Ollama is reachable (local dev)
+
+    Both implement the same interface so callers need no changes.
+
+    Example:
+        llm = get_llm_engine()
+        text = llm.generate(system="...", prompt="...")
+    """
+    groq_key = getattr(settings, "GROQ_API_KEY", "")
+    if groq_key:
+        engine = GroqLLMEngine()
+        if engine.is_available():
+            logger.info("[get_llm_engine] Using GroqLLMEngine (model: %s)", engine.model)
+            return engine
+
+    # Fallback to Ollama (local dev / self-hosted)
+    logger.debug("[get_llm_engine] GROQ_API_KEY not set — falling back to OllamaLLMEngine")
+    return OllamaLLMEngine()

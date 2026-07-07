@@ -1,379 +1,366 @@
+﻿# deploy/huggingface-ai-engine/app.py
 """
-FASHIONISTAR AI Engine — ZeroGPU Gradio Application
+FASHIONISTAR AI Engine — Hugging Face ZeroGPU Space
 =====================================================
-Hosts all GPU-intensive AI/ML inference tasks for the FASHIONISTAR platform.
 
-ZeroGPU Architecture:
-  - Models are loaded at MODULE LEVEL onto 'cuda' (ZeroGPU emulation mode outside @spaces.GPU)
-  - @spaces.GPU decorator requests a real GPU for the duration of the function
-  - GPU is released after each function call (ZeroGPU is shared, not persistent)
+Production entry point for the fashionistar/fashionistar-ai-engine HF Space.
 
-Services:
-  - Body measurement extraction (MediaPipe Pose)
-  - Fashion visual embeddings (SigLIP / google/siglip-so400m-patch14-384)
-  - Health check endpoint (queried by fashionistar-api-v1)
+Architecture:
+  This file is a thin Gradio wrapper around apps.ai.engines.zerogpu_engine.
+  All core AI logic lives in zerogpu_engine.py which is co-deployed here.
 
-Internal API: Celery workers call this via Gradio Client API
-External URL: https://fashionistar-fashionistar-ai-engine.hf.space
+  When running standalone (not inside Django), the inline geometry fallback
+  in zerogpu_engine.py handles body measurements without Django ORM access.
+
+Models Loaded at Startup (ZeroGPU requirement):
+  - Marqo/marqo-FashionSigLIP-B-16    (512-dim fashion embeddings)
+  - MediaPipe pose_landmarker_heavy    (33 3D body pose landmarks)
+  - Groq API client                    (Llama-3.3-70B — API key required)
+
+Environment Variables (set in HF Space secrets):
+  - HF_TOKEN             — HF Hub token (faster model downloads, auth)
+  - GROQ_API_KEY         — Groq API key (LLM features)
+  - SIGLIP_MODEL_ID      — Override model ID (default: Marqo/marqo-FashionSigLIP-B-16)
+  - GROQ_MODEL           — Override Groq model (default: llama-3.3-70b-versatile)
+
+Endpoints exposed via Gradio API (/run/<api_name>):
+  POST /run/health_check       — Service health + model availability
+  POST /run/body_measurements  — Body pose extraction from image
+  POST /run/fashion_embedding  — Product visual embedding
+  POST /run/llm_fashion        — Fashion LLM advice via Groq
+  POST /run/warmup             — Pre-warm GPU memory (called by CI/CD)
+
+Queried by fashionistar-api-v1 at:
+  GET /api/v1/ninja/ai/health/
 """
-import os
+
+from __future__ import annotations
+
 import json
-import time
 import logging
-import base64
-from io import BytesIO
-from typing import Optional, Dict, Any
+import os
+import sys
+import time
+from pathlib import Path
 
 import gradio as gr
-import spaces  # ZeroGPU decorator — no-op outside HF Spaces
-import numpy as np
-from PIL import Image
 
 # ── Logging ────────────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger("fashionistar.ai_engine")
 
-# ── Environment ────────────────────────────────────────────────────────────────
-HF_TOKEN          = os.environ.get("HF_TOKEN", "")
-INTERNAL_TOKEN    = os.environ.get("INTERNAL_SERVICE_TOKEN", "fashionistar-internal-telemetry-2026")
-PORT              = int(os.environ.get("PORT", 7860))
-AI_ENGINE_VERSION = "2.0.0"
+# ── Load environment from .env (if present, e.g. local dev) ───────────────────
+try:
+    from dotenv import load_dotenv
+    _env = Path(__file__).parent / ".env"
+    if _env.exists():
+        load_dotenv(_env)
+        logger.info("Loaded .env from %s", _env)
+except ImportError:
+    pass  # python-dotenv not required in production
 
-# ── ZeroGPU: Load models at MODULE LEVEL onto 'cuda' ──────────────────────────
-# Outside @spaces.GPU, CUDA emulation is active. Inside @spaces.GPU, real GPU is used.
-# NEVER lazy-load inside @spaces.GPU — it breaks ZeroGPU's CUDA transfer optimizations.
+# ── Import ZeroGPU Engine ─────────────────────────────────────────────────────
+# Try to import from the deployed zerogpu_engine.py (co-deployed in same dir)
+# Fall back to apps.ai.engines if running inside full Django project
+_engine = None
+_engine_error = None
 
-_mediapipe_pose    = None
-_siglip_model      = None
-_siglip_processor  = None
-_models_loaded     = False
+try:
+    # Primary: import from the same directory (HF Space deploy)
+    _script_dir = Path(__file__).parent
+    if str(_script_dir) not in sys.path:
+        sys.path.insert(0, str(_script_dir))
 
-def _initialize_models():
-    """Load all models at startup time (module level, as required by ZeroGPU)."""
-    global _mediapipe_pose, _siglip_model, _siglip_processor, _models_loaded
-
-    # ── MediaPipe Pose ─────────────────────────────────────────────────────────
-    try:
-        import mediapipe as mp
-        mp_pose = mp.solutions.pose
-        _mediapipe_pose = mp_pose.Pose(
-            static_image_mode=True,
-            model_complexity=2,
-            enable_segmentation=True,
-            min_detection_confidence=0.5,
-        )
-        logger.info("✅ MediaPipe Pose loaded")
-    except Exception as e:
-        logger.warning(f"⚠️  MediaPipe load failed (non-fatal): {e}")
-
-    # ── SigLIP Vision Model ────────────────────────────────────────────────────
-    # google/siglip-so400m-patch14-384 — state-of-art fashion embedding
-    try:
-        import torch
-        from transformers import AutoProcessor, AutoModel
-
-        model_id = os.environ.get("SIGLIP_MODEL_ID", "google/siglip-base-patch16-224")
-        logger.info(f"Loading SigLIP: {model_id} ...")
-        _siglip_processor = AutoProcessor.from_pretrained(model_id)
-        _siglip_model = AutoModel.from_pretrained(model_id, torch_dtype=torch.float16)
-        # Move to CUDA at module level (ZeroGPU requirement)
-        _siglip_model = _siglip_model.to("cuda")
-        _siglip_model.eval()
-        logger.info("✅ SigLIP model loaded on CUDA")
-    except Exception as e:
-        logger.warning(f"⚠️  SigLIP load failed (non-fatal): {e}")
-
-    _models_loaded = True
-    logger.info(
-        f"AI Engine v{AI_ENGINE_VERSION} initialized — "
-        f"MediaPipe: {'✅' if _mediapipe_pose else '❌'}, "
-        f"SigLIP: {'✅' if _siglip_model else '❌'}"
+    from zerogpu_engine import (
+        initialize_models,
+        extract_body_measurements,
+        generate_fashion_embedding,
+        generate_llm_response,
+        health_check as _engine_health_check,
+        AI_ENGINE_VERSION,
     )
+    logger.info("✅ Loaded zerogpu_engine from %s", _script_dir)
+except ImportError:
+    try:
+        # Secondary: import from Django apps (full project deploy)
+        from apps.ai.engines.zerogpu_engine import (
+            initialize_models,
+            extract_body_measurements,
+            generate_fashion_embedding,
+            generate_llm_response,
+            health_check as _engine_health_check,
+            AI_ENGINE_VERSION,
+        )
+        logger.info("✅ Loaded zerogpu_engine from apps.ai.engines")
+    except ImportError as e:
+        _engine_error = str(e)
+        logger.error("❌ zerogpu_engine not found: %s", e)
+        # Minimal stubs so Gradio can still start
+        AI_ENGINE_VERSION = "error"
+
+        def initialize_models():
+            return {"mediapipe": False, "siglip": False, "groq": False}
+
+        def extract_body_measurements(img_b64, height_cm=170.0):
+            return {"success": False, "error": "zerogpu_engine not loaded"}
+
+        def generate_fashion_embedding(img_b64):
+            return {"success": False, "error": "zerogpu_engine not loaded"}
+
+        def generate_llm_response(prompt, system="", max_tokens=512, temperature=0.7):
+            return {"success": False, "error": "zerogpu_engine not loaded", "text": None}
+
+        def _engine_health_check():
+            return {"status": "error", "error": _engine_error}
 
 
-# Initialize models at startup
-_initialize_models()
+# ── Startup: load all models NOW (required before any @spaces.GPU call) ────────
+logger.info("═" * 60)
+logger.info("🎀 FASHIONISTAR AI Engine v%s — Starting...", AI_ENGINE_VERSION)
+logger.info("═" * 60)
+_startup_results = initialize_models()
+logger.info("Startup complete: %s", _startup_results)
 
 
-# ── ZeroGPU-decorated AI Functions ─────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# Gradio Interface Functions
+# (These wrap zerogpu_engine functions with JSON string I/O for easy API use)
+# ══════════════════════════════════════════════════════════════════════════════
 
-@spaces.GPU(duration=30)
-def extract_body_measurements(image_b64: str, height_cm: float = 170.0) -> dict:
+def health_check_fn() -> str:
     """
-    Extract body measurements from a base64-encoded image.
-    Uses MediaPipe Pose + geometric estimation.
+    Return AI Engine health status as JSON string.
+    Queried by fashionistar-api-v1 /ninja/ai/health/ endpoint.
+    """
+    result = _engine_health_check()
+    result["startup_results"] = _startup_results
+    return json.dumps(result)
+
+
+def body_measurements_fn(image_b64: str, height_cm: float = 170.0) -> str:
+    """
+    Extract body measurements from a base64-encoded body photo.
 
     Args:
-        image_b64: Base64-encoded JPEG/PNG image
+        image_b64: Base64-encoded JPEG/PNG of the user's full body (front-facing)
         height_cm: Known user height in cm for scale calibration
 
     Returns:
-        dict with measurements: chest, waist, hips, etc.
+        JSON string with: success, measurements, confidence, errors
     """
-    try:
-        import mediapipe as mp
-        import cv2
-
-        if _mediapipe_pose is None:
-            return {"error": "MediaPipe not available", "success": False}
-
-        # Decode image
-        img_bytes  = base64.b64decode(image_b64)
-        img        = Image.open(BytesIO(img_bytes)).convert("RGB")
-        img_array  = np.array(img)
-        img_bgr    = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
-
-        results = _mediapipe_pose.process(cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB))
-        if not results.pose_landmarks:
-            return {"error": "No pose detected in image", "success": False}
-
-        landmarks   = results.pose_landmarks.landmark
-        h_px, w_px  = img_array.shape[:2]
-
-        # Key landmark indices (MediaPipe BlazePose)
-        LEFT_SHOULDER  = 11
-        RIGHT_SHOULDER = 12
-        LEFT_HIP       = 23
-        RIGHT_HIP      = 24
-        LEFT_ANKLE     = 27
-        RIGHT_ANKLE    = 28
-        LEFT_EAR       = 7
-        RIGHT_EAR      = 8
-
-        def px(idx: int) -> np.ndarray:
-            lm = landmarks[idx]
-            return np.array([lm.x * w_px, lm.y * h_px])
-
-        # Pixel distances
-        shoulder_px     = np.linalg.norm(px(LEFT_SHOULDER)  - px(RIGHT_SHOULDER))
-        hip_px          = np.linalg.norm(px(LEFT_HIP)       - px(RIGHT_HIP))
-        torso_px        = np.mean([
-            np.linalg.norm(px(LEFT_SHOULDER)  - px(LEFT_HIP)),
-            np.linalg.norm(px(RIGHT_SHOULDER) - px(RIGHT_HIP)),
-        ])
-        body_height_px  = np.linalg.norm(
-            (px(LEFT_ANKLE) + px(RIGHT_ANKLE)) / 2
-            - (px(LEFT_EAR) + px(RIGHT_EAR)) / 2
-        )
-
-        if body_height_px < 1:
-            return {
-                "error": "Cannot determine scale — ensure full body is visible",
-                "success": False,
-            }
-
-        px_per_cm   = body_height_px / height_cm
-        shoulder_cm = (shoulder_px / px_per_cm) * 2.2
-        chest_cm    = shoulder_cm * 0.95
-        waist_cm    = (hip_px     / px_per_cm) * 1.8
-        hip_cm      = (hip_px     / px_per_cm) * 2.1
-        inseam_cm   = (torso_px   / px_per_cm) * 0.6
-
-        return {
-            "success": True,
-            "measurements": {
-                "shoulder_cm": round(shoulder_cm, 1),
-                "chest_cm":    round(chest_cm,    1),
-                "waist_cm":    round(waist_cm,    1),
-                "hip_cm":      round(hip_cm,      1),
-                "inseam_cm":   round(inseam_cm,   1),
-                "height_cm":   round(height_cm,   1),
-            },
-            "confidence": round(results.pose_landmarks.landmark[LEFT_SHOULDER].visibility, 3),
-            "model":       "mediapipe-pose-v2",
-        }
-
-    except Exception as e:
-        logger.error(f"Measurement extraction failed: {e}")
-        return {"error": str(e), "success": False}
+    if not image_b64 or not image_b64.strip():
+        return json.dumps({"success": False, "error": "image_b64 is required"})
+    # Strip data URI prefix if present
+    if "," in image_b64:
+        image_b64 = image_b64.split(",", 1)[1]
+    result = extract_body_measurements(image_b64, float(height_cm))
+    return json.dumps(result)
 
 
-@spaces.GPU(duration=20)
-def generate_fashion_embedding(image_b64: str) -> dict:
+def fashion_embedding_fn(image_b64: str) -> str:
     """
-    Generate SigLIP visual embedding for a fashion item image.
+    Generate marqo-FashionSigLIP-B-16 visual embedding for a product image.
 
     Args:
-        image_b64: Base64-encoded image
+        image_b64: Base64-encoded product/fashion image
 
     Returns:
-        dict with 'embedding' vector (list of floats) and metadata
+        JSON string with: success, embedding (list[float]), dimension
     """
+    if not image_b64 or not image_b64.strip():
+        return json.dumps({"success": False, "error": "image_b64 is required"})
+    if "," in image_b64:
+        image_b64 = image_b64.split(",", 1)[1]
+    result = generate_fashion_embedding(image_b64)
+    return json.dumps(result)
+
+
+def llm_fashion_fn(
+    prompt: str,
+    system: str = "You are a professional fashion advisor for FASHIONISTAR.",
+    max_tokens: int = 512,
+    temperature: float = 0.7,
+) -> str:
+    """
+    Generate fashion LLM response via Groq API (Llama-3.3-70B-Versatile).
+
+    Args:
+        prompt:      User request / task description
+        system:      System prompt (optional, defaults to fashion advisor)
+        max_tokens:  Maximum response tokens (default 512)
+        temperature: Sampling temperature (0=deterministic, 1=creative)
+
+    Returns:
+        JSON string with: success, text, model, usage
+    """
+    if not prompt or not prompt.strip():
+        return json.dumps({"success": False, "error": "prompt is required"})
+    result = generate_llm_response(
+        prompt=prompt.strip(),
+        system=system.strip() if system else "You are a professional fashion advisor for FASHIONISTAR.",
+        max_tokens=int(max_tokens),
+        temperature=float(temperature),
+    )
+    return json.dumps(result)
+
+
+def warmup_fn() -> str:
+    """
+    Pre-warm GPU memory by running a minimal forward pass.
+    Called by GitHub Actions CI/CD after successful deploy.
+    Eliminates the 15s cold-start for the first real user request.
+    """
+    import base64
+    from io import BytesIO
+
     try:
-        if _siglip_model is None or _siglip_processor is None:
-            return {"error": "SigLIP model not available", "success": False}
+        # 1×1 white pixel — minimal valid image
+        from PIL import Image as _Image
+        img = _Image.new("RGB", (1, 1), (255, 255, 255))
+        buf = BytesIO()
+        img.save(buf, format="JPEG")
+        tiny_b64 = base64.b64encode(buf.getvalue()).decode()
 
-        import torch
+        results = {}
 
-        img_bytes = base64.b64decode(image_b64)
-        img       = Image.open(BytesIO(img_bytes)).convert("RGB")
+        # Warmup SigLIP
+        emb_result = generate_fashion_embedding(tiny_b64)
+        results["siglip"] = emb_result.get("success", False)
 
-        inputs = _siglip_processor(images=img, return_tensors="pt")
-        # Move inputs to GPU (real GPU inside @spaces.GPU)
-        inputs = {k: v.to("cuda") for k, v in inputs.items()}
+        # Warmup MediaPipe (use a slightly larger image)
+        img_large = _Image.new("RGB", (224, 224), (128, 128, 128))
+        buf2      = BytesIO()
+        img_large.save(buf2, format="JPEG")
+        large_b64 = base64.b64encode(buf2.getvalue()).decode()
+        mp_result = extract_body_measurements(large_b64, 170.0)
+        # No person in the image — that's fine, just warming GPU
+        results["mediapipe"] = mp_result.get("success", False) or "error" in mp_result
 
-        with torch.no_grad():
-            image_features = _siglip_model.get_image_features(**inputs)
-            embedding      = image_features[0].float().cpu().numpy()
-            embedding      = embedding / np.linalg.norm(embedding)
-
-        return {
-            "success":   True,
-            "embedding": embedding.tolist(),
-            "dimension": len(embedding),
-            "model":     os.environ.get("SIGLIP_MODEL_ID", "google/siglip-base-patch16-224"),
-        }
-
-    except Exception as e:
-        logger.error(f"Embedding generation failed: {e}")
-        return {"error": str(e), "success": False}
-
-
-# ── Health Check (no GPU needed, called by fashionistar-api-v1) ────────────────
-def health_check() -> dict:
-    """
-    Returns AI Engine service health.
-    Called by fashionistar-api-v1 /api/v1/ninja/ai/health/ endpoint.
-    Response shape must include: models.siglip and models.mediapipe (bool).
-    """
-    return {
-        "status":  "ok",
-        "service": "fashionistar-ai-engine",
-        "version": AI_ENGINE_VERSION,
-        "models": {
-            "siglip":    _siglip_model is not None,
-            "mediapipe": _mediapipe_pose is not None,
-        },
-        "gpu_available": True,  # ZeroGPU provides GPU on-demand
-        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-    }
+        return json.dumps({
+            "status":  "warmed_up",
+            "results": results,
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        })
+    except Exception as exc:
+        logger.warning("Warmup failed (non-critical): %s", exc)
+        return json.dumps({"status": "warmup_failed", "error": str(exc)})
 
 
-# ── Gradio UI Wrappers ─────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# Gradio App
+# ══════════════════════════════════════════════════════════════════════════════
 
-def measurements_ui(image: Image.Image, height_cm: float) -> str:
-    """Gradio UI wrapper for body measurements."""
-    if image is None:
-        return json.dumps({"error": "No image provided"}, indent=2)
-    buf = BytesIO()
-    image.save(buf, format="JPEG", quality=90)
-    result = extract_body_measurements(base64.b64encode(buf.getvalue()).decode(), height_cm)
-    return json.dumps(result, indent=2)
-
-
-def embedding_ui(image: Image.Image) -> str:
-    """Gradio UI wrapper for fashion embeddings (truncates for display)."""
-    if image is None:
-        return json.dumps({"error": "No image provided"}, indent=2)
-    buf = BytesIO()
-    image.save(buf, format="JPEG", quality=90)
-    result = generate_fashion_embedding(base64.b64encode(buf.getvalue()).decode())
-    if result.get("success") and "embedding" in result:
-        result["embedding_preview"] = result["embedding"][:8]
-        result["embedding"]         = f"[{result['dimension']} dimensions — use API for full vector]"
-    return json.dumps(result, indent=2)
-
-
-# ── Build Gradio Blocks App ────────────────────────────────────────────────────
 with gr.Blocks(
     title="FASHIONISTAR AI Engine",
-    theme=gr.themes.Soft(primary_hue="purple"),
-    css="""
-    .header    { text-align: center; margin-bottom: 20px; }
-    .badge     { display: inline-block; padding: 3px 8px; border-radius: 12px;
-                 background: #7c3aed; color: #fff; font-size: 12px; font-weight: 700; }
-    .api-note  { background: #1e1b4b; color: #c4b5fd; border-radius: 8px;
-                 padding: 12px; font-family: monospace; font-size: 13px; }
-    """,
+    theme=gr.themes.Soft(primary_hue="pink", secondary_hue="rose"),
 ) as demo:
-
     gr.Markdown(
-        f"""
-        # 🤖 FASHIONISTAR AI Engine <span class="badge">v{AI_ENGINE_VERSION}</span>
+        """
+        # 🎀 FASHIONISTAR AI Engine
+        **Production ZeroGPU AI Service** — `v""" + AI_ENGINE_VERSION + """`
 
-        **ZeroGPU-powered AI inference — NVIDIA RTX Pro 6000 Blackwell (48 GB VRAM)**
+        Powers the FASHIONISTAR platform with:
+        - 📐 Body measurement extraction (MediaPipe Tasks PoseLandmarker)
+        - 🖼️ Fashion visual embeddings (marqo-FashionSigLIP-B-16)
+        - 💬 AI fashion advisor (Groq / Llama-3.3-70B)
 
-        > Internal API used by `fashionistar-api-v1` and `fashionistar-celery-queues` for background AI tasks.
-
-        <div class="api-note">
-        🔗 API Gateway: <code>https://fashionistar-fashionistar-api-v1.hf.space/api/v1/ninja/ai/health/</code>
-        </div>
-        """,
-        elem_classes="header",
+        > This is a machine-to-machine API space.
+        > Queried by `fashionistar-api-v1` at `/api/v1/ninja/ai/health/`.
+        """
     )
 
-    with gr.Tabs():
+    with gr.Tab("Health"):
+        health_btn    = gr.Button("🩺 Check Health", variant="primary")
+        health_output = gr.JSON(label="Health Status")
+        health_btn.click(fn=health_check_fn, inputs=[], outputs=[health_output])
 
-        # ── Tab 1: Body Measurements ──────────────────────────────────────────
-        with gr.Tab("📏 Body Measurements"):
-            gr.Markdown(
-                "Extract body measurements from a photo using **MediaPipe Pose** estimation.\n\n"
-                "Requires a full-body standing photo for accurate results."
-            )
-            with gr.Row():
-                with gr.Column(scale=1):
-                    meas_image  = gr.Image(
-                        label="Body Photo (full body, standing, front-facing)",
-                        type="pil",
-                    )
-                    meas_height = gr.Slider(
-                        minimum=140, maximum=220, value=170, step=1,
-                        label="Known Height (cm) — for pixel→cm scale calibration",
-                    )
-                    meas_btn = gr.Button("📏 Extract Measurements", variant="primary", size="lg")
-                with gr.Column(scale=1):
-                    meas_output = gr.Code(label="Measurements (JSON)", language="json")
-            meas_btn.click(
-                fn=measurements_ui,
-                inputs=[meas_image, meas_height],
-                outputs=meas_output,
-                api_name="extract_measurements",
-            )
+    with gr.Tab("Body Measurements"):
+        gr.Markdown("Upload a base64-encoded body photo and user height for measurement extraction.")
+        img_input    = gr.Textbox(label="Base64 Image", placeholder="data:image/jpeg;base64,/9j/...")
+        height_input = gr.Number(label="Height (cm)", value=170, minimum=100, maximum=250)
+        meas_btn     = gr.Button("Extract Measurements", variant="primary")
+        meas_output  = gr.JSON(label="Measurements")
+        meas_btn.click(fn=body_measurements_fn, inputs=[img_input, height_input], outputs=[meas_output])
 
-        # ── Tab 2: Fashion Embeddings ──────────────────────────────────────────
-        with gr.Tab("🎨 Fashion Embeddings"):
-            gr.Markdown(
-                "Generate **SigLIP visual embeddings** for fashion items.\n\n"
-                "Embeddings are stored in pgvector and used for visual similarity search."
-            )
-            with gr.Row():
-                with gr.Column(scale=1):
-                    emb_image = gr.Image(label="Fashion Item Image", type="pil")
-                    emb_btn   = gr.Button("🎨 Generate Embedding", variant="primary", size="lg")
-                with gr.Column(scale=1):
-                    emb_output = gr.Code(label="Embedding Result (JSON)", language="json")
-            emb_btn.click(
-                fn=embedding_ui,
-                inputs=[emb_image],
-                outputs=emb_output,
-                api_name="generate_embedding",
-            )
+    with gr.Tab("Fashion Embedding"):
+        gr.Markdown("Generate a 512-dim fashion visual embedding using marqo-FashionSigLIP.")
+        emb_img_input = gr.Textbox(label="Base64 Product Image", placeholder="data:image/jpeg;base64,...")
+        emb_btn       = gr.Button("Generate Embedding", variant="primary")
+        emb_output    = gr.JSON(label="Embedding Result")
+        emb_btn.click(fn=fashion_embedding_fn, inputs=[emb_img_input], outputs=[emb_output])
 
-        # ── Tab 3: Health Check ─────────────────────────────────────────────────
-        with gr.Tab("💚 Health Status"):
-            gr.Markdown(
-                "**Internal health check** — queried by `fashionistar-api-v1` via "
-                "`/run/health_check` to report SigLIP & MediaPipe availability."
-            )
-            health_btn    = gr.Button("🔍 Check Health", variant="secondary")
-            health_output = gr.JSON(label="Health Status")
-            health_btn.click(
-                fn=health_check,
-                outputs=health_output,
-                api_name="health_check",  # <-- API gateway calls /run/health_check
-            )
+    with gr.Tab("Fashion LLM"):
+        gr.Markdown("Generate fashion AI advice via Groq / Llama-3.3-70B-Versatile.")
+        llm_system_input = gr.Textbox(
+            label="System Prompt",
+            value="You are a professional fashion advisor for FASHIONISTAR.",
+        )
+        llm_prompt_input = gr.Textbox(
+            label="User Prompt",
+            placeholder="Recommend a size for someone with bust 90cm, waist 72cm, hips 96cm.",
+            lines=3,
+        )
+        llm_max_tokens   = gr.Slider(100, 2048, value=512, step=64, label="Max Tokens")
+        llm_temperature  = gr.Slider(0.0, 1.0, value=0.7, step=0.1, label="Temperature")
+        llm_btn          = gr.Button("Generate", variant="primary")
+        llm_output       = gr.JSON(label="LLM Response")
+        llm_btn.click(
+            fn=llm_fashion_fn,
+            inputs=[llm_prompt_input, llm_system_input, llm_max_tokens, llm_temperature],
+            outputs=[llm_output],
+        )
 
-    demo.queue(max_size=10)
+    with gr.Tab("Warmup"):
+        gr.Markdown(
+            "> Called by GitHub Actions CI/CD after deploy to pre-warm GPU memory.\n"
+            "> Prevents 15s cold-start for first user request."
+        )
+        warmup_btn    = gr.Button("🔥 Run GPU Warmup", variant="secondary")
+        warmup_output = gr.JSON(label="Warmup Result")
+        warmup_btn.click(fn=warmup_fn, inputs=[], outputs=[warmup_output])
 
 
-# ── Launch ─────────────────────────────────────────────────────────────────────
+# ── Named API endpoints (accessible via /run/<api_name>) ──────────────────────
+# These are the machine-to-machine endpoints called by fashionistar-api-v1.
+
+demo.add_api(
+    fn=health_check_fn,
+    inputs=[],
+    outputs=[gr.Textbox()],
+    api_name="health_check",
+)
+demo.add_api(
+    fn=body_measurements_fn,
+    inputs=[gr.Textbox(), gr.Number()],
+    outputs=[gr.Textbox()],
+    api_name="body_measurements",
+)
+demo.add_api(
+    fn=fashion_embedding_fn,
+    inputs=[gr.Textbox()],
+    outputs=[gr.Textbox()],
+    api_name="fashion_embedding",
+)
+demo.add_api(
+    fn=llm_fashion_fn,
+    inputs=[gr.Textbox(), gr.Textbox(), gr.Number(), gr.Number()],
+    outputs=[gr.Textbox()],
+    api_name="llm_fashion",
+)
+demo.add_api(
+    fn=warmup_fn,
+    inputs=[],
+    outputs=[gr.Textbox()],
+    api_name="warmup",
+)
+
 if __name__ == "__main__":
     demo.launch(
         server_name="0.0.0.0",
-        server_port=PORT,
-        share=False,
-        show_error=True,
+        server_port=int(os.environ.get("PORT", 7860)),
+        show_api=True,
     )
