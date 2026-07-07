@@ -221,19 +221,25 @@ def initialize_models() -> dict[str, bool]:
     Call this once at module level in app.py.
     """
     global _models_initialized
+
+    # Determine LLM availability before logging
+    _llm = _get_llm_client()
     results = {
-        "mediapipe": _load_mediapipe(),
-        "siglip":    _load_siglip(),
-        "groq":      bool(GROQ_API_KEY),
+        "mediapipe":         _load_mediapipe(),
+        "siglip":            _load_siglip(),
+        "llm_available":     _llm is not None,
+        "sambanova":         bool(SAMBANOVA_API_KEY),
+        "cerebras":          bool(CEREBRAS_API_KEY),
+        "groq":              bool(GROQ_API_KEY),
     }
     _models_initialized = True
-    _get_groq_client()  # warm up the Groq client connection
     logger.info(
-        "AI Engine v%s ready — MediaPipe: %s  SigLIP: %s  Groq: %s",
+        "AI Engine v%s ready | MediaPipe: %s  SigLIP: %s  LLM: %s [%s]",
         AI_ENGINE_VERSION,
-        "✅" if results["mediapipe"] else "❌",
-        "✅" if results["siglip"]    else "❌",
-        "✅" if results["groq"]      else "❌ (no GROQ_API_KEY)",
+        "✅" if results["mediapipe"]     else "❌",
+        "✅" if results["siglip"]        else "❌",
+        "✅" if results["llm_available"] else "❌ (no API keys)",
+        _ACTIVE_LLM_PROVIDER or "none",
     )
     return results
 
@@ -243,9 +249,22 @@ def extract_body_measurements(image_b64: str, height_cm: float = 170.0) -> dict[
     """
     Extract body measurements from a base64-encoded image.
     Uses MediaPipe Tasks PoseLandmarker (NEW API — replaces deprecated mp.solutions).
+
+    Rec 6: Returns 'ai_engine_version' in the result for provenance tracking.
+    Rec 7: Rejects results below MEASUREMENT_MIN_CONFIDENCE (default 0.65)
+           with success=False and error_code='LOW_CONFIDENCE'.
     """
     if _pose_landmarker is None:
         return {"success": False, "error": "MediaPipe PoseLandmarker not available"}
+
+    # Rec 7 — Read minimum confidence threshold (Django or env fallback)
+    try:
+        from django.conf import settings as django_settings
+        min_confidence = getattr(django_settings, "MEASUREMENT_MIN_CONFIDENCE", 0.65)
+        engine_version = getattr(django_settings, "AI_ENGINE_VERSION", AI_ENGINE_VERSION)
+    except Exception:
+        min_confidence = float(os.environ.get("MEASUREMENT_MIN_CONFIDENCE", "0.65"))
+        engine_version = AI_ENGINE_VERSION
 
     try:
         import mediapipe as mp
@@ -278,13 +297,35 @@ def extract_body_measurements(image_b64: str, height_cm: float = 170.0) -> dict[
         except ImportError:
             geo = _inline_geometry(landmarks, float(height_cm))
 
+        confidence = float(geo.get("quality_score", 0.0))
+
+        # Rec 7 — Confidence gate: reject below threshold
+        if confidence < min_confidence:
+            logger.warning(
+                "Measurement rejected — confidence %.3f < threshold %.3f",
+                confidence,
+                min_confidence,
+            )
+            return {
+                "success":          False,
+                "error_code":       "LOW_CONFIDENCE",
+                "error":            (
+                    f"Scan quality too low ({confidence:.0%}). "
+                    "Please ensure: full body visible, good lighting, plain background."
+                ),
+                "confidence":       confidence,
+                "min_confidence":   min_confidence,
+                "ai_engine_version": engine_version,
+            }
+
         return {
-            "success":       True,
-            "measurements":  geo.get("measurements", {}),
-            "confidence":    geo.get("quality_score", 0.0),
-            "height_source": geo.get("height_source", "user_provided"),
-            "model":         "mediapipe-tasks-pose-landmarker-heavy",
-            "errors":        geo.get("errors", []),
+            "success":           True,
+            "measurements":      geo.get("measurements", {}),
+            "confidence":        confidence,
+            "height_source":     geo.get("height_source", "user_provided"),
+            "model":             "mediapipe-tasks-pose-landmarker-heavy",
+            "errors":            geo.get("errors", []),
+            "ai_engine_version": engine_version,   # Rec 6 — provenance tracking
         }
 
     except Exception as exc:
@@ -388,9 +429,20 @@ def health_check() -> dict[str, Any]:
     Returns AI Engine health status.
     Called by fashionistar-api-v1 /api/v1/ninja/ai/health/ via /run/health_check.
 
-    Response includes: models.siglip, models.mediapipe, models.llm_available, llm_provider.
+    Response includes: models.siglip, models.mediapipe, models.llm_available,
+    llm_provider, measurement_settings (Rec 6 + Rec 7 observability).
     """
     llm_client = _get_llm_client()
+
+    # Read measurement settings (Django or env fallback)
+    try:
+        from django.conf import settings as django_settings
+        min_confidence = getattr(django_settings, "MEASUREMENT_MIN_CONFIDENCE", 0.65)
+        engine_version_setting = getattr(django_settings, "AI_ENGINE_VERSION", AI_ENGINE_VERSION)
+    except Exception:
+        min_confidence = float(os.environ.get("MEASUREMENT_MIN_CONFIDENCE", "0.65"))
+        engine_version_setting = AI_ENGINE_VERSION
+
     return {
         "status":  "ok" if (_siglip_model or _pose_landmarker) else "degraded",
         "service": "fashionistar-ai-engine",
@@ -405,8 +457,14 @@ def health_check() -> dict[str, Any]:
         "llm_provider":       _ACTIVE_LLM_PROVIDER,
         "gpu_available":      _HAS_SPACES,
         "models_initialized": _models_initialized,
+        # Rec 6 + 7 observability — visible in /api/v1/ninja/ai/health/
+        "measurement_settings": {
+            "min_confidence":  min_confidence,
+            "engine_version":  engine_version_setting,
+        },
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
+
 
 
 

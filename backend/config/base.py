@@ -997,6 +997,23 @@ OLLAMA_MODEL      = env("OLLAMA_MODEL",      default="llama3.2:3b")
 OLLAMA_EMBED_MODEL = env("OLLAMA_EMBED_MODEL", default="nomic-embed-text")
 OLLAMA_ENABLED    = env.bool("OLLAMA_ENABLED", default=True)
 
+# =============================================================================
+# MEASUREMENT ENGINE — Quality & Versioning Settings
+# =============================================================================
+# Rec 7 — Confidence Threshold
+#   Minimum MediaPipe pose confidence to accept a body scan as valid.
+#   Results below this threshold return HTTP 422 with a user-friendly message.
+#   Tune between 0.55 (permissive) and 0.80 (strict) based on observed quality.
+MEASUREMENT_MIN_CONFIDENCE = env.float("MEASUREMENT_MIN_CONFIDENCE", default=0.65)
+
+# Rec 6 — AI Engine Version Tracking
+#   Stored on each MeasurementProfile row for:
+#     - A/B testing between engine versions
+#     - Easy invalidation when the pose model is upgraded
+#     - Production quality auditing over time
+#   Format: "<major>.<minor>.<patch>-<provider>" e.g. "3.0.0-zerogpu"
+AI_ENGINE_VERSION = env("AI_ENGINE_VERSION", default="3.0.0-zerogpu")
+
 
 # =============================================================================
 # CELERY — Base Settings (Broker / Serialiser / Reliability Flags)
