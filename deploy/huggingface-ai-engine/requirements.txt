@@ -1,29 +1,31 @@
 # FASHIONISTAR AI Engine — ZeroGPU Gradio Space Dependencies
 # ─────────────────────────────────────────────────────────────
 # NOTE: Do NOT pin torch/torchvision here.
-# ZeroGPU (zero-a10g hardware) pre-installs the correct PyTorch build.
-# Pinning conflicts with HF's build system which injects torch<=2.11.0.
+# ZeroGPU (H200 hardware) pre-installs PyTorch. Pinning conflicts with
+# HF's build system which injects torch constraints.
+# Gradio 6.x is the latest stable — HF Spaces supports it natively.
 
 # Core Gradio + ZeroGPU
-gradio>=5.37.0
+gradio>=6.0.0
 spaces>=0.37.0
 
-# Vision AI models
-transformers>=4.45.0
-accelerate>=0.34.0          # Required for loading models in fp16 / device_map
+# Vision AI — OpenCLIP (Marqo FashionSigLIP uses OpenCLIP hub format)
+open_clip_torch>=3.3.0          # latest: 3.3.0 (Feb 2026)
 huggingface-hub>=0.25.0
-sentencepiece>=0.2.0
-open_clip_torch>=2.24.0     # For marqo-FashionSigLIP-B-16 (CLIP backend)
+transformers>=4.45.0            # needed for tokenizer utilities
+accelerate>=0.34.0
 
-# Body pose estimation (Tasks API — replaces deprecated mp.solutions)
-mediapipe>=0.10.21          # Tasks API requires 0.10.21+
+# Body pose estimation
+# MediaPipe 0.10.21+ uses Tasks API
+# opencv-python-headless MUST come before mediapipe to prevent libEGL conflict
 opencv-python-headless>=4.10.0
+mediapipe>=0.10.21
 
-# LLM Providers (multi-provider waterfall)
-openai>=1.40.0              # SambaNova + Cerebras (OpenAI-compatible)
-groq>=0.13.0                # Groq LPU API (Llama 3.3-70B fallback)
+# LLM Providers
+openai>=1.40.0                  # SambaNova + Cerebras (OpenAI-compatible API)
+groq>=0.13.0                    # Groq LPU (Llama 3.3-70B fallback)
 
 # Utilities
 numpy>=1.26.0
 Pillow>=10.0.0
-python-dotenv>=1.0.0        # .env support for local dev
+python-dotenv>=1.0.0

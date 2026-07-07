@@ -466,8 +466,9 @@ async def get_ai_health(request) -> dict:
 
         # ── 3. Check AI Engine ZeroGPU Space (SigLIP + MediaPipe live there) ──
         # Gradio 5.x API (>=5.0): Named endpoints via queue/join + SSE stream.
-        # Named endpoint: POST /gradio_api/queue/join → GET /gradio_api/queue/data (SSE)
-        # The named endpoint '/health_check' maps to fn_index=0 (first click handler).
+        # ALWAYS use api_name — fn_index is fragile (changes with UI order).
+        # Named endpoint: POST /gradio_api/queue/join {api_name: "/health_check"}
+        #                 GET  /gradio_api/queue/data?session_hash=<hash> (SSE)
         ai_engine_url = getattr(
             settings, "AI_ENGINE_URL",
             "https://fashionistar-fashionistar-ai-engine.hf.space"
@@ -482,11 +483,15 @@ async def get_ai_health(request) -> dict:
 
             session_hash = uuid.uuid4().hex
 
-            # Strategy 1: Gradio 5.x named endpoint via queue/join
+            # Strategy 1: Gradio 5.x — use api_name (stable), NOT fn_index (fragile)
             join_resp = _req.post(
                 f"{ai_engine_url}/gradio_api/queue/join",
-                json={"fn_index": 0, "data": [], "session_hash": session_hash},
-                timeout=8,
+                json={
+                    "data": [],
+                    "api_name": "/health_check",
+                    "session_hash": session_hash,
+                },
+                timeout=10,
             )
 
             if join_resp.status_code == 200:
@@ -495,7 +500,7 @@ async def get_ai_health(request) -> dict:
                     f"{ai_engine_url}/gradio_api/queue/data",
                     params={"session_hash": session_hash},
                     stream=True,
-                    timeout=12,
+                    timeout=20,  # 20s: handles ZeroGPU cold-start latency
                 )
                 health_data = None
                 for raw_line in sse_resp.iter_lines():

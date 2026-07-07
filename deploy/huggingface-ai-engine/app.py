@@ -140,14 +140,15 @@ logger.info("Startup complete: %s", _startup_results)
 # (These wrap zerogpu_engine functions with JSON string I/O for easy API use)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def health_check_fn() -> str:
+def health_check_fn() -> dict:
     """
-    Return AI Engine health status as JSON string.
-    Queried by fashionistar-api-v1 /ninja/ai/health/ endpoint.
+    Return AI Engine health status as a dict (Gradio 5.x gr.JSON expects dict, not str).
+    Queried by fashionistar-api-v1 at /api/v1/ninja/ai/health/ via queue/join SSE.
     """
     result = _engine_health_check()
     result["startup_results"] = _startup_results
-    return json.dumps(result)
+    return result  # gr.JSON auto-serialises — do NOT json.dumps()
+
 
 
 def body_measurements_fn(image_b64: str, height_cm: float = 170.0) -> str:

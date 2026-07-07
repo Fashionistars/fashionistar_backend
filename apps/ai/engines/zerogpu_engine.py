@@ -41,7 +41,7 @@ logger = logging.getLogger("fashionistar.zerogpu_engine")
 # ── Constants ──────────────────────────────────────────────────────────────────
 AI_ENGINE_VERSION = "3.0.0"
 
-SIGLIP_MODEL_ID   = os.environ.get("SIGLIP_MODEL_ID",   "Marqo/marqo-FashionSigLIP-B-16")
+SIGLIP_MODEL_ID   = os.environ.get("SIGLIP_MODEL_ID",   "Marqo/marqo-fashionSigLIP")
 SAMBANOVA_API_KEY = os.environ.get("SAMBANOVA_API_KEY",  "")
 SAMBANOVA_MODEL   = os.environ.get("SAMBANOVA_MODEL",    "Meta-Llama-3.3-70B-Instruct")
 CEREBRAS_API_KEY  = os.environ.get("CEREBRAS_API_KEY",   "")
@@ -59,6 +59,11 @@ _MP_MODEL_PATH = Path("/tmp/pose_landmarker_heavy.task")
 
 # Active LLM provider (set by _get_llm_client)
 _ACTIVE_LLM_PROVIDER = "none"
+
+# Prevent MediaPipe from trying to initialise EGL/OpenGL at import time.
+# On headless ZeroGPU containers this causes libEGL.so.1 errors at module load.
+# GPU is handled by @spaces.GPU decorator — MediaPipe CPU inference is fine.
+os.environ.setdefault("MEDIAPIPE_DISABLE_GPU", "1")
 
 
 
@@ -128,24 +133,23 @@ def _load_mediapipe() -> bool:
 
 
 def _load_siglip() -> bool:
-    """Load marqo-FashionSigLIP onto CUDA at module level (ZeroGPU requirement)."""
+    """Load Marqo/marqo-fashionSigLIP via open_clip (OpenCLIP hub format, not HF AutoModel)."""
     global _siglip_model, _siglip_processor
     try:
         import torch
-        from transformers import AutoModel, AutoProcessor
+        import open_clip
 
-        logger.info("Loading %s ...", SIGLIP_MODEL_ID)
-        _siglip_processor = AutoProcessor.from_pretrained(
-            SIGLIP_MODEL_ID, token=HF_TOKEN or None,
+        # Correct model id: 'Marqo/marqo-fashionSigLIP' (lowercase, hf-hub: prefix)
+        # open_clip uses hf_hub_download internally — HF_TOKEN auto-picked from env
+        hf_hub_id = f"hf-hub:{SIGLIP_MODEL_ID}"
+        logger.info("Loading %s via open_clip.create_model_from_pretrained ...", hf_hub_id)
+        _siglip_model, _siglip_processor = open_clip.create_model_from_pretrained(
+            hf_hub_id,
+            cache_dir="/tmp/open_clip_cache",
         )
-        _siglip_model = AutoModel.from_pretrained(
-            SIGLIP_MODEL_ID,
-            dtype=torch.float16,  # dtype= replaces deprecated torch_dtype=
-            token=HF_TOKEN or None,
-        )
-        _siglip_model = _siglip_model.to("cuda")
+        _siglip_model = _siglip_model.to("cuda").half()
         _siglip_model.eval()
-        logger.info("✅ %s loaded on CUDA", SIGLIP_MODEL_ID)
+        logger.info("✅ %s loaded on CUDA via open_clip", SIGLIP_MODEL_ID)
         return True
     except Exception as exc:
         logger.warning("⚠️  SigLIP load failed (non-fatal): %s", exc)
