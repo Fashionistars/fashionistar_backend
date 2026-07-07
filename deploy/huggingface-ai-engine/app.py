@@ -1,33 +1,42 @@
-﻿# deploy/huggingface-ai-engine/app.py
+# deploy/huggingface-ai-engine/app.py
 """
-FASHIONISTAR AI Engine — Hugging Face ZeroGPU Space
-=====================================================
+FASHIONISTAR AI Engine — Hugging Face ZeroGPU Space (v3.0.0)
+=============================================================
 
 Production entry point for the fashionistar/fashionistar-ai-engine HF Space.
 
 Architecture:
-  This file is a thin Gradio wrapper around apps.ai.engines.zerogpu_engine.
-  All core AI logic lives in zerogpu_engine.py which is co-deployed here.
+  This file is a thin Gradio wrapper around zerogpu_engine.py.
+  All core AI logic lives in zerogpu_engine.py, which is co-deployed here.
 
   When running standalone (not inside Django), the inline geometry fallback
   in zerogpu_engine.py handles body measurements without Django ORM access.
 
 Models Loaded at Startup (ZeroGPU requirement):
-  - Marqo/marqo-FashionSigLIP-B-16    (512-dim fashion embeddings)
-  - MediaPipe pose_landmarker_heavy    (33 3D body pose landmarks)
-  - Groq API client                    (Llama-3.3-70B — API key required)
+  - Marqo/marqo-FashionSigLIP-B-16    (512-dim fashion embeddings, ZeroGPU)
+  - MediaPipe pose_landmarker_heavy    (33 3D body pose landmarks, ZeroGPU)
+  - LLM provider (auto-selected)       (Cloud API, no GPU needed)
+
+LLM Provider Waterfall (fastest available wins):
+  1. SambaNova  (~4,000 tok/s) — set SAMBANOVA_API_KEY
+  2. Cerebras   (~2,000 tok/s) — set CEREBRAS_API_KEY  (1M tok/day FREE)
+  3. Groq       (~300   tok/s) — set GROQ_API_KEY      (14,400 req/day FREE)
 
 Environment Variables (set in HF Space secrets):
   - HF_TOKEN             — HF Hub token (faster model downloads, auth)
-  - GROQ_API_KEY         — Groq API key (LLM features)
+  - SAMBANOVA_API_KEY    — SambaNova API key (FASTEST: ~4,000 tok/s)
+  - CEREBRAS_API_KEY     — Cerebras API key (FREE 1M tokens/day)
+  - GROQ_API_KEY         — Groq API key (fallback LLM, 14,400 req/day free)
   - SIGLIP_MODEL_ID      — Override model ID (default: Marqo/marqo-FashionSigLIP-B-16)
   - GROQ_MODEL           — Override Groq model (default: llama-3.3-70b-versatile)
+  - SAMBANOVA_MODEL      — Override SambaNova model (default: Meta-Llama-3.3-70B-Instruct)
+  - CEREBRAS_MODEL       — Override Cerebras model (default: llama-3.3-70b)
 
 Endpoints exposed via Gradio API (/run/<api_name>):
-  POST /run/health_check       — Service health + model availability
+  POST /run/health_check       — Service health + model availability + LLM provider
   POST /run/body_measurements  — Body pose extraction from image
-  POST /run/fashion_embedding  — Product visual embedding
-  POST /run/llm_fashion        — Fashion LLM advice via Groq
+  POST /run/fashion_embedding  — Product visual embedding (512-dim)
+  POST /run/llm_fashion        — Fashion LLM advice (multi-provider)
   POST /run/warmup             — Pre-warm GPU memory (called by CI/CD)
 
 Queried by fashionistar-api-v1 at:

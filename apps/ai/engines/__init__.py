@@ -14,7 +14,7 @@ ZeroGPU (HF Spaces):
         generate_fashion_embedding, generate_llm_response, health_check
     )
 
-Server-side (Django):
+Server-side validation (Django):
     from apps.ai.engines.measurement_engine import MeasurementEngine
     from apps.ai.engines.llm_engine import get_llm_engine
     from apps.ai.engines.recommendation_engine import generate_product_embedding

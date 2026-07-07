@@ -439,12 +439,41 @@ jobs:
       - name: Prepare AI Engine deploy directory
         run: |
           mkdir -p "$DEPLOY_DIR"
-          # AI engine only needs its own app files (lightweight)
-          cp deploy/huggingface-ai-engine/app.py "$DEPLOY_DIR/app.py"
-          cp deploy/huggingface-ai-engine/README.md "$DEPLOY_DIR/README.md"
-          echo "✅ AI Engine files prepared"
+          # Copy all 3 AI engine files to deploy dir
+          cp deploy/huggingface-ai-engine/app.py          "$DEPLOY_DIR/app.py"
+          cp deploy/huggingface-ai-engine/requirements.txt "$DEPLOY_DIR/requirements.txt"
+          cp deploy/huggingface-ai-engine/zerogpu_engine.py "$DEPLOY_DIR/zerogpu_engine.py"
+          cp deploy/huggingface-ai-engine/README.md        "$DEPLOY_DIR/README.md" || true
+          echo "✅ AI Engine files prepared:"
+          ls -lh "$DEPLOY_DIR/"
 
-      - name: Push to HF Space
+      - name: Push LLM API key secrets to HF Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          SAMBANOVA_API_KEY: ${{ secrets.SAMBANOVA_API_KEY }}
+          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: |
+          # Helper: push a single secret to the HF Space
+          push_secret() {
+            local key="$1" val="$2"
+            [ -z "$val" ] && echo "  ⏭  $key not set, skipping" && return
+            HTTP=$(curl -sf -o /dev/null -w "%{http_code}" -X PUT \
+              -H "Authorization: Bearer ${HF_TOKEN}" \
+              -H "Content-Type: application/json" \
+              "https://huggingface.co/api/spaces/${SPACE_ID}/secrets" \
+              -d "{\"key\":\"$key\",\"value\":\"$val\"}" || echo "000")
+            echo "  ${key}: HTTP $HTTP"
+          }
+          echo "🔑 Syncing secrets to HF Space: ${SPACE_ID}"
+          push_secret "GROQ_API_KEY"       "$GROQ_API_KEY"
+          push_secret "SAMBANOVA_API_KEY"  "$SAMBANOVA_API_KEY"
+          push_secret "CEREBRAS_API_KEY"   "$CEREBRAS_API_KEY"
+          push_secret "RESEND_API_KEY"     "$RESEND_API_KEY"
+          echo "✅ Secrets pushed"
+
+      - name: Push files to HF Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
@@ -454,24 +483,44 @@ jobs:
           git config user.name "FASHIONISTAR CI/CD"
           git config user.email "fashionistar.home.beauty@gmail.com"
           git add -A
-          git commit -m "🤖 AI Engine Deploy: ${{ github.sha }} [GitHub Actions]"
+          git commit -m "🤖 AI Engine v3.0.0: ZeroGPU + SambaNova/Cerebras/Groq waterfall — ${{ github.sha }}"
           git remote add hf "https://user:${HF_TOKEN}@huggingface.co/spaces/${SPACE_ID}"
           git push hf main --force
           echo "✅ AI Engine pushed to: https://huggingface.co/spaces/${SPACE_ID}"
 
-      - name: Poll build status
+      - name: Poll build status (max 10 min)
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          echo "⏳ Polling HF for build completion (max 8min)..."
-          for i in $(seq 1 32); do
+          echo "⏳ Polling HF for build completion (max 10 min)..."
+          for i in $(seq 1 40); do
             STATUS=$(curl -sf -H "Authorization: Bearer ${HF_TOKEN}" \
               "https://huggingface.co/api/spaces/${SPACE_ID}" | \
               python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('runtime',{}).get('stage','unknown'))" 2>/dev/null || echo "unknown")
-            echo "  [${i}/32] Build status: $STATUS"
+            echo "  [${i}/40] Build status: $STATUS"
             if [ "$STATUS" = "RUNNING" ]; then echo "🎉 AI Engine RUNNING!"; break; fi
             if [ "$STATUS" = "BUILD_ERROR" ] || [ "$STATUS" = "RUNTIME_ERROR" ]; then
               echo "❌ Build failed: $STATUS"; exit 1; fi
+            sleep 15
+          done
+
+      - name: Warmup AI Engine (pre-allocate ZeroGPU memory)
+        continue-on-error: true
+        run: |
+          echo "🔥 Warming up AI Engine ZeroGPU allocation..."
+          sleep 30  # Give Gradio 30s to fully initialize
+          # Warmup: hit health_check endpoint
+          for attempt in 1 2 3; do
+            STATUS=$(curl -sf -w "\n%{http_code}" \
+              -X POST "${SPACE_URL}/run/health_check" \
+              -H "Content-Type: application/json" \
+              -d '{"data": []}' 2>/dev/null || echo "error")
+            HTTP=$(echo "$STATUS" | tail -1)
+            echo "  [Warmup $attempt] HTTP: $HTTP"
+            if [ "$HTTP" = "200" ]; then
+              echo "✅ AI Engine warmed up successfully!"
+              break
+            fi
             sleep 15
           done
 
