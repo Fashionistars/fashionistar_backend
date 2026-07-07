@@ -439,11 +439,12 @@ jobs:
       - name: Prepare AI Engine deploy directory
         run: |
           mkdir -p "$DEPLOY_DIR"
-          # Copy all 3 AI engine files to deploy dir
-          cp deploy/huggingface-ai-engine/app.py          "$DEPLOY_DIR/app.py"
-          cp deploy/huggingface-ai-engine/requirements.txt "$DEPLOY_DIR/requirements.txt"
+          # Copy all AI engine files to deploy dir
+          cp deploy/huggingface-ai-engine/app.py           "$DEPLOY_DIR/app.py"
+          cp deploy/huggingface-ai-engine/requirements.txt  "$DEPLOY_DIR/requirements.txt"
           cp deploy/huggingface-ai-engine/zerogpu_engine.py "$DEPLOY_DIR/zerogpu_engine.py"
-          cp deploy/huggingface-ai-engine/README.md        "$DEPLOY_DIR/README.md" || true
+          cp deploy/huggingface-ai-engine/packages.txt      "$DEPLOY_DIR/packages.txt"
+          cp deploy/huggingface-ai-engine/README.md         "$DEPLOY_DIR/README.md" || true
           echo "✅ AI Engine files prepared:"
           ls -lh "$DEPLOY_DIR/"
 
