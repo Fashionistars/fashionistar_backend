@@ -458,43 +458,71 @@ async def get_ai_health(request) -> dict:
 
         # ── 3. Check AI Engine ZeroGPU Space (SigLIP + MediaPipe live there) ──
         # The AI Engine is a separate HF ZeroGPU Gradio space. We call its
-        # health endpoint to get the real SigLIP / MediaPipe availability.
+        # /run/health_check Gradio API endpoint.
+        # NOTE: If HF Dev Mode is ON for that space, it blocks the Gradio API
+        # and this check will detect it via HTML content-type detection.
         ai_engine_url = getattr(
             settings, "AI_ENGINE_URL",
             "https://fashionistar-fashionistar-ai-engine.hf.space"
         )
         results["ai_engine_url"] = ai_engine_url
 
+        _log = __import__("logging").getLogger(__name__)
         try:
             import requests as _req
-            resp = _req.get(
-                f"{ai_engine_url}/api/predict",
-                json={"data": []},
-                headers={"Content-Type": "application/json"},
-                timeout=8,
-            )
-            # If the space is running and serving, try the dedicated health fn
+
+            # Strategy 1: Named Gradio endpoint /run/health_check
             health_resp = _req.post(
                 f"{ai_engine_url}/run/health_check",
                 json={"data": []},
-                timeout=8,
+                timeout=10,
             )
-            if health_resp.status_code == 200:
+            ct = health_resp.headers.get("content-type", "")
+
+            # Detect dev-mode: space returns HTML instead of JSON
+            if "text/html" in ct and health_resp.status_code == 200:
+                # Dev Mode is ON — space serves the dev container (old app)
+                # not the committed production app.py. This is a user-controlled
+                # setting in the HF Space UI. No code fix can resolve this.
+                results["ai_engine_status"] = "dev_mode_blocking"
+                _log.warning(
+                    "AI Engine ZeroGPU space is in Dev Mode — "
+                    "Gradio API is blocked. Turn off Dev Mode in HF Space UI."
+                )
+
+            elif health_resp.status_code == 200 and "application/json" in ct:
                 payload = health_resp.json().get("data", [{}])
                 if payload and isinstance(payload[0], dict):
-                    engine_health = payload[0]
-                    models = engine_health.get("models", {})
+                    models = payload[0].get("models", {})
                     results["siglip_available"] = models.get("siglip", False)
                     results["mediapipe_ready"]  = models.get("mediapipe", False)
                     results["ai_engine_status"] = "ok"
                 else:
-                    # Space is up but health fn not ready (cold start)
                     results["ai_engine_status"] = "cold_starting"
+
+            elif health_resp.status_code == 404:
+                # Strategy 2: Try fn_index=2 (health_check is the 3rd function)
+                for fn_idx in range(5):
+                    fb = _req.post(
+                        f"{ai_engine_url}/api/predict",
+                        json={"data": [], "fn_index": fn_idx},
+                        timeout=8,
+                    )
+                    if fb.status_code == 200 and "application/json" in fb.headers.get("content-type", ""):
+                        data = fb.json().get("data", [])
+                        if data and isinstance(data[0], dict) and "models" in data[0]:
+                            models = data[0]["models"]
+                            results["siglip_available"] = models.get("siglip", False)
+                            results["mediapipe_ready"]  = models.get("mediapipe", False)
+                            results["ai_engine_status"] = f"ok_fn{fn_idx}"
+                            break
+                else:
+                    results["ai_engine_status"] = "api_not_found"
             else:
                 results["ai_engine_status"] = f"http_{health_resp.status_code}"
+
         except Exception as exc:
-            logger = __import__("logging").getLogger(__name__)
-            logger.warning(f"AI Engine space unreachable: {exc}")
+            _log.warning(f"AI Engine space unreachable: {exc}")
             results["ai_engine_status"] = "unreachable"
 
         return results
