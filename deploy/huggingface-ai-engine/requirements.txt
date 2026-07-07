@@ -1,27 +1,20 @@
-# FASHIONISTAR AI Engine — ZeroGPU Gradio Space Dependencies
-# ─────────────────────────────────────────────────────────────
-# CRITICAL: Do NOT specify gradio version here.
+# FASHIONISTAR AI Engine -- ZeroGPU Gradio Space Dependencies
+# Do NOT specify gradio, spaces, or torch versions here.
 # HF ZeroGPU builder hard-pins: gradio[oauth,mcp]==5.37.0 + spaces==0.50.4
-# These are injected AFTER pip install runs. Specifying a different version
-# causes "Could not find a version that satisfies the requirement" BUILD_ERROR.
-#
-# Do NOT pin torch/torchvision here.
-# ZeroGPU (H200 hardware) pre-installs PyTorch.
 
-# Vision AI — OpenCLIP (Marqo FashionSigLIP uses OpenCLIP hub format, NOT AutoModel)
-open_clip_torch>=3.3.0          # latest: 3.3.0 (Feb 2026)
+# Vision AI -- OpenCLIP
+open_clip_torch>=3.3.0
 huggingface-hub>=0.25.0
-transformers>=4.45.0            # needed for tokenizer utilities
+transformers>=4.45.0
 accelerate>=0.34.0
 
-# Body pose estimation
-# opencv-python-headless MUST come BEFORE mediapipe to prevent libEGL conflict
+# Body pose -- opencv BEFORE mediapipe prevents libEGL conflict
 opencv-python-headless>=4.10.0
 mediapipe>=0.10.21
 
 # LLM Providers
-openai>=1.40.0                  # SambaNova + Cerebras (OpenAI-compatible API)
-groq>=0.13.0                    # Groq LPU (Llama 3.3-70B fallback)
+openai>=1.40.0
+groq>=0.13.0
 
 # Utilities
 numpy>=1.26.0
