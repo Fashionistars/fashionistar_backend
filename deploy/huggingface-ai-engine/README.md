@@ -8,7 +8,7 @@ sdk_version: "5.37.0"
 app_file: app.py
 pinned: true
 license: mit
-short_description: FASHIONISTAR AI/ML Engine — ZeroGPU Body Measurements & Fashion AI
+short_description: ZeroGPU AI Engine — Fashion AI & Body Measurements
 hardware: zero-gpu
 ---
 
