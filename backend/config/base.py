@@ -914,31 +914,88 @@ PHONE_VERIFICATION = {
 # =============================================================================
 # EMAIL
 # =============================================================================
-# NOTE: Override EMAIL_BACKEND in development.py (console) or production.py (SMTP/Mailgun)
+# Priority:
+#   1. Resend API (if RESEND_API_KEY set)          → anymail.backends.resend
+#   2. Gmail SMTP (if EMAIL_HOST_PASSWORD set)     → smtp.EmailBackend
+#   3. Console (fallback, safe for dev/test)       → console.EmailBackend
+#
+# HF Spaces BLOCKS port 587/465 (SMTP is unreliable on containers).
+# Resend API (HTTP-based) works reliably on HF Spaces with no port restrictions.
+# =============================================================================
+
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="noreply@fashionistar.net")
-SERVER_EMAIL = config("DEFAULT_FROM_EMAIL", default="noreply@fashionistar.net")
+SERVER_EMAIL       = config("DEFAULT_FROM_EMAIL", default="noreply@fashionistar.net")
 
-# Gmail SMTP (used in production or via DatabaseConfiguredEmailBackend)
-EMAIL_HOST = "smtp.gmail.com"
-EMAIL_HOST_USER = config(
-    "EMAIL_HOST_USER", default="fashionistar.home.beauty@gmail.com"
-)
+# Gmail SMTP (fallback when Resend not configured)
+EMAIL_HOST          = "smtp.gmail.com"
+EMAIL_HOST_USER     = config("EMAIL_HOST_USER",     default="fashionistar.home.beauty@gmail.com")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
-EMAIL_PORT = 465
-EMAIL_USE_TLS = False
-EMAIL_USE_SSL = True
+EMAIL_PORT          = 465
+EMAIL_USE_TLS       = False
+EMAIL_USE_SSL       = True
 
-# Anymail (Mailgun)
-ANYMAIL = {
-    "MAILGUN_API_KEY": env("MAILGUN_API_KEY", default=""),
-    "MAILGUN_SENDER_DOMAIN": env("MAILGUN_DOMAIN", default=""),
-}
+# Resend API key (set this to enable Resend backend — preferred for HF Spaces)
+_RESEND_API_KEY   = env("RESEND_API_KEY",   default="")
+_MAILGUN_API_KEY  = env("MAILGUN_API_KEY",  default="")
 
-# Zoho ZeptoMail
+# Auto-select best available email backend
+if _RESEND_API_KEY:
+    # ✅ Best: Resend API (HTTP, no port restrictions, 3,000 emails/mo free)
+    EMAIL_BACKEND = "anymail.backends.resend.EmailBackend"
+    ANYMAIL = {
+        "RESEND_API_KEY": _RESEND_API_KEY,
+    }
+elif _MAILGUN_API_KEY:
+    # ✅ Fallback: Mailgun (HTTP API, also works on HF Spaces)
+    EMAIL_BACKEND = "anymail.backends.mailgun.EmailBackend"
+    ANYMAIL = {
+        "MAILGUN_API_KEY":      _MAILGUN_API_KEY,
+        "MAILGUN_SENDER_DOMAIN": env("MAILGUN_DOMAIN", default=""),
+    }
+else:
+    # ⚠️  Fallback: SMTP (may fail on HF Spaces; works in local dev)
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+    ANYMAIL = {}
+
+# Zoho ZeptoMail (optional — used by DatabaseConfiguredEmailBackend)
 ZOHO_ZEPTOMAIL_API_KEY_TOKEN = env("ZOHO_ZEPTOMAIL_API_KEY_TOKEN", default="")
 ZOHO_ZEPTOMAIL_HOSTED_REGION = env(
     "ZOHO_ZEPTOMAIL_HOSTED_REGION", default="zeptomail.zoho.com"
 )
+
+# =============================================================================
+# AI / LLM ENGINE — Multi-Provider Settings
+# =============================================================================
+# Priority waterfall (see apps/ai/engines/llm_engine.py get_llm_engine()):
+#   1. SambaNova  — Llama-4 Maverick/Scout on RDU chips. ~4000 tok/s. Free $5 credit.
+#   2. Cerebras   — Llama-3.3-70B on WSE-3 chips. ~2000 tok/s. 1M tokens/day free.
+#   3. Groq       — Llama-3.3-70B on LPU chips.   ~300  tok/s. 14,400 req/day free.
+#   4. Ollama     — Local self-hosted (dev only).   CPU/GPU. Zero cost, no rate limit.
+# =============================================================================
+
+# SambaNova Cloud (Fastest for large models: Llama-4 Maverick)
+# Get key: https://cloud.sambanova.ai/apis
+SAMBANOVA_API_KEY = env("SAMBANOVA_API_KEY", default="")
+SAMBANOVA_MODEL   = env("SAMBANOVA_MODEL",   default="Meta-Llama-3.3-70B-Instruct")
+SAMBANOVA_ENABLED = bool(SAMBANOVA_API_KEY)
+
+# Cerebras Cloud (Highest token throughput: 2000+ tok/s, 1M tok/day free)
+# Get key: https://cloud.cerebras.ai/
+CEREBRAS_API_KEY = env("CEREBRAS_API_KEY", default="")
+CEREBRAS_MODEL   = env("CEREBRAS_MODEL",   default="llama-3.3-70b")
+CEREBRAS_ENABLED = bool(CEREBRAS_API_KEY)
+
+# Groq Cloud (Ultra-low latency: <200ms, 14,400 req/day free)
+# Get key: https://console.groq.com/keys
+GROQ_API_KEY = env("GROQ_API_KEY", default="")
+GROQ_MODEL   = env("GROQ_MODEL",   default="llama-3.3-70b-versatile")
+GROQ_ENABLED = bool(GROQ_API_KEY)
+
+# Ollama (local dev, self-hosted — fallback of last resort)
+OLLAMA_HOST       = env("OLLAMA_HOST",       default="http://localhost:11434")
+OLLAMA_MODEL      = env("OLLAMA_MODEL",      default="llama3.2:3b")
+OLLAMA_EMBED_MODEL = env("OLLAMA_EMBED_MODEL", default="nomic-embed-text")
+OLLAMA_ENABLED    = env.bool("OLLAMA_ENABLED", default=True)
 
 
 # =============================================================================

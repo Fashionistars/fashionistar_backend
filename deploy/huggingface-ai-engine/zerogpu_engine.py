@@ -1,4 +1,4 @@
-﻿# apps/ai/engines/zerogpu_engine.py
+# apps/ai/engines/zerogpu_engine.py
 """
 ZeroGPU AI Engine — HF Spaces GPU Inference Module
 ====================================================
@@ -41,10 +41,14 @@ logger = logging.getLogger("fashionistar.zerogpu_engine")
 # ── Constants ──────────────────────────────────────────────────────────────────
 AI_ENGINE_VERSION = "3.0.0"
 
-SIGLIP_MODEL_ID = os.environ.get("SIGLIP_MODEL_ID", "Marqo/marqo-FashionSigLIP-B-16")
-GROQ_API_KEY    = os.environ.get("GROQ_API_KEY", "")
-GROQ_MODEL      = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
-HF_TOKEN        = os.environ.get("HF_TOKEN", "")
+SIGLIP_MODEL_ID   = os.environ.get("SIGLIP_MODEL_ID",   "Marqo/marqo-FashionSigLIP-B-16")
+SAMBANOVA_API_KEY = os.environ.get("SAMBANOVA_API_KEY",  "")
+SAMBANOVA_MODEL   = os.environ.get("SAMBANOVA_MODEL",    "Meta-Llama-3.3-70B-Instruct")
+CEREBRAS_API_KEY  = os.environ.get("CEREBRAS_API_KEY",   "")
+CEREBRAS_MODEL    = os.environ.get("CEREBRAS_MODEL",     "llama-3.3-70b")
+GROQ_API_KEY      = os.environ.get("GROQ_API_KEY",       "")
+GROQ_MODEL        = os.environ.get("GROQ_MODEL",         "llama-3.3-70b-versatile")
+HF_TOKEN          = os.environ.get("HF_TOKEN",           "")
 
 _MP_MODEL_URL  = (
     "https://storage.googleapis.com/mediapipe-models/"
@@ -52,6 +56,11 @@ _MP_MODEL_URL  = (
     "pose_landmarker_heavy.task"
 )
 _MP_MODEL_PATH = Path("/tmp/pose_landmarker_heavy.task")
+
+# Active LLM provider (set by _get_llm_client)
+_ACTIVE_LLM_PROVIDER = "none"
+
+
 
 # ── ZeroGPU Decorator (no-op outside HF Spaces) ────────────────────────────────
 try:
@@ -68,10 +77,10 @@ except ImportError:
     _HAS_SPACES = False
 
 # ── Module-level model handles ─────────────────────────────────────────────────
-_pose_landmarker   = None
-_siglip_model      = None
-_siglip_processor  = None
-_groq_client       = None
+_pose_landmarker    = None
+_siglip_model       = None
+_siglip_processor   = None
+_llm_client         = None   # active LLM client (SambaNova, Cerebras, or Groq)
 _models_initialized = False
 
 
@@ -143,24 +152,67 @@ def _load_siglip() -> bool:
         return False
 
 
+def _get_llm_client():
+    """
+    Multi-provider LLM client — waterfall:
+      1. SambaNova   (~4,000 tok/s)  — set SAMBANOVA_API_KEY
+      2. Cerebras    (~2,000 tok/s)  — set CEREBRAS_API_KEY
+      3. Groq        (~300   tok/s)  — set GROQ_API_KEY
+    All use OpenAI-compatible interface.
+    """
+    global _llm_client, _ACTIVE_LLM_PROVIDER
+    if _llm_client is not None:
+        return _llm_client
+
+    # 1. SambaNova (fastest, OpenAI-compatible)
+    if SAMBANOVA_API_KEY:
+        try:
+            from openai import OpenAI
+            _llm_client = OpenAI(
+                api_key=SAMBANOVA_API_KEY,
+                base_url="https://api.sambanova.ai/v1",
+            )
+            _ACTIVE_LLM_PROVIDER = f"sambanova/{SAMBANOVA_MODEL}"
+            logger.info("✅ LLM: SambaNova (%s, ~4000 tok/s)", SAMBANOVA_MODEL)
+            return _llm_client
+        except Exception as exc:
+            logger.warning("SambaNova client init failed: %s", exc)
+
+    # 2. Cerebras (highest free throughput, OpenAI-compatible)
+    if CEREBRAS_API_KEY:
+        try:
+            from openai import OpenAI
+            _llm_client = OpenAI(
+                api_key=CEREBRAS_API_KEY,
+                base_url="https://api.cerebras.ai/v1",
+            )
+            _ACTIVE_LLM_PROVIDER = f"cerebras/{CEREBRAS_MODEL}"
+            logger.info("✅ LLM: Cerebras (%s, ~2000 tok/s, 1M tok/day free)", CEREBRAS_MODEL)
+            return _llm_client
+        except Exception as exc:
+            logger.warning("Cerebras client init failed: %s", exc)
+
+    # 3. Groq (lowest latency per request)
+    if GROQ_API_KEY:
+        try:
+            from groq import Groq
+            _llm_client = Groq(api_key=GROQ_API_KEY)
+            _ACTIVE_LLM_PROVIDER = f"groq/{GROQ_MODEL}"
+            logger.info("✅ LLM: Groq (%s, ~300 tok/s)", GROQ_MODEL)
+            return _llm_client
+        except ImportError:
+            logger.debug("groq package not installed")
+        except Exception as exc:
+            logger.warning("Groq client init failed: %s", exc)
+
+    logger.warning("⚠️  No LLM API keys configured. Set SAMBANOVA_API_KEY, CEREBRAS_API_KEY, or GROQ_API_KEY.")
+    return None
+
+
+# Keep backward-compat alias
 def _get_groq_client():
-    """Lazy-initialize Groq client."""
-    global _groq_client
-    if _groq_client is not None:
-        return _groq_client
-    if not GROQ_API_KEY:
-        return None
-    try:
-        from groq import Groq
-        _groq_client = Groq(api_key=GROQ_API_KEY)
-        logger.info("✅ Groq client initialized (model: %s)", GROQ_MODEL)
-        return _groq_client
-    except ImportError:
-        logger.debug("groq package not installed — LLM via Groq disabled")
-        return None
-    except Exception as exc:
-        logger.warning("Groq client init failed: %s", exc)
-        return None
+    return _get_llm_client()
+
 
 
 def initialize_models() -> dict[str, bool]:
@@ -284,20 +336,30 @@ def generate_llm_response(
     temperature: float = 0.7,
 ) -> dict[str, Any]:
     """
-    Generate LLM response via Groq API (Llama-3.3-70B-Versatile).
-    No @spaces.GPU needed — Groq runs on Groq LPU chips, not local GPU.
+    Generate LLM response via the fastest available provider.
+    Waterfall: SambaNova (~4000 tok/s) → Cerebras (~2000 tok/s) → Groq (~300 tok/s).
+    No @spaces.GPU needed — all providers run on their own cloud chips.
     """
-    client = _get_groq_client()
+    client = _get_llm_client()
     if client is None:
         return {
             "success": False,
-            "error":   "Groq API not configured (set GROQ_API_KEY secret)",
+            "error":   "No LLM configured (set SAMBANOVA_API_KEY, CEREBRAS_API_KEY, or GROQ_API_KEY)",
             "text":    None,
         }
+
+    # Determine which model name to use based on active provider
+    if "sambanova" in _ACTIVE_LLM_PROVIDER:
+        active_model = SAMBANOVA_MODEL
+    elif "cerebras" in _ACTIVE_LLM_PROVIDER:
+        active_model = CEREBRAS_MODEL
+    else:
+        active_model = GROQ_MODEL
+
     try:
         t0 = time.time()
         response = client.chat.completions.create(
-            model=GROQ_MODEL,
+            model=active_model,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user",   "content": prompt},
@@ -307,17 +369,17 @@ def generate_llm_response(
         )
         elapsed = time.time() - t0
         return {
-            "success": True,
-            "text":    response.choices[0].message.content,
-            "model":   GROQ_MODEL,
+            "success":  True,
+            "text":     response.choices[0].message.content,
+            "model":    _ACTIVE_LLM_PROVIDER,
             "usage": {
-                "prompt_tokens":     response.usage.prompt_tokens,
-                "completion_tokens": response.usage.completion_tokens,
+                "prompt_tokens":     getattr(response.usage, "prompt_tokens", 0),
+                "completion_tokens": getattr(response.usage, "completion_tokens", 0),
                 "latency_ms":        round(elapsed * 1000),
             },
         }
     except Exception as exc:
-        logger.error("Groq LLM error: %s", exc)
+        logger.error("LLM error [%s]: %s", _ACTIVE_LLM_PROVIDER, exc)
         return {"success": False, "error": str(exc), "text": None}
 
 
@@ -326,21 +388,26 @@ def health_check() -> dict[str, Any]:
     Returns AI Engine health status.
     Called by fashionistar-api-v1 /api/v1/ninja/ai/health/ via /run/health_check.
 
-    Response MUST include models.siglip, models.mediapipe, models.groq (bool).
+    Response includes: models.siglip, models.mediapipe, models.llm_available, llm_provider.
     """
+    llm_client = _get_llm_client()
     return {
         "status":  "ok" if (_siglip_model or _pose_landmarker) else "degraded",
         "service": "fashionistar-ai-engine",
         "version": AI_ENGINE_VERSION,
         "models": {
-            "siglip":    _siglip_model    is not None,
-            "mediapipe": _pose_landmarker is not None,
-            "groq":      _get_groq_client() is not None,
+            "siglip":        _siglip_model    is not None,
+            "mediapipe":     _pose_landmarker is not None,
+            "llm_available": llm_client       is not None,
+            # Legacy compat
+            "groq":          llm_client       is not None,
         },
+        "llm_provider":       _ACTIVE_LLM_PROVIDER,
         "gpu_available":      _HAS_SPACES,
         "models_initialized": _models_initialized,
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
+
 
 
 def _inline_geometry(landmarks: list[dict], height_cm: float) -> dict[str, Any]:

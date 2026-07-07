@@ -20,7 +20,7 @@ This space runs all GPU-intensive AI tasks:
 - 📏 **Body Measurements** — MediaPipe + SigLIP pose estimation
 - 🎨 **Fashion Embeddings** — CLIP/SigLIP image understanding  
 - 🔍 **Visual Search** — Semantic fashion item lookup
-- 🧠 **LLM Inference** — Llama 3.2 via Ollama for style advice
+- 🧠 **LLM Inference** — Llama 3.2 via Groq for style advice
 - 📊 **Recommendation Engine** — AI-driven product recommendations
 
 ## API Endpoints
