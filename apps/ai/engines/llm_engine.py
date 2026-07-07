@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 def _get_ollama_client():
     """Lazy import of Ollama client to avoid startup errors if not installed."""
     try:
+        # pyrefly: ignore [missing-import]
         import ollama
         host = getattr(settings, "OLLAMA_HOST", "http://localhost:11434")
         return ollama.Client(host=host)
