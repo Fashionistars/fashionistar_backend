@@ -1,15 +1,12 @@
-﻿# FASHIONISTAR AI Engine — ZeroGPU Gradio Space Dependencies
+# FASHIONISTAR AI Engine — ZeroGPU Gradio Space Dependencies
 # ─────────────────────────────────────────────────────────────
-# PyTorch 2.8.0 is required for ZeroGPU compatibility
-# (ZeroGPU supports PyTorch 2.8.0+ — see HF ZeroGPU docs)
+# NOTE: Do NOT pin torch/torchvision here.
+# ZeroGPU (zero-a10g hardware) pre-installs the correct PyTorch build.
+# Pinning conflicts with HF's build system which injects torch<=2.11.0.
 
 # Core Gradio + ZeroGPU
 gradio>=5.37.0
 spaces>=0.37.0
-
-# PyTorch (ZeroGPU provides the CUDA runtime; we pin the version)
-torch==2.8.0
-torchvision==0.23.0
 
 # Vision AI models
 transformers>=4.45.0
