@@ -465,10 +465,9 @@ async def get_ai_health(request) -> dict:
             pass
 
         # ── 3. Check AI Engine ZeroGPU Space (SigLIP + MediaPipe live there) ──
-        # The AI Engine is a separate HF ZeroGPU Gradio space. We call its
-        # /run/health_check Gradio API endpoint.
-        # NOTE: If HF Dev Mode is ON for that space, it blocks the Gradio API
-        # and this check will detect it via HTML content-type detection.
+        # Gradio 5.x API (>=5.0): Named endpoints via queue/join + SSE stream.
+        # Named endpoint: POST /gradio_api/queue/join → GET /gradio_api/queue/data (SSE)
+        # The named endpoint '/health_check' maps to fn_index=0 (first click handler).
         ai_engine_url = getattr(
             settings, "AI_ENGINE_URL",
             "https://fashionistar-fashionistar-ai-engine.hf.space"
@@ -478,56 +477,95 @@ async def get_ai_health(request) -> dict:
         _log = __import__("logging").getLogger(__name__)
         try:
             import requests as _req
+            import uuid
+            import json as _json
 
-            # Strategy 1: Named Gradio endpoint /run/health_check
-            health_resp = _req.post(
-                f"{ai_engine_url}/run/health_check",
-                json={"data": []},
-                timeout=10,
+            session_hash = uuid.uuid4().hex
+
+            # Strategy 1: Gradio 5.x named endpoint via queue/join
+            join_resp = _req.post(
+                f"{ai_engine_url}/gradio_api/queue/join",
+                json={"fn_index": 0, "data": [], "session_hash": session_hash},
+                timeout=8,
             )
-            ct = health_resp.headers.get("content-type", "")
 
-            # Detect dev-mode: space returns HTML instead of JSON
-            if "text/html" in ct and health_resp.status_code == 200:
-                # Dev Mode is ON — space serves the dev container (old app)
-                # not the committed production app.py. This is a user-controlled
-                # setting in the HF Space UI. No code fix can resolve this.
-                results["ai_engine_status"] = "dev_mode_blocking"
-                _log.warning(
-                    "AI Engine ZeroGPU space is in Dev Mode — "
-                    "Gradio API is blocked. Turn off Dev Mode in HF Space UI."
+            if join_resp.status_code == 200:
+                # Stream SSE events from /gradio_api/queue/data
+                sse_resp = _req.get(
+                    f"{ai_engine_url}/gradio_api/queue/data",
+                    params={"session_hash": session_hash},
+                    stream=True,
+                    timeout=12,
                 )
+                health_data = None
+                for raw_line in sse_resp.iter_lines():
+                    if not raw_line:
+                        continue
+                    line = raw_line.decode("utf-8") if isinstance(raw_line, bytes) else raw_line
+                    if not line.startswith("data:"):
+                        continue
+                    try:
+                        msg = _json.loads(line[len("data:"):].strip())
+                    except _json.JSONDecodeError:
+                        continue
+                    if msg.get("msg") == "process_completed":
+                        output = msg.get("output", {})
+                        data_list = output.get("data", [])
+                        if data_list:
+                            first = data_list[0]
+                            # In Gradio 5.x the output of a gr.JSON component
+                            # comes back as a plain dict (already parsed)
+                            if isinstance(first, dict):
+                                health_data = first
+                            elif isinstance(first, str):
+                                # Fallback: JSON-encoded string
+                                try:
+                                    health_data = _json.loads(first)
+                                except _json.JSONDecodeError:
+                                    pass
+                        break
+                    if msg.get("msg") == "process_generating":
+                        # Streaming function — accumulate last value
+                        pass
 
-            elif health_resp.status_code == 200 and "application/json" in ct:
-                payload = health_resp.json().get("data", [{}])
-                if payload and isinstance(payload[0], dict):
-                    models = payload[0].get("models", {})
+                if health_data and isinstance(health_data, dict):
+                    models = health_data.get("models", {})
                     results["siglip_available"] = models.get("siglip", False)
                     results["mediapipe_ready"]  = models.get("mediapipe", False)
                     results["ai_engine_status"] = "ok"
-                else:
-                    results["ai_engine_status"] = "cold_starting"
-
-            elif health_resp.status_code == 404:
-                # Strategy 2: Try fn_index=2 (health_check is the 3rd function)
-                for fn_idx in range(5):
-                    fb = _req.post(
-                        f"{ai_engine_url}/api/predict",
-                        json={"data": [], "fn_index": fn_idx},
-                        timeout=8,
+                    _log.info(
+                        "AI Engine health OK: llm=%s siglip=%s mediapipe=%s",
+                        health_data.get("llm_provider", "?"),
+                        models.get("siglip"), models.get("mediapipe"),
                     )
-                    if fb.status_code == 200 and "application/json" in fb.headers.get("content-type", ""):
-                        data = fb.json().get("data", [])
-                        if data and isinstance(data[0], dict) and "models" in data[0]:
-                            models = data[0]["models"]
-                            results["siglip_available"] = models.get("siglip", False)
-                            results["mediapipe_ready"]  = models.get("mediapipe", False)
-                            results["ai_engine_status"] = f"ok_fn{fn_idx}"
-                            break
+                elif join_resp.status_code == 200:
+                    # Space is running but health data wasn't parsed — still counts
+                    results["ai_engine_status"] = "running_no_data"
+
+            elif join_resp.status_code in (404, 422):
+                # Strategy 2: Legacy /run/<name> path (Gradio 4.x compat)
+                legacy = _req.post(
+                    f"{ai_engine_url}/run/health_check",
+                    json={"data": []},
+                    timeout=8,
+                )
+                ct_leg = legacy.headers.get("content-type", "")
+                if legacy.status_code == 200 and "application/json" in ct_leg:
+                    payload = legacy.json().get("data", [{}])
+                    first = payload[0] if payload else {}
+                    if isinstance(first, str):
+                        try:
+                            first = _json.loads(first)
+                        except _json.JSONDecodeError:
+                            first = {}
+                    models = first.get("models", {}) if isinstance(first, dict) else {}
+                    results["siglip_available"] = models.get("siglip", False)
+                    results["mediapipe_ready"]  = models.get("mediapipe", False)
+                    results["ai_engine_status"] = "ok_legacy"
                 else:
                     results["ai_engine_status"] = "api_not_found"
             else:
-                results["ai_engine_status"] = f"http_{health_resp.status_code}"
+                results["ai_engine_status"] = f"http_{join_resp.status_code}"
 
         except Exception as exc:
             _log.warning(f"AI Engine space unreachable: {exc}")

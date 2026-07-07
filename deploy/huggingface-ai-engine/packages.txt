@@ -1,0 +1,7 @@
+﻿# System packages for FASHIONISTAR AI Engine
+# libgl1-mesa-glx: required by MediaPipe for OpenGL ES (libGLESv2.so.2)
+# libglib2.0-0: required by opencv-python-headless
+libgl1-mesa-glx
+libglib2.0-0
+libgl1
+
