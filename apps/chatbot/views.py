@@ -349,6 +349,43 @@ class VendorChatbotViewSet(viewsets.GenericViewSet):
             )
     
     @extend_schema(
+        summary="Send message to chatbot",
+        description="Send vendor message and get chatbot response",
+        request=SendMessageRequestSerializer,
+        responses={200: SendMessageResponseSerializer}
+    )
+    @action(detail=False, methods=['post'])
+    def send_message(self, request):
+        """
+        ارسال و پردازش پیام کاربر به چت‌بات و بازگشت پاسخ ساخت‌یافته‌ی سرویس هوش‌مصنوعی.
+        
+        این متد یک درخواست POST را می‌پذیرد که باید حداقل شامل فیلد `message` (رشته) باشد و می‌تواند فیلد اختیاری `context` (شی یا دیکشنری) برای ارائه زمینهٔ گفتگو ارسال کند. ورودی ابتدا با `SendMessageRequestSerializer` اعتبارسنجی می‌شود؛ در صورت نامعتبر بودن، خطاهای اعتبارسنجی با وضعیت HTTP 400 بازگردانده می‌شوند. سپس از سرویس چت‌بات (از طریق `self.get_chatbot_service()`) برای پردازش پیام استفاده می‌شود و متد `process_message(message, context)` فراخوانی می‌گردد؛ نتیجهٔ بازگشتی این سرویس مستقیماً در بدنهٔ پاسخ HTTP قرار می‌گیرد.
+        
+        بازگشت‌ها:
+        - HTTP 200: پاسخ پردازش شدهٔ سرویس چت‌بات (معمولاً JSON ساخت‌یافته شامل پیام/اقدامات/گزینه‌های بعدی).
+        - HTTP 400: خطاهای اعتبارسنجی ورودی.
+        - HTTP 500: خطاهای غیرمنتظره در زمان پردازش پیام؛ پیام خطا در بدنه بازگردانده می‌شود.
+        """
+        serializer = SendMessageRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            chatbot_service = self.get_chatbot_service()
+            
+            # پردازش پیام
+            result = chatbot_service.process_message(
+                message=serializer.validated_data['message'],
+                context=serializer.validated_data.get('context')
+            )
+            return Response(result)
+        except Exception as e:
+            return Response(
+                {'error': f'Error processing message: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @extend_schema(
         summary="Request product catalog support",
         description="Get recommendation and categorization for new products",
         request=SizeRecommendationRequestSerializer,
@@ -526,6 +563,7 @@ class VendorChatbotViewSet(viewsets.GenericViewSet):
                 {'error': f'Error searching fashion references: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
 
 class ChatbotSessionViewSet(BaseChatbotViewSet):
     """

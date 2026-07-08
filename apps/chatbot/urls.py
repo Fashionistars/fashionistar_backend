@@ -2,7 +2,9 @@
 Chatbot URLs for Fashionistar.
 """
 
+# pyrefly: ignore [missing-import]
 from django.urls import path, include
+# pyrefly: ignore [missing-import]
 from rest_framework.routers import DefaultRouter
 from .views import (
     ClientChatbotViewSet,
@@ -65,10 +67,10 @@ urlpatterns = [
          name='vendor-product-info'),
     
     path('api/vendor/tailoring-guideline/', 
-         VendorChatbotViewSet.as_view({'get': 'tailoring_guideline'}), 
+         VendorChatbotViewSet.as_view({'get': 'tailoring_guidelines'}), 
          name='vendor-tailoring-guideline'),
     
     path('api/vendor/search-references/', 
-         VendorChatbotViewSet.as_view({'get': 'search_references'}), 
+         VendorChatbotViewSet.as_view({'get': 'search_design_references'}), 
          name='vendor-search-references'),
 ]
