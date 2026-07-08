@@ -3,12 +3,26 @@
 Custom Permission Patterns
 """
 
+import logging
 from rest_framework import permissions
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from unified_access.services import AccessControlService
-import logging
-import time
+try:
+    from unified_access.services import AccessControlService
+except ImportError:
+    class AccessControlService:
+        """Fallback mock for AccessControlService to prevent import crashes."""
+        def has_patient_access(self, user, patient) -> bool:
+            return False
+        def check_permission(self, user, resource, action) -> bool:
+            return user.is_staff or getattr(user, 'role', '') == 'admin'
+        def log_permission_denied(self, user, permission_code, ip_address) -> None:
+            pass
+
+def check_permission(user, permission_type) -> bool:
+    """Helper to check permissions via AccessControlService."""
+    service = AccessControlService()
+    return service.check_permission(user, "global", permission_type)
 
 
 User = get_user_model()
@@ -34,30 +48,30 @@ class BasePermission(permissions.BasePermission):
         return True
 
 
-class IsPatient(BasePermission):
+class IsClient(BasePermission):
     """
-    دسترسی فقط برای بیماران
+    دسترسی فقط برای مشتریان
     """
-    message = 'دسترسی فقط برای بیماران'
+    message = 'دسترسی فقط برای مشتریان'
     
     def has_permission(self, request, view):
         if not super().has_permission(request, view):
             return False
             
-        return request.user.user_type == 'patient'
+        return getattr(request.user, 'role', '') == 'client'
 
 
-class IsDoctor(BasePermission):
+class IsVendor(BasePermission):
     """
-    دسترسی فقط برای پزشکان
+    دسترسی فقط برای فروشندگان/خیاط‌ها
     """
-    message = 'دسترسی فقط برای پزشکان'
+    message = 'دسترسی فقط برای فروشندگان/خیاط‌ها'
     
     def has_permission(self, request, view):
         if not super().has_permission(request, view):
             return False
             
-        return request.user.user_type == 'doctor'
+        return getattr(request.user, 'role', '') == 'vendor'
 
 
 class IsOwner(BasePermission):
@@ -68,7 +82,7 @@ class IsOwner(BasePermission):
     
     def has_object_permission(self, request, view, obj):
         # بررسی فیلدهای مختلف ownership
-        owner_fields = ['user', 'owner', 'created_by', 'patient', 'doctor']
+        owner_fields = ['user', 'owner', 'created_by', 'client', 'vendor']
         
         for field in owner_fields:
             if hasattr(obj, field):
@@ -79,25 +93,25 @@ class IsOwner(BasePermission):
         return False
 
 
-class IsOwnerOrDoctor(BasePermission):
+class IsOwnerOrVendor(BasePermission):
     """
-    دسترسی برای مالک یا پزشک مربوطه
+    دسترسی برای مالک یا فروشنده مربوطه
     """
-    message = 'دسترسی برای مالک یا پزشک مربوطه'
+    message = 'دسترسی برای مالک یا فروشنده مربوطه'
     
     def has_object_permission(self, request, view, obj):
         # مالک
-        if hasattr(obj, 'patient') and obj.patient == request.user:
+        if hasattr(obj, 'client') and obj.client == request.user:
             return True
             
-        # پزشک
-        if hasattr(obj, 'doctor') and obj.doctor == request.user:
+        # فروشنده
+        if hasattr(obj, 'vendor') and obj.vendor == request.user:
             return True
             
-        # پزشک دارای دسترسی به بیمار
-        if hasattr(obj, 'patient') and request.user.user_type == 'doctor':
+        # فروشنده دارای دسترسی به مشتری
+        if hasattr(obj, 'client') and getattr(request.user, 'role', '') == 'vendor':
             access_service = AccessControlService()
-            return access_service.has_patient_access(request.user, obj.patient)
+            return access_service.has_patient_access(request.user, obj.client)
             
         return False
 
@@ -334,15 +348,15 @@ class CompositePermission(BasePermission):
 
 # مثال‌های استفاده
 
-class DoctorWithActiveSubscription(CompositePermission):
-    """پزشک با اشتراک فعال"""
-    permissions = [IsDoctor, HasActiveSubscription]
+class VendorWithActiveSubscription(CompositePermission):
+    """فروشنده با اشتراک فعال"""
+    permissions = [IsVendor, HasActiveSubscription]
     require_all = True
 
 
-class PatientOrDoctor(CompositePermission):
-    """بیمار یا پزشک"""
-    permissions = [IsPatient, IsDoctor]
+class ClientOrVendor(CompositePermission):
+    """مشتری یا فروشنده"""
+    permissions = [IsClient, IsVendor]
     require_all = False
 
 
@@ -364,6 +378,32 @@ class AIRateLimitPermission(RateLimitPermission):
 
 
 # Helper functions
+
+class GDPRConsentPermission(BasePermission):
+    """
+    بررسی محدودیت‌های پردازش داده بر اساس قوانین GDPR (ماده ۱۸ و ۲۱)
+    """
+    message = 'امکان پردازش پیام به دلیل محدودیت‌های حریم خصوصی کاربر وجود ندارد.'
+    
+    def has_permission(self, request, view):
+        if not super().has_permission(request, view):
+            return False
+            
+        user = request.user
+        
+        # بررسی محدودیت پردازش (ماده ۱۸)
+        if getattr(user, 'is_processing_restricted', False):
+            self.message = 'حساب کاربری شما تحت محدودیت پردازش داده قرار دارد.'
+            return False
+            
+        # بررسی اعتراض به پردازش هوش مصنوعی/چت‌بات (ماده ۲۱)
+        objected_purposes = getattr(user, 'objected_processing_purposes', []) or []
+        if 'chatbot' in objected_purposes or 'ai_processing' in objected_purposes:
+            self.message = 'شما با پردازش داده‌ها توسط چت‌بات هوشمند مخالفت کرده‌اید.'
+            return False
+            
+        return True
+
 
 def check_object_permission(user, obj, permission_type='view'):
     """

@@ -1,40 +1,40 @@
-# سیستم چت‌بات هلسا
+# سیستم چت‌بات فشن‌استار (Fashionistar Chatbot System)
 
-سیستم چت‌بات هوشمند برای بیماران و پزشکان در پلتفرم هلسا که با استفاده از هوش مصنوعی پاسخ‌های مناسب و کاربردی ارائه می‌دهد.
+سیستم چت‌بات هوشمند برای مشتریان و فروشندگان/خیاط‌ها در پلتفرم فشن‌استار که با استفاده از هوش مصنوعی پاسخ‌های مناسب در مورد تناسب سایز بدنی، مشخصات پارچه، روندهای طراحی لباس و سفارش‌های شخصی‌سازی شده ارائه می‌دهد.
 
 ## ویژگی‌ها
 
-### چت‌بات بیماران
-- **ارزیابی علائم**: بررسی اولیه علائم و ارائه راهنمایی
-- **اطلاعات دارویی**: دریافت اطلاعات در مورد داروها
-- **نوبت‌گیری**: رزرو نوبت با پزشکان
-- **راهنمایی کلی**: پاسخ به سؤالات عمومی سلامت
+### چت‌بات مشتریان
+- **محاسبه دقیق سایز**: بررسی اولیه اندازه‌های بدنی و ارائه پیشنهاد سایز مناسب.
+- **مشخصات فنی و نگهداری محصول**: دریافت اطلاعات درباره شستشو، اتو و محدودیت‌های الیاف.
+- **مشاوره و رزرو سفارشی (Bespoke)**: هماهنگی جلسات مشاوره با طراحان و خیاط‌ها.
+- **راهنمایی استایلینگ**: پاسخ به سؤالات عمومی پیرامون ست لباس و روندهای مد.
 
-### چت‌بات پزشکان
-- **پشتیبانی تشخیصی**: کمک در تشخیص بر اساس علائم
-- **اطلاعات دارویی پیشرفته**: تداخلات، دوزاژ، عوارض جانبی
-- **پروتکل‌های درمان**: راهنماهای درمانی استاندارد
-- **جستجو در مراجع**: دسترسی به منابع علمی پزشکی
+### چت‌بات خیاط‌ها / فروشندگان
+- **پشتیبانی کاتالوگ**: کمک به دسته‌بندی و تحلیل قیمت کاتالوگ محصولات.
+- **الگوهای دوخت**: راهنماهای فنی دوخت و مراحل سوار کردن لباس بر اساس پیچیدگی.
+- **مشخصات فنی پارچه**: آنالیز تداخلات الیاف و محدودیت‌های اتوکشی و شستشوی پارچه‌های حساس.
+- **جستجوی مراجع طراحی**: دسترسی به منابع الهام‌بخش، مراجع طراحی و ژورنال‌های مد.
 
 ## معماری سیستم
 
 ```
 chatbot/
-├── models.py              # مدل‌های پایگاه داده
-├── serializers.py         # سریالایزرهای REST API
+├── models.py              # مدل‌های پایگاه داده جلسات، پیام‌ها و پاسخ‌های از پیش تعیین شده
+├── serializers.py         # سریالایزرهای REST API (اعتبارسنجی ورودی‌ها و خروجی‌ها)
 ├── views.py              # ViewSet ها و API endpoints
-├── urls.py               # تعریف URL ها
-├── admin.py              # پنل مدیریت Django
-├── settings.py           # تنظیمات اپ
-├── tests.py              # تست‌های جامع
+├── urls.py               # تعریف URL های سیستم چت‌بات
+├── admin.py              # پنل مدیریت Django برای ثبت کلیدواژه‌ها و پاسخ‌های آماده
+├── settings.py           # تنظیمات چت‌بات (تایم‌اوت، محدودیت طول پیام، آستانه اطمینان AI)
+├── tests.py              # تست‌های جامع سیستم
 ├── services/             # سرویس‌های کسب‌وکار
 │   ├── base_chatbot.py   # کلاس پایه چت‌بات
-│   ├── patient_chatbot.py # سرویس چت‌بات بیمار
-│   ├── doctor_chatbot.py  # سرویس چت‌بات پزشک
-│   ├── ai_integration.py  # یکپارچه‌سازی AI
-│   └── response_matcher.py # تطبیق پاسخ‌ها
+│   ├── client_chatbot.py  # سرویس چت‌بات مشتری
+│   ├── vendor_chatbot.py  # سرویس چت‌بات فروشنده/خیاط
+│   ├── ai_integration.py  # یکپارچه‌سازی با لایه AI
+│   └── response_matcher.py # تطبیق پاسخ‌های آماده بر اساس امتیاز کلیدواژه‌ها
 └── middleware/           # میان‌افزارهای امنیتی
-    └── rate_limiting.py  # محدودسازی نرخ درخواست
+    └── rate_limiting.py  # محدودسازی نرخ درخواست‌ها
 ```
 
 ## مدل‌های داده
@@ -43,8 +43,8 @@ chatbot/
 جلسه چت‌بات که تمام مکالمات کاربر را نگهداری می‌کند.
 
 **فیلدهای مهم:**
-- `user`: کاربر (بیمار یا پزشک)
-- `session_type`: نوع جلسه (`patient` یا `doctor`)
+- `user`: کاربر (مشتری یا فروشنده)
+- `session_type`: نوع جلسه (`client` یا `vendor`)
 - `status`: وضعیت جلسه (`active`, `paused`, `completed`, `expired`)
 - `context_data`: داده‌های زمینه‌ای مکالمه
 - `expires_at`: زمان انقضای جلسه
@@ -54,7 +54,7 @@ chatbot/
 
 **فیلدهای مهم:**
 - `session`: جلسه مربوطه
-- `conversation_type`: نوع مکالمه (`symptom_check`, `medication_info`, `appointment`, etc.)
+- `conversation_type`: نوع مکالمه (`size_recommendation`, `product_inquiry`, `bespoke_consultation`, etc.)
 - `title`: عنوان مکالمه
 - `summary`: خلاصه مکالمه
 
@@ -67,149 +67,133 @@ chatbot/
 - `message_type`: نوع پیام (`text`, `quick_reply`, `attachment`, etc.)
 - `content`: محتوای پیام
 - `ai_confidence`: درجه اطمینان AI
-- `is_sensitive`: آیا پیام حساس است؟
+- `is_sensitive`: آیا پیام حاوی داده‌های حساس است؟
 
 ### ChatbotResponse
-پاسخ‌های از پیش تعریف شده چت‌بات.
+پاسخ‌های از پیش تعریف شده چت‌بات بر اساس تطبیق کلیدواژه‌ها.
 
 **فیلدهای مهم:**
 - `category`: دسته‌بندی پاسخ
-- `target_user`: کاربر هدف (`patient`, `doctor`, `both`)
+- `target_user`: کاربر هدف (`client`, `vendor`, `both`)
 - `trigger_keywords`: کلمات کلیدی محرک
 - `response_text`: متن پاسخ
 - `priority`: اولویت پاسخ
 
 ## API Endpoints
 
-### بیماران
+### مشتریان (Clients)
 
 #### شروع جلسه
 ```http
-POST /chatbot/api/patient/start-session/
+POST /chatbot/api/client/start-session/
 ```
 
 #### ارسال پیام
 ```http
-POST /chatbot/api/patient/send-message/
+POST /chatbot/api/client/send-message/
 Content-Type: application/json
 
 {
-    "message": "سردرد دارم",
+    "message": "نحوه اندازه‌گیری دور سینه چگونه است؟",
     "message_type": "text",
     "context": {}
 }
 ```
 
-#### شروع ارزیابی علائم
+#### شروع ارزیابی سایز
 ```http
-POST /chatbot/api/patient/symptom-assessment/
+POST /chatbot/api/client/size-assessment/
 ```
 
-#### ارسال پاسخ‌های ارزیابی
+#### ثبت درخواست سفارش دوخت سفارشی (Bespoke)
 ```http
-POST /chatbot/api/patient/submit-assessment/
+POST /chatbot/api/client/bespoke-consultation/
 Content-Type: application/json
 
 {
-    "main_symptom": "سردرد",
-    "symptom_duration": "۲ روز",
-    "symptom_severity": 7
-}
-```
-
-#### درخواست نوبت
-```http
-POST /chatbot/api/patient/request-appointment/
-Content-Type: application/json
-
-{
-    "specialty": "پزشک عمومی",
-    "preferred_time": "صبح",
+    "tailoring_type": "کت و شلوار سفارشی",
+    "preferred_date": "2026-07-15",
     "urgency": "medium"
 }
 ```
 
-### پزشکان
+### فروشندگان / خیاط‌ها (Vendors)
 
 #### شروع جلسه
 ```http
-POST /chatbot/api/doctor/start-session/
+POST /chatbot/api/vendor/start-session/
 ```
 
-#### پشتیبانی تشخیصی
+#### پشتیبانی کاتالوگ
 ```http
-POST /chatbot/api/doctor/diagnosis-support/
+POST /chatbot/api/vendor/catalog-support/
 Content-Type: application/json
 
 {
-    "symptoms": ["سردرد", "تب", "گلودرد"],
-    "patient_age": 30,
-    "patient_gender": "M",
-    "medical_history": "سابقه فشار خون"
+    "measurements": ["Coats", "Jackets"],
+    "height_cm": 180,
+    "gender": "M",
+    "fit_preference": "slim"
 }
 ```
 
-#### اطلاعات دارو
+#### مشخصات فنی محصول
 ```http
-POST /chatbot/api/doctor/medication-info/
+POST /chatbot/api/vendor/product-specifications/
 Content-Type: application/json
 
 {
-    "medication_name": "آسپرین",
-    "patient_age": 45,
-    "current_medications": ["متفورمین"]
+    "product_sku": "SKU-992384-WOOL",
+    "client_size": "L"
 }
 ```
 
-#### پروتکل درمان
+#### دریافت الگوی دوخت
 ```http
-GET /chatbot/api/doctor/treatment-protocol/?condition=سردرد&severity=moderate
+GET /chatbot/api/vendor/tailoring-guidelines/?condition=TweedCoat&severity=complex
 ```
 
-#### جستجو در مراجع
+#### جستجو در مراجع طراحی
 ```http
-GET /chatbot/api/doctor/search-references/?query=diabetes&specialty=endocrinology
+GET /chatbot/api/vendor/search-design-references/?query=wool+blends&specialty=Outerwear
 ```
 
-## تنظیمات
+## تنظیمات (Settings)
 
 ### فایل settings.py پروژه
-
 ```python
 INSTALLED_APPS = [
     # ...
-    'chatbot',
+    'apps.chatbot',
     # ...
 ]
 
 MIDDLEWARE = [
     # ...
-    'chatbot.middleware.rate_limiting.ChatbotRateLimitMiddleware',
-    'chatbot.middleware.rate_limiting.ChatbotSecurityMiddleware',
+    'apps.chatbot.middleware.rate_limiting.ChatbotRateLimitMiddleware',
+    'apps.chatbot.middleware.rate_limiting.ChatbotSecurityMiddleware',
     # ...
 ]
 
-# تنظیمات اختصاصی چت‌بات
+# تنظیمات اختصاصی چت‌بات فشن‌استار
 CHATBOT_SETTINGS = {
     'DEFAULT_SESSION_TIMEOUT': 3600,  # 1 ساعت
     'MAX_MESSAGE_LENGTH': 4000,
     'ENABLE_RATE_LIMITING': True,
     'AI_CONFIDENCE_THRESHOLD': 0.7,
-    'PATIENT_CHATBOT': {
+    'CLIENT_CHATBOT': {
         'MAX_DAILY_SESSIONS': 10,
         'SESSION_TIMEOUT': 1800,  # 30 دقیقه
     },
-    'DOCTOR_CHATBOT': {
+    'VENDOR_CHATBOT': {
         'MAX_DAILY_SESSIONS': 50,
         'SESSION_TIMEOUT': 3600,  # 1 ساعت
     }
 }
 ```
 
-### متغیرهای محیط
-
+### متغیرهای محیطی
 ```bash
-# تنظیمات چت‌بات
 CHATBOT_SESSION_TIMEOUT=3600
 CHATBOT_MAX_MESSAGE_LENGTH=4000
 CHATBOT_ENABLE_RATE_LIMITING=true
@@ -218,33 +202,32 @@ CHATBOT_AI_CONFIDENCE_THRESHOLD=0.7
 
 ## امنیت
 
-### Rate Limiting
-- **پیام‌ها**: حداکثر 30 پیام در دقیقه
-- **جلسات جدید**: حداکثر 5 جلسه در 5 دقیقه
-- **پشتیبانی تشخیصی**: حداکثر 10 درخواست در 10 دقیقه
+### محدودسازی نرخ درخواست (Rate Limiting)
+- **ارسال پیام عمومی**: حداکثر 30 پیام در دقیقه به ازای هر کاربر
+- **شروع جلسه جدید**: حداکثر 5 جلسه در 5 دقیقه
+- **تحلیل و پشتیبانی کاتالوگ**: حداکثر 15 درخواست در 10 دقیقه
 
 ### فیلتر محتوای حساس
-سیستم محتوای حساس مانند رمز عبور، شماره کارت و کد ملی را تشخیص داده و مانع از ارسال آن می‌شود.
+سیستم محتوای حساس مانند شماره کارت بانکی، رمزهای عبور و کدهای ملی را به صورت خودکار شناسایی کرده و پیش از ارسال، نسبت به ماسک کردن یا رد پیام اقدام می‌کند.
 
-### احراز هویت
-تمام API ها نیاز به احراز هویت دارند و بر اساس نوع کاربر (بیمار/پزشک) دسترسی‌ها تعریف شده است.
+### مجوزها و دسترسی‌ها (Permissions)
+تمام API ها نیاز به احراز هویت دارند و سطح دسترسی‌ها بر اساس نوع نقش کاربر (`client` و `vendor`) کنترل می‌شود.
 
-## استفاده در تولید
+## استفاده در محیط تولید
 
-### Migration ها
+### اعمال Migration ها
 ```bash
 python manage.py makemigrations chatbot
 python manage.py migrate
 ```
 
-### جمع‌آوری فایل‌های Static
+### بارگذاری پاسخ‌های از پیش تعیین شده اولیه
 ```bash
-python manage.py collectstatic
+python manage.py loaddata initial_responses
 ```
 
-### پاکسازی خودکار
-برای پاکسازی جلسات قدیمی می‌توانید از Celery task استفاده کنید:
-
+### پاکسازی خودکار جلسات منقضی‌شده
+پاکسازی جلسات قدیمی با استفاده از Celery task زیر انجام می‌شود:
 ```python
 # tasks.py
 from celery import shared_task
@@ -254,7 +237,7 @@ from .models import ChatbotSession
 
 @shared_task
 def cleanup_old_sessions():
-    """پاکسازی جلسات قدیمی"""
+    """پاکسازی جلسات قدیمی و غیرفعال"""
     cutoff_date = timezone.now() - timedelta(days=30)
     ChatbotSession.objects.filter(
         last_activity__lt=cutoff_date,
@@ -262,56 +245,18 @@ def cleanup_old_sessions():
     ).delete()
 ```
 
-## نظارت و لاگ‌گذاری
-
-### لاگ‌های مهم
-- تعداد پیام‌ها و جلسات
-- زمان پردازش AI
-- خطاهای سیستم
-- تلاش‌های ارسال محتوای حساس
-
-### متریک‌های عملکرد
-- میانگین زمان پاسخ
-- درجه اطمینان AI
-- نرخ موفقیت در پاسخ‌گویی
-- تعداد جلسات فعال
-
 ## توسعه و تست
 
-### اجرای تست‌ها
+### اجرای تست‌های چت‌بات
 ```bash
-python manage.py test chatbot
+python manage.py test apps.chatbot
 ```
 
 ### تست Coverage
 ```bash
-coverage run --source='.' manage.py test chatbot
+coverage run --source='apps/chatbot' manage.py test apps.chatbot
 coverage report
 ```
 
-### Linting
-```bash
-flake8 chatbot/
-black chatbot/
-```
-
-## یکپارچه‌سازی‌های آتی
-
-- **API های پزشکی خارجی**: اتصال به پایگاه‌داده‌های دارویی
-- **سیستم نوبت‌گیری**: یکپارچه‌سازی با تقویم پزشکان
-- **تحلیل احساسات**: تشخیص حالت روحی کاربر
-- **پشتیبانی چندزبانه**: افزودن زبان‌های دیگر
-
-## مشارکت
-
-برای مشارکت در توسعه:
-
-1. ابتدا Issue ایجاد کنید
-2. Branch جدید بسازید
-3. تغییرات را پیاده‌سازی کنید
-4. تست‌های مربوطه را اضافه کنید
-5. Pull Request ارسال کنید
-
-## مجوز
-
-این کد تحت مجوز اختصاصی هلسا/Medogram قرار دارد.
+### مجوزها
+این پلتفرم تحت امتیاز و مجوز اختصاصی پلتفرم فشن‌استار (Fashionistar) توسعه یافته است.

@@ -39,25 +39,25 @@ CHATBOT_SETTINGS = {
     'AUTO_CLEANUP_OLD_SESSIONS': True, # پاکسازی خودکار جلسات قدیمی
     'CLEANUP_AFTER_DAYS': 30,          # پاکسازی بعد از چند روز
     
-    # تنظیمات چت‌بات بیمار
-    'PATIENT_CHATBOT': {
-        'ENABLE_SYMPTOM_ASSESSMENT': True,
-        'ENABLE_APPOINTMENT_BOOKING': True,
-        'ENABLE_MEDICATION_REMINDERS': False,
+    # تنظیمات چت‌بات مشتری
+    'CLIENT_CHATBOT': {
+        'ENABLE_SIZE_ASSESSMENT': True,
+        'ENABLE_BESPOKE_BOOKING': True,
+        'ENABLE_FIT_REMINDERS': False,
         'MAX_DAILY_SESSIONS': 10,
         'SESSION_TIMEOUT': 1800,  # 30 دقیقه
-        'GREETING_MESSAGE': 'سلام! من دستیار هوشمند هلسا هستم. چطور می‌توانم کمکتان کنم؟',
+        'GREETING_MESSAGE': 'سلام! من دستیار هوشمند فشن‌استار هستم. چطور می‌توانم در انتخاب سایز و طراحی لباس کمکتان کنم؟',
     },
     
-    # تنظیمات چت‌بات پزشک
-    'DOCTOR_CHATBOT': {
-        'ENABLE_DIAGNOSIS_SUPPORT': True,
-        'ENABLE_TREATMENT_PROTOCOLS': True,
-        'ENABLE_DRUG_INTERACTIONS': True,
-        'ENABLE_LITERATURE_SEARCH': True,
+    # تنظیمات چت‌بات خیاط/فروشنده
+    'VENDOR_CHATBOT': {
+        'ENABLE_CATALOG_SUPPORT': True,
+        'ENABLE_TAILORING_PROTOCOLS': True,
+        'ENABLE_FABRIC_LIMITATIONS': True,
+        'ENABLE_TREND_SEARCH': True,
         'MAX_DAILY_SESSIONS': 50,
         'SESSION_TIMEOUT': 3600,  # 1 ساعت
-        'GREETING_MESSAGE': 'سلام دکتر! من دستیار هوشمند پزشکی هلسا هستم. چطور می‌توانم در کار بالینی شما کمک کنم؟',
+        'GREETING_MESSAGE': 'سلام خیاط عزیز! من دستیار هوشمند طراحی و دوخت فشن‌استار هستم. چطور می‌توانم در مشخصات فنی و الگوهای دوخت کمکتان کنم؟',
     },
     
     # تنظیمات لاگ
@@ -79,9 +79,9 @@ CHATBOT_SETTINGS = {
     
     # تنظیمات یکپارچه‌سازی خارجی
     'EXTERNAL_INTEGRATIONS': {
-        'ENABLE_MEDICAL_API': False,
-        'ENABLE_DRUG_DATABASE': False,
-        'ENABLE_APPOINTMENT_SYSTEM': False,
+        'ENABLE_FASHION_API': False,
+        'ENABLE_FABRIC_DATABASE': False,
+        'ENABLE_BOOKING_SYSTEM': False,
         'API_TIMEOUT': 10,  # ثانیه
     }
 }

@@ -57,15 +57,15 @@ urlpatterns = [
          name='vendor-send-message'),
     
     path('api/vendor/catalog-support/', 
-         VendorChatbotViewSet.as_view({'post': 'diagnosis_support'}), 
+         VendorChatbotViewSet.as_view({'post': 'catalog_support'}), 
          name='vendor-catalog-support'),
     
     path('api/vendor/product-info/', 
-         VendorChatbotViewSet.as_view({'post': 'medication_info'}), 
+         VendorChatbotViewSet.as_view({'post': 'product_specifications'}), 
          name='vendor-product-info'),
     
     path('api/vendor/tailoring-guideline/', 
-         VendorChatbotViewSet.as_view({'get': 'treatment_protocol'}), 
+         VendorChatbotViewSet.as_view({'get': 'tailoring_guideline'}), 
          name='vendor-tailoring-guideline'),
     
     path('api/vendor/search-references/', 

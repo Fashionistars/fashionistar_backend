@@ -14,10 +14,23 @@ from rest_framework.throttling import UserRateThrottle
 from rest_framework.pagination import PageNumberPagination
 from django.db import transaction
 from django.core.cache import cache
-from app_standards.permissions import IsPatient, IsDoctor
+from app_standards.permissions import IsClient, IsVendor
 from app_standards.four_cores import APIIngressCore, CentralOrchestrator
+from apps.client.models.client_profile import ClientProfile
+from apps.custom_order.models import CustomOrder
+from rest_framework import serializers
 import logging
 from django.http import JsonResponse
+
+class ClientProfileFallbackSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ClientProfile
+        fields = '__all__'
+
+class CustomOrderFallbackSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomOrder
+        fields = '__all__'
 
 logger = logging.getLogger(__name__)
 
@@ -102,24 +115,21 @@ def standard_api_endpoint(request):
             ingress.build_error_response('internal'),
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
-
-
-# Class-based Views
-class PatientChatView(BaseAPIView):
+class ClientChatView(BaseAPIView):
     """
-    نمونه View برای چت بیمار
+    نمونه View برای چت مشتری
     """
-    permission_classes = [IsAuthenticated, IsPatient]
+    permission_classes = [IsAuthenticated, IsClient]
     throttle_classes = [StandardUserThrottle, AIRequestThrottle]
     
     def post(self, request):
         """ارسال پیام چت"""
         try:
             # اعتبارسنجی
-            from patient_chatbot.serializers import ChatMessageSerializer
+            from apps.chatbot.serializers import MessageSerializer
             is_valid, data = self.ingress.validate_request(
                 request.data,
-                ChatMessageSerializer
+                MessageSerializer
             )
             
             if not is_valid:
@@ -130,7 +140,7 @@ class PatientChatView(BaseAPIView):
             
             # اجرای workflow
             result = self.orchestrator.execute_workflow(
-                'medical_chat',
+                'client_chat',
                 data,
                 request.user
             )
@@ -152,19 +162,19 @@ class PatientChatView(BaseAPIView):
                 self.ingress.build_error_response('internal'),
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
-
-class DoctorDashboardView(BaseAPIView):
+ 
+ 
+class VendorDashboardView(BaseAPIView):
     """
-    داشبورد پزشک
+    داشبورد فروشنده
     """
-    permission_classes = [IsAuthenticated, IsDoctor]
+    permission_classes = [IsAuthenticated, IsVendor]
     
     def get(self, request):
         """دریافت اطلاعات داشبورد"""
         try:
             # بررسی cache
-            cache_key = f"doctor_dashboard:{request.user.id}"
+            cache_key = f"vendor_dashboard:{request.user.id}"
             cached_data = cache.get(cache_key)
             
             if cached_data:
@@ -172,9 +182,9 @@ class DoctorDashboardView(BaseAPIView):
             
             # جمع‌آوری داده‌ها
             dashboard_data = {
-                'today_visits': self._get_today_visits(request.user),
-                'pending_reports': self._get_pending_reports(request.user),
-                'patient_messages': self._get_patient_messages(request.user),
+                'today_orders': self._get_today_orders(request.user),
+                'pending_offers': self._get_pending_offers(request.user),
+                'client_messages': self._get_client_messages(request.user),
                 'statistics': self._get_statistics(request.user),
             }
             
@@ -190,53 +200,50 @@ class DoctorDashboardView(BaseAPIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
-    def _get_today_visits(self, doctor):
-        """دریافت ویزیت‌های امروز"""
+    def _get_today_orders(self, vendor):
+        """دریافت سفارش‌های امروز"""
         # Implementation
         return []
     
-    def _get_pending_reports(self, doctor):
-        """دریافت گزارش‌های در انتظار"""
+    def _get_pending_offers(self, vendor):
+        """دریافت آفر‌های در انتظار"""
         # Implementation
         return []
     
-    def _get_patient_messages(self, doctor):
-        """دریافت پیام‌های بیماران"""
+    def _get_client_messages(self, vendor):
+        """دریافت پیام‌های مشتریان"""
         # Implementation
         return []
     
-    def _get_statistics(self, doctor):
+    def _get_statistics(self, vendor):
         """دریافت آمار"""
         # Implementation
         return {}
-
-
+ 
+ 
 # Generic Views
-class PatientListView(ListAPIView):
+class ClientListView(ListAPIView):
     """
-    لیست بیماران برای پزشک
+    لیست مشتریان برای فروشنده
     """
-    permission_classes = [IsAuthenticated, IsDoctor]
+    permission_classes = [IsAuthenticated, IsVendor]
     pagination_class = StandardPagination
     
     def get_queryset(self):
-        """دریافت queryset بر اساس پزشک"""
-        from patient_records.models import PatientRecord
-        return PatientRecord.objects.filter(
-            doctor=self.request.user,
+        """دریافت queryset بر اساس فروشنده"""
+        return ClientProfile.objects.filter(
             is_active=True
-        ).select_related('patient')
+        )
     
     def get_serializer_class(self):
         """انتخاب serializer"""
-        from patient_records.serializers import PatientListSerializer
-        return PatientListSerializer
-
-
+        return ClientProfileFallbackSerializer
+ 
+ 
 # ViewSets
-class PrescriptionViewSet(ModelViewSet):
+class CustomOrderViewSet(ModelViewSet):
     """
-    ViewSet برای مدیریت نسخه‌ها
+    ViewSet برای مدیریت سفارش‌های شخصی‌سازی شده
     """
     permission_classes = [IsAuthenticated]
     pagination_class = StandardPagination
@@ -244,44 +251,32 @@ class PrescriptionViewSet(ModelViewSet):
     def get_permissions(self):
         """تعیین دسترسی‌ها بر اساس action"""
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            self.permission_classes = [IsAuthenticated, IsDoctor]
+            self.permission_classes = [IsAuthenticated, IsVendor]
         return super().get_permissions()
     
     def get_queryset(self):
         """دریافت queryset بر اساس نوع کاربر"""
-        from prescription_system.models import Prescription
-        
         user = self.request.user
-        if user.user_type == 'doctor':
-            return Prescription.objects.filter(doctor=user)
-        elif user.user_type == 'patient':
-            return Prescription.objects.filter(patient=user)
+        role = getattr(user, 'role', '')
+        if role == 'vendor':
+            return CustomOrder.objects.filter(vendor=user)
+        elif role == 'client':
+            return CustomOrder.objects.filter(client=user)
         else:
-            return Prescription.objects.none()
+            return CustomOrder.objects.none()
     
     def get_serializer_class(self):
         """انتخاب serializer بر اساس action"""
-        from prescription_system.serializers import (
-            PrescriptionListSerializer,
-            PrescriptionDetailSerializer,
-            PrescriptionCreateSerializer
-        )
-        
-        if self.action == 'list':
-            return PrescriptionListSerializer
-        elif self.action == 'create':
-            return PrescriptionCreateSerializer
-        else:
-            return PrescriptionDetailSerializer
+        return CustomOrderFallbackSerializer
     
     @transaction.atomic
     def create(self, request, *args, **kwargs):
-        """ایجاد نسخه جدید"""
+        """ایجاد سفارش جدید"""
         try:
             # پردازش با orchestrator
             orchestrator = CentralOrchestrator()
             result = orchestrator.execute_workflow(
-                'create_prescription',
+                'create_custom_order',
                 request.data,
                 request.user
             )
@@ -293,12 +288,11 @@ class PrescriptionViewSet(ModelViewSet):
                 )
             else:
                 return Response(
-                    {'error': 'Failed to create prescription', 'details': result.errors},
+                    {'error': 'Failed to create custom order', 'details': result.errors},
                     status=status.HTTP_400_BAD_REQUEST
                 )
                 
         except Exception as e:
-            logger.error(f"Prescription creation error: {str(e)}")
             return Response(
                 {'error': 'Internal server error'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

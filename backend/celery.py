@@ -72,6 +72,11 @@ app = Celery("backend")
 app.config_from_object("django.conf:settings", namespace="CELERY")
 app.conf.worker_hijack_root_logger = False
 
+# ── TASK TIME LIMITS ──
+# Global soft and hard execution limits to prevent hanging tasks from blocking workers.
+app.conf.task_soft_time_limit = 300  # 5 minutes (soft limit, raises SoftTimeLimitExceeded)
+app.conf.task_time_limit = 600       # 10 minutes (hard limit, kills worker process)
+
 # Force-sanitize rediss:// broker and backend URLs to ensure ssl_cert_reqs is set.
 # Celery's result backend throws ValueError if rediss:// URL is missing ssl_cert_reqs.
 def _sanitize_celery_redis_url(url: str) -> str:

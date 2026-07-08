@@ -6,6 +6,7 @@ from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.throttling import ScopedRateThrottle
 from django.contrib.auth import get_user_model
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
@@ -19,6 +20,7 @@ from .serializers import (
     ProductInquiryRequestSerializer, BespokeConsultationRequestSerializer
 )
 from .services import ClientChatbotService, VendorChatbotService
+from apps.app_standards.views.permissions import GDPRConsentPermission
 
 User = get_user_model()
 
@@ -30,7 +32,7 @@ class StandardResultsSetPagination(PageNumberPagination):
 
 
 class BaseChatbotViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, GDPRConsentPermission]
     pagination_class = StandardResultsSetPagination
     
     def get_queryset(self):
@@ -43,7 +45,9 @@ class ClientChatbotViewSet(viewsets.GenericViewSet):
     """
     API for client-facing chatbot services.
     """
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, GDPRConsentPermission]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'client_chatbot'
     
     def get_chatbot_service(self):
         """
@@ -270,7 +274,9 @@ class VendorChatbotViewSet(viewsets.GenericViewSet):
     """
     API for vendor-facing chatbot services.
     """
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, GDPRConsentPermission]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'vendor_chatbot'
     
     def get_chatbot_service(self):
         """
@@ -295,24 +301,7 @@ class VendorChatbotViewSet(viewsets.GenericViewSet):
         
         این عمل:
         - از سرویس چت‌بات (get_chatbot_service) برای ایجاد یا بازیابی یک ChatbotSession استفاده می‌کند (در صورت نبودن، جلسه جدید ساخته می‌شود).
-        - از لایه هوش مصنوعی سرویس چت‌بات (ai_service.response_matcher) تلاش می‌کند یک پیام خوشامدگویی مناسب را دریافت کند و در صورت وجود آن را به شکل یک دیکشنری ساختار یافته برمی‌گرداند:
-          - content: متن پیام
-          - message_type: نوع پیام (مثلاً 'text')
-          - response_data: داده‌های اضافی مربوط به پاسخ AI
-        - از سرویس چت‌بات لیست پاسخ‌های سریع اولیه (quick_replies) را تهیه می‌کند تا برای رابط کاربری ارسال شود.
-        - در صورت بروز استثناء، پاسخ HTTP 500 با پیام خطای فارسی بازگردانده می‌شود.
-        
-        پارامترها:
-            request: درخواست HTTP دریافتی — باید کاربر احراز هویت‌شده باشد (نماگر عملکرد وابسته به self.request.user است).
-        
-        مقدار بازگشتی:
-            شی Response حاوی ساختار JSON با کلیدهای:
-              - session: داده‌های سریال‌شده جلسه (ChatbotSessionSerializer)
-              - greeting_message: دیکشنری پیام خوشامدگویی یا None
-              - quick_replies: فهرست پاسخ‌های سریع آماده برای نمایش در رابط
-        
-        عوارض جانبی:
-            - ممکن است یک جلسه جدید در پایگاه داده ایجاد شود (از طریق chatbot_service.get_or_create_session).
+        - از لایه هوش مصنوعی سرویس چت‌بات (ai_service.response_matcher) تلاش می‌کند یک پیام خوشامدگویی مناسب را دریافت کند و در صورت وجود آن را به شکل یک دیکشنری ساختار یافته برمی‌گرداند.
         """
         try:
             chatbot_service = self.get_chatbot_service()
@@ -343,63 +332,26 @@ class VendorChatbotViewSet(viewsets.GenericViewSet):
             )
     
     @extend_schema(
-        summary="Send message to chatbot",
-        description="Send vendor message and get chatbot response",
-        request=SendMessageRequestSerializer,
-        responses={200: SendMessageResponseSerializer}
-    )
-    @action(detail=False, methods=['post'])
-    def send_message(self, request):
-        """
-        ارسال و پردازش پیام کاربر به چت‌بات و بازگشت پاسخ ساخت‌یافته‌ی سرویس هوش‌مصنوعی.
-        
-        این متد یک درخواست POST را می‌پذیرد که باید حداقل شامل فیلد `message` (رشته) باشد و می‌تواند فیلد اختیاری `context` (شی یا دیکشنری) برای ارائه زمینهٔ گفتگو ارسال کند. ورودی ابتدا با `SendMessageRequestSerializer` اعتبارسنجی می‌شود؛ در صورت نامعتبر بودن، خطاهای اعتبارسنجی با وضعیت HTTP 400 بازگردانده می‌شوند. سپس از سرویس چت‌بات (از طریق `self.get_chatbot_service()`) برای پردازش پیام استفاده می‌شود و متد `process_message(message, context)` فراخوانی می‌گردد؛ نتیجهٔ بازگشتی این سرویس مستقیماً در بدنهٔ پاسخ HTTP قرار می‌گیرد.
-        
-        بازگشت‌ها:
-        - HTTP 200: پاسخ پردازش شدهٔ سرویس چت‌بات (معمولاً JSON ساخت‌یافته شامل پیام/اقدامات/گزینه‌های بعدی).
-        - HTTP 400: خطاهای اعتبارسنجی ورودی.
-        - HTTP 500: خطاهای غیرمنتظره در زمان پردازش پیام؛ پیام خطا در بدنه بازگردانده می‌شود.
-        """
-        serializer = SendMessageRequestSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-        try:
-            chatbot_service = self.get_chatbot_service()
-            
-            # پردازش پیام
-            result = chatbot_service.process_message(
-                message=serializer.validated_data['message'],
-                context=serializer.validated_data.get('context')
-            )
-            return Response(result)
-        except Exception as e:
-            return Response(
-                {'error': f'Error processing message: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-    
-    @extend_schema(
         summary="Request product catalog support",
         description="Get recommendation and categorization for new products",
         request=SizeRecommendationRequestSerializer,
         responses={200: dict}
     )
     @action(detail=False, methods=['post'])
-    def diagnosis_support(self, request):
+    def catalog_support(self, request):
         """
-        درخواست پشتیبانی تشخیصی برای یک بیمار و بازگرداندن نتیجه تحلیل تشخیصی توسط سرویس هوش‌مصنوعی.
+        درخواست پشتیبانی کاتالوگ برای یک فروشنده و بازگرداندن نتیجه تحلیل کاتالوگ توسط سرویس هوش‌مصنوعی.
         
-        این متد داده‌های ورودی را با DiagnosisSupportRequestSerializer اعتبارسنجی می‌کند (خطاهای اعتبارسنجی با HTTP 400 بازگردانده می‌شوند)، سپس اطلاعات بیمار را از فیلدهای زیر می‌سازد:
-        - patient_age
-        - patient_gender
-        - medical_history
-        - current_medications (اختیاری، پیش‌فرض لیست خالی)
+        این متد داده‌های ورودی را با SizeRecommendationRequestSerializer اعتبارسنجی می‌کند (خطاهای اعتبارسنجی با HTTP 400 بازگردانده می‌شوند)، سپس اطلاعات فروشنده را از فیلدهای زیر می‌سازد:
+        - height_cm
+        - gender
+        - fit_preference
+        - prior_purchases (اختیاری، پیش‌فرض لیست خالی)
         
-        سپس متد get_diagnosis_support سرویس چت‌بات را با پارامترهای `symptoms` و `patient_info` فراخوانی می‌کند و خروجی آن را در بدنه پاسخ بازمی‌گرداند. در صورت بروز هرگونه خطای اجرایی، پاسخ با وضعیت HTTP 500 و پیام خطا بازگردانده می‌شود.
+        سپس متد get_catalog_support سرویس چت‌بات را با پارامترهای `measurements` و `vendor_info` فراخوانی می‌کند و خروجی آن را در بدنه پاسخ بازمی‌گرداند. در صورت بروز هرگونه خطای اجرایی، پاسخ با وضعیت HTTP 500 و پیام خطا بازگردانده می‌شود.
         
         بازگشت:
-            Response: در حالت موفقیت، داده‌های پشتیبانی تشخیصی بازگردانده می‌شوند؛ در صورت خطای اعتبارسنجی HTTP 400 و در صورت خطای داخلی HTTP 500.
+            Response: در حالت موفقیت، داده‌های پشتیبانی کاتالوگ بازگردانده می‌شوند؛ در صورت خطای اعتبارسنجی HTTP 400 و در صورت خطای داخلی HTTP 500.
         """
         serializer = SizeRecommendationRequestSerializer(data=request.data)
         if not serializer.is_valid():
@@ -432,22 +384,21 @@ class VendorChatbotViewSet(viewsets.GenericViewSet):
         responses={200: dict}
     )
     @action(detail=False, methods=['post'])
-
-    def medication_info(self, request):
+    def product_specifications(self, request):
         """
-        درخواست و بازگردانی اطلاعات دارویی با توجه به زمینه بیمار.
+        درخواست و بازگردانی مشخصات محصول با توجه به زمینه مشتری.
         
-        این متد ورودی درخواست را اعتبارسنجی می‌کند و سپس با استفاده از سرویس چت‌بات اطلاعات مربوط به داروی مشخص‌شده را با درنظر گرفتن زمینهٔ بیمار (سن، وزن، آلرژی‌ها و داروهای جاری) از لایه سرویس دریافت و برمی‌گرداند. پردازش اطلاعات دارویی (شامل تداخل‌های احتمالی، نکات احتیاطی، دوزهای معمول و هشدارها) توسط متد get_medication_info در سرویس چت‌بات انجام می‌شود.
+        این متد ورودی درخواست را اعتبارسنجی می‌کند و سپس با استفاده از سرویس چت‌بات اطلاعات مربوط به محصول مشخص‌شده را با درنظر گرفتن زمینهٔ مشتری (سایز، قد، اولویت‌های پارچه و محصولات مشابه) از لایه سرویس دریافت و برمی‌گرداند. پردازش اطلاعات محصول (شامل قیمت‌گذاری، دستورالعمل‌های نگهداری و بسته‌بندی) توسط متد get_product_info در سرویس چت‌بات انجام می‌شود.
         
         پارامترهای درخواست (بدنه JSON) که اعتبارسنجی می‌شوند:
-            - medication_name: نام دارو (الزامی)
-            - patient_age: سن بیمار (اختیاری)
-            - patient_weight: وزن بیمار (اختیاری)
-            - allergies: فهرست آلرژی‌های شناخته‌شده (اختیاری)
-            - current_medications: فهرست داروهای مصرفی فعلی بیمار (اختیاری)
+            - product_sku: شناسه کالا (الزامی)
+            - client_size: سایز مشتری (اختیاری)
+            - client_height: قد مشتری (اختیاری)
+            - fabric_preferences: اولویت‌های پارچه (اختیاری)
+            - similar_products: محصولات مشابه (اختیاری)
         
         بازگشت:
-            - در صورت موفقیت: پاسخ JSON حاوی ساختار اطلاعات دارویی تولیدشده توسط سرویس چت‌بات.
+            - در صورت موفقیت: پاسخ JSON حاوی ساختار اطلاعات محصول تولیدشده توسط سرویس چت‌بات.
             - در صورت خطای اعتبارسنجی: پاسخ با وضعیت HTTP 400 شامل خطاهای serializer.
             - در صورت خطای داخلی یا استثناء در پردازش: پاسخ با وضعیت HTTP 500 و پیام خطا.
         """
@@ -485,21 +436,21 @@ class VendorChatbotViewSet(viewsets.GenericViewSet):
         responses={200: dict}
     )
     @action(detail=False, methods=['get'])
-    def treatment_protocol(self, request):
+    def tailoring_guidelines(self, request):
         """
-        درخواست پروتکل درمان برای یک بیماری مشخص.
+        درخواست راهنمای دوخت برای یک نوع پوشاک مشخص.
         
-        این اکشن پارامترهای کوئری زیر را می‌پذیرد و پروتکل درمانی را از سرویس چت‌بات دریافت می‌کند:
-        - condition (الزامی): نام یا شناسه بیماری/شرایط بالینی.
-        - severity (اختیاری): شدت وضعیت (پیش‌فرض "moderate").
+        این اکشن پارامترهای کوئری زیر را می‌پذیرد و راهنمای دوخت را از سرویس چت‌بات دریافت می‌کند:
+        - condition (الزامی): نام یا نوع پوشاک.
+        - severity (اختیاری): پیچیدگی دوخت (پیش‌فرض "moderate").
         
         رفتار:
         - در صورت نبودن پارامتر condition، پاسخ با وضعیت HTTP 400 و پیام خطا بازگردانده می‌شود.
-        - در حالت عادی، این متد با فراخوانی get_treatment_protocol(condition, severity) روی سرویس چت‌بات، پروتکل درمانی را درخواست می‌کند و نتیجه (ساختار JSON/دیکشنری) را در بدنه پاسخ بازمی‌گرداند.
+        - در حالت عادی، این متد با فراخوانی get_treatment_protocol(condition, severity) روی سرویس چت‌بات، راهنمای دوخت را درخواست می‌کند و نتیجه را در بدنه پاسخ بازمی‌گرداند.
         - هر استثنایی که طی پردازش رخ دهد با وضعیت HTTP 500 و پیام خطا پاسخ داده می‌شود.
         
         مقدار بازگشتی:
-        - HTTP 200: محتوای پروتکل درمانی (معمولاً دیکشنری/JSON).
+        - HTTP 200: محتوای راهنمای دوخت (معمولاً دیکشنری/JSON).
         - HTTP 400: اگر پارامتر condition ارائه نشده باشد.
         - HTTP 500: در صورت بروز خطای سرور/سرویس.
         """
@@ -529,22 +480,19 @@ class VendorChatbotViewSet(viewsets.GenericViewSet):
         responses={200: dict}
     )
     @action(detail=False, methods=['get'])
-    def search_references(self, request):
+    def search_design_references(self, request):
         """
-        جستجوی مراجع پزشکی بر اساس عبارت و تخصص اختیاری و بازگرداندن نتایج به‌صورت پاسخ HTTP.
+        جستجوی مراجع طراحی لباس بر اساس عبارت و تخصص اختیاری و بازگرداندن نتایج به‌صورت پاسخ HTTP.
         
         این عملیات پارامترهای کوئری زیر را می‌خواند:
-        - `query` (الزامی): عبارت جستجو برای یافتن منابع پزشکی.
-        - `specialty` (اختیاری): فیلتر بر اساس تخصص پزشکی (مثلاً "cardiology").
+        - `query` (الزامی): عبارت جستجو برای یافتن مراجع طراحی.
+        - `specialty` (اختیاری): فیلتر بر اساس حوزه تخصصی طراحی (مثلاً "Custom Suits").
         
         رفتار:
         - پارامتر `query` باید موجود باشد؛ در غیر این صورت پاسخ 400 با پیام خطا بازگردانده می‌شود.
-        - برای انجام جستجو از سرویس چت‌بات (`self.get_chatbot_service().search_medical_references`) استفاده می‌شود که نتایج مرتبط با منابع پزشکی را بازمی‌گرداند.
-        - در صورت موفقیت، محتویات برگشتی سرویس مستقیماً در بدنه پاسخ HTTP قرار می‌گیرد (معمولاً لیست یا ساختار JSON شامل مراجع، عنوان، چکیده و لینک‌ها).
+        - برای انجام جستجو از سرویس چت‌بات (`self.get_chatbot_service().search_medical_references`) استفاده می‌شود که نتایج مرتبط را بازمی‌گرداند.
+        - در صورت موفقیت، محتویات برگشتی سرویس مستقیماً در بدنه پاسخ HTTP قرار می‌گیرد.
         - در صورت بروز استثنا، پاسخ 500 همراه با پیام خطا بازگردانده می‌شود.
-        
-        مقدار بازگشتی:
-        - یک شی Response حاوی نتایج جستجو یا یک پیام خطا با وضعیت‌های HTTP مناسب (400 یا 500).
         """
         query = request.query_params.get('query')
         specialty = request.query_params.get('specialty')
@@ -562,13 +510,15 @@ class VendorChatbotViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-
 class ChatbotSessionViewSet(BaseChatbotViewSet):
     """
     مدیریت جلسات چت‌بات
     """
     queryset = ChatbotSession.objects.all()
     serializer_class = ChatbotSessionSerializer
+
+    def get_queryset(self):
+        return super().get_queryset().select_related('user')
 
 
 class ConversationViewSet(BaseChatbotViewSet):
@@ -578,7 +528,9 @@ class ConversationViewSet(BaseChatbotViewSet):
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False) or self.request.user.is_anonymous:
             return self.queryset.none()
-        return self.queryset.filter(session__user=self.request.user)
+        return self.queryset.filter(
+            session__user=self.request.user
+        ).select_related('session', 'session__user').prefetch_related('messages')
     
     @action(detail=True, methods=['get'])
     def history(self, request, pk=None):

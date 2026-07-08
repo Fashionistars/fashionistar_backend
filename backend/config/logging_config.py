@@ -729,7 +729,11 @@ def build_logging_config(
             'level': 'DEBUG' if debug else 'INFO',
             'propagate': False,
         },
-       
+        'apps.chatbot': {
+            'handlers': _handlers_for('file.chat'),
+            'level': 'DEBUG' if debug else 'INFO',
+            'propagate': False,
+        },
 
         # ── Admin ─────────────────────────────────────────────────────────────
         'admin_backend': {
