@@ -382,6 +382,21 @@ DATABASES = {
 }
 DATABASES["default"]["DISABLE_SERVER_SIDE_CURSORS"] = True
 
+# PostgreSQL connection resilience.
+# Managed poolers (Neon, pgBouncer) silently close idle connections, which
+# surfaces as "SSL connection has been closed unexpectedly" on the next query
+# when Django reuses a stale persistent connection (conn_max_age > 0).
+# CONN_HEALTH_CHECKS makes Django validate a pooled connection at the start of
+# each request and transparently reconnect if the server dropped it. TCP
+# keepalives keep the socket alive across the pooler between requests.
+if "postgresql" in DATABASES["default"]["ENGINE"]:
+    DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
+    _pg_options = DATABASES["default"].setdefault("OPTIONS", {})
+    _pg_options.setdefault("keepalives", 1)
+    _pg_options.setdefault("keepalives_idle", 30)
+    _pg_options.setdefault("keepalives_interval", 10)
+    _pg_options.setdefault("keepalives_count", 5)
+
 # SQLite-specific options (ignored for PostgreSQL)
 if "sqlite" in DATABASES["default"]["ENGINE"]:
     DATABASES["default"].setdefault("OPTIONS", {})["timeout"] = 20
