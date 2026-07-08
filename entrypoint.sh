@@ -235,7 +235,7 @@ case "$COMMAND" in
         log_section "Starting Celery Worker (${PLATFORM})"
         if [ "$PLATFORM" = "huggingface" ]; then
             log_info "Hugging Face platform detected. Starting background HTTP health server on port 7860..."
-            python hf_health_server.py &
+            python deploy/huggingface/hf_health_server.py &
         fi
         
         # Start Ollama service if enabled
@@ -258,7 +258,7 @@ case "$COMMAND" in
         log_section "Starting Celery Beat Scheduler (${PLATFORM})"
         if [ "$PLATFORM" = "huggingface" ]; then
             log_info "Hugging Face platform detected. Starting background HTTP health server on port 7860..."
-            python hf_health_server.py &
+            python deploy/huggingface/hf_health_server.py &
         fi
         exec celery -A backend beat \
             --loglevel="${CELERY_LOG_LEVEL:-info}" \
