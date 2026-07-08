@@ -53,7 +53,10 @@ SECRET_KEY = 'test-secret-key-not-for-production-use-only'
 REST_FRAMEWORK = {
     **REST_FRAMEWORK,                 # type: ignore[name-defined]
     'DEFAULT_THROTTLE_CLASSES': [],
-    'DEFAULT_THROTTLE_RATES': {},
+    'DEFAULT_THROTTLE_RATES': {
+        'client_chatbot': '1000/minute',
+        'vendor_chatbot': '1000/minute',
+    },
 }
 
 # ─── Cache — DummyCache so throttle counts never persist between requests ────

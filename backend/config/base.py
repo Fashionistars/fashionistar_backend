@@ -731,6 +731,8 @@ REST_FRAMEWORK = {
         "otp": "3/minute",
         "upload": "20/hour",
         "vendor": "200/minute",
+        "client_chatbot": "60/minute",
+        "vendor_chatbot": "100/minute",
     },
     # ── Pagination — Fashionistar standard envelope ─────────────────────────
     "DEFAULT_PAGINATION_CLASS": "apps.common.pagination.DefaultPagination",
