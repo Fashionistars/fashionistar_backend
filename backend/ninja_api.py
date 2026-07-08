@@ -304,3 +304,20 @@ try:
     logger.info("✅ NinjaAPI: AI engine router registered at /api/v1/ninja/ai/")
 except Exception as exc:  # pragma: no cover
     logger.warning("ℹ️ NinjaAPI: AI engine router FAILED to register: %s", exc)
+
+# Chatbot domain: /api/v1/ninja/chatbot/
+try:
+    # pyrefly: ignore [missing-import]
+    from apps.chatbot.views.async_views import router as chatbot_router
+    ninja_api.add_router("/chatbot/", chatbot_router)
+    logger.info("✅ NinjaAPI: chatbot router registered at /api/v1/ninja/chatbot/")
+except Exception as exc:  # pragma: no cover
+    logger.warning("ℹ️ NinjaAPI: chatbot router FAILED to register: %s", exc)
+
+# App Standards domain: /api/v1/ninja/app-standards/
+try:
+    from apps.app_standards.views.async_views import router as app_standards_router
+    ninja_api.add_router("/app-standards/", app_standards_router)
+    logger.info("✅ NinjaAPI: app-standards router registered at /api/v1/ninja/app-standards/")
+except Exception as exc:  # pragma: no cover
+    logger.warning("ℹ️ NinjaAPI: app-standards router FAILED to register: %s", exc)

@@ -197,6 +197,33 @@ class UnifiedAIUsage(BaseModel):
     def total_tokens(self):
         """Calculate total tokens used."""
         return self.input_tokens + self.output_tokens
+    
+    # ============================================================================
+    # ASYNC METHODS (Django 6.0 native async ORM)
+    # ============================================================================
+    
+    @classmethod
+    async def aget_by_user(cls, user_id: str, service_type: str = None):
+        """Get AI usage records for a user (async)."""
+        queryset = cls.objects.filter(user_id=user_id)
+        if service_type:
+            queryset = queryset.filter(service_type=service_type)
+        return [u async for u in queryset.order_by('-created_at')[:20]]
+    
+    @classmethod
+    async def aget_by_model(cls, model_name: str, limit: int = 10):
+        """Get AI usage by model name (async)."""
+        queryset = cls.objects.filter(model_name=model_name).order_by('-created_at')
+        return [u async for u in queryset[:limit]]
+    
+    @classmethod
+    async def aget_total_usage(cls, user_id: str):
+        """Get total token usage for a user (async)."""
+        from django.db.models import Sum
+        result = await cls.objects.filter(user_id=user_id).aggregate(
+            total=Sum('input_tokens') + Sum('output_tokens')
+        )
+        return result['total'] or 0
 
 
 class UnifiedAccessPermission(BaseModel):

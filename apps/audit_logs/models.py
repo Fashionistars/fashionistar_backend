@@ -75,6 +75,7 @@ class EventCategory(models.TextChoices):
     PROVIDER         = "provider",          _("Payment Providers")
     CLIENT           = "client",            _("Client / Consumer")
     SETTINGS         = "settings",          _("Platform Settings")
+    CHATBOT          = "chatbot",           _("Chatbot & AI Assistant")
 
 
 class EventType(models.TextChoices):
@@ -244,6 +245,18 @@ class EventType(models.TextChoices):
     MESSAGE_DELETED        = "message_deleted",       _("Message Deleted")
     WEBSOCKET_CONNECTED    = "websocket_connected",   _("WebSocket Connected")
     WEBSOCKET_DISCONNECTED = "websocket_disconnected",_("WebSocket Disconnected")
+
+    # ── Chatbot & AI Assistant ─────────────────────────────────────────
+    CHATBOT_MESSAGE_SENT           = "chatbot_message_sent",           _("Chatbot Message Sent")
+    CHATBOT_SESSION_STARTED        = "chatbot_session_started",        _("Chatbot Session Started")
+    CHATBOT_SESSION_ENDED          = "chatbot_session_ended",          _("Chatbot Session Ended")
+    CHATBOT_CONVERSATION_CREATED   = "chatbot_conversation_created",   _("Chatbot Conversation Created")
+    CHATBOT_CONVERSATION_UPDATED   = "chatbot_conversation_updated",   _("Chatbot Conversation Updated")
+    CHATBOT_RESPONSE_TRIGGERED     = "chatbot_response_triggered",     _("Chatbot Predefined Response Triggered")
+    CHATBOT_AI_RESPONSE_GENERATED = "chatbot_ai_response_generated", _("Chatbot AI Response Generated")
+    CHATBOT_STYLE_ASSESSMENT_STARTED = "chatbot_style_assessment_started", _("Style Assessment Started")
+    CHATBOT_STYLE_ASSESSMENT_COMPLETED = "chatbot_style_assessment_completed", _("Style Assessment Completed")
+    CHATBOT_APPOINTMENT_REQUESTED  = "chatbot_appointment_requested",  _("Bespoke Tailoring Appointment Requested")
 
     # ── Transactions & Ledger ─────────────────────────────────────────
     LEDGER_ENTRY_CREATED   = "ledger_entry_created",  _("Ledger Entry Created")
