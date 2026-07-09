@@ -284,3 +284,5 @@ htmlcov/
 .idea/
 .vscode/
 *.swp
+# Accidentally-committed disabled git directory (removed 2026-07)
+.git_disabled/

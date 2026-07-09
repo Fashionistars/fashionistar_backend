@@ -23,16 +23,6 @@ name: 🔄 Deploy Celery Workers to Northflank (Production)
 # ============================================================================
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '**.py'
-      - 'pyproject.toml'
-      - 'uv.lock'
-      - 'Dockerfile.celery'
-      - 'northflank.json'
-      - 'entrypoint.sh'
-      - '.github/workflows/deploy-northflank.yml'
   workflow_dispatch:
     inputs:
       force_rebuild:
