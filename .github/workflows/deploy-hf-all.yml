@@ -23,7 +23,7 @@ on:
       - 'uv.lock'
       - 'Dockerfile*'
       - 'entrypoint.sh'
-      - 'hf_health_server.py'
+      - 'deploy/huggingface/hf_health_server.py'
       - 'gunicorn.conf.py'
       - 'backend/**'
       - 'apps/**'
@@ -91,7 +91,7 @@ jobs:
           uv run python -m py_compile backend/asgi.py
           uv run python -m py_compile backend/wsgi.py
           uv run python -m py_compile gunicorn.conf.py
-          uv run python -m py_compile hf_health_server.py
+          uv run python -m py_compile deploy/huggingface/hf_health_server.py
           echo "✅ All entrypoint files compile without errors"
 
       - name: Django system check (no DB required)
@@ -141,7 +141,7 @@ jobs:
         run: |
           # Force LF endings so the Linux container can execute it correctly
           sed -i 's/\r//' entrypoint.sh
-          sed -i 's/\r//' hf_health_server.py
+          sed -i 's/\r//' deploy/huggingface/hf_health_server.py
           echo "✅ Line endings normalised to LF"
 
       - name: Prepare deploy directory
@@ -239,7 +239,7 @@ jobs:
           git lfs install
 
       - name: Ensure LF line endings
-        run: sed -i 's/\r//' entrypoint.sh hf_health_server.py
+        run: sed -i 's/\r//' entrypoint.sh deploy/huggingface/hf_health_server.py
 
       - name: Prepare deploy directory
         run: |
@@ -325,7 +325,7 @@ jobs:
           git lfs install
 
       - name: Ensure LF line endings
-        run: sed -i 's/\r//' entrypoint.sh hf_health_server.py
+        run: sed -i 's/\r//' entrypoint.sh deploy/huggingface/hf_health_server.py
 
       - name: Prepare deploy directory
         run: |

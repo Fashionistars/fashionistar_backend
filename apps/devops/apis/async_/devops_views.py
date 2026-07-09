@@ -20,7 +20,7 @@ from ...selectors import (
     aget_devops_dashboard_parallel,
 )
 from ...models import EnvironmentConfig, DeploymentHistory, HealthCheck, ServiceMonitoring
-from apps.audit_logs.services.devops import DevOpsAuditService
+from apps.audit_logs.services.devops.devops_audit import DevOpsAuditService
 
 
 router = Router(tags=['DevOps'])

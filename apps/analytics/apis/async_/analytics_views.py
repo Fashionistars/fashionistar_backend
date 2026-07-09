@@ -19,7 +19,7 @@ from apps.analytics.selectors.analytics_selectors import (
     aget_analytics_dashboard_parallel,
 )
 from apps.analytics.services import AnalyticsService
-from apps.audit_logs.services.analytics import AnalyticsAuditService
+from apps.audit_logs.services.analytics.analytics_audit import AnalyticsAuditService
 
 
 router = Router(tags=['Analytics'])

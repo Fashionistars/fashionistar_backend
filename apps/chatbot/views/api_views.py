@@ -11,15 +11,15 @@ from django.contrib.auth import get_user_model
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
 
-from .models import ChatbotSession, Conversation, Message
-from .serializers import (
+from ..models import ChatbotSession, Conversation, Message
+from ..serializers import (
     ChatbotSessionSerializer, ConversationSerializer, ConversationListSerializer,
     MessageSerializer, SendMessageRequestSerializer,
     SendMessageResponseSerializer, StartSessionResponseSerializer,
     StyleAssessmentRequestSerializer, SizeRecommendationRequestSerializer,
     ProductInquiryRequestSerializer, BespokeConsultationRequestSerializer
 )
-from .services import ClientChatbotService, VendorChatbotService
+from ..services import ClientChatbotService, VendorChatbotService
 from apps.app_standards.views.permissions import GDPRConsentPermission
 
 User = get_user_model()

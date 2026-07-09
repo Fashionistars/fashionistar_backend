@@ -18,7 +18,7 @@ from apps.search.selectors.search_selectors import (
 )
 from apps.search.services import HybridSearchService
 from apps.search.metrics import search_metrics
-from apps.audit_logs.services.search import SearchAuditService
+from apps.audit_logs.services.search.search_audit import SearchAuditService
 
 
 router = Router(tags=['Search'])

@@ -330,10 +330,3 @@ try:
 except Exception as exc:  # pragma: no cover
     logger.warning("ℹ️ NinjaAPI: analytics router FAILED to register: %s", exc)
 
-# DevOps domain: /api/v1/ninja/devops/
-try:
-    from apps.devops.apis.async_.devops_views import router as devops_router
-    ninja_api.add_router("/devops/", devops_router)
-    logger.info("✅ NinjaAPI: devops router registered at /api/v1/ninja/devops/")
-except Exception as exc:  # pragma: no cover
-    logger.warning("ℹ️ NinjaAPI: devops router FAILED to register: %s", exc)
