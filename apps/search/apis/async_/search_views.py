@@ -1,154 +1,202 @@
 # apps/search/apis/async_/search_views.py
 """
-Django-Ninja async views for the search domain (reads/GETs).
+Django Ninja async views for Search domain.
+Follows vendor pattern with async endpoints under /api/v1/ninja/search/.
 """
 
-from typing import List, Dict, Any, Optional
-from ninja import Router, Schema
+from ninja import Router
+from django.http import HttpRequest
+from typing import List, Optional
+from pydantic import BaseModel
 from django.utils import timezone
-from django.db.models import Avg
-
-from ...services import HybridSearchService
-from ...models import SearchQuery as SearchQueryModel
-
-router = Router(tags=["search"])
-
-
-class SearchResultSchema(Schema):
-    id: int
-    encounter_id: Optional[int] = None
-    content_type: str
-    content_id: int
-    title: str
-    snippet: str
-    combined_score: float = 0.0
-    search_type: str
-    metadata: Dict[str, Any] = {}
+from datetime import timedelta
+from apps.search.selectors.search_selectors import (
+    aget_searchable_content,
+    aget_search_queries,
+    aget_cached_results,
+    aget_search_dashboard_parallel,
+)
+from apps.search.services import HybridSearchService
+from apps.search.metrics import search_metrics
+from apps.audit_logs.services.search import SearchAuditService
 
 
-class PaginationSchema(Schema):
-    page: int
-    page_size: int
-    total_pages: int
-    total_results: int
-    has_next: bool
-    has_previous: bool
+router = Router(tags=['Search'])
 
 
-class SearchResponseSchema(Schema):
+# ============================================================================
+# Pydantic Schemas
+# ============================================================================
+
+class SearchRequest(BaseModel):
     query: str
-    filters: Dict[str, Any]
-    results: List[SearchResultSchema]
-    pagination: PaginationSchema
+    filters: Optional[dict] = None
+    limit: int = 20
+    boolean_mode: bool = True
+
+
+class SearchResultItem(BaseModel):
+    id: int
+    title: str
+    content: str
+    snippet: str
+    score: float
+    combined_score: float
+
+
+class SearchResponse(BaseModel):
+    results: List[SearchResultItem]
+    total_count: int
     execution_time_ms: int
+    query: str
     search_id: int
 
 
-class SuggestionResponseSchema(Schema):
-    query_prefix: str
-    suggestions: List[str]
+class DashboardResponse(BaseModel):
+    recent_queries_count: int
+    content_count: int
+    avg_execution_time: float
 
 
-class AnalyticsResponseSchema(Schema):
-    since_days: int
-    total_queries: int
-    average_execution_time_ms: int
+class HealthCheckResponse(BaseModel):
+    status: str
+    index_status: str
+    cache_status: str
+    database_status: str
+    content_count: int
+    recent_queries_24h: int
+    avg_execution_time_ms: float
 
 
-@router.get("/content/", response=SearchResponseSchema)
-async def search_content(
-    request,
-    q: str,
-    encounter_id: Optional[int] = None,
-    content_type: Optional[str] = None,
-    date_from: Optional[str] = None,
-    date_to: Optional[str] = None,
-    page: int = 1,
-    page_size: int = 20,
-):
-    """Perform async hybrid search on all clinical and notes content."""
-    filters = {}
-    if encounter_id:
-        filters['encounter_id'] = encounter_id
-    if content_type:
-        filters['content_type'] = [content_type]
-    if date_from:
-        filters['date_from'] = date_from
-    if date_to:
-        filters['date_to'] = date_to
+# ============================================================================
+# Async Endpoints
+# ============================================================================
 
-    page_size = min(page_size, 100)
-
+@router.post('/search/', response=SearchResponse)
+async def execute_search(request: HttpRequest, search_request: SearchRequest):
+    """
+    Execute search query (async).
+    Endpoint: POST /api/v1/ninja/search/search/
+    """
+    user = request.auth
     search_service = HybridSearchService()
-    search_results = await search_service.asearch(
-        query_text=q,
-        user=request.auth,
-        filters=filters,
-        limit=page_size * 5
+    
+    results = await search_service.asearch(
+        query_text=search_request.query,
+        user=user,
+        filters=search_request.filters,
+        limit=search_request.limit,
+        boolean_mode=search_request.boolean_mode,
+    )
+    
+    # Log audit events
+    SearchAuditService.log_search_query_executed(
+        actor=user,
+        query_id=results.get('search_id'),
+        query_text=search_request.query,
+        filters=search_request.filters,
+        request=request,
+    )
+    
+    if results['total_count'] > 0:
+        SearchAuditService.log_search_result_returned(
+            actor=user,
+            query_id=results.get('search_id'),
+            result_count=results['total_count'],
+            execution_time=results['execution_time_ms'],
+            request=request,
+        )
+    else:
+        SearchAuditService.log_search_zero_results(
+            actor=user,
+            query_id=results.get('search_id'),
+            query_text=search_request.query,
+            request=request,
+        )
+    
+    return SearchResponse(
+        results=[SearchResultItem(**r) for r in results['results']],
+        total_count=results['total_count'],
+        execution_time_ms=results['execution_time_ms'],
+        query=results['query'],
+        search_id=results['search_id'],
     )
 
-    results_list = search_results['results']
-    total_results = len(results_list)
-    total_pages = (total_results + page_size - 1) // page_size if total_results else 1
-    
-    start_idx = (page - 1) * page_size
-    end_idx = start_idx + page_size
-    paginated_results = results_list[start_idx:end_idx]
 
-    return {
-        "query": q,
-        "filters": filters,
-        "results": paginated_results,
-        "pagination": {
-            "page": page,
-            "page_size": page_size,
-            "total_pages": total_pages,
-            "total_results": total_results,
-            "has_next": page < total_pages,
-            "has_previous": page > 1,
-        },
-        "execution_time_ms": search_results['execution_time_ms'],
-        "search_id": search_results['search_id']
-    }
+@router.get('/dashboard/', response=DashboardResponse)
+async def get_search_dashboard(request: HttpRequest):
+    """
+    Get search dashboard data in parallel (async).
+    Endpoint: GET /api/v1/ninja/search/dashboard/
+    """
+    user = request.auth
+    if not user:
+        return DashboardResponse(recent_queries_count=0, content_count=0, avg_execution_time=0)
+    
+    dashboard_data = await aget_search_dashboard_parallel(str(user.id))
+    
+    return DashboardResponse(
+        recent_queries_count=len(dashboard_data['recent_queries']),
+        content_count=dashboard_data['content_count'],
+        avg_execution_time=dashboard_data['avg_execution_time'],
+    )
 
 
-@router.get("/suggestions/", response=SuggestionResponseSchema)
-async def search_suggestions(request, q: str, limit: int = 10):
-    """Provide async search suggestions based on previous successful query history."""
-    if len(q) < 2:
-        return {"query_prefix": q, "suggestions": []}
+@router.get('/health/', response=HealthCheckResponse)
+async def get_search_health(request: HttpRequest):
+    """
+    Get search service health check (async).
+    Endpoint: GET /api/v1/ninja/search/health/
+    """
+    from apps.search.models import SearchableContent, SearchQuery
+    from django.db.models import Count, Avg
+    from django.core.cache import cache
     
-    limit = min(limit, 20)
+    # Check database connectivity
+    try:
+        content_count = await SearchableContent.objects.acount()
+        database_status = "healthy"
+    except Exception:
+        content_count = 0
+        database_status = "unhealthy"
     
-    suggestions_qs = SearchQueryModel.objects.filter(
-        query_text__icontains=q,
-        results_count__gt=0
-    ).values('query_text').distinct().order_by('-id')[:limit]
+    # Check cache connectivity
+    try:
+        cache.set('search_health_check', 'ok', 10)
+        cache.get('search_health_check')
+        cache_status = "healthy"
+    except Exception:
+        cache_status = "unhealthy"
     
-    suggestions = [s['query_text'] async for s in suggestions_qs]
+    # Check index status (content count > 0)
+    index_status = "healthy" if content_count > 0 else "empty"
     
-    return {
-        "query_prefix": q,
-        "suggestions": suggestions
-    }
-
-
-@router.get("/analytics/", response=AnalyticsResponseSchema)
-async def search_analytics(request, days: int = 30):
-    """Fetch search analytics and average execution speeds asynchronously."""
-    days = min(max(days, 1), 365)
-    since = timezone.now() - timezone.timedelta(days=days)
-    qs = SearchQueryModel.objects.filter(created_at__gte=since)
-    
-    total = await qs.acount()
-    if total:
-        agg = await qs.aaggregate(models_avg=Avg('execution_time_ms'))
-        avg_time = agg['models_avg']
-    else:
-        avg_time = 0
+    # Get recent query metrics
+    since = timezone.now() - timedelta(hours=24)
+    try:
+        recent_qs = SearchQuery.objects.filter(created_at__gte=since)
+        recent_queries_24h = await recent_qs.acount()
         
-    return {
-        "since_days": days,
-        "total_queries": total,
-        "average_execution_time_ms": int(avg_time or 0),
-    }
+        if recent_queries_24h > 0:
+            agg = await recent_qs.aaggregate(avg_time=Avg('execution_time_ms'))
+            avg_execution_time_ms = agg['avg_time'] or 0
+        else:
+            avg_execution_time_ms = 0
+    except Exception:
+        recent_queries_24h = 0
+        avg_execution_time_ms = 0
+    
+    # Overall status
+    overall_status = "healthy" if database_status == "healthy" and cache_status == "healthy" else "degraded"
+    
+    return HealthCheckResponse(
+        status=overall_status,
+        index_status=index_status,
+        cache_status=cache_status,
+        database_status=database_status,
+        content_count=content_count,
+        recent_queries_24h=recent_queries_24h,
+        avg_execution_time_ms=avg_execution_time_ms,
+    )
+
+

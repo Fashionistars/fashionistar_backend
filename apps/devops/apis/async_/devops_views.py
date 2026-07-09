@@ -1,62 +1,70 @@
 # apps/devops/apis/async_/devops_views.py
 """
-Django-Ninja async views for the DevOps app (reads/GETs).
+Django Ninja async views for DevOps domain.
+Follows vendor pattern with async endpoints under /api/v1/ninja/devops/.
 """
 
-from typing import List, Dict, Any, Optional
+from ninja import Router
+from django.http import HttpRequest
+from typing import List, Optional
+from pydantic import BaseModel
 from uuid import UUID
 from datetime import datetime
-from ninja import Router, Schema
-from asgiref.sync import sync_to_async
+from django.utils import timezone
 
 from ...selectors import (
-    get_environment_configs,
-    get_deployment_histories,
-    get_health_checks,
-    get_service_monitorings
+    aget_environment_configs,
+    aget_deployment_histories,
+    aget_health_checks,
+    aget_service_monitorings,
+    aget_devops_dashboard_parallel,
 )
-from ...services.health_service import HealthService
+from ...models import EnvironmentConfig, DeploymentHistory, HealthCheck, ServiceMonitoring
+from apps.audit_logs.services.devops import DevOpsAuditService
 
-router = Router(tags=["devops"])
+
+router = Router(tags=['DevOps'])
 
 
-# ── Schemas ───────────────────────────────────────────────────────────────────
+# ============================================================================
+# Pydantic Schemas
+# ============================================================================
 
-class EnvironmentOut(Schema):
+class EnvironmentSchema(BaseModel):
     id: UUID
     name: str
     environment_type: str
     description: str
     is_active: bool
-    created_at: datetime
-    updated_at: datetime
+    created_at: str
+    updated_at: str
 
 
-class DeploymentOut(Schema):
+class DeploymentSchema(BaseModel):
     id: UUID
     environment_id: UUID
     version: str
-    commit_hash: str
+    commit_hash: Optional[str]
     branch: str
     status: str
-    started_at: datetime
-    completed_at: Optional[datetime] = None
-    artifacts_url: str
-    rollback_from_id: Optional[UUID] = None
+    started_at: str
+    completed_at: Optional[str]
+    artifacts_url: Optional[str]
+    rollback_from_id: Optional[UUID]
 
 
-class HealthCheckOut(Schema):
+class HealthCheckSchema(BaseModel):
     id: UUID
     environment_id: UUID
     service_name: str
     endpoint_url: str
     status: str
-    response_time: Optional[float] = None
-    status_code: Optional[int] = None
-    checked_at: datetime
+    response_time: Optional[float]
+    status_code: Optional[int]
+    checked_at: str
 
 
-class ServiceMonitoringOut(Schema):
+class ServiceMonitoringSchema(BaseModel):
     id: UUID
     environment_id: UUID
     service_name: str
@@ -66,68 +74,231 @@ class ServiceMonitoringOut(Schema):
     timeout: int
     is_active: bool
     alert_on_failure: bool
-    created_at: datetime
-    updated_at: datetime
+    created_at: str
+    updated_at: str
 
 
-# ── Endpoints ─────────────────────────────────────────────────────────────────
+class DashboardResponse(BaseModel):
+    deployment_count: int
+    successful_deployments: int
+    failed_deployments: int
+    health_check_count: int
+    healthy_checks: int
+    critical_checks: int
+    monitoring_count: int
+    secret_count: int
 
-@router.get("/environments/", response=List[EnvironmentOut])
-async def list_environments(request):
-    """List all registered deployment environments."""
-    qs = get_environment_configs()
-    return [item async for item in qs]
+
+class HealthCheckResponse(BaseModel):
+    status: str
+    database_status: str
+    cache_status: str
+    environments_count: int
+    active_deployments: int
+    critical_health_checks: int
 
 
-@router.get("/deployments/", response=List[DeploymentOut])
-async def list_deployments(request, environment: Optional[str] = None):
-    """List deployment history logs."""
-    qs = get_deployment_histories().order_by('-started_at')
+# ============================================================================
+# Async Endpoints
+# ============================================================================
+
+@router.get('/dashboard/', response=DashboardResponse)
+async def get_devops_dashboard(request: HttpRequest, environment_id: Optional[str] = None):
+    """
+    Get devops dashboard data in parallel (async).
+    Endpoint: GET /api/v1/ninja/devops/dashboard/
+    """
+    user = request.auth
+    dashboard_data = await aget_devops_dashboard_parallel(environment_id)
+    
+    # Log audit event
+    DevOpsAuditService.log_config_change_applied(
+        actor=user,
+        config_type='dashboard_view',
+        environment_name=environment_id or 'all',
+        request=request,
+    )
+    
+    return DashboardResponse(
+        deployment_count=dashboard_data['deployment_count'],
+        successful_deployments=dashboard_data['successful_deployments'],
+        failed_deployments=dashboard_data['failed_deployments'],
+        health_check_count=dashboard_data['health_check_count'],
+        healthy_checks=dashboard_data['healthy_checks'],
+        critical_checks=dashboard_data['critical_checks'],
+        monitoring_count=dashboard_data['monitoring_count'],
+        secret_count=dashboard_data['secret_count'],
+    )
+
+
+@router.get('/environments/', response=List[EnvironmentSchema])
+async def list_environments(request: HttpRequest):
+    """
+    List all registered deployment environments (async).
+    Endpoint: GET /api/v1/ninja/devops/environments/
+    """
+    environments = await aget_environment_configs()
+    
+    return [
+        EnvironmentSchema(
+            id=env.id,
+            name=env.name,
+            environment_type=env.environment_type,
+            description=env.description,
+            is_active=env.is_active,
+            created_at=env.created_at.isoformat(),
+            updated_at=env.updated_at.isoformat(),
+        )
+        for env in environments
+    ]
+
+
+@router.get('/deployments/', response=List[DeploymentSchema])
+async def list_deployments(request: HttpRequest, environment: Optional[str] = None, limit: int = 50):
+    """
+    List deployment history logs (async).
+    Endpoint: GET /api/v1/ninja/devops/deployments/
+    """
     if environment:
-        qs = qs.filter(environment__name=environment)
-    return [item async for item in qs]
+        from ...models import EnvironmentConfig
+        env = await EnvironmentConfig.aget_by_name(environment)
+        if env:
+            deployments = await DeploymentHistory.aget_by_environment(str(env.id), limit)
+        else:
+            deployments = []
+    else:
+        deployments = await DeploymentHistory.aget_recent_deployments(limit)
+    
+    return [
+        DeploymentSchema(
+            id=dep.id,
+            environment_id=dep.environment_id,
+            version=dep.version,
+            commit_hash=dep.commit_hash,
+            branch=dep.branch,
+            status=dep.status,
+            started_at=dep.started_at.isoformat(),
+            completed_at=dep.completed_at.isoformat() if dep.completed_at else None,
+            artifacts_url=dep.artifacts_url,
+            rollback_from_id=dep.rollback_from_id,
+        )
+        for dep in deployments
+    ]
 
 
-@router.get("/health-checks/", response=List[HealthCheckOut])
-async def list_health_checks(request, environment: Optional[str] = None, service: Optional[str] = None, limit: int = 50):
-    """Retrieve database log of periodic health check responses."""
-    qs = get_health_checks().order_by('-checked_at')
-    if environment:
-        qs = qs.filter(environment__name=environment)
+@router.get('/health-checks/', response=List[HealthCheckSchema])
+async def list_health_checks(request: HttpRequest, environment: Optional[str] = None, service: Optional[str] = None, limit: int = 50):
+    """
+    Retrieve database log of periodic health check responses (async).
+    Endpoint: GET /api/v1/ninja/devops/health-checks/
+    """
     if service:
-        qs = qs.filter(service_name=service)
-    qs = qs[:limit]
-    return [item async for item in qs]
+        health_checks = await HealthCheck.aget_by_service(service, limit)
+    elif environment:
+        from ...models import EnvironmentConfig
+        env = await EnvironmentConfig.aget_by_name(environment)
+        if env:
+            health_checks = await HealthCheck.aget_by_environment(str(env.id), limit)
+        else:
+            health_checks = []
+    else:
+        health_checks = await HealthCheck.aget_recent_checks(limit)
+    
+    return [
+        HealthCheckSchema(
+            id=check.id,
+            environment_id=check.environment_id,
+            service_name=check.service_name,
+            endpoint_url=check.endpoint_url,
+            status=check.status,
+            response_time=check.response_time,
+            status_code=check.status_code,
+            checked_at=check.checked_at.isoformat(),
+        )
+        for check in health_checks
+    ]
 
 
-@router.get("/services/", response=List[ServiceMonitoringOut])
-async def list_services(request, environment: Optional[str] = None):
-    """List service nodes configured for automated monitoring."""
-    qs = get_service_monitorings()
+@router.get('/services/', response=List[ServiceMonitoringSchema])
+async def list_services(request: HttpRequest, environment: Optional[str] = None):
+    """
+    List service nodes configured for automated monitoring (async).
+    Endpoint: GET /api/v1/ninja/devops/services/
+    """
     if environment:
-        qs = qs.filter(environment__name=environment)
-    return [item async for item in qs]
+        from ...models import EnvironmentConfig
+        env = await EnvironmentConfig.aget_by_name(environment)
+        if env:
+            monitorings = await ServiceMonitoring.aget_by_environment(str(env.id))
+        else:
+            monitorings = []
+    else:
+        monitorings = await aget_service_monitorings()
+    
+    return [
+        ServiceMonitoringSchema(
+            id=mon.id,
+            environment_id=mon.environment_id,
+            service_name=mon.service_name,
+            service_type=mon.service_type,
+            health_check_url=mon.health_check_url,
+            check_interval=mon.check_interval,
+            timeout=mon.timeout,
+            is_active=mon.is_active,
+            alert_on_failure=mon.alert_on_failure,
+            created_at=mon.created_at.isoformat(),
+            updated_at=mon.updated_at.isoformat(),
+        )
+        for mon in monitorings
+    ]
 
 
-@router.get("/uptime/", response=Dict[str, Any])
-async def get_service_uptime(request, environment_name: str, service_name: str, hours: int = 24):
-    """Fetch uptime statistics for a specific service node."""
-    health_service = HealthService(environment_name)
-    uptime_data = await sync_to_async(health_service.get_service_uptime)(service_name, hours)
-    return uptime_data
+@router.get('/health/', response=HealthCheckResponse)
+async def check_system_health(request: HttpRequest):
+    """
+    Run real-time async comprehensive system health checks (async).
+    Endpoint: GET /api/v1/ninja/devops/health/
+    """
+    from django.core.cache import cache
+    from ...models import HealthCheck
+    
+    # Check database connectivity
+    try:
+        environments_count = await EnvironmentConfig.objects.acount()
+        database_status = "healthy"
+    except Exception:
+        environments_count = 0
+        database_status = "unhealthy"
+    
+    # Check cache connectivity
+    try:
+        cache.set('devops_health_check', 'ok', 10)
+        cache.get('devops_health_check')
+        cache_status = "healthy"
+    except Exception:
+        cache_status = "unhealthy"
+    
+    # Get active deployments
+    try:
+        active_deployments = await DeploymentHistory.objects.filter(status='running').acount()
+    except Exception:
+        active_deployments = 0
+    
+    # Get critical health checks
+    try:
+        critical_health_checks = await HealthCheck.objects.filter(status='critical').acount()
+    except Exception:
+        critical_health_checks = 0
+    
+    # Overall status
+    overall_status = "healthy" if database_status == "healthy" and cache_status == "healthy" else "degraded"
+    
+    return HealthCheckResponse(
+        status=overall_status,
+        database_status=database_status,
+        cache_status=cache_status,
+        environments_count=environments_count,
+        active_deployments=active_deployments,
+        critical_health_checks=critical_health_checks,
+    )
 
-
-@router.get("/performance/", response=Dict[str, Any])
-async def get_performance_metrics(request, environment_name: Optional[str] = None, hours: int = 24):
-    """Retrieve system resource usage and service speed latency metrics."""
-    health_service = HealthService(environment_name)
-    metrics = await sync_to_async(health_service.get_performance_metrics)(hours)
-    return metrics
-
-
-@router.get("/system/health/", response=Dict[str, Any])
-async def check_system_health(request):
-    """Run real-time async comprehensive system health checks."""
-    health_service = HealthService()
-    result = await sync_to_async(health_service.comprehensive_health_check)()
-    return result

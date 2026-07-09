@@ -321,3 +321,19 @@ try:
     logger.info("✅ NinjaAPI: app-standards router registered at /api/v1/ninja/app-standards/")
 except Exception as exc:  # pragma: no cover
     logger.warning("ℹ️ NinjaAPI: app-standards router FAILED to register: %s", exc)
+
+# Analytics domain: /api/v1/ninja/analytics/
+try:
+    from apps.analytics.apis.async_.analytics_views import router as analytics_router
+    ninja_api.add_router("/analytics/", analytics_router)
+    logger.info("✅ NinjaAPI: analytics router registered at /api/v1/ninja/analytics/")
+except Exception as exc:  # pragma: no cover
+    logger.warning("ℹ️ NinjaAPI: analytics router FAILED to register: %s", exc)
+
+# DevOps domain: /api/v1/ninja/devops/
+try:
+    from apps.devops.apis.async_.devops_views import router as devops_router
+    ninja_api.add_router("/devops/", devops_router)
+    logger.info("✅ NinjaAPI: devops router registered at /api/v1/ninja/devops/")
+except Exception as exc:  # pragma: no cover
+    logger.warning("ℹ️ NinjaAPI: devops router FAILED to register: %s", exc)

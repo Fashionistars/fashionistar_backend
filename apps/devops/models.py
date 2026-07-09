@@ -76,6 +76,31 @@ class EnvironmentConfig(SoftDeleteModel):
         
     def __str__(self) -> str:
         return f"{self.name} ({self.get_environment_type_display()})"
+    
+    # Async class methods
+    @classmethod
+    async def aget_by_id(cls, env_id: str):
+        try:
+            return await cls.objects.aget(id=env_id)
+        except cls.DoesNotExist:
+            return None
+    
+    @classmethod
+    async def aget_by_name(cls, name: str):
+        try:
+            return await cls.objects.aget(name=name)
+        except cls.DoesNotExist:
+            return None
+    
+    @classmethod
+    async def aget_active_environments(cls):
+        queryset = cls.objects.filter(is_active=True)
+        return [env async for env in queryset]
+    
+    @classmethod
+    async def aget_by_type(cls, environment_type: str):
+        queryset = cls.objects.filter(environment_type=environment_type)
+        return [env async for env in queryset]
 
 
 class SecretConfig(SoftDeleteModel):
@@ -166,6 +191,29 @@ class SecretConfig(SoftDeleteModel):
     def is_expired(self) -> bool:
         """Check if the secret is expired."""
         return bool(self.expires_at and self.expires_at <= timezone.now())
+    
+    # Async class methods
+    @classmethod
+    async def aget_by_id(cls, secret_id: str):
+        try:
+            return await cls.objects.aget(id=secret_id)
+        except cls.DoesNotExist:
+            return None
+    
+    @classmethod
+    async def aget_by_environment(cls, environment_id: str):
+        queryset = cls.objects.filter(environment_id=environment_id)
+        return [secret async for secret in queryset]
+    
+    @classmethod
+    async def aget_by_category(cls, category: str):
+        queryset = cls.objects.filter(category=category)
+        return [secret async for secret in queryset]
+    
+    @classmethod
+    async def aget_active_secrets(cls):
+        queryset = cls.objects.filter(is_active=True)
+        return [secret async for secret in queryset]
 
 
 class DeploymentHistory(models.Model):
@@ -260,6 +308,29 @@ class DeploymentHistory(models.Model):
         if self.completed_at:
             return self.completed_at - self.started_at
         return None
+    
+    # Async class methods
+    @classmethod
+    async def aget_by_id(cls, deployment_id: str):
+        try:
+            return await cls.objects.aget(id=deployment_id)
+        except cls.DoesNotExist:
+            return None
+    
+    @classmethod
+    async def aget_by_environment(cls, environment_id: str, limit: int = 50):
+        queryset = cls.objects.filter(environment_id=environment_id).order_by('-started_at')[:limit]
+        return [deployment async for deployment in queryset]
+    
+    @classmethod
+    async def aget_by_status(cls, status: str, limit: int = 50):
+        queryset = cls.objects.filter(status=status).order_by('-started_at')[:limit]
+        return [deployment async for deployment in queryset]
+    
+    @classmethod
+    async def aget_recent_deployments(cls, limit: int = 50):
+        queryset = cls.objects.all().order_by('-started_at')[:limit]
+        return [deployment async for deployment in queryset]
 
 
 class HealthCheck(models.Model):
@@ -328,6 +399,34 @@ class HealthCheck(models.Model):
         
     def __str__(self) -> str:
         return f"{self.service_name} ({self.environment.name}) - {self.get_status_display()}"
+    
+    # Async class methods
+    @classmethod
+    async def aget_by_id(cls, check_id: str):
+        try:
+            return await cls.objects.aget(id=check_id)
+        except cls.DoesNotExist:
+            return None
+    
+    @classmethod
+    async def aget_by_environment(cls, environment_id: str, limit: int = 100):
+        queryset = cls.objects.filter(environment_id=environment_id).order_by('-checked_at')[:limit]
+        return [check async for check in queryset]
+    
+    @classmethod
+    async def aget_by_service(cls, service_name: str, limit: int = 100):
+        queryset = cls.objects.filter(service_name=service_name).order_by('-checked_at')[:limit]
+        return [check async for check in queryset]
+    
+    @classmethod
+    async def aget_by_status(cls, status: str, limit: int = 100):
+        queryset = cls.objects.filter(status=status).order_by('-checked_at')[:limit]
+        return [check async for check in queryset]
+    
+    @classmethod
+    async def aget_recent_checks(cls, limit: int = 100):
+        queryset = cls.objects.all().order_by('-checked_at')[:limit]
+        return [check async for check in queryset]
 
 
 class ServiceMonitoring(models.Model):
@@ -398,3 +497,26 @@ class ServiceMonitoring(models.Model):
         
     def __str__(self) -> str:
         return f"{self.service_name} ({self.environment.name})"
+    
+    # Async class methods
+    @classmethod
+    async def aget_by_id(cls, monitoring_id: str):
+        try:
+            return await cls.objects.aget(id=monitoring_id)
+        except cls.DoesNotExist:
+            return None
+    
+    @classmethod
+    async def aget_by_environment(cls, environment_id: str):
+        queryset = cls.objects.filter(environment_id=environment_id)
+        return [monitoring async for monitoring in queryset]
+    
+    @classmethod
+    async def aget_by_service_type(cls, service_type: str):
+        queryset = cls.objects.filter(service_type=service_type)
+        return [monitoring async for monitoring in queryset]
+    
+    @classmethod
+    async def aget_active_monitoring(cls):
+        queryset = cls.objects.filter(is_active=True)
+        return [monitoring async for monitoring in queryset]

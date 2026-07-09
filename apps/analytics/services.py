@@ -3,11 +3,15 @@ Analytics Services for telemetry and performance monitoring.
 """
 
 import logging
+import hashlib
+import json
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 from django.db.models import Count, Avg
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+from django.conf import settings
+from django.core.cache import cache
 
 from .models import Metric, UserActivity, PerformanceMetric, BusinessMetric, AlertRule, Alert
 
@@ -17,8 +21,20 @@ User = get_user_model()
 
 class AnalyticsService:
     """
-    Main service to record and analyze system telemetry and business metrics.
+    Main service to record and analyze system telemetry and business metrics with Redis caching.
     """
+    
+    def __init__(self):
+        # Cache TTL in seconds (default 5 minutes for metrics, 1 hour for business metrics)
+        self.metrics_cache_ttl = getattr(settings, 'ANALYTICS_METRICS_CACHE_TTL', 300)
+        self.business_cache_ttl = getattr(settings, 'ANALYTICS_BUSINESS_CACHE_TTL', 3600)
+        self.cache_prefix = 'analytics:v1:'
+    
+    def _generate_cache_key(self, prefix: str, **kwargs) -> str:
+        """Generate a unique cache key for analytics parameters."""
+        cache_data = {k: v for k, v in sorted(kwargs.items())}
+        cache_hash = hashlib.md5(json.dumps(cache_data, sort_keys=True).encode()).hexdigest()
+        return f"{self.cache_prefix}{prefix}:{cache_hash}"
     
     def record_metric(self, name: str, value: float, metric_type: str = 'gauge', 
                       tags: Optional[Dict[str, Any]] = None) -> Metric:
@@ -134,8 +150,13 @@ class AnalyticsService:
     
     def get_user_analytics(self, user_id: Optional[Any] = None, days: int = 30) -> Dict[str, Any]:
         """
-        Retrieve user activity and usage statistics.
+        Retrieve user activity and usage statistics with Redis caching.
         """
+        cache_key = self._generate_cache_key('user_analytics', user_id=user_id, days=days)
+        cached_result = cache.get(cache_key)
+        if cached_result:
+            return cached_result
+        
         cutoff_date = timezone.now() - timedelta(days=days)
         
         queryset = UserActivity.objects.filter(timestamp__gte=cutoff_date)
@@ -164,7 +185,7 @@ class AnalyticsService:
         total_activities = queryset.count()
         avg_activities_per_user = total_activities / unique_users if unique_users > 0 else 0
         
-        return {
+        result = {
             'period_days': days,
             'total_activities': total_activities,
             'unique_users': unique_users,
@@ -173,11 +194,19 @@ class AnalyticsService:
             'resource_usage': list(resource_usage),
             'daily_activity': list(daily_activity)
         }
+        
+        cache.set(cache_key, result, self.metrics_cache_ttl)
+        return result
     
     def get_performance_analytics(self, days: int = 7) -> Dict[str, Any]:
         """
-        Retrieve API performance trends.
+        Retrieve API performance trends with Redis caching.
         """
+        cache_key = self._generate_cache_key('performance_analytics', days=days)
+        cached_result = cache.get(cache_key)
+        if cached_result:
+            return cached_result
+        
         cutoff_date = timezone.now() - timedelta(days=days)
         
         metrics = PerformanceMetric.objects.filter(timestamp__gte=cutoff_date)
@@ -215,7 +244,7 @@ class AnalyticsService:
             index = int(len(data) * p / 100)
             return data[min(index, len(data) - 1)]
         
-        return {
+        result = {
             'period_days': days,
             'total_requests': total_requests,
             'avg_response_time_ms': round(avg_response_time, 2),
@@ -227,6 +256,9 @@ class AnalyticsService:
             'error_breakdown': list(error_breakdown),
             'error_rate_percent': round((errors.count() / total_requests * 100) if total_requests > 0 else 0, 2)
         }
+        
+        cache.set(cache_key, result, self.metrics_cache_ttl)
+        return result
     
     def check_alert_rules(self) -> List[Dict[str, Any]]:
         """
@@ -305,8 +337,13 @@ class AnalyticsService:
     
     def get_system_overview(self) -> Dict[str, Any]:
         """
-        Retrieve a general summary of active e-commerce and performance telemetry.
+        Retrieve a general summary of active e-commerce and performance telemetry with Redis caching.
         """
+        cache_key = self._generate_cache_key('system_overview')
+        cached_result = cache.get(cache_key)
+        if cached_result:
+            return cached_result
+        
         now = timezone.now()
         last_24h = now - timedelta(hours=24)
         last_7d = now - timedelta(days=7)
@@ -342,7 +379,7 @@ class AnalyticsService:
         error_rate_percent = (error_rate_24h / total_requests_24h * 100) if total_requests_24h > 0 else 0
         active_alerts = Alert.objects.filter(status='firing').count()
         
-        return {
+        result = {
             'orders_24h': orders_24h,
             'orders_7d': orders_7d,
             'active_users_24h': active_users_24h,
@@ -352,6 +389,9 @@ class AnalyticsService:
             'active_alerts': active_alerts,
             'last_updated': now.isoformat()
         }
+        
+        cache.set(cache_key, result, self.metrics_cache_ttl)
+        return result
     
     def _get_client_ip(self, request) -> Optional[str]:
         """Retrieve client IP address from request metadata."""
@@ -387,10 +427,141 @@ class ReportingService:
         return {"total_metrics": count}
 
 
-class InsightsService:
+class RealTimeAnalyticsService:
     """
-    Minimal dashboard insights service wrapper.
+    Real-time analytics service for live dashboard updates and streaming metrics.
+    Uses async methods for high-performance real-time data fetching.
     """
+    
+    def __init__(self):
+        self.cache_prefix = 'analytics:realtime:v1:'
+        self.cache_ttl = getattr(settings, 'ANALYTICS_REALTIME_CACHE_TTL', 60)  # 1 minute for real-time
+    
+    def _generate_cache_key(self, prefix: str, **kwargs) -> str:
+        """Generate a unique cache key for real-time analytics parameters."""
+        cache_data = {k: v for k, v in sorted(kwargs.items())}
+        cache_hash = hashlib.md5(json.dumps(cache_data, sort_keys=True).encode()).hexdigest()
+        return f"{self.cache_prefix}{prefix}:{cache_hash}"
+    
+    async def aget_live_metrics(self, minutes: int = 5) -> Dict[str, Any]:
+        """
+        Get live metrics for the specified time window (async).
+        Returns real-time request counts, response times, and active users.
+        """
+        cache_key = self._generate_cache_key('live_metrics', minutes=minutes)
+        cached_result = cache.get(cache_key)
+        if cached_result:
+            return cached_result
+        
+        from datetime import timedelta
+        since = timezone.now() - timedelta(minutes=minutes)
+        
+        # Get recent performance metrics
+        performance_qs = PerformanceMetric.objects.filter(timestamp__gte=since)
+        total_requests = await performance_qs.acount()
+        
+        if total_requests > 0:
+            agg = await performance_qs.aaggregate(
+                avg_time=Avg('response_time_ms'),
+                p50_count=Count('id')
+            )
+            avg_response_time = agg['avg_time'] or 0
+        else:
+            avg_response_time = 0
+        
+        # Get active users in the time window
+        active_users = await UserActivity.objects.filter(
+            timestamp__gte=since
+        ).values('user').distinct().acount()
+        
+        # Get firing alerts
+        firing_alerts = await Alert.objects.filter(status='firing').acount()
+        
+        result = {
+            'time_window_minutes': minutes,
+            'total_requests': total_requests,
+            'avg_response_time_ms': round(avg_response_time, 2),
+            'active_users': active_users,
+            'firing_alerts': firing_alerts,
+            'requests_per_minute': round(total_requests / minutes, 2) if minutes > 0 else 0,
+            'timestamp': timezone.now().isoformat(),
+        }
+        
+        cache.set(cache_key, result, self.cache_ttl)
+        return result
+    
+    async def aget_live_user_activity(self, minutes: int = 5, limit: int = 20) -> List[Dict[str, Any]]:
+        """
+        Get live user activity feed (async).
+        Returns recent user actions for live dashboard updates.
+        """
+        cache_key = self._generate_cache_key('live_activity', minutes=minutes, limit=limit)
+        cached_result = cache.get(cache_key)
+        if cached_result:
+            return cached_result
+        
+        from datetime import timedelta
+        since = timezone.now() - timedelta(minutes=minutes)
+        
+        activities = UserActivity.objects.filter(timestamp__gte=since).order_by('-timestamp')[:limit]
+        activity_list = []
+        
+        async for activity in activities:
+            activity_list.append({
+                'id': activity.id,
+                'action': activity.action,
+                'resource': activity.resource,
+                'resource_id': activity.resource_id,
+                'timestamp': activity.timestamp.isoformat(),
+            })
+        
+        cache.set(cache_key, activity_list, self.cache_ttl)
+        return activity_list
+    
+    async def aget_live_performance_trend(self, minutes: int = 30, interval_minutes: int = 5) -> List[Dict[str, Any]]:
+        """
+        Get live performance trend data (async).
+        Returns time-series data for response times and request counts.
+        """
+        cache_key = self._generate_cache_key('live_trend', minutes=minutes, interval=interval_minutes)
+        cached_result = cache.get(cache_key)
+        if cached_result:
+            return cached_result
+        
+        from datetime import timedelta
+        since = timezone.now() - timedelta(minutes=minutes)
+        
+        # Group by time intervals
+        intervals = []
+        current_time = timezone.now()
+        
+        for i in range(minutes // interval_minutes):
+            interval_start = current_time - timedelta(minutes=(i + 1) * interval_minutes)
+            interval_end = current_time - timedelta(minutes=i * interval_minutes)
+            
+            metrics = PerformanceMetric.objects.filter(
+                timestamp__gte=interval_start,
+                timestamp__lt=interval_end
+            )
+            
+            count = await metrics.acount()
+            if count > 0:
+                agg = await metrics.aaggregate(avg_time=Avg('response_time_ms'))
+                avg_time = agg['avg_time'] or 0
+            else:
+                avg_time = 0
+            
+            intervals.append({
+                'interval_start': interval_start.isoformat(),
+                'interval_end': interval_end.isoformat(),
+                'request_count': count,
+                'avg_response_time_ms': round(avg_time, 2),
+            })
+        
+        intervals.reverse()  # Return in chronological order
+        cache.set(cache_key, intervals, self.cache_ttl)
+        return intervals
 
-    def get_dashboard_metrics(self):
-        return {"uptime": 100, "users_active": 0}
+
+# Singleton instance for easy import
+realtime_analytics = RealTimeAnalyticsService()
