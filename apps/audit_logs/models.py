@@ -75,6 +75,10 @@ class EventCategory(models.TextChoices):
     PROVIDER         = "provider",          _("Payment Providers")
     CLIENT           = "client",            _("Client / Consumer")
     SETTINGS         = "settings",          _("Platform Settings")
+    CHATBOT          = "chatbot",           _("Chatbot & AI Assistant")
+    SEARCH           = "search",            _("Search & Discovery")
+    ANALYTICS        = "analytics",         _("Analytics & Telemetry")
+    DEVOPS           = "devops",            _("DevOps & Infrastructure")
 
 
 class EventType(models.TextChoices):
@@ -244,6 +248,61 @@ class EventType(models.TextChoices):
     MESSAGE_DELETED        = "message_deleted",       _("Message Deleted")
     WEBSOCKET_CONNECTED    = "websocket_connected",   _("WebSocket Connected")
     WEBSOCKET_DISCONNECTED = "websocket_disconnected",_("WebSocket Disconnected")
+
+    # ── Chatbot & AI Assistant ─────────────────────────────────────────
+    CHATBOT_MESSAGE_SENT           = "chatbot_message_sent",           _("Chatbot Message Sent")
+    CHATBOT_SESSION_STARTED        = "chatbot_session_started",        _("Chatbot Session Started")
+    CHATBOT_SESSION_ENDED          = "chatbot_session_ended",          _("Chatbot Session Ended")
+    CHATBOT_CONVERSATION_CREATED   = "chatbot_conversation_created",   _("Chatbot Conversation Created")
+    CHATBOT_CONVERSATION_UPDATED   = "chatbot_conversation_updated",   _("Chatbot Conversation Updated")
+    CHATBOT_RESPONSE_TRIGGERED     = "chatbot_response_triggered",     _("Chatbot Predefined Response Triggered")
+    CHATBOT_AI_RESPONSE_GENERATED = "chatbot_ai_response_generated", _("Chatbot AI Response Generated")
+    CHATBOT_STYLE_ASSESSMENT_STARTED = "chatbot_style_assessment_started", _("Style Assessment Started")
+    CHATBOT_STYLE_ASSESSMENT_COMPLETED = "chatbot_style_assessment_completed", _("Style Assessment Completed")
+    CHATBOT_APPOINTMENT_REQUESTED  = "chatbot_appointment_requested",  _("Bespoke Tailoring Appointment Requested")
+
+    # ── Search & Discovery ─────────────────────────────────────────────────
+    SEARCH_QUERY_EXECUTED      = "search_query_executed",      _("Search Query Executed")
+    SEARCH_RESULT_RETURNED     = "search_result_returned",     _("Search Results Returned")
+    SEARCH_ZERO_RESULTS        = "search_zero_results",        _("Search Returned Zero Results")
+    SEARCH_CACHE_HIT           = "search_cache_hit",           _("Search Cache Hit")
+    SEARCH_CACHE_MISS          = "search_cache_miss",          _("Search Cache Miss")
+    SEARCH_INDEX_UPDATED       = "search_index_updated",       _("Search Index Updated")
+    SEARCH_INDEX_FAILED        = "search_index_failed",        _("Search Index Operation Failed")
+    SEARCH_FILTER_APPLIED      = "search_filter_applied",      _("Search Filter Applied")
+    SEARCH_SORT_APPLIED        = "search_sort_applied",        _("Search Sort Applied")
+    SEARCH_PAGINATION_APPLIED = "search_pagination_applied", _("Search Pagination Applied")
+
+    # ── Analytics & Telemetry ───────────────────────────────────────────────
+    ANALYTICS_METRIC_RECORDED      = "analytics_metric_recorded",      _("Analytics Metric Recorded")
+    ANALYTICS_USER_ACTIVITY_LOGGED  = "analytics_user_activity_logged",  _("User Activity Logged")
+    ANALYTICS_PERFORMANCE_TRACKED   = "analytics_performance_tracked",   _("Performance Metric Tracked")
+    ANALYTICS_BUSINESS_METRIC_CALC  = "analytics_business_metric_calc",  _("Business Metric Calculated")
+    ANALYTICS_ALERT_RULE_EVALUATED = "analytics_alert_rule_evaluated", _("Alert Rule Evaluated")
+    ANALYTICS_ALERT_TRIGGERED       = "analytics_alert_triggered",       _("Alert Triggered")
+    ANALYTICS_ALERT_RESOLVED        = "analytics_alert_resolved",        _("Alert Resolved")
+    ANALYTICS_DASHBOARD_VIEWED      = "analytics_dashboard_viewed",      _("Analytics Dashboard Viewed")
+    ANALYTICS_REPORT_GENERATED      = "analytics_report_generated",      _("Analytics Report Generated")
+    ANALYTICS_DATA_EXPORTED         = "analytics_data_exported",         _("Analytics Data Exported")
+
+    # ── DevOps & Infrastructure ───────────────────────────────────────────────
+    DEVOPS_ENVIRONMENT_CREATED     = "devops_environment_created",     _("Environment Created")
+    DEVOPS_ENVIRONMENT_UPDATED     = "devops_environment_updated",     _("Environment Updated")
+    DEVOPS_ENVIRONMENT_DELETED     = "devops_environment_deleted",     _("Environment Deleted")
+    DEVOPS_SECRET_CREATED          = "devops_secret_created",          _("Secret Created")
+    DEVOPS_SECRET_UPDATED          = "devops_secret_updated",          _("Secret Updated")
+    DEVOPS_SECRET_DELETED          = "devops_secret_deleted",          _("Secret Deleted")
+    DEVOPS_SECRET_ROTATED          = "devops_secret_rotated",          _("Secret Rotated")
+    DEVOPS_DEPLOYMENT_STARTED      = "devops_deployment_started",      _("Deployment Started")
+    DEVOPS_DEPLOYMENT_SUCCESS      = "devops_deployment_success",      _("Deployment Success")
+    DEVOPS_DEPLOYMENT_FAILED       = "devops_deployment_failed",       _("Deployment Failed")
+    DEVOPS_DEPLOYMENT_ROLLED_BACK  = "devops_deployment_rolled_back",  _("Deployment Rolled Back")
+    DEVOPS_HEALTH_CHECK_PASSED     = "devops_health_check_passed",     _("Health Check Passed")
+    DEVOPS_HEALTH_CHECK_FAILED     = "devops_health_check_failed",     _("Health Check Failed")
+    DEVOPS_SERVICE_MONITORING_ENABLED = "devops_service_monitoring_enabled", _("Service Monitoring Enabled")
+    DEVOPS_SERVICE_MONITORING_DISABLED = "devops_service_monitoring_disabled", _("Service Monitoring Disabled")
+    DEVOPS_INFRASTRUCTURE_SCALING  = "devops_infrastructure_scaling",  _("Infrastructure Scaling")
+    DEVOPS_CONFIG_CHANGE_APPLIED   = "devops_config_change_applied",   _("Configuration Change Applied")
 
     # ── Transactions & Ledger ─────────────────────────────────────────
     LEDGER_ENTRY_CREATED   = "ledger_entry_created",  _("Ledger Entry Created")

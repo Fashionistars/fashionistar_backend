@@ -59,6 +59,30 @@ class Metric(models.Model):
     
     def __str__(self):
         return f"{self.name}: {self.value} ({self.timestamp})"
+    
+    # Async class methods
+    @classmethod
+    async def aget_by_id(cls, metric_id: int):
+        try:
+            return await cls.objects.aget(id=metric_id)
+        except cls.DoesNotExist:
+            return None
+    
+    @classmethod
+    async def aget_by_name(cls, name: str, limit: int = 100):
+        queryset = cls.objects.filter(name=name).order_by('-timestamp')[:limit]
+        return [m async for m in queryset]
+    
+    @classmethod
+    async def acreate_from_dict(cls, data: dict):
+        return await cls.objects.acreate(**data)
+    
+    @classmethod
+    async def aget_recent_metrics(cls, hours: int = 24, limit: int = 100):
+        from datetime import timedelta
+        since = timezone.now() - timedelta(hours=hours)
+        queryset = cls.objects.filter(timestamp__gte=since).order_by('-timestamp')[:limit]
+        return [m async for m in queryset]
 
 
 class UserActivity(models.Model):
@@ -123,6 +147,31 @@ class UserActivity(models.Model):
     def __str__(self):
         user_ident = self.user.email or self.user.phone or "Unknown"
         return f"{user_ident}: {self.action} ({self.timestamp})"
+    
+    # Async class methods
+    @classmethod
+    async def aget_by_id(cls, activity_id: int):
+        try:
+            return await cls.objects.aget(id=activity_id)
+        except cls.DoesNotExist:
+            return None
+    
+    @classmethod
+    async def aget_by_user(cls, user_id: str, limit: int = 100):
+        queryset = cls.objects.filter(user_id=user_id).order_by('-timestamp')[:limit]
+        return [a async for a in queryset]
+    
+    @classmethod
+    async def aget_by_action(cls, action: str, limit: int = 100):
+        queryset = cls.objects.filter(action=action).order_by('-timestamp')[:limit]
+        return [a async for a in queryset]
+    
+    @classmethod
+    async def aget_recent_activities(cls, hours: int = 24, limit: int = 100):
+        from datetime import timedelta
+        since = timezone.now() - timedelta(hours=hours)
+        queryset = cls.objects.filter(timestamp__gte=since).order_by('-timestamp')[:limit]
+        return [a async for a in queryset]
 
 
 class PerformanceMetric(models.Model):
@@ -178,6 +227,31 @@ class PerformanceMetric(models.Model):
     
     def __str__(self):
         return f"{self.method} {self.endpoint}: {self.response_time_ms}ms ({self.status_code})"
+    
+    # Async class methods
+    @classmethod
+    async def aget_by_id(cls, metric_id: int):
+        try:
+            return await cls.objects.aget(id=metric_id)
+        except cls.DoesNotExist:
+            return None
+    
+    @classmethod
+    async def aget_by_endpoint(cls, endpoint: str, limit: int = 100):
+        queryset = cls.objects.filter(endpoint=endpoint).order_by('-timestamp')[:limit]
+        return [m async for m in queryset]
+    
+    @classmethod
+    async def aget_by_user(cls, user_id: str, limit: int = 100):
+        queryset = cls.objects.filter(user_id=user_id).order_by('-timestamp')[:limit]
+        return [m async for m in queryset]
+    
+    @classmethod
+    async def aget_recent_metrics(cls, hours: int = 24, limit: int = 100):
+        from datetime import timedelta
+        since = timezone.now() - timedelta(hours=hours)
+        queryset = cls.objects.filter(timestamp__gte=since).order_by('-timestamp')[:limit]
+        return [m async for m in queryset]
 
 
 class BusinessMetric(models.Model):
@@ -219,6 +293,34 @@ class BusinessMetric(models.Model):
     
     def __str__(self):
         return f"{self.metric_name}: {self.value} ({self.period_start.date()})"
+    
+    # Async class methods
+    @classmethod
+    async def aget_by_id(cls, metric_id: int):
+        try:
+            return await cls.objects.aget(id=metric_id)
+        except cls.DoesNotExist:
+            return None
+    
+    @classmethod
+    async def aget_by_name(cls, metric_name: str, limit: int = 100):
+        queryset = cls.objects.filter(metric_name=metric_name).order_by('-created_at')[:limit]
+        return [m async for m in queryset]
+    
+    @classmethod
+    async def aget_by_period(cls, period_start, period_end):
+        queryset = cls.objects.filter(
+            period_start=period_start,
+            period_end=period_end
+        )
+        return [m async for m in queryset]
+    
+    @classmethod
+    async def aget_recent_metrics(cls, days: int = 30, limit: int = 100):
+        from datetime import timedelta
+        since = timezone.now() - timedelta(days=days)
+        queryset = cls.objects.filter(created_at__gte=since).order_by('-created_at')[:limit]
+        return [m async for m in queryset]
 
 
 class AlertRule(models.Model):
@@ -290,6 +392,24 @@ class AlertRule(models.Model):
     
     def __str__(self):
         return f"{self.name}: {self.metric_name} {self.operator} {self.threshold}"
+    
+    # Async class methods
+    @classmethod
+    async def aget_by_id(cls, rule_id: int):
+        try:
+            return await cls.objects.aget(id=rule_id)
+        except cls.DoesNotExist:
+            return None
+    
+    @classmethod
+    async def aget_active_rules(cls):
+        queryset = cls.objects.filter(is_active=True)
+        return [r async for r in queryset]
+    
+    @classmethod
+    async def aget_by_metric(cls, metric_name: str):
+        queryset = cls.objects.filter(metric_name=metric_name)
+        return [r async for r in queryset]
 
 
 class Alert(models.Model):
@@ -345,3 +465,26 @@ class Alert(models.Model):
     
     def __str__(self):
         return f"{self.rule.name}: {self.status} ({self.fired_at})"
+    
+    # Async class methods
+    @classmethod
+    async def aget_by_id(cls, alert_id: int):
+        try:
+            return await cls.objects.aget(id=alert_id)
+        except cls.DoesNotExist:
+            return None
+    
+    @classmethod
+    async def aget_by_rule(cls, rule_id: int, limit: int = 100):
+        queryset = cls.objects.filter(rule_id=rule_id).order_by('-fired_at')[:limit]
+        return [a async for a in queryset]
+    
+    @classmethod
+    async def aget_by_status(cls, status: str, limit: int = 100):
+        queryset = cls.objects.filter(status=status).order_by('-fired_at')[:limit]
+        return [a async for a in queryset]
+    
+    @classmethod
+    async def aget_firing_alerts(cls, limit: int = 100):
+        queryset = cls.objects.filter(status='firing').order_by('-fired_at')[:limit]
+        return [a async for a in queryset]

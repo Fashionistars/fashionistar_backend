@@ -273,6 +273,41 @@ class MeasurementProfile(TimeStampedModel):
         help_text="Timestamp of the last AI recommendation generation for this profile.",
     )
 
+    # ── AI Engine Provenance ──────────────────────────────────────────────────
+    # Rec 6 — Track which AI engine version produced this measurement set.
+    #   Format: "<major>.<minor>.<patch>-<provider>" e.g. "3.0.0-zerogpu"
+    #   Populated by ZeroGPUEngine.extract_body_measurements() via the
+    #   settings.AI_ENGINE_VERSION constant. Use to:
+    #     • A/B test between engine versions
+    #     • Batch-invalidate stale profiles after a major model upgrade
+    #     • Audit quality regressions across releases
+    ai_engine_version = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        verbose_name=_("AI Engine Version"),
+        help_text=_(
+            "AI engine version that produced these measurements. "
+            "Format: <major>.<minor>.<patch>-<provider> (e.g. '3.0.0-zerogpu'). "
+            "Used for A/B testing and quality audits."
+        ),
+    )
+
+    # Rec 7 — Confidence score from the pose estimation model (0.0–1.0).
+    #   Populated by ZeroGPUEngine at scan time. Profiles below
+    #   settings.MEASUREMENT_MIN_CONFIDENCE (default 0.65) are rejected
+    #   with HTTP 422 before being saved, so stored values are always >= threshold.
+    ai_scan_confidence = models.FloatField(
+        null=True,
+        blank=True,
+        default=None,
+        verbose_name=_("Scan Confidence"),
+        help_text=_(
+            "MediaPipe pose confidence score (0.0–1.0) at scan time. "
+            "Profiles below MEASUREMENT_MIN_CONFIDENCE (default: 0.65) "
+            "are rejected and never stored."
+        ),
+    )
 
     class Meta:
         verbose_name = _("Measurement Profile")

@@ -122,6 +122,47 @@ class ChatbotSession(models.Model):
         self.status = 'completed'
         self.ended_at = timezone.now()
         self.save(update_fields=['status', 'ended_at'])
+    
+    # ============================================================================
+    # ASYNC METHODS (Django 6.0 native async ORM)
+    # ============================================================================
+    
+    @classmethod
+    async def aget_active_session(cls, user):
+        """Get active session for a user (async)."""
+        return await cls.objects.filter(user=user, status='active').select_related('user').afirst()
+    
+    @classmethod
+    async def aget_session_by_id(cls, session_id):
+        """Get session by ID (async)."""
+        try:
+            return await cls.objects.select_related('user').aget(id=session_id)
+        except cls.DoesNotExist:
+            return None
+    
+    async def aget_conversation_count(self):
+        """Get total conversation count for this session (async)."""
+        return await self.conversations.acount()
+    
+    async def aget_active_conversation(self):
+        """Get active conversation for this session (async)."""
+        try:
+            return await self.conversations.filter(is_active=True).afirst()
+        except Conversation.DoesNotExist:
+            return None
+    
+    async def aget_conversations(self, is_active: bool = None):
+        """Get all conversations for this session (async)."""
+        queryset = self.conversations.all()
+        if is_active is not None:
+            queryset = queryset.filter(is_active=is_active)
+        return [c async for c in queryset.order_by('-started_at')]
+    
+    async def aend_session(self):
+        """End session, marking it completed (async)."""
+        self.status = 'completed'
+        self.ended_at = timezone.now()
+        await self.asave(update_fields=['status', 'ended_at'])
 
 
 class Conversation(models.Model):
@@ -220,6 +261,27 @@ class Conversation(models.Model):
         """Get timestamp of last message."""
         last_message = self.messages.order_by('-created_at').first()
         return last_message.created_at if last_message else self.started_at
+    
+    # ============================================================================
+    # ASYNC METHODS (Django 6.0 native async ORM)
+    # ============================================================================
+    
+    async def aget_message_count(self):
+        """Get total message count for this conversation (async)."""
+        return await self.messages.acount()
+    
+    async def aget_last_message(self):
+        """Get last message in this conversation (async)."""
+        return await self.messages.order_by('-created_at').afirst()
+    
+    async def aget_messages(self, limit: int = 10):
+        """Get recent messages for this conversation (async)."""
+        return [m async for m in self.messages.order_by('-created_at')[:limit]]
+    
+    async def aget_messages_by_sender(self, sender_type: str, limit: int = 10):
+        """Get messages by sender type for this conversation (async)."""
+        queryset = self.messages.filter(sender_type=sender_type)
+        return [m async for m in queryset.order_by('-created_at')[:limit]]
 
 
 class Message(models.Model):
@@ -339,6 +401,32 @@ class Message(models.Model):
     @property
     def is_from_bot(self):
         return self.sender_type == 'bot'
+    
+    # ============================================================================
+    # ASYNC METHODS (Django 6.0 native async ORM)
+    # ============================================================================
+    
+    @classmethod
+    async def aget_by_conversation(cls, conversation_id, limit: int = 10):
+        """Get messages by conversation ID (async)."""
+        queryset = cls.objects.filter(conversation_id=conversation_id).select_related('conversation')
+        return [m async for m in queryset.order_by('-created_at')[:limit]]
+    
+    @classmethod
+    async def aget_recent_messages(cls, user, limit: int = 10):
+        """Get recent messages for a user across all conversations (async)."""
+        queryset = cls.objects.filter(
+            conversation__session__user=user
+        ).select_related('conversation', 'conversation__session')
+        return [m async for m in queryset.order_by('-created_at')[:limit]]
+    
+    @classmethod
+    async def aget_by_id(cls, message_id):
+        """Get message by ID (async)."""
+        try:
+            return await cls.objects.select_related('conversation').aget(id=message_id)
+        except cls.DoesNotExist:
+            return None
 
 
 class ChatbotResponse(models.Model):
@@ -431,3 +519,44 @@ class ChatbotResponse(models.Model):
     
     def __str__(self):
         return f"{self.category} - {self.target_user} (Priority: {self.priority})"
+    
+    # ============================================================================
+    # ASYNC METHODS (Django 6.0 native async ORM)
+    # ============================================================================
+    
+    @classmethod
+    async def aget_by_category(cls, category: str, target_user: str = 'both'):
+        """Get active responses by category (async)."""
+        queryset = cls.objects.filter(
+            category=category,
+            target_user=target_user,
+            is_active=True
+        ).order_by('-priority', '-created_at')
+        return [r async for r in queryset]
+    
+    @classmethod
+    async def aget_active_responses(cls, target_user: str = 'both'):
+        """Get all active responses for a target user (async)."""
+        queryset = cls.objects.filter(
+            target_user=target_user,
+            is_active=True
+        ).order_by('-priority', '-created_at')
+        return [r async for r in queryset]
+    
+    @classmethod
+    async def aget_by_id(cls, response_id):
+        """Get response by ID (async)."""
+        try:
+            return await cls.objects.aget(id=response_id)
+        except cls.DoesNotExist:
+            return None
+    
+    @classmethod
+    async def aget_by_keywords(cls, keyword: str, target_user: str = 'both'):
+        """Get responses matching a keyword (async)."""
+        queryset = cls.objects.filter(
+            trigger_keywords__icontains=keyword,
+            target_user=target_user,
+            is_active=True
+        ).order_by('-priority', '-created_at')
+        return [r async for r in queryset]

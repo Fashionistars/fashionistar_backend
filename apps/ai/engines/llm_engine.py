@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 def _get_ollama_client():
     """Lazy import of Ollama client to avoid startup errors if not installed."""
     try:
+        # pyrefly: ignore [missing-import]
         import ollama
         host = getattr(settings, "OLLAMA_HOST", "http://localhost:11434")
         return ollama.Client(host=host)
@@ -385,3 +386,368 @@ In 2 sentences, encourage them and suggest 1 specific thing to improve accuracy 
                 best_size  = variant.get("size")
 
         return best_size
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# GroqLLMEngine — Production LLM for HF Spaces (replaces Ollama on ZeroGPU)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class GroqLLMEngine:
+    """
+    Interface to Groq API — ultra-fast LLM inference via Groq LPU chips.
+
+    Why Groq instead of Ollama on HF Spaces:
+      - Ollama requires a persistent daemon (incompatible with HF cold-start)
+      - Groq free tier: 14,400 req/day, Llama-3.3-70B-Versatile
+      - Response time: <200ms (faster than local 7B on CPU)
+      - Zero infrastructure — one API key, works from any container
+
+    API: https://console.groq.com/keys
+    Free tier: 14,400 requests/day (Llama-3.3-70B-Versatile)
+    Paid tier: pay-per-token with no rate limit
+
+    Implements the same public interface as OllamaLLMEngine for drop-in use:
+      llm.generate(system, prompt) -> str
+      llm.is_available() -> bool
+
+    Domain methods inherit from OllamaLLMEngine by delegation to share
+    prompt templates (size recommendation, analytics insights, etc).
+    """
+
+    def __init__(self):
+        self.enabled   = getattr(settings, "GROQ_ENABLED", True)
+        self.api_key   = getattr(settings, "GROQ_API_KEY", "")
+        self.model     = getattr(settings, "GROQ_MODEL",   "llama-3.3-70b-versatile")
+        self._client   = None
+
+    @property
+    def client(self):
+        if self._client is None:
+            if not self.api_key:
+                return None
+            try:
+                from groq import Groq
+                self._client = Groq(api_key=self.api_key)
+            except ImportError:
+                logger.debug("groq package not installed — Groq LLM disabled")
+            except Exception as exc:
+                logger.warning("Failed to create Groq client: %s", exc)
+        return self._client
+
+    def is_available(self) -> bool:
+        """True if GROQ_API_KEY is set and the groq package is installed."""
+        if not self.enabled or not self.api_key:
+            return False
+        return self.client is not None
+
+    def generate(
+        self,
+        system: str,
+        prompt: str,
+        temperature: float = 0.3,
+        max_tokens: int    = 500,
+    ) -> str:
+        """
+        Generate text using Groq API.
+        Returns empty string if Groq is unavailable (graceful degradation).
+        """
+        if not self.enabled:
+            return ""
+        client = self.client
+        if client is None:
+            return ""
+        try:
+            response = client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user",   "content": prompt},
+                ],
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as exc:
+            logger.warning("[GroqLLMEngine] generate failed: %s", exc)
+            return ""
+
+    # ── Delegate domain methods to OllamaLLMEngine (shared prompt templates) ──
+
+    def generate_size_recommendation_reasoning(
+        self, measurements: dict, product_specs: dict, recommended_size: str
+    ) -> str:
+        return OllamaLLMEngine.generate_size_recommendation_reasoning(
+            self, measurements, product_specs, recommended_size  # type: ignore[arg-type]
+        )
+
+    def generate_platform_insights(self, analytics_data: dict) -> str:
+        return OllamaLLMEngine.generate_platform_insights(self, analytics_data)  # type: ignore[arg-type]
+
+    def generate_measurement_advice(self, measurements: dict, quality_score: float) -> str:
+        return OllamaLLMEngine.generate_measurement_advice(self, measurements, quality_score)  # type: ignore[arg-type]
+
+    def generate_size_recommendation(self, measurements: dict, product_info: dict) -> str:
+        return OllamaLLMEngine.generate_size_recommendation(self, measurements, product_info)  # type: ignore[arg-type]
+
+    @staticmethod
+    def load_product_size_chart(product_id: int | str) -> list[dict]:
+        return OllamaLLMEngine.load_product_size_chart(product_id)
+
+    @staticmethod
+    def _format_measurements(m: dict) -> str:
+        return OllamaLLMEngine._format_measurements(m)
+
+    @staticmethod
+    def _format_product_specs(specs: dict) -> str:
+        return OllamaLLMEngine._format_product_specs(specs)
+
+    @staticmethod
+    def _pick_best_size(measurements: dict, size_chart: list[dict]) -> str | None:
+        return OllamaLLMEngine._pick_best_size(measurements, size_chart)
+
+
+def get_llm_engine():
+    """
+    Factory: returns the best available LLM engine using a four-provider waterfall.
+
+    Priority (fastest/most-capable first):
+      1. SambaNovLLMEngine — if SAMBANOVA_API_KEY set
+         └─ RDU chips: ~4,000 tok/s for Llama-3.3-70B. Fastest large-model inference.
+         └─ Get key: https://cloud.sambanova.ai/apis (free $5 credit)
+
+      2. CerebrasLLMEngine — if CEREBRAS_API_KEY set
+         └─ WSE-3 chips: ~2,000 tok/s, 1,000,000 tokens/day free.
+         └─ Best for high-volume batch tasks (analytics, measurement advice).
+         └─ Get key: https://cloud.cerebras.ai/ (free, no credit card)
+
+      3. GroqLLMEngine — if GROQ_API_KEY set
+         └─ LPU chips: ~300 tok/s, <200ms TTFT, 14,400 req/day free.
+         └─ Best for real-time interactive responses.
+         └─ Get key: https://console.groq.com/keys
+
+      4. OllamaLLMEngine — local dev / self-hosted fallback
+         └─ No rate limits, no cost. Works on any GPU/CPU.
+         └─ Install: https://ollama.com/
+
+    All engines implement the same interface, so callers need zero changes.
+
+    Example:
+        llm = get_llm_engine()
+        text = llm.generate(system="You are a fashion advisor.", prompt="Recommend a size for 90/72/96cm.")
+        print(text)  # <-- works with any provider
+    """
+    # 1. SambaNova (fastest)
+    samba_key = getattr(settings, "SAMBANOVA_API_KEY", "")
+    if samba_key:
+        engine = SambaNovLLMEngine()
+        if engine.is_available():
+            logger.info("[get_llm_engine] ✅ Using SambaNovLLMEngine (model: %s, ~4000 tok/s)", engine.model)
+            return engine
+
+    # 2. Cerebras (highest free throughput)
+    cerebras_key = getattr(settings, "CEREBRAS_API_KEY", "")
+    if cerebras_key:
+        engine = CerebrasLLMEngine()
+        if engine.is_available():
+            logger.info("[get_llm_engine] ✅ Using CerebrasLLMEngine (model: %s, ~2000 tok/s)", engine.model)
+            return engine
+
+    # 3. Groq (lowest latency per request)
+    groq_key = getattr(settings, "GROQ_API_KEY", "")
+    if groq_key:
+        engine = GroqLLMEngine()
+        if engine.is_available():
+            logger.info("[get_llm_engine] ✅ Using GroqLLMEngine (model: %s, ~300 tok/s)", engine.model)
+            return engine
+
+    # 4. Ollama (local dev, self-hosted, no rate limit)
+    logger.debug("[get_llm_engine] No cloud API keys set — using OllamaLLMEngine (local)")
+    return OllamaLLMEngine()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SambaNova LLM Engine — Fastest large model inference (RDU chips)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class SambaNovLLMEngine:
+    """
+    Interface to SambaNova Cloud — world's fastest inference for large models.
+
+    Why SambaNova:
+      - RDU (Reconfigurable Data Unit) chips: optimized for agentic, long-context tasks
+      - Llama-4 Maverick (400B MoE, 17B active) at >600 tok/s
+      - Llama-3.3-70B at >4,000 tok/s  — 13x faster than Groq
+      - OpenAI-compatible API (just change base_url + api_key)
+      - Free tier: $5 signup credit (no credit card), then pay-per-token
+
+    Get key: https://cloud.sambanova.ai/apis
+    Models available: Meta-Llama-3.3-70B-Instruct, Meta-Llama-4-Maverick, etc.
+    """
+
+    BASE_URL = "https://api.sambanova.ai/v1"
+
+    def __init__(self):
+        self.enabled = getattr(settings, "SAMBANOVA_ENABLED", False)
+        self.api_key = getattr(settings, "SAMBANOVA_API_KEY", "")
+        self.model   = getattr(settings, "SAMBANOVA_MODEL", "Meta-Llama-3.3-70B-Instruct")
+        self._client = None
+
+    @property
+    def client(self):
+        if self._client is None and self.api_key:
+            try:
+                from openai import OpenAI
+                self._client = OpenAI(api_key=self.api_key, base_url=self.BASE_URL)
+            except ImportError:
+                logger.debug("openai package not installed — SambaNova disabled")
+            except Exception as exc:
+                logger.warning("SambaNova client init failed: %s", exc)
+        return self._client
+
+    def is_available(self) -> bool:
+        if not self.enabled or not self.api_key:
+            return False
+        return self.client is not None
+
+    def generate(
+        self,
+        system: str,
+        prompt: str,
+        temperature: float = 0.3,
+        max_tokens: int    = 500,
+    ) -> str:
+        if not self.enabled:
+            return ""
+        client = self.client
+        if client is None:
+            return ""
+        try:
+            response = client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user",   "content": prompt},
+                ],
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as exc:
+            logger.warning("[SambaNovLLMEngine] generate failed: %s", exc)
+            return ""
+
+    # Shared domain methods (delegate to OllamaLLMEngine prompt templates)
+    def generate_size_recommendation_reasoning(self, measurements, product_specs, recommended_size):
+        return OllamaLLMEngine.generate_size_recommendation_reasoning(self, measurements, product_specs, recommended_size)  # type: ignore[arg-type]
+
+    def generate_platform_insights(self, analytics_data):
+        return OllamaLLMEngine.generate_platform_insights(self, analytics_data)  # type: ignore[arg-type]
+
+    def generate_measurement_advice(self, measurements, quality_score):
+        return OllamaLLMEngine.generate_measurement_advice(self, measurements, quality_score)  # type: ignore[arg-type]
+
+    def generate_size_recommendation(self, measurements, product_info):
+        return OllamaLLMEngine.generate_size_recommendation(self, measurements, product_info)  # type: ignore[arg-type]
+
+    @staticmethod
+    def load_product_size_chart(product_id): return OllamaLLMEngine.load_product_size_chart(product_id)
+    @staticmethod
+    def _format_measurements(m): return OllamaLLMEngine._format_measurements(m)
+    @staticmethod
+    def _format_product_specs(specs): return OllamaLLMEngine._format_product_specs(specs)
+    @staticmethod
+    def _pick_best_size(measurements, size_chart): return OllamaLLMEngine._pick_best_size(measurements, size_chart)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Cerebras LLM Engine — Highest token throughput (WSE-3 chips)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class CerebrasLLMEngine:
+    """
+    Interface to Cerebras Cloud — highest raw token throughput in 2026.
+
+    Why Cerebras:
+      - WSE-3 (Wafer Scale Engine): world's largest chip, optimized for AI
+      - Llama-3.3-70B at ~2,000 tok/s — massive throughput for batch tasks
+      - OpenAI-compatible API (just change base_url)
+      - Free tier: 1,000,000 tokens/day (no credit card required)
+      - Ideal for batch embedding tasks and long-context analytics
+
+    Get key: https://cloud.cerebras.ai/
+    Models: llama-3.3-70b, llama3.1-8b, llama-4-scout-17b-16e-instruct
+    """
+
+    BASE_URL = "https://api.cerebras.ai/v1"
+
+    def __init__(self):
+        self.enabled = getattr(settings, "CEREBRAS_ENABLED", False)
+        self.api_key = getattr(settings, "CEREBRAS_API_KEY", "")
+        self.model   = getattr(settings, "CEREBRAS_MODEL", "llama-3.3-70b")
+        self._client = None
+
+    @property
+    def client(self):
+        if self._client is None and self.api_key:
+            try:
+                from openai import OpenAI
+                self._client = OpenAI(api_key=self.api_key, base_url=self.BASE_URL)
+            except ImportError:
+                logger.debug("openai package not installed — Cerebras disabled")
+            except Exception as exc:
+                logger.warning("Cerebras client init failed: %s", exc)
+        return self._client
+
+    def is_available(self) -> bool:
+        if not self.enabled or not self.api_key:
+            return False
+        return self.client is not None
+
+    def generate(
+        self,
+        system: str,
+        prompt: str,
+        temperature: float = 0.3,
+        max_tokens: int    = 500,
+    ) -> str:
+        if not self.enabled:
+            return ""
+        client = self.client
+        if client is None:
+            return ""
+        try:
+            response = client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user",   "content": prompt},
+                ],
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as exc:
+            logger.warning("[CerebrasLLMEngine] generate failed: %s", exc)
+            return ""
+
+    # Shared domain methods
+    def generate_size_recommendation_reasoning(self, measurements, product_specs, recommended_size):
+        return OllamaLLMEngine.generate_size_recommendation_reasoning(self, measurements, product_specs, recommended_size)  # type: ignore[arg-type]
+
+    def generate_platform_insights(self, analytics_data):
+        return OllamaLLMEngine.generate_platform_insights(self, analytics_data)  # type: ignore[arg-type]
+
+    def generate_measurement_advice(self, measurements, quality_score):
+        return OllamaLLMEngine.generate_measurement_advice(self, measurements, quality_score)  # type: ignore[arg-type]
+
+    def generate_size_recommendation(self, measurements, product_info):
+        return OllamaLLMEngine.generate_size_recommendation(self, measurements, product_info)  # type: ignore[arg-type]
+
+    @staticmethod
+    def load_product_size_chart(product_id): return OllamaLLMEngine.load_product_size_chart(product_id)
+    @staticmethod
+    def _format_measurements(m): return OllamaLLMEngine._format_measurements(m)
+    @staticmethod
+    def _format_product_specs(specs): return OllamaLLMEngine._format_product_specs(specs)
+    @staticmethod
+    def _pick_best_size(measurements, size_chart): return OllamaLLMEngine._pick_best_size(measurements, size_chart)

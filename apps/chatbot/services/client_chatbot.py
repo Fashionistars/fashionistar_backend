@@ -243,3 +243,35 @@ class ClientChatbotService(BaseChatbotService):
             updates.update(context)
         
         self._update_session_context(updates)
+        
+    def get_catalog_support(self, products: List[str], vendor_info: Dict = None) -> Dict[str, Any]:
+        """Proxy delegation to VendorChatbotService."""
+        from .vendor_chatbot import VendorChatbotService
+        service = VendorChatbotService(self.user)
+        service.current_session = self.current_session
+        service.current_conversation = self.current_conversation
+        return service.get_catalog_support(products, vendor_info)
+        
+    def get_product_info(self, product_sku: str, vendor_context: Dict = None) -> Dict[str, Any]:
+        """Proxy delegation to VendorChatbotService."""
+        from .vendor_chatbot import VendorChatbotService
+        service = VendorChatbotService(self.user)
+        service.current_session = self.current_session
+        service.current_conversation = self.current_conversation
+        return service.get_product_info(product_sku, vendor_context)
+        
+    def get_treatment_protocol(self, garment_type: str, complexity: str = 'moderate') -> Dict[str, Any]:
+        """Proxy delegation to VendorChatbotService."""
+        from .vendor_chatbot import VendorChatbotService
+        service = VendorChatbotService(self.user)
+        service.current_session = self.current_session
+        service.current_conversation = self.current_conversation
+        return service.get_treatment_protocol(garment_type, complexity)
+        
+    def search_medical_references(self, query: str, specialty: str = None) -> Dict[str, Any]:
+        """Proxy delegation to VendorChatbotService."""
+        from .vendor_chatbot import VendorChatbotService
+        service = VendorChatbotService(self.user)
+        service.current_session = self.current_session
+        service.current_conversation = self.current_conversation
+        return service.search_medical_references(query, specialty)

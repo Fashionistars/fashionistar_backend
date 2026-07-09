@@ -76,6 +76,31 @@ class SearchableContent(models.Model):
             self.metadata_text = ""
         super().save(*args, **kwargs)
 
+    @classmethod
+    async def aget_by_id(cls, content_id: int):
+        """Get searchable content by ID (async)."""
+        try:
+            return await cls.objects.aget(id=content_id)
+        except cls.DoesNotExist:
+            return None
+
+    @classmethod
+    async def aget_by_content_type(cls, content_type: str, limit: int = 100):
+        """Get content by type (async)."""
+        queryset = cls.objects.filter(content_type=content_type)
+        return [c async for c in queryset.order_by('-created_at')[:limit]]
+
+    @classmethod
+    async def aget_by_encounter(cls, encounter_id: int, limit: int = 100):
+        """Get content by encounter (async)."""
+        queryset = cls.objects.filter(encounter_id=encounter_id)
+        return [c async for c in queryset.order_by('-created_at')[:limit]]
+
+    @classmethod
+    async def acreate_from_dict(cls, data: dict):
+        """Create from dictionary (async)."""
+        return await cls.objects.acreate(**data)
+
 
 class SearchQuery(models.Model):
     """
@@ -99,6 +124,26 @@ class SearchQuery(models.Model):
 
     def __str__(self) -> str:
         return f"Search: {self.query_text[:50]}..."
+
+    @classmethod
+    async def aget_recent_queries(cls, user_id: str = None, limit: int = 10):
+        """Get recent queries (async)."""
+        queryset = cls.objects.all()
+        if user_id:
+            queryset = queryset.filter(user_id=user_id)
+        return [q async for q in queryset.order_by('-created_at')[:limit]]
+
+    @classmethod
+    async def aget_query_analytics(cls, date_from, date_to):
+        """Get query analytics (async)."""
+        from django.db.models import Count, Avg, Q
+        queryset = cls.objects.filter(created_at__range=(date_from, date_to))
+        result = await queryset.aggregate(
+            total_queries=Count('id'),
+            avg_execution_time=Avg('execution_time_ms'),
+            zero_result_count=Count('id', filter=Q(results_count=0))
+        )
+        return result
 
 
 class SearchResult(models.Model):
@@ -128,4 +173,15 @@ class SearchResult(models.Model):
 
     def __str__(self) -> str:
         return f"Result {self.rank} for query {self.query.id}"
+
+    @classmethod
+    async def aget_by_query(cls, query_id: int):
+        """Get cached results by query (async)."""
+        queryset = cls.objects.filter(query_id=query_id).order_by('rank')
+        return [r async for r in queryset]
+
+    @classmethod
+    async def acreate_bulk(cls, results: list):
+        """Bulk create results (async)."""
+        return await cls.objects.abulk_create(results)
 

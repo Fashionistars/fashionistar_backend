@@ -4,15 +4,15 @@
     "pk": 1,
     "fields": {
       "category": "greeting",
-      "target_user": "patient",
+      "target_user": "client",
       "trigger_keywords": ["سلام", "درود", "صبح بخیر", "عصر بخیر", "hello", "hi"],
-      "response_text": "سلام و درود! من دستیار هوشمند هلسا هستم. 🌟\n\nمن اینجا هستم تا در مسائل سلامتی شما کمک کنم. چطور می‌توانم امروز به شما کمک کنم؟",
+      "response_text": "سلام و درود! من دستیار هوشمند فشن‌استار هستم. 🌟\n\nمن اینجا هستم تا به شما در محاسبه دقیق سایز بدنتان و برقراری ارتباط با بهترین خیاط‌ها کمک کنم. چطور می‌توانم امروز کمکتان کنم؟",
       "response_data": {
         "quick_replies": [
-          {"title": "بررسی علائم", "payload": "symptoms_check"},
-          {"title": "اطلاعات دارو", "payload": "medication_info"},
-          {"title": "رزرو نوبت", "payload": "book_appointment"},
-          {"title": "راهنما", "payload": "help"}
+          {"title": "محاسبه دقیق سایز", "payload": "size_assessment"},
+          {"title": "سفارش شخصی‌سازی شده", "payload": "bespoke_consultation"},
+          {"title": "پیگیری سفارش‌ها", "payload": "track_orders"},
+          {"title": "راهنمای اندازه‌گیری", "payload": "measurement_guide"}
         ]
       },
       "is_active": true,
@@ -24,15 +24,15 @@
     "pk": 2,
     "fields": {
       "category": "greeting",
-      "target_user": "doctor",
+      "target_user": "vendor",
       "trigger_keywords": ["سلام", "درود", "صبح بخیر", "عصر بخیر", "hello", "hi"],
-      "response_text": "سلام دکتر گرامی! 👨‍⚕️\n\nمن دستیار هوشمند پزشکی هلسا هستم. آماده کمک در موارد زیر:\n\n• پشتیبانی تشخیصی\n• اطلاعات دارویی و تداخلات\n• پروتکل‌های درمانی\n• جستجو در مراجع علمی\n\nچطور می‌توانم در کار بالینی شما کمک کنم؟",
+      "response_text": "سلام خیاط/فروشنده گرامی! 🪡\n\nمن دستیار هوشمند طراحی و دوخت فشن‌استار هستم. آماده کمک در موارد زیر:\n\n• آنالیز کاتالوگ و سایزبندی\n• الگوها و دستورالعمل‌های دوخت\n• مشخصات فنی و تداخلات پارچه\n• تحلیل روندهای بازار\n\nچطور می‌توانم امروز در کار طراحی و دوخت به شما کمک کنم؟",
       "response_data": {
         "quick_replies": [
-          {"title": "پشتیبانی تشخیصی", "payload": "diagnosis_support"},
-          {"title": "اطلاعات دارویی", "payload": "drug_info"},
-          {"title": "پروتکل درمان", "payload": "treatment_protocol"},
-          {"title": "مراجع علمی", "payload": "references"}
+          {"title": "آنالیز کاتالوگ", "payload": "catalog_support"},
+          {"title": "الگوی دوخت", "payload": "tailoring_guideline"},
+          {"title": "مشخصات فنی محصول", "payload": "product_specs"},
+          {"title": "جستجوی روندها", "payload": "search_trends"}
         ]
       },
       "is_active": true,
@@ -43,17 +43,15 @@
     "model": "chatbot.chatbotresponse",
     "pk": 3,
     "fields": {
-      "category": "symptom_inquiry",
-      "target_user": "patient",
-      "trigger_keywords": ["علائم", "درد", "تب", "سردرد", "مشکل", "بیماری", "احساس بدی"],
-      "response_text": "متوجه شدم که در مورد علائم سؤال دارید. 🩺\n\nبرای ارزیابی بهتر وضعیت شما، لطفاً علائم خود را به طور دقیق‌تر توضیح دهید:\n\n• کدام علامت اصلی است؟\n• چه زمانی شروع شده؟\n• شدت آن چگونه است؟",
+      "category": "size_assessment",
+      "target_user": "client",
+      "trigger_keywords": ["اندازه", "سایز", "قد", "وزن", "اندازه‌گیری", "size", "fit"],
+      "response_text": "برای محاسبه دقیق سایز و تناسب اندام، لطفاً اطلاعات زیر را با من به اشتراک بگذارید: 📏\n\n• قد (به سانتی‌متر)\n• جنسیت\n• اولویت تناسب (جذب، معمولی، آزاد)",
       "response_data": {
         "quick_replies": [
-          {"title": "درد خفیف", "payload": "pain_mild"},
-          {"title": "درد شدید", "payload": "pain_severe"},
-          {"title": "تب دارم", "payload": "fever"},
-          {"title": "سردرد", "payload": "headache"},
-          {"title": "مشکل گوارشی", "payload": "digestive_issue"}
+          {"title": "محاسبه خودکار", "payload": "auto_recommend"},
+          {"title": "سایزهای استاندارد", "payload": "standard_chart"},
+          {"title": "نکات اندازه‌گیری دستی", "payload": "manual_tips"}
         ]
       },
       "is_active": true,
@@ -64,17 +62,16 @@
     "model": "chatbot.chatbotresponse",
     "pk": 4,
     "fields": {
-      "category": "medication_info",
-      "target_user": "patient",
-      "trigger_keywords": ["دارو", "قرص", "کپسول", "شربت", "مصرف", "دوز"],
-      "response_text": "در مورد داروها سؤال دارید؟ 💊\n\nبرای ارائه اطلاعات دقیق، لطفاً یکی از گزینه‌های زیر را انتخاب کنید:",
+      "category": "product_specs",
+      "target_user": "client",
+      "trigger_keywords": ["پارچه", "الیاف", "جنس", "نگهداری", "شستشو", "اتو", "fabric"],
+      "response_text": "در مورد مشخصات فنی، جنس پارچه و راهنمای نگهداری محصولات سؤال دارید؟ 🧵\n\nلطفاً یکی از موارد زیر را انتخاب کنید تا اطلاعات لازم را در اختیارتان بگذارم:",
       "response_data": {
         "quick_replies": [
-          {"title": "جستجوی دارو", "payload": "search_medication"},
-          {"title": "نحوه مصرف", "payload": "how_to_take"},
-          {"title": "عوارض جانبی", "payload": "side_effects"},
-          {"title": "تداخل دارویی", "payload": "drug_interactions"},
-          {"title": "نگهداری دارو", "payload": "storage"}
+          {"title": "دستورالعمل شستشو", "payload": "care_instructions"},
+          {"title": "تداخلات الیاف", "payload": "fabric_limitations"},
+          {"title": "بسته‌بندی و ارسال", "payload": "packaging_info"},
+          {"title": "بررسی قیمت استاندارد", "payload": "standard_pricing"}
         ]
       },
       "is_active": true,
@@ -85,18 +82,17 @@
     "model": "chatbot.chatbotresponse",
     "pk": 5,
     "fields": {
-      "category": "appointment",
-      "target_user": "patient",
-      "trigger_keywords": ["نوبت", "وقت", "رزرو", "appointment", "قرار ملاقات"],
-      "response_text": "برای رزرو نوبت، لطفاً اطلاعات زیر را مشخص کنید: 📅\n\n• نوع تخصص مورد نیاز\n• زمان ترجیحی\n• میزان فوریت",
+      "category": "bespoke_consultation",
+      "target_user": "client",
+      "trigger_keywords": ["سفارش", "دوخت", "شخصی", "مشاوره", "خیاطی", "bespoke", "custom"],
+      "response_text": "برای ثبت درخواست مشاوره دوخت سفارشی (Bespoke)، لطفاً اطلاعات زیر را وارد کنید: 📅\n\n• نوع لباس (کت و شلوار، لباس مجلسی، پالتو و ...)\n• زمان ترجیحی برای جلسه اندازه‌گیری\n• میزان فوریت سفارش",
       "response_data": {
-        "appointment_form": true,
+        "bespoke_form": true,
         "quick_replies": [
-          {"title": "پزشک عمومی", "payload": "general_doctor"},
-          {"title": "متخصص داخلی", "payload": "internal_medicine"},
-          {"title": "قلب و عروق", "payload": "cardiology"},
-          {"title": "ارتوپدی", "payload": "orthopedics"},
-          {"title": "روانپزشک", "payload": "psychiatry"}
+          {"title": "کت و شلوار سفارشی", "payload": "custom_suit"},
+          {"title": "لباس شب و مجلسی", "payload": "custom_gown"},
+          {"title": "پالتو و بارانی", "payload": "custom_coat"},
+          {"title": "مشاوره با طراح", "payload": "designer_meeting"}
         ]
       },
       "is_active": true,
@@ -109,15 +105,14 @@
     "fields": {
       "category": "emergency",
       "target_user": "both",
-      "trigger_keywords": ["اورژانس", "فوری", "emergency", "urgent", "درد شدید قفسه سینه", "تنگی نفس شدید"],
-      "response_text": "🚨 اورژانس تشخیص داده شد!\n\nاگر در موقعیت اورژانسی قرار دارید:\n\n• فوراً با ۱۱۵ تماس بگیرید\n• به نزدیک‌ترین بیمارستان مراجعه کنید\n• در صورت امکان با کسی تماس بگیرید\n\n⚠️ این سیستم جایگزین مراقبت‌های پزشکی فوری نیست.",
+      "trigger_keywords": ["فوری", "عجله", "تحویل فوری", "سریع", "urgent", "rush"],
+      "response_text": "🚨 سفارش‌های فوری (Rush Orders) نیاز به هماهنگی مستقیم دارند!\n\nاگر برای تحویل لباس خود عجله دارید:\n\n• سفارش خود را به عنوان 'Rush' ثبت کنید تا اولویت بالا بگیرد\n• مستقیماً با خیاط پشتیبان تماس بگیرید\n• از طرح‌های آماده شخصی‌سازی سریع استفاده کنید",
       "response_data": {
-        "emergency": true,
+        "rush_order": true,
         "priority": "high",
         "quick_replies": [
-          {"title": "تماس با اورژانس", "payload": "call_emergency"},
-          {"title": "یافتن بیمارستان", "payload": "find_hospital"},
-          {"title": "راهنمای کمک‌های اولیه", "payload": "first_aid"}
+          {"title": "پشتیبانی فوری", "payload": "instant_support"},
+          {"title": "طرح‌های سریع", "payload": "fast_track_designs"}
         ]
       },
       "is_active": true,
@@ -128,16 +123,15 @@
     "model": "chatbot.chatbotresponse",
     "pk": 7,
     "fields": {
-      "category": "general_health",
-      "target_user": "patient",
-      "trigger_keywords": ["سلامت", "تغذیه", "ورزش", "رژیم", "کاهش وزن", "افزایش وزن"],
-      "response_text": "در مورد سلامت عمومی سؤال دارید؟ 🌱\n\nمن می‌توانم در موارد زیر راهنمایی کنم:\n\n• نکات تغذیه سالم\n• برنامه ورزشی مناسب\n• مدیریت استرس\n• بهبود کیفیت خواب",
+      "category": "fashion_trends",
+      "target_user": "client",
+      "trigger_keywords": ["مد", "ترند", "طراحی", "رنگ سال", "استایل", "style", "trend"],
+      "response_text": "در مورد آخرین روندهای مد و استایلینگ سؤال دارید؟ 👗\n\nمن می‌توانم در موارد زیر راهنمایی کنم:\n\n• رنگ‌های ترند فصل\n• الگوها و برش‌های جدید\n• ترکیب لباس و اکسسوری\n• استایلینگ بر اساس فرم بدنتان",
       "response_data": {
         "quick_replies": [
-          {"title": "تغذیه سالم", "payload": "healthy_nutrition"},
-          {"title": "ورزش و تناسب اندام", "payload": "exercise"},
-          {"title": "مدیریت استرس", "payload": "stress_management"},
-          {"title": "بهبود خواب", "payload": "sleep_improvement"}
+          {"title": "استایلینگ فرم بدنی", "payload": "body_shape_styling"},
+          {"title": "رنگ‌های ترند", "payload": "trend_colors"},
+          {"title": "کاتالوگ جدید", "payload": "new_collection"}
         ]
       },
       "is_active": true,
@@ -151,12 +145,12 @@
       "category": "farewell",
       "target_user": "both",
       "trigger_keywords": ["خداحافظ", "خدانگهدار", "bye", "goodbye", "تمام", "پایان"],
-      "response_text": "خداحافظ و سلامت باشید! 🌟\n\nامیدوارم توانسته باشم کمکتان کنم. هر زمان سؤالی داشتید، من اینجا هستم.\n\n🌸 سلامتی شما برای ما مهم است.",
+      "response_text": "خداحافظ و به امید دیدارتان! 🌟\n\nامیدوارم توانسته باشم کمکتان کنم. هر زمان نیاز به مشاوره سایز یا طراحی داشتید، من در خدمت شما هستم.\n\n🌸 آراستگی و برازندگی شما آرزوی ماست.",
       "response_data": {
         "session_end": true,
         "quick_replies": [
-          {"title": "ارزیابی خدمات", "payload": "rate_service"},
-          {"title": "ارتباط با پشتیبانی", "payload": "contact_support"}
+          {"title": "امتیازدهی به دستیار", "payload": "rate_service"},
+          {"title": "تماس با طراحان", "payload": "contact_designers"}
         ]
       },
       "is_active": true,
@@ -170,12 +164,12 @@
       "category": "error",
       "target_user": "both",
       "trigger_keywords": [],
-      "response_text": "متأسفانه خطایی رخ داده است. 😔\n\nلطفاً:\n• چند لحظه صبر کنید و دوباره تلاش کنید\n• سؤال خود را ساده‌تر بیان کنید\n• در صورت تداوم مشکل، با پشتیبانی تماس بگیرید",
+      "response_text": "متأسفانه خطایی در پردازش اطلاعات رخ داده است. 😔\n\nلطفاً:\n• چند لحظه صبر کنید و دوباره تلاش کنید\n• پیام خود را ساده‌تر ارسال کنید\n• در صورت تداوم مشکل، با پشتیبانی تماس بگیرید",
       "response_data": {
         "error": true,
         "quick_replies": [
           {"title": "تلاش مجدد", "payload": "retry"},
-          {"title": "تماس با پشتیبانی", "payload": "contact_support"},
+          {"title": "پشتیبانی سایت", "payload": "contact_support"},
           {"title": "راهنما", "payload": "help"}
         ]
       },
@@ -190,14 +184,13 @@
       "category": "unknown",
       "target_user": "both",
       "trigger_keywords": [],
-      "response_text": "متأسفانه سؤال شما را کاملاً متوجه نشدم. 🤔\n\nلطفاً سؤال خود را واضح‌تر بیان کنید یا از گزینه‌های زیر استفاده کنید:",
+      "response_text": "متأسفانه متوجه منظور شما نشدم. 🤔\n\nلطفاً پیام خود را واضح‌تر بیان کنید یا از یکی از گزینه‌های زیر استفاده کنید:",
       "response_data": {
         "quick_replies": [
-          {"title": "بررسی علائم", "payload": "symptoms_check"},
-          {"title": "اطلاعات دارو", "payload": "medication_info"},
-          {"title": "رزرو نوبت", "payload": "book_appointment"},
-          {"title": "سؤالات متداول", "payload": "faq"},
-          {"title": "تماس با پشتیبانی", "payload": "contact_support"}
+          {"title": "محاسبه سایز بدنی", "payload": "size_assessment"},
+          {"title": "سفارش دوخت سفارشی", "payload": "bespoke_consultation"},
+          {"title": "سوالات متداول", "payload": "faq"},
+          {"title": "پشتیبانی مشتریان", "payload": "contact_support"}
         ]
       },
       "is_active": true,

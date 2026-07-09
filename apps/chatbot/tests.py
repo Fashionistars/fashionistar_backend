@@ -27,7 +27,8 @@ class ChatbotModelsTest(TestCase):
         self.user = User.objects.create_user(
             email='user@fashionistar-test.io',
             first_name='Ahmed',
-            last_name='Mohamadi'
+            last_name='Mohamadi',
+            is_active=True
         )
     
     def test_chatbot_session_creation(self):
@@ -111,13 +112,17 @@ class ChatbotServicesTest(TestCase):
         self.client_user = User.objects.create_user(
             email='client@fashionistar-test.io',
             first_name='Ahmed',
-            last_name='Mohamadi'
+            last_name='Mohamadi',
+            role='client',
+            is_active=True
         )
         
         self.vendor_user = User.objects.create_user(
             email='vendor@fashionistar-test.io',
             first_name='Vendor Jane',
-            last_name='Doe'
+            last_name='Doe',
+            role='vendor',
+            is_active=True
         )
         
         ChatbotResponse.objects.create(
@@ -187,13 +192,17 @@ class ChatbotAPITest(APITestCase):
         self.client_user = User.objects.create_user(
             email='client@fashionistar-test.io',
             first_name='Ahmed',
-            last_name='Mohamadi'
+            last_name='Mohamadi',
+            role='client',
+            is_active=True
         )
         
         self.vendor_user = User.objects.create_user(
             email='vendor@fashionistar-test.io',
             first_name='Vendor Jane',
-            last_name='Doe'
+            last_name='Doe',
+            role='vendor',
+            is_active=True
         )
         
         self.client = APIClient()
@@ -269,7 +278,8 @@ class ChatbotSerializersTest(TestCase):
         self.user = User.objects.create_user(
             email='user@fashionistar-test.io',
             first_name='Ahmed',
-            last_name='Mohamadi'
+            last_name='Mohamadi',
+            is_active=True
         )
         
         self.session = ChatbotSession.objects.create(
@@ -330,7 +340,8 @@ class ChatbotMiddlewareTest(TestCase):
         self.user = User.objects.create_user(
             email='user@fashionistar-test.io',
             first_name='Ahmed',
-            last_name='Mohamadi'
+            last_name='Mohamadi',
+            is_active=True
         )
         self.client = APIClient()
     

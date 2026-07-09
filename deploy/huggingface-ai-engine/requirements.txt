@@ -1,0 +1,22 @@
+# FASHIONISTAR AI Engine -- ZeroGPU Gradio Space Dependencies
+# Do NOT specify gradio, spaces, or torch versions here.
+# HF ZeroGPU builder hard-pins: gradio[oauth,mcp]==5.37.0 + spaces==0.50.4
+
+# Vision AI -- OpenCLIP
+open_clip_torch>=3.3.0
+huggingface-hub>=0.25.0
+transformers>=4.45.0
+accelerate>=0.34.0
+
+# Body pose -- opencv BEFORE mediapipe prevents libEGL conflict
+opencv-python-headless>=4.10.0
+mediapipe>=0.10.21
+
+# LLM Providers
+openai>=1.40.0
+groq>=0.13.0
+
+# Utilities
+numpy>=1.26.0
+Pillow>=10.0.0
+python-dotenv>=1.0.0

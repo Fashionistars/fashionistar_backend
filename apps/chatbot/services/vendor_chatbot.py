@@ -90,9 +90,9 @@ class VendorChatbotService(BaseChatbotService):
             'content': 'Based on the design details provided, here is our custom catalog analysis and pricing advisory:',
             'message_type': 'text',
             'response_data': {
-                'differential_diagnoses': catalog_analysis['categories'],
-                'recommended_tests': catalog_analysis['pricing_tiers'],
-                'treatment_options': catalog_analysis['materials'],
+                'categories': catalog_analysis['categories'],
+                'pricing_tiers': catalog_analysis['pricing_tiers'],
+                'materials': catalog_analysis['materials'],
                 'guidelines': catalog_analysis['guidelines'],
                 'quick_replies': [
                     {'title': 'Fabric Incompatibilities', 'payload': 'fabric_incompatibilities'},
@@ -120,7 +120,7 @@ class VendorChatbotService(BaseChatbotService):
             'content': f'Product specifications for SKU {product_sku}:',
             'message_type': 'text',
             'response_data': {
-                'medication_details': product_details,
+                'product_details': product_details,
                 'quick_replies': [
                     {'title': 'Fabric Incompatibilities', 'payload': f'interactions_{product_sku}'},
                     {'title': 'Standard Pricing', 'payload': f'pricing_{product_sku}'},
@@ -190,14 +190,14 @@ class VendorChatbotService(BaseChatbotService):
             {
                 'name': 'Premium Outerwear',
                 'probability': 0.8,
-                'symptoms_match': ['Coats', 'Jackets'],
-                'severity': 'High Quality'
+                'garments_match': ['Coats', 'Jackets'],
+                'quality_grade': 'High Quality'
             },
             {
                 'name': 'Bespoke Evening Wear',
                 'probability': 0.6,
-                'symptoms_match': ['Gowns', 'Suits'],
-                'severity': 'Custom Tailored'
+                'garments_match': ['Gowns', 'Suits'],
+                'quality_grade': 'Custom Tailored'
             }
         ]
         
@@ -228,39 +228,39 @@ class VendorChatbotService(BaseChatbotService):
     
     def _get_product_spec_details(self, product_sku: str, vendor_context: Dict = None) -> Dict[str, Any]:
         return {
-            'generic_name': product_sku,
+            'product_sku': product_sku,
             'brand_names': ['Brand Signature', 'Collection Line'],
-            'dosage_forms': ['Regular Fit', 'Slim Fit', 'Oversized'],
-            'standard_dosage': {
-                'adult': '$150.00 Standard retail',
-                'pediatric': '$250.00 Custom tailored bespoke'
+            'fitting_styles': ['Regular Fit', 'Slim Fit', 'Oversized'],
+            'standard_pricing': {
+                'standard_fit': '$150.00 Standard retail',
+                'custom_tailored': '$250.00 Custom tailored bespoke'
             },
-            'contraindications': ['Do not machine wash', 'Do not tumble dry'],
-            'side_effects': ['Iron at low temp only', 'Store in dry breathable bag'],
-            'interactions': ['Delicate fabrics', 'Wool blends'],
-            'pregnancy_category': 'A',
-            'monitoring_required': ['Material QC test', 'Sizing audit']
+            'handling_precautions': ['Do not machine wash', 'Do not tumble dry'],
+            'care_instructions': ['Iron at low temp only', 'Store in dry breathable bag'],
+            'fabric_limitations': ['Delicate fabrics', 'Wool blends'],
+            'durability_rating': 'Excellent',
+            'quality_checks_required': ['Material QC test', 'Sizing audit']
         }
     
     def _get_tailoring_protocol_details(self, garment_type: str, complexity: str) -> Dict[str, Any]:
         return {
-            'first_line_treatment': ['Wool Tweed', 'Silk Lining'],
-            'second_line_treatment': ['Cotton Canvas interfacing', 'Polyester thread'],
-            'duration': '7-10 Days assembly',
-            'monitoring': ['Sleeve length alignment', 'Stitch density audit'],
-            'follow_up': 'Final fit test review after 48h',
-            'complications_to_watch': ['Seam puckering', 'Hem misalignment'],
-            'patient_education': ['Care tags instruction', 'Customer measurements confirmation']
+            'primary_materials': ['Wool Tweed', 'Silk Lining'],
+            'secondary_materials': ['Cotton Canvas interfacing', 'Polyester thread'],
+            'estimated_time': '7-10 Days assembly',
+            'quality_monitoring': ['Sleeve length alignment', 'Stitch density audit'],
+            'fitting_schedule': 'Final fit test review after 48h',
+            'stitching_risks': ['Seam puckering', 'Hem misalignment'],
+            'client_notes': ['Care tags instruction', 'Customer measurements confirmation']
         }
     
     def _search_fashion_trends(self, query: str, specialty: str = None) -> List[Dict]:
         return [
             {
                 'title': f'Trend analysis for {query}',
-                'authors': ['Fashion Institute', 'Vogue Trends'],
-                'journal': 'Global Fashion Quarterly',
+                'contributors': ['Fashion Institute', 'Vogue Trends'],
+                'publication': 'Global Fashion Quarterly',
                 'year': 2023,
-                'abstract': 'Detailed report on color trends and pattern popularity...',
+                'summary': 'Detailed report on color trends and pattern popularity...',
                 'link': 'https://example.com/trends1'
             },
             {

@@ -73,6 +73,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     zstd \
     bash \
+    dos2unix \
     git \
     git-lfs \
     procps \
@@ -94,8 +95,9 @@ WORKDIR /app
 COPY --chown=appuser:appuser . .
 
 # Copy entrypoint and make executable (must be done as root before USER switch)
+# dos2unix strips Windows CRLF (\r\n) → LF (\n) to prevent "sh: 1: api: not found"
 COPY --chown=appuser:appuser entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN dos2unix /entrypoint.sh && chmod +x /entrypoint.sh
 
 USER appuser
 
@@ -106,9 +108,13 @@ USER appuser
 # Port 7860 — mandatory for HF Spaces
 EXPOSE 7860
 
-# Health check
+# Health check — polls /api/v1/health/ endpoint
 HEALTHCHECK --interval=30s --timeout=15s --start-period=120s --retries=3 \
     CMD curl -fsS "http://127.0.0.1:${PORT:-7860}/api/v1/health/" || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]
+
+# Default command: start the production API server.
+# The entrypoint.sh auto-detects platform + port.
+# For Celery: override with CMD ["celery-worker"] or CMD ["celery-beat"]
 CMD ["api"]
