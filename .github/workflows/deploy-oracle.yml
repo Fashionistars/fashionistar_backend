@@ -14,17 +14,6 @@ name: 🚀 Deploy API to Oracle Cloud (Production)
 # ============================================================================
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "**.py"
-      - "pyproject.toml"
-      - "uv.lock"
-      - "Dockerfile.production"
-      - "gunicorn.conf.py"
-      - "entrypoint.sh"
-      - "deploy/**"
-      - ".github/workflows/deploy-oracle.yml"
   workflow_dispatch: # Allow manual trigger from GitHub UI
     inputs:
       force_rebuild:

@@ -1,6 +1,0 @@
-0000000000000000000000000000000000000000 281f008b88103f21ceeb0c71dd228ac31f3a6680 zichdan <zichdan1999@gmail.com> 1778447260 +0100	commit (initial): feat(backend): Modernize enterprise audit logging infrastructure and refactor core application models
-281f008b88103f21ceeb0c71dd228ac31f3a6680 11f2d895f836da0c3915d6103d0154da7f8eb544 zichdan <zichdan1999@gmail.com> 1778452617 +0100	commit: feat(hardening): Wave 2-G production finalization — audit wiring, FK integrity, migrations & docstrings
-11f2d895f836da0c3915d6103d0154da7f8eb544 121c99e617cfcf2e729d62e4f1b8bd1dd79adc4a zichdan <zichdan1999@gmail.com> 1778464670 +0100	commit: refactor(backend): Enforce robust soft-delete models and refine cart audit integration patterns
-121c99e617cfcf2e729d62e4f1b8bd1dd79adc4a 03d321c83076a2aedc619e8ba39c3ffed28f98af zichdan <zichdan1999@gmail.com> 1778468285 +0100	commit: fix(wave-8): Harden cart, catalog, and KYC webhook domain models
-03d321c83076a2aedc619e8ba39c3ffed28f98af ae113584d76437cde0bd8307c1071239e4a07d57 zichdan <zichdan1999@gmail.com> 1778470004 +0100	commit: feat(wallet): add migration 0002 — alter id fields on Currency/Wallet/WalletHold
-ae113584d76437cde0bd8307c1071239e4a07d57 6886ed9607da6b3dd890e578ba34eea043ece627 zichdan <zichdan1999@gmail.com> 1778475626 +0100	commit: feat(backend): Wave 7G Production E2E Hardening & Data Integrity
