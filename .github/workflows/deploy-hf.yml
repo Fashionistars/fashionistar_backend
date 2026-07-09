@@ -24,18 +24,6 @@ name: 🤗 Deploy API to Hugging Face Spaces (Production)
 # =============================================================================
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '**.py'
-      - 'pyproject.toml'
-      - 'uv.lock'
-      - 'Dockerfile.production'
-      - 'entrypoint.sh'
-      - 'gunicorn.conf.py'
-      - 'backend/**'
-      - 'apps/**'
-      - '.github/workflows/deploy-hf.yml'
   workflow_dispatch:
     inputs:
       force_rebuild:
