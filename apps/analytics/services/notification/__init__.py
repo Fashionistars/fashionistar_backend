@@ -1,0 +1,1 @@
+"""Notification analytics service package."""

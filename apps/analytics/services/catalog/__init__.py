@@ -1,0 +1,1 @@
+"""Catalog analytics service package."""

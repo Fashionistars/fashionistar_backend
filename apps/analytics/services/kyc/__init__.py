@@ -1,0 +1,1 @@
+"""Kyc analytics service package."""

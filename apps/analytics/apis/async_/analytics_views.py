@@ -4,19 +4,24 @@ Django Ninja async views for Analytics domain.
 Follows vendor pattern with async endpoints under /api/v1/ninja/analytics/.
 """
 
-from ninja import Router
-from django.http import HttpRequest
-from typing import List, Optional
-from pydantic import BaseModel
-from django.utils import timezone
+import json
 from datetime import timedelta
+from typing import List, Optional
+
+from django.core.cache import cache
+from django.http import HttpRequest
+from django.utils import timezone
+from ninja import Router
+from ninja.errors import HttpError
+from pydantic import BaseModel
+
 from apps.analytics.selectors.analytics_selectors import (
-    aget_metrics_by_name,
-    aget_user_activities,
-    aget_performance_metrics,
+    aget_analytics_dashboard_parallel,
     aget_business_metrics,
     aget_firing_alerts,
-    aget_analytics_dashboard_parallel,
+    aget_metrics_by_name,
+    aget_performance_metrics,
+    aget_user_activities,
 )
 from apps.analytics.services import AnalyticsService
 from apps.audit_logs.services.analytics.analytics_audit import AnalyticsAuditService
@@ -89,6 +94,18 @@ class HealthCheckResponse(BaseModel):
     firing_alerts_count: int
 
 
+class AnalyticsReportSchema(BaseModel):
+    generated_at:    str
+    days:            int
+    scope:           str
+    order_metrics:   dict = {}
+    product_metrics: dict = {}
+    user_metrics:    dict = {}
+    vendor_metrics:  dict = {}
+    anomalies:       list = []
+    llm_insights:    str  = ""
+
+
 # ============================================================================
 # Async Endpoints
 # ============================================================================
@@ -118,6 +135,57 @@ async def get_analytics_dashboard(request: HttpRequest):
         activity_count=dashboard_data['activity_count'],
         avg_response_time_ms=dashboard_data['avg_response_time_ms'],
     )
+
+
+@router.get(
+    '/platform/',
+    response=AnalyticsReportSchema,
+    summary="Get platform analytics report",
+    description=(
+        "Returns the latest analytics report for the platform. "
+        "Served from Redis cache (generated daily at 02:30 UTC). "
+        "Requires staff or admin access."
+    ),
+)
+async def get_platform_analytics(
+    request: HttpRequest,
+    days: int = 7,
+) -> dict:
+    """GET /api/v1/ninja/analytics/platform/?days=7"""
+    user = request.auth
+    if not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
+        raise HttpError(403, "Staff access required.")
+
+    cache_key = f"analytics:report:platform:platform:{days}d"
+    cached = cache.get(cache_key)
+
+    if cached:
+        try:
+            return json.loads(cached) if isinstance(cached, str) else cached
+        except Exception:
+            pass
+
+    # Trigger generation if not cached
+    from asgiref.sync import sync_to_async
+
+    @sync_to_async
+    def trigger():
+        from apps.analytics.tasks.analytics_tasks import run_platform_analytics
+        run_platform_analytics.delay(days=days)
+
+    await trigger()
+
+    return {
+        "generated_at":    timezone.now().isoformat(),
+        "days":            days,
+        "scope":           "platform",
+        "order_metrics":   {},
+        "product_metrics": {},
+        "user_metrics":    {},
+        "vendor_metrics":  {},
+        "anomalies":       [],
+        "llm_insights":    "Report generation in progress...",
+    }
 
 
 @router.get('/metrics/', response=List[MetricSchema])
