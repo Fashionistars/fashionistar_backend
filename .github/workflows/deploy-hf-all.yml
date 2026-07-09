@@ -149,7 +149,7 @@ jobs:
           mkdir -p "$DEPLOY_DIR"
           # Copy source, excluding dev-only and binary assets
           rsync -av \
-            --exclude='.git' --exclude='.github' --exclude='.venv' \
+            --exclude='.git' --exclude='.git_disabled' --exclude='.github' --exclude='.venv' \
             --exclude='node_modules' --exclude='logs' --exclude='.pytest_cache' \
             --exclude='.mypy_cache' --exclude='.ruff_cache' --exclude='htmlcov' \
             --exclude='staticfiles' --exclude='scratch' --exclude='media' \
@@ -245,7 +245,7 @@ jobs:
         run: |
           mkdir -p "$DEPLOY_DIR"
           rsync -av \
-            --exclude='.git' --exclude='.github' --exclude='.venv' \
+            --exclude='.git' --exclude='.git_disabled' --exclude='.github' --exclude='.venv' \
             --exclude='node_modules' --exclude='logs' --exclude='.pytest_cache' \
             --exclude='.mypy_cache' --exclude='.ruff_cache' --exclude='htmlcov' \
             --exclude='staticfiles' --exclude='scratch' --exclude='media' \
@@ -331,7 +331,7 @@ jobs:
         run: |
           mkdir -p "$DEPLOY_DIR"
           rsync -av \
-            --exclude='.git' --exclude='.github' --exclude='.venv' \
+            --exclude='.git' --exclude='.git_disabled' --exclude='.github' --exclude='.venv' \
             --exclude='node_modules' --exclude='logs' --exclude='.pytest_cache' \
             --exclude='.mypy_cache' --exclude='.ruff_cache' --exclude='htmlcov' \
             --exclude='staticfiles' --exclude='scratch' --exclude='media' \

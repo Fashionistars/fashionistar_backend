@@ -1,6 +1,0 @@
-feat(backend): Wave 7G Production E2E Hardening & Data Integrity
-
-- Implement system-wide auditable actions and transaction ledgers.
-- Refactor catalog models to utilize shared SoftDeleteModel and TimeStampedModel.
-- Optimize async aggregate operations for cart summaries.
-- Finalize idempotent logic for automated E2E test data seeding.
