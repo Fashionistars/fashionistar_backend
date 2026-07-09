@@ -298,7 +298,7 @@ class UnifiedNotification(StatusModel):
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='notifications',
+        related_name='unified_notifications',
         verbose_name='User'
     )
     notification_type = models.CharField(
