@@ -19,6 +19,11 @@ from ninja.errors import HttpError
 from pydantic import BaseModel
 
 from apps.analytics.selectors.analytics_selectors import (
+    MetricSelector,
+    UserActivitySelector,
+    PerformanceMetricSelector,
+    BusinessMetricSelector,
+    AlertSelector,
     aget_alerts,
     aget_analytics_dashboard_parallel,
     aget_business_metrics,
@@ -28,6 +33,13 @@ from apps.analytics.selectors.analytics_selectors import (
 )
 from apps.analytics.services import AnalyticsService
 from apps.audit_logs.services.analytics.analytics_audit import AnalyticsAuditService
+from apps.common.pagination import async_ninja_paginate
+from apps.common.throttling import (
+    AnonBurstThrottle,
+    UserBurstThrottle,
+    UserSustainedThrottle,
+    get_ninja_throttle,
+)
 
 
 router = Router(tags=['Analytics'])
@@ -52,6 +64,7 @@ class UserActivitySchema(BaseModel):
     resource: str
     resource_id: Optional[int]
     timestamp: str
+    user_id: Optional[str] = None
 
 
 class PerformanceMetricSchema(BaseModel):
@@ -158,10 +171,33 @@ class AnalyticsReportSchema(BaseModel):
 
 
 # ============================================================================
+# PII Redaction Helper
+# ============================================================================
+
+def _redact_user_activity(activity) -> dict:
+    """Strip PII from user activity before returning to client.
+
+    Never exposes ip_address, user_agent, or session_id in API responses.
+    """
+    return {
+        "id": activity.id,
+        "action": activity.action,
+        "resource": activity.resource,
+        "resource_id": activity.resource_id,
+        "timestamp": activity.timestamp.isoformat(),
+        "user_id": str(activity.user_id) if activity.user_id else None,
+    }
+
+
+# ============================================================================
 # Async Endpoints
 # ============================================================================
 
-@router.get('/dashboard/', response=DashboardResponse)
+@router.get(
+    '/dashboard/',
+    response=DashboardResponse,
+    throttle=get_ninja_throttle(UserBurstThrottle, UserSustainedThrottle),
+)
 async def get_analytics_dashboard(request: HttpRequest):
     """
     Get analytics dashboard data in parallel (async).
@@ -408,31 +444,34 @@ async def get_realtime_analytics(request: HttpRequest) -> dict:
     }
 
 
-@router.get('/metrics/', response=List[MetricSchema])
+@router.get(
+    '/metrics/',
+    throttle=get_ninja_throttle(UserBurstThrottle, UserSustainedThrottle),
+)
 async def get_metrics(
     request: HttpRequest,
     metric_name: Optional[str] = None,
     metric_type: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
-    limit: int = 100,
+    page: int = 1,
+    page_size: int = 20,
 ):
     """
-    Get analytics metrics (async).
+    Get analytics metrics (async, paginated).
     Endpoint: GET /api/v1/ninja/analytics/metrics/
     """
     date_from_dt = parse_datetime(date_from) if date_from else None
     date_to_dt = parse_datetime(date_to) if date_to else None
 
-    metrics = await aget_metrics(
+    queryset = MetricSelector.get_queryset(
         metric_name=metric_name,
         metric_type=metric_type,
         date_from=date_from_dt,
         date_to=date_to_dt,
-        limit=limit,
     )
-
-    return [
+    paginated = await async_ninja_paginate(request, queryset, page=page, page_size=page_size)
+    paginated['results'] = [
         MetricSchema(
             id=m.id,
             name=m.name,
@@ -441,11 +480,16 @@ async def get_metrics(
             tags=m.tags,
             timestamp=m.timestamp.isoformat(),
         )
-        for m in metrics
+        for m in paginated['results']
     ]
+    return paginated
 
 
-@router.post('/metrics/', response=MetricCreatedResponse)
+@router.post(
+    '/metrics/',
+    response=MetricCreatedResponse,
+    throttle=get_ninja_throttle(UserBurstThrottle),
+)
 async def create_metric(request: HttpRequest, payload: CreateMetricRequest):
     """
     Record a new analytics metric.
@@ -491,30 +535,33 @@ async def create_metric(request: HttpRequest, payload: CreateMetricRequest):
     )
 
 
-@router.get('/performance/', response=List[PerformanceMetricSchema])
+@router.get(
+    '/performance/',
+    throttle=get_ninja_throttle(UserBurstThrottle, UserSustainedThrottle),
+)
 async def get_performance_metrics(
     request: HttpRequest,
     endpoint: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     hours: int = 24,
-    limit: int = 100,
+    page: int = 1,
+    page_size: int = 20,
 ):
     """
-    Get performance metrics (async).
+    Get performance metrics (async, paginated).
     Endpoint: GET /api/v1/ninja/analytics/performance/
     """
     date_from_dt = parse_datetime(date_from) if date_from else timezone.now() - timedelta(hours=hours)
     date_to_dt = parse_datetime(date_to) if date_to else None
 
-    metrics = await aget_performance_metrics(
+    queryset = PerformanceMetricSelector.get_queryset(
         endpoint=endpoint,
         date_from=date_from_dt,
         date_to=date_to_dt,
-        limit=limit,
     )
-
-    return [
+    paginated = await async_ninja_paginate(request, queryset, page=page, page_size=page_size)
+    paginated['results'] = [
         PerformanceMetricSchema(
             id=m.id,
             endpoint=m.endpoint,
@@ -523,70 +570,75 @@ async def get_performance_metrics(
             status_code=m.status_code,
             timestamp=m.timestamp.isoformat(),
         )
-        for m in metrics
+        for m in paginated['results']
     ]
+    return paginated
 
 
-@router.get('/user-activity/', response=List[UserActivitySchema])
+@router.get(
+    '/user-activity/',
+    throttle=get_ninja_throttle(UserBurstThrottle, UserSustainedThrottle),
+)
 async def get_user_activity(
     request: HttpRequest,
     user_id: Optional[str] = None,
     action: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
-    limit: int = 100,
+    page: int = 1,
+    page_size: int = 20,
 ):
     """
-    Get user activity events (async).
+    Get user activity events (async, paginated, PII-redacted).
     Endpoint: GET /api/v1/ninja/analytics/user-activity/
+
+    RBAC: Restricted to staff/admin — contains user activity data.
     """
+    user = request.auth
+    if not (getattr(user, 'is_staff', False) or getattr(user, 'is_superuser', False)):
+        raise HttpError(403, 'Staff access required.')
+
     date_from_dt = parse_datetime(date_from) if date_from else None
     date_to_dt = parse_datetime(date_to) if date_to else None
 
-    activities = await aget_user_activity(
+    queryset = UserActivitySelector.get_queryset(
         user_id=user_id,
         action=action,
         date_from=date_from_dt,
         date_to=date_to_dt,
-        limit=limit,
     )
-
-    return [
-        UserActivitySchema(
-            id=a.id,
-            action=a.action,
-            resource=a.resource,
-            resource_id=a.resource_id,
-            timestamp=a.timestamp.isoformat(),
-        )
-        for a in activities
-    ]
+    paginated = await async_ninja_paginate(request, queryset, page=page, page_size=page_size)
+    paginated['results'] = [_redact_user_activity(a) for a in paginated['results']]
+    return paginated
 
 
-@router.get('/business-metrics/', response=List[BusinessMetricSchema])
+@router.get(
+    '/business-metrics/',
+    throttle=get_ninja_throttle(UserBurstThrottle, UserSustainedThrottle),
+)
 async def get_business_metrics(
     request: HttpRequest,
     metric_name: Optional[str] = None,
     period_start: Optional[str] = None,
     period_end: Optional[str] = None,
     days: int = 30,
-    limit: int = 100,
+    page: int = 1,
+    page_size: int = 20,
 ):
     """
-    Get business metrics (async).
+    Get business metrics (async, paginated).
     Endpoint: GET /api/v1/ninja/analytics/business-metrics/
     """
     period_start_dt = parse_datetime(period_start) if period_start else timezone.now() - timedelta(days=days)
     period_end_dt = parse_datetime(period_end) if period_end else None
 
-    metrics = await aget_business_metrics(
+    queryset = BusinessMetricSelector.get_queryset(
         metric_name=metric_name,
         period_start=period_start_dt,
         period_end=period_end_dt,
-        limit=limit,
     )
-    
-    return [
+    paginated = await async_ninja_paginate(request, queryset, page=page, page_size=page_size)
+    paginated['results'] = [
         BusinessMetricSchema(
             id=m.id,
             metric_name=m.metric_name,
@@ -595,11 +647,16 @@ async def get_business_metrics(
             period_end=m.period_end.isoformat(),
             created_at=m.created_at.isoformat(),
         )
-        for m in metrics
+        for m in paginated['results']
     ]
+    return paginated
 
 
-@router.post('/business-metrics/', response=BusinessMetricCreatedResponse)
+@router.post(
+    '/business-metrics/',
+    response=BusinessMetricCreatedResponse,
+    throttle=get_ninja_throttle(UserBurstThrottle),
+)
 async def create_business_metric(
     request: HttpRequest, payload: CreateBusinessMetricRequest
 ):
@@ -639,20 +696,24 @@ async def create_business_metric(
     )
 
 
-@router.get('/alerts/', response=List[AlertSchema])
+@router.get(
+    '/alerts/',
+    throttle=get_ninja_throttle(UserBurstThrottle, UserSustainedThrottle),
+)
 async def get_alerts(
     request: HttpRequest,
     status: Optional[str] = None,
     severity: Optional[str] = None,
-    limit: int = 50,
+    page: int = 1,
+    page_size: int = 20,
 ):
     """
-    Get alerts (async).
+    Get alerts (async, paginated).
     Endpoint: GET /api/v1/ninja/analytics/alerts/
     """
-    alerts = await aget_alerts(status=status, severity=severity, limit=limit)
-
-    return [
+    queryset = AlertSelector.get_queryset(status=status, severity=severity)
+    paginated = await async_ninja_paginate(request, queryset, page=page, page_size=page_size)
+    paginated['results'] = [
         AlertSchema(
             id=a.id,
             rule_id=a.rule.id,
@@ -664,11 +725,16 @@ async def get_alerts(
             fired_at=a.fired_at.isoformat(),
             resolved_at=a.resolved_at.isoformat() if a.resolved_at else None,
         )
-        for a in alerts
+        for a in paginated['results']
     ]
+    return paginated
 
 
-@router.post('/alerts/{int:alert_id}/resolve/', response=AlertResolvedResponse)
+@router.post(
+    '/alerts/{int:alert_id}/resolve/',
+    response=AlertResolvedResponse,
+    throttle=get_ninja_throttle(UserBurstThrottle),
+)
 async def resolve_alert(
     request: HttpRequest,
     alert_id: int,
