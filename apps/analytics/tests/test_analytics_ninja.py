@@ -44,12 +44,12 @@ def user_token(regular_user):
 async def test_get_platform_analytics_returns_cached_report(
     async_client, staff_token, mock_report
 ):
-    """GET /api/v1/ninja/analytics/platform/ returns a cached report when present."""
+    """GET /api/v1/ninja/analytics/platform/overview/ returns a cached report when present."""
     cache_key = "analytics:report:platform:platform:7d"
     cache.set(cache_key, json.dumps(mock_report), timeout=60)
 
     response = await async_client.get(
-        "/api/v1/ninja/analytics/platform/?days=7",
+        "/api/v1/ninja/analytics/platform/overview/?days=7",
         headers={"Authorization": f"Bearer {staff_token}"},
     )
 
@@ -67,13 +67,13 @@ async def test_get_platform_analytics_returns_cached_report(
 async def test_get_platform_analytics_triggers_generation_when_missing(
     async_client, staff_token
 ):
-    """GET /api/v1/ninja/analytics/platform/ triggers background generation when cache miss."""
+    """GET /api/v1/ninja/analytics/platform/overview/ triggers background generation when cache miss."""
     cache.delete("analytics:report:platform:platform:7d")
 
     with patch("apps.analytics.tasks.analytics_tasks.run_platform_analytics") as mock_task:
         mock_task.delay.return_value = None
         response = await async_client.get(
-            "/api/v1/ninja/analytics/platform/?days=7",
+            "/api/v1/ninja/analytics/platform/overview/?days=7",
             headers={"Authorization": f"Bearer {staff_token}"},
         )
 
@@ -91,7 +91,7 @@ async def test_get_platform_analytics_forbidden_for_regular_user(
 ):
     """Non-staff users should receive 403 from the platform analytics endpoint."""
     response = await async_client.get(
-        "/api/v1/ninja/analytics/platform/?days=7",
+        "/api/v1/ninja/analytics/platform/overview/?days=7",
         headers={"Authorization": f"Bearer {user_token}"},
     )
 
@@ -110,6 +110,87 @@ async def test_legacy_ai_analytics_platform_path_removed(
     )
 
     assert response.status_code == 404
+
+
+@pytest.mark.django_db
+@pytest.mark.asyncio
+async def test_get_vendor_analytics_triggers_generation(
+    async_client, staff_token
+):
+    """GET /api/v1/ninja/analytics/vendors/{id}/overview/ triggers vendor report generation."""
+    cache.delete("analytics:report:vendor:3:7d")
+
+    with patch("apps.analytics.tasks.analytics_tasks.run_platform_analytics") as mock_task:
+        mock_task.delay.return_value = None
+        response = await async_client.get(
+            "/api/v1/ninja/analytics/vendors/3/overview/?days=7",
+            headers={"Authorization": f"Bearer {staff_token}"},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["scope"] == "vendor"
+    assert data["days"] == 7
+    mock_task.delay.assert_called_once_with(days=7, scope="vendor", scope_id=3)
+
+
+@pytest.mark.django_db
+@pytest.mark.asyncio
+async def test_get_order_analytics_returns_stub(async_client, staff_token):
+    """GET /api/v1/ninja/analytics/orders/ returns an order analytics stub."""
+    response = await async_client.get(
+        "/api/v1/ninja/analytics/orders/?days=30",
+        headers={"Authorization": f"Bearer {staff_token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["scope"] == "orders"
+    assert data["days"] == 30
+
+
+@pytest.mark.django_db
+@pytest.mark.asyncio
+async def test_get_product_analytics_returns_stub(async_client, staff_token):
+    """GET /api/v1/ninja/analytics/products/ returns a product analytics stub."""
+    response = await async_client.get(
+        "/api/v1/ninja/analytics/products/?days=30",
+        headers={"Authorization": f"Bearer {staff_token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["scope"] == "products"
+
+
+@pytest.mark.django_db
+@pytest.mark.asyncio
+async def test_get_user_analytics_returns_stub(async_client, staff_token):
+    """GET /api/v1/ninja/analytics/users/ returns a user analytics stub."""
+    response = await async_client.get(
+        "/api/v1/ninja/analytics/users/?days=30",
+        headers={"Authorization": f"Bearer {staff_token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["scope"] == "users"
+
+
+@pytest.mark.django_db
+@pytest.mark.asyncio
+async def test_get_realtime_analytics_returns_snapshot_or_stub(
+    async_client, staff_token
+):
+    """GET /api/v1/ninja/analytics/realtime/ returns realtime snapshot or stub."""
+    response = await async_client.get(
+        "/api/v1/ninja/analytics/realtime/",
+        headers={"Authorization": f"Bearer {staff_token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "generated_at" in data
 
 
 @pytest.mark.django_db

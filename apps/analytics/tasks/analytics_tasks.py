@@ -119,27 +119,10 @@ def run_user_behavior_analysis(self, user_id: int, days: int = 30) -> dict:
     logger.info("[run_user_behavior_analysis] user_id=%s days=%d", user_id, days)
 
     try:
-        from apps.ai.database.access_layer import FashionistarDatabaseLayer
-        import json
-        from django.core.cache import cache
+        from apps.analytics.workflows.user_behavior import UserBehaviorWorkflow
 
-        db = FashionistarDatabaseLayer()
-        context    = db.get_user_full_context(user_id) or {}
-        orders     = db.get_user_order_history(user_id) or []
-        measures   = db.get_user_measurements(user_id) or []
-
-        report = {
-            "user_id":               user_id,
-            "days":                  days,
-            "total_orders":          len(orders),
-            "measurement_profiles":  len(measures),
-            "has_default_profile":   any(m.get("is_default") for m in measures),
-            "purchase_categories":   context.get("recent_categories", []),
-            "engagement_signals":    context.get("engagement", {}),
-        }
-
-        cache_key = f"analytics:report:user:{user_id}"
-        cache.set(cache_key, json.dumps(report, default=str), timeout=86400)
+        workflow = UserBehaviorWorkflow()
+        report = workflow.execute({"user_id": user_id, "days": days})
 
         logger.info("[run_user_behavior_analysis] DONE user=%s", user_id)
         return report
@@ -182,27 +165,10 @@ def run_product_performance_analysis(self, product_id: int, days: int = 30) -> d
     )
 
     try:
-        from apps.ai.database.access_layer import FashionistarDatabaseLayer
-        import json
-        from django.core.cache import cache
+        from apps.analytics.workflows.product_performance import ProductPerformanceWorkflow
 
-        db = FashionistarDatabaseLayer()
-        product_data = db.get_product_full(product_id) or {}
-
-        # Basic performance snapshot
-        report = {
-            "product_id":  product_id,
-            "days":        days,
-            "name":        product_data.get("name"),
-            "category":    product_data.get("category"),
-            "total_views": product_data.get("view_count", 0),
-            "total_sales": product_data.get("sales_count", 0),
-            "rating":      product_data.get("average_rating"),
-            "stock":       product_data.get("stock_quantity"),
-        }
-
-        cache_key = f"analytics:report:product:{product_id}"
-        cache.set(cache_key, json.dumps(report, default=str), timeout=43200)
+        workflow = ProductPerformanceWorkflow()
+        report = workflow.execute({"product_id": product_id, "days": days})
 
         logger.info(
             "[run_product_performance_analysis] DONE product=%s", product_id
@@ -214,6 +180,88 @@ def run_product_performance_analysis(self, product_id: int, days: int = 30) -> d
             "[run_product_performance_analysis] FAILED product=%s", product_id
         )
         raise self.retry(exc=exc, countdown=60)
+
+
+@shared_task(
+    bind=True,
+    name="apps.analytics.tasks.analytics_tasks.run_vendor_analytics",
+    queue="analytics",
+    max_retries=2,
+    soft_time_limit=120,
+    time_limit=150,
+    ignore_result=False,
+)
+def run_vendor_analytics(self, vendor_id: int, days: int = 30) -> dict:
+    """
+    Analyse a single vendor's performance over the last N days.
+
+    Args:
+        vendor_id: Vendor PK
+        days:      Lookback window (default: 30)
+
+    Returns:
+        dict: Vendor performance report
+    """
+    logger.info("[run_vendor_analytics] vendor_id=%s days=%d", vendor_id, days)
+
+    try:
+        from apps.analytics.workflows.vendor_performance import VendorPerformanceWorkflow
+
+        workflow = VendorPerformanceWorkflow()
+        report = workflow.execute({"vendor_id": vendor_id, "days": days})
+
+        logger.info("[run_vendor_analytics] DONE vendor=%s", vendor_id)
+        return report
+
+    except Exception as exc:
+        logger.exception("[run_vendor_analytics] FAILED vendor=%s", vendor_id)
+        raise self.retry(exc=exc, countdown=60)
+
+
+@shared_task(
+    bind=True,
+    name="apps.analytics.tasks.analytics_tasks.run_realtime_analytics",
+    queue="analytics",
+    max_retries=1,
+    soft_time_limit=30,
+    time_limit=60,
+    ignore_result=False,
+)
+def run_realtime_analytics(self) -> dict:
+    """
+    Generate a lightweight real-time analytics snapshot.
+
+    Returns:
+        dict: Real-time metrics snapshot cached at analytics:realtime:snapshot
+    """
+    logger.info("[run_realtime_analytics] Starting real-time snapshot")
+
+    try:
+        import json
+        from datetime import timedelta
+
+        from django.core.cache import cache
+        from django.utils import timezone
+
+        from apps.analytics.services import AnalyticsService
+
+        service = AnalyticsService()
+        since = timezone.now() - timedelta(minutes=5)
+        snapshot = {
+            "generated_at": timezone.now().isoformat(),
+            "recent_metrics_count": getattr(service, "_metrics_count", 0),
+            "window_start": since.isoformat(),
+        }
+
+        cache_key = "analytics:realtime:snapshot"
+        cache.set(cache_key, json.dumps(snapshot, default=str), timeout=60)
+
+        logger.info("[run_realtime_analytics] DONE")
+        return snapshot
+
+    except Exception as exc:
+        logger.exception("[run_realtime_analytics] FAILED")
+        raise self.retry(exc=exc, countdown=30)
 
 
 @shared_task(

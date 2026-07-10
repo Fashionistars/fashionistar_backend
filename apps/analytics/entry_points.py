@@ -77,7 +77,11 @@ Provide your insights:
 """.strip()
 
     try:
-        insights = engine.generate(prompt, max_tokens=max_tokens)
+        system = (
+            "You are FASHIONISTAR's AI analytics engine. Analyze platform metrics "
+            "and provide concise, actionable business insights."
+        )
+        insights = engine.generate(system=system, prompt=prompt, max_tokens=max_tokens)
         logger.info("Generated LLM insights (%d chars)", len(insights))
         return insights
     except Exception as exc:  # noqa: BLE001

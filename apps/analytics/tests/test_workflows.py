@@ -13,6 +13,9 @@ import pytest
 from django.core.cache import cache
 
 from apps.analytics.workflows.analytics import AnalyticsWorkflow
+from apps.analytics.workflows.product_performance import ProductPerformanceWorkflow
+from apps.analytics.workflows.user_behavior import UserBehaviorWorkflow
+from apps.analytics.workflows.vendor_performance import VendorPerformanceWorkflow
 
 
 @pytest.fixture
@@ -158,3 +161,94 @@ def test_generate_llm_insights_uses_entry_points(workflow):
 
     assert new_state["llm_insights"] == "Insight text"
     mock_generate.assert_called_once()
+
+
+@pytest.mark.django_db
+def test_user_behavior_workflow_caches_report(regular_user):
+    """UserBehaviorWorkflow should cache a report under analytics:report:user:{user_id}."""
+    cache.delete(f"analytics:report:user:{regular_user.id}")
+
+    with patch("apps.analytics.workflows.user_behavior.BaseWorkflow") as mock_base:
+        base_instance = MagicMock()
+        base_instance.start_execution.return_value = "test-exec-id"
+        base_instance.complete_execution.return_value = None
+        mock_base.return_value = base_instance
+
+        with patch(
+            "apps.ai.database.access_layer.FashionistarDatabaseLayer"
+        ) as mock_db:
+            instance = MagicMock()
+            instance.get_user_full_context.return_value = {"recent_categories": ["shirts"]}
+            instance.get_user_order_history.return_value = [{"id": 1}]
+            instance.get_user_measurements.return_value = [{"is_default": True}]
+            mock_db.return_value = instance
+
+            workflow = UserBehaviorWorkflow()
+            result = workflow.execute({"user_id": regular_user.id, "days": 30})
+
+    assert result["user_id"] == regular_user.id
+    assert "shirts" in result["purchase_categories"]
+    assert cache.get(f"analytics:report:user:{regular_user.id}") is not None
+
+
+@pytest.mark.django_db
+def test_product_performance_workflow_caches_report():
+    """ProductPerformanceWorkflow should cache a report under analytics:report:product:{product_id}."""
+    product_id = 7
+    cache.delete(f"analytics:report:product:{product_id}")
+
+    with patch("apps.analytics.workflows.product_performance.BaseWorkflow") as mock_base:
+        base_instance = MagicMock()
+        base_instance.start_execution.return_value = "test-exec-id"
+        base_instance.complete_execution.return_value = None
+        mock_base.return_value = base_instance
+
+        with patch(
+            "apps.ai.database.access_layer.FashionistarDatabaseLayer"
+        ) as mock_db:
+            instance = MagicMock()
+            instance.get_product_full.return_value = {
+                "name": "Test Product",
+                "category": "Shirts",
+                "view_count": 100,
+                "sales_count": 5,
+                "average_rating": 4.5,
+                "stock_quantity": 20,
+            }
+            mock_db.return_value = instance
+
+            workflow = ProductPerformanceWorkflow()
+            result = workflow.execute({"product_id": product_id, "days": 30})
+
+    assert result["product_id"] == product_id
+    assert result["name"] == "Test Product"
+    assert cache.get(f"analytics:report:product:{product_id}") is not None
+
+
+@pytest.mark.django_db
+def test_vendor_performance_workflow_caches_report():
+    """VendorPerformanceWorkflow should cache a report under analytics:report:vendor:{vendor_id}."""
+    vendor_id = 3
+    cache.delete(f"analytics:report:vendor:{vendor_id}")
+
+    with patch("apps.analytics.workflows.vendor_performance.BaseWorkflow") as mock_base:
+        base_instance = MagicMock()
+        base_instance.start_execution.return_value = "test-exec-id"
+        base_instance.complete_execution.return_value = None
+        mock_base.return_value = base_instance
+
+        with patch(
+            "apps.ai.database.access_layer.FashionistarDatabaseLayer"
+        ) as mock_db:
+            instance = MagicMock()
+            instance.get_all_vendor_stats.return_value = [
+                {"vendor_id": vendor_id, "gmv": 1000, "total_sales": 10}
+            ]
+            mock_db.return_value = instance
+
+            workflow = VendorPerformanceWorkflow()
+            result = workflow.execute({"vendor_id": vendor_id, "days": 30})
+
+    assert result["vendor_id"] == vendor_id
+    assert result["gmv"] == 1000
+    assert cache.get(f"analytics:report:vendor:{vendor_id}") is not None

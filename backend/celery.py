@@ -311,6 +311,8 @@ app.conf.task_routes = {
     "apps.analytics.tasks.analytics_tasks.run_platform_analytics":             {"queue": "analytics"},
     "apps.analytics.tasks.analytics_tasks.run_user_behavior_analysis":         {"queue": "analytics"},
     "apps.analytics.tasks.analytics_tasks.run_product_performance_analysis":   {"queue": "analytics"},
+    "apps.analytics.tasks.analytics_tasks.run_vendor_analytics":               {"queue": "analytics"},
+    "apps.analytics.tasks.analytics_tasks.run_realtime_analytics":             {"queue": "analytics"},
     "apps.analytics.tasks.analytics_tasks.generate_daily_report":              {"queue": "analytics"},
     # DB ingestion — triggered by Django signals on model saves
     "apps.ai.tasks.ingestion_tasks.ingest_db_change":                   {"queue": "ai_ingestion"},

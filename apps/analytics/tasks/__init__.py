@@ -10,12 +10,16 @@ from apps.analytics.tasks.analytics_tasks import (
     generate_daily_report,
     run_platform_analytics,
     run_product_performance_analysis,
+    run_realtime_analytics,
     run_user_behavior_analysis,
+    run_vendor_analytics,
 )
 
 __all__ = [
     "generate_daily_report",
     "run_platform_analytics",
     "run_product_performance_analysis",
+    "run_realtime_analytics",
     "run_user_behavior_analysis",
+    "run_vendor_analytics",
 ]

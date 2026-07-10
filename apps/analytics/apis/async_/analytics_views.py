@@ -138,7 +138,7 @@ async def get_analytics_dashboard(request: HttpRequest):
 
 
 @router.get(
-    '/platform/',
+    '/platform/overview/',
     response=AnalyticsReportSchema,
     summary="Get platform analytics report",
     description=(
@@ -151,7 +151,7 @@ async def get_platform_analytics(
     request: HttpRequest,
     days: int = 7,
 ) -> dict:
-    """GET /api/v1/ninja/analytics/platform/?days=7"""
+    """GET /api/v1/ninja/analytics/platform/overview/?days=7"""
     user = request.auth
     if not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
         raise HttpError(403, "Staff access required.")
@@ -185,6 +185,175 @@ async def get_platform_analytics(
         "vendor_metrics":  {},
         "anomalies":       [],
         "llm_insights":    "Report generation in progress...",
+    }
+
+
+@router.get(
+    '/vendors/{vendor_id}/overview/',
+    response=AnalyticsReportSchema,
+    summary="Get vendor analytics report",
+    description=(
+        "Returns the latest analytics report for a specific vendor. "
+        "Requires staff, admin, or the vendor themselves."
+    ),
+)
+async def get_vendor_analytics(
+    request: HttpRequest,
+    vendor_id: int,
+    days: int = 7,
+) -> dict:
+    """GET /api/v1/ninja/analytics/vendors/{vendor_id}/overview/?days=7"""
+    user = request.auth
+    is_authorized = (
+        getattr(user, "is_staff", False)
+        or getattr(user, "is_superuser", False)
+        or (getattr(user, "vendor_profile", None) and user.vendor_profile.id == vendor_id)
+    )
+    if not is_authorized:
+        raise HttpError(403, "Vendor access required.")
+
+    cache_key = f"analytics:report:vendor:{vendor_id}:{days}d"
+    cached = cache.get(cache_key)
+
+    if cached:
+        try:
+            return json.loads(cached) if isinstance(cached, str) else cached
+        except Exception:
+            pass
+
+    from asgiref.sync import sync_to_async
+
+    @sync_to_async
+    def trigger():
+        from apps.analytics.tasks.analytics_tasks import run_platform_analytics
+        run_platform_analytics.delay(days=days, scope="vendor", scope_id=vendor_id)
+
+    await trigger()
+
+    return {
+        "generated_at":    timezone.now().isoformat(),
+        "days":            days,
+        "scope":           "vendor",
+        "order_metrics":   {},
+        "product_metrics": {},
+        "user_metrics":    {},
+        "vendor_metrics":  {},
+        "anomalies":       [],
+        "llm_insights":    "Report generation in progress...",
+    }
+
+
+@router.get('/orders/', response=AnalyticsReportSchema)
+async def get_order_analytics(
+    request: HttpRequest,
+    days: int = 30,
+) -> dict:
+    """GET /api/v1/ninja/analytics/orders/?days=30"""
+    user = request.auth
+    if not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
+        raise HttpError(403, "Staff access required.")
+
+    cache_key = f"analytics:report:orders:platform:{days}d"
+    cached = cache.get(cache_key)
+    if cached:
+        try:
+            return json.loads(cached) if isinstance(cached, str) else cached
+        except Exception:
+            pass
+
+    return {
+        "generated_at": timezone.now().isoformat(),
+        "days": days,
+        "scope": "orders",
+        "order_metrics": {},
+        "product_metrics": {},
+        "user_metrics": {},
+        "vendor_metrics": {},
+        "anomalies": [],
+        "llm_insights": "",
+    }
+
+
+@router.get('/products/', response=AnalyticsReportSchema)
+async def get_product_analytics(
+    request: HttpRequest,
+    days: int = 30,
+) -> dict:
+    """GET /api/v1/ninja/analytics/products/?days=30"""
+    user = request.auth
+    if not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
+        raise HttpError(403, "Staff access required.")
+
+    cache_key = f"analytics:report:products:platform:{days}d"
+    cached = cache.get(cache_key)
+    if cached:
+        try:
+            return json.loads(cached) if isinstance(cached, str) else cached
+        except Exception:
+            pass
+
+    return {
+        "generated_at": timezone.now().isoformat(),
+        "days": days,
+        "scope": "products",
+        "order_metrics": {},
+        "product_metrics": {},
+        "user_metrics": {},
+        "vendor_metrics": {},
+        "anomalies": [],
+        "llm_insights": "",
+    }
+
+
+@router.get('/users/', response=AnalyticsReportSchema)
+async def get_user_analytics(
+    request: HttpRequest,
+    days: int = 30,
+) -> dict:
+    """GET /api/v1/ninja/analytics/users/?days=30"""
+    user = request.auth
+    if not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
+        raise HttpError(403, "Staff access required.")
+
+    cache_key = f"analytics:report:users:platform:{days}d"
+    cached = cache.get(cache_key)
+    if cached:
+        try:
+            return json.loads(cached) if isinstance(cached, str) else cached
+        except Exception:
+            pass
+
+    return {
+        "generated_at": timezone.now().isoformat(),
+        "days": days,
+        "scope": "users",
+        "order_metrics": {},
+        "product_metrics": {},
+        "user_metrics": {},
+        "vendor_metrics": {},
+        "anomalies": [],
+        "llm_insights": "",
+    }
+
+
+@router.get('/realtime/')
+async def get_realtime_analytics(request: HttpRequest) -> dict:
+    """GET /api/v1/ninja/analytics/realtime/"""
+    user = request.auth
+    if not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
+        raise HttpError(403, "Staff access required.")
+
+    cache_key = "analytics:realtime:snapshot"
+    cached = cache.get(cache_key)
+    if cached:
+        try:
+            return json.loads(cached) if isinstance(cached, str) else cached
+        except Exception:
+            pass
+
+    return {
+        "generated_at": timezone.now().isoformat(),
+        "status": "realtime snapshot not yet generated",
     }
 
 

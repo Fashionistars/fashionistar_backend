@@ -22,15 +22,45 @@ Design:
 
 from __future__ import annotations
 
+import importlib.util
+import os
+from types import ModuleType
+
 __all__ = ["AnalyticsService", "RealTimeAnalyticsService"]
+
+
+__legacy_services_module: ModuleType | None = None
+
+
+def _load_legacy_services() -> ModuleType:
+    """Load the legacy apps/analytics/services.py module by filesystem path.
+
+    The legacy module uses relative imports (``from .models import ...``). We
+    set its ``__package__`` to ``apps.analytics`` so those relative imports
+    resolve correctly even though the module is executed under a temporary name.
+    """
+    global __legacy_services_module
+    if __legacy_services_module is not None:
+        return __legacy_services_module
+
+    legacy_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "services.py",
+    )
+    spec = importlib.util.spec_from_file_location(
+        "_legacy_analytics_services",
+        legacy_path,
+    )
+    module = importlib.util.module_from_spec(spec)
+    module.__package__ = "apps.analytics"
+    spec.loader.exec_module(module)  # type: ignore[union-attr]
+    __legacy_services_module = module
+    return module
 
 
 def __getattr__(name: str):
     """Lazy-import gateway — keeps django.setup() safe from circular imports."""
-    if name == "AnalyticsService":
-        from apps.analytics.services.services import AnalyticsService  # noqa: PLC0415
-        return AnalyticsService
-    if name == "RealTimeAnalyticsService":
-        from apps.analytics.services.services import RealTimeAnalyticsService  # noqa: PLC0415
-        return RealTimeAnalyticsService
+    if name in __all__:
+        module = _load_legacy_services()
+        return getattr(module, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
