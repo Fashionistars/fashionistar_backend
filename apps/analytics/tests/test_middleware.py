@@ -57,7 +57,7 @@ def test_middleware_records_post_activity():
     response = HttpResponse(status=201)
     middleware = UserActivityTrackingMiddleware(get_response=MagicMock(return_value=response))
 
-    with patch("apps.analytics.tasks.analytics_tasks.record_user_activity_async") as mock_task:
+    with patch("apps.analytics.tasks.record_user_activity_async") as mock_task:
         result = middleware(request)
 
     assert result.status_code == 201
@@ -79,7 +79,7 @@ def test_middleware_skips_error_responses():
     response = HttpResponse(status=500)
     middleware = UserActivityTrackingMiddleware(get_response=MagicMock(return_value=response))
 
-    with patch("apps.analytics.tasks.analytics_tasks.record_user_activity_async") as mock_task:
+    with patch("apps.analytics.tasks.record_user_activity_async") as mock_task:
         result = middleware(request)
 
     assert result.status_code == 500

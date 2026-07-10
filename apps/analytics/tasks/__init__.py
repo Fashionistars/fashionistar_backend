@@ -6,6 +6,18 @@ report generation, and data aggregation across all 27 backend apps.
 AI-specific tasks remain in apps/ai.
 """
 
+# Re-export legacy tasks from tasks.py (which is shadowed by this package)
+import importlib.util as _ilu
+import os as _os
+
+_tasks_py_path = _os.path.join(_os.path.dirname(_os.path.dirname(__file__)), "tasks.py")
+if _os.path.exists(_tasks_py_path):
+    _spec = _ilu.spec_from_file_location("apps.analytics._legacy_tasks", _tasks_py_path)
+    _legacy = _ilu.module_from_spec(_spec)
+    _spec.loader.exec_module(_legacy)
+    record_user_activity_async = _legacy.record_user_activity_async
+    record_performance_metric_async = _legacy.record_performance_metric_async
+
 from apps.analytics.tasks.analytics_tasks import (
     cleanup_expired_data,
     generate_daily_report,
@@ -48,4 +60,6 @@ __all__ = [
     "refresh_materialized_views",
     "warm_query_builder_cache",
     "warm_capacity_cache",
+    "record_user_activity_async",
+    "record_performance_metric_async",
 ]

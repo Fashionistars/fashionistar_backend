@@ -41,9 +41,9 @@ class TestAnalyticsRetention:
 
         assert "METRICS_DAYS" in retention
         assert "USER_ACTIVITY_DAYS" in retention
-        assert "PERFORMANCE_METRIC_DAYS" in retention
-        assert "BUSINESS_METRIC_DAYS" in retention
-        assert "ALERT_DAYS" in retention
+        assert "PERFORMANCE_METRICS_DAYS" in retention
+        assert "BUSINESS_METRICS_DAYS" in retention
+        assert "ALERTS_DAYS" in retention
 
     def test_retention_values_are_positive_integers(self):
         """All retention day values are positive integers."""
@@ -149,14 +149,14 @@ class TestAnalyticsRetention:
         assert not Alert.objects.filter(id=old_alert.id).exists()
         assert Alert.objects.filter(id=new_alert.id).exists()
 
-    def test_cleanup_task_in_celery_beat_schedule(self):
-        """cleanup_expired_data is registered in Celery Beat schedule."""
+    def test_cleanup_task_in_celery_routes(self):
+        """cleanup_expired_data is registered in Celery task routes."""
         from backend.celery import app
 
-        beat_schedule = app.conf.beat_schedule
+        routes = app.conf.task_routes
         found = False
-        for task_name, task_config in beat_schedule.items():
-            if "cleanup_expired_data" in str(task_config.get("task", "")):
+        for key in routes:
+            if "cleanup_expired_data" in key:
                 found = True
                 break
-        assert found, "cleanup_expired_data not found in Celery Beat schedule"
+        assert found, "cleanup_expired_data not found in Celery task routes"
