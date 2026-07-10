@@ -314,6 +314,11 @@ app.conf.task_routes = {
     "apps.analytics.tasks.analytics_tasks.run_vendor_analytics":               {"queue": "analytics"},
     "apps.analytics.tasks.analytics_tasks.run_realtime_analytics":             {"queue": "analytics"},
     "apps.analytics.tasks.analytics_tasks.generate_daily_report":              {"queue": "analytics"},
+    # Analytics aggregation rollups
+    "apps.analytics.tasks.aggregation_tasks.rollup_1m":                        {"queue": "analytics"},
+    "apps.analytics.tasks.aggregation_tasks.rollup_5m":                        {"queue": "analytics"},
+    "apps.analytics.tasks.aggregation_tasks.rollup_1h":                        {"queue": "analytics"},
+    "apps.analytics.tasks.aggregation_tasks.rollup_1d":                        {"queue": "analytics"},
     # DB ingestion — triggered by Django signals on model saves
     "apps.ai.tasks.ingestion_tasks.ingest_db_change":                   {"queue": "ai_ingestion"},
     "apps.ai.tasks.ingestion_tasks.refresh_trending_cache":             {"queue": "ai_ingestion"},
@@ -400,6 +405,28 @@ app.conf.beat_schedule = {
     "analytics-daily-report": {
         "task":     "apps.analytics.tasks.analytics_tasks.generate_daily_report",
         "schedule": crontab(hour=2, minute=30),
+        "options":  {"queue": "analytics"},
+    },
+
+    # Analytics metric rollups (migrated to apps/analytics)
+    "analytics-rollup-1m": {
+        "task":     "apps.analytics.tasks.aggregation_tasks.rollup_1m",
+        "schedule": crontab(minute="*"),
+        "options":  {"queue": "analytics"},
+    },
+    "analytics-rollup-5m": {
+        "task":     "apps.analytics.tasks.aggregation_tasks.rollup_5m",
+        "schedule": crontab(minute="*/5"),
+        "options":  {"queue": "analytics"},
+    },
+    "analytics-rollup-1h": {
+        "task":     "apps.analytics.tasks.aggregation_tasks.rollup_1h",
+        "schedule": crontab(minute=0),
+        "options":  {"queue": "analytics"},
+    },
+    "analytics-rollup-1d": {
+        "task":     "apps.analytics.tasks.aggregation_tasks.rollup_1d",
+        "schedule": crontab(hour=0, minute=5),
         "options":  {"queue": "analytics"},
     },
 

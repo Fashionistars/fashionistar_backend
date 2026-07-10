@@ -14,6 +14,12 @@ from apps.analytics.tasks.analytics_tasks import (
     run_user_behavior_analysis,
     run_vendor_analytics,
 )
+from apps.analytics.tasks.aggregation_tasks import (
+    rollup_1d,
+    rollup_1h,
+    rollup_1m,
+    rollup_5m,
+)
 
 __all__ = [
     "generate_daily_report",
@@ -22,4 +28,8 @@ __all__ = [
     "run_realtime_analytics",
     "run_user_behavior_analysis",
     "run_vendor_analytics",
+    "rollup_1m",
+    "rollup_5m",
+    "rollup_1h",
+    "rollup_1d",
 ]
