@@ -137,11 +137,13 @@ def _load_siglip() -> bool:
         logger.info("Loading %s ...", SIGLIP_MODEL_ID)
         _siglip_processor = AutoProcessor.from_pretrained(
             SIGLIP_MODEL_ID, token=HF_TOKEN or None,
+            trust_remote_code=True,
         )
         _siglip_model = AutoModel.from_pretrained(
             SIGLIP_MODEL_ID,
             dtype=torch.float16,  # dtype= replaces deprecated torch_dtype=
             token=HF_TOKEN or None,
+            trust_remote_code=True,
         )
         _siglip_model = _siglip_model.to("cuda")
         _siglip_model.eval()
