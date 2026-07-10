@@ -589,3 +589,149 @@ class Alert(models.Model):
         if resolution_notes:
             self.message = resolution_notes
         await self.asave(update_fields=['status', 'resolved_at', 'message'])
+
+
+class MetricRollup(models.Model):
+    """
+    Pre-aggregated metric rollups for fast dashboard queries.
+
+    Stores aggregated values for Metric data across time windows
+    (1m, 5m, 1h, 1d) to avoid expensive real-time aggregations.
+    """
+    WINDOW_CHOICES = [
+        ('1m', '1 Minute'),
+        ('5m', '5 Minutes'),
+        ('1h', '1 Hour'),
+        ('1d', '1 Day'),
+    ]
+
+    name = models.CharField(
+        max_length=255,
+        verbose_name='Metric Name',
+    )
+    metric_type = models.CharField(
+        max_length=20,
+        default='gauge',
+        verbose_name='Metric Type',
+    )
+    window = models.CharField(
+        max_length=5,
+        choices=WINDOW_CHOICES,
+        verbose_name='Aggregation Window',
+    )
+    timestamp = models.DateTimeField(
+        verbose_name='Window Start Timestamp',
+    )
+    avg = models.FloatField(
+        default=0,
+        verbose_name='Average Value',
+    )
+    min = models.FloatField(
+        default=0,
+        verbose_name='Minimum Value',
+    )
+    max = models.FloatField(
+        default=0,
+        verbose_name='Maximum Value',
+    )
+    count = models.PositiveIntegerField(
+        default=0,
+        verbose_name='Sample Count',
+    )
+    sum = models.FloatField(
+        default=0,
+        verbose_name='Sum of Values',
+    )
+
+    class Meta:
+        verbose_name = 'Metric Rollup'
+        verbose_name_plural = 'Metric Rollups'
+        ordering = ['-timestamp']
+        unique_together = ['name', 'metric_type', 'window', 'timestamp']
+        indexes = [
+            models.Index(fields=['name', 'window', 'timestamp']),
+            models.Index(fields=['window', 'timestamp']),
+        ]
+
+    def __str__(self):
+        return f"{self.name} [{self.window}]: avg={self.avg:.2f} count={self.count} ({self.timestamp})"
+
+    @classmethod
+    async def aget_rollup(cls, name, window, date_from=None, date_to=None, limit=100):
+        queryset = cls.objects.filter(name=name, window=window)
+        if date_from:
+            queryset = queryset.filter(timestamp__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(timestamp__lte=date_to)
+        return [r async for r in queryset.order_by('-timestamp')[:limit]]
+
+
+class PerformanceMetricRollup(models.Model):
+    """
+    Pre-aggregated performance metric rollups for fast dashboard queries.
+
+    Stores aggregated values for PerformanceMetric data across time windows
+    (1m, 5m, 1h, 1d) to avoid expensive real-time aggregations.
+    """
+    WINDOW_CHOICES = [
+        ('1m', '1 Minute'),
+        ('5m', '5 Minutes'),
+        ('1h', '1 Hour'),
+        ('1d', '1 Day'),
+    ]
+
+    endpoint = models.CharField(
+        max_length=255,
+        verbose_name='Endpoint Route',
+    )
+    method = models.CharField(
+        max_length=10,
+        default='GET',
+        verbose_name='HTTP Method',
+    )
+    window = models.CharField(
+        max_length=5,
+        choices=WINDOW_CHOICES,
+        verbose_name='Aggregation Window',
+    )
+    timestamp = models.DateTimeField(
+        verbose_name='Window Start Timestamp',
+    )
+    avg_response_time = models.FloatField(
+        default=0,
+        verbose_name='Average Response Time (ms)',
+    )
+    max_response_time = models.PositiveIntegerField(
+        default=0,
+        verbose_name='Max Response Time (ms)',
+    )
+    error_count = models.PositiveIntegerField(
+        default=0,
+        verbose_name='Error Count (non-2xx)',
+    )
+    total = models.PositiveIntegerField(
+        default=0,
+        verbose_name='Total Requests',
+    )
+
+    class Meta:
+        verbose_name = 'Performance Metric Rollup'
+        verbose_name_plural = 'Performance Metric Rollups'
+        ordering = ['-timestamp']
+        unique_together = ['endpoint', 'method', 'window', 'timestamp']
+        indexes = [
+            models.Index(fields=['endpoint', 'window', 'timestamp']),
+            models.Index(fields=['window', 'timestamp']),
+        ]
+
+    def __str__(self):
+        return f"{self.method} {self.endpoint} [{self.window}]: avg={self.avg_response_time:.2f}ms total={self.total} ({self.timestamp})"
+
+    @classmethod
+    async def aget_rollup(cls, endpoint, window, date_from=None, date_to=None, limit=100):
+        queryset = cls.objects.filter(endpoint=endpoint, window=window)
+        if date_from:
+            queryset = queryset.filter(timestamp__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(timestamp__lte=date_to)
+        return [r async for r in queryset.order_by('-timestamp')[:limit]]

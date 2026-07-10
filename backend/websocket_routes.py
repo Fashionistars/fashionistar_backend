@@ -6,8 +6,12 @@ from apps.chat.routing import websocket_urlpatterns as chat_websocket_urlpattern
 from apps.notification.routing import (
     websocket_urlpatterns as notification_websocket_urlpatterns,
 )
+from apps.analytics.routing import (
+    websocket_urlpatterns as analytics_websocket_urlpatterns,
+)
 
 websocket_urlpatterns = [
     *chat_websocket_urlpatterns,
     *notification_websocket_urlpatterns,
+    *analytics_websocket_urlpatterns,
 ]

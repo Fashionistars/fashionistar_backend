@@ -34,11 +34,74 @@ def _get_window_floor(interval_minutes: int) -> datetime:
     )
 
 
-async def _aggregate_metrics(window_start: datetime, window_end: datetime):
-    """Aggregate Metric and PerformanceMetric records within a window."""
-    from apps.analytics.models import Metric, PerformanceMetric
-    from django.db.models import Avg, Count, Q
+async def _aggregate_metrics(window_start: datetime, window_end: datetime, window_label: str = "1m"):
+    """Aggregate Metric and PerformanceMetric records within a window.
 
+    Persists results to MetricRollup and PerformanceMetricRollup models
+    for fast dashboard queries, in addition to caching.
+    """
+    from apps.analytics.models import Metric, PerformanceMetric, MetricRollup, PerformanceMetricRollup
+    from django.db.models import Avg, Count, Max, Min, Q, Sum
+
+    # Aggregate metrics by name
+    metric_groups = (
+        Metric.objects.filter(timestamp__gte=window_start, timestamp__lt=window_end)
+        .values("name", "metric_type")
+        .annotate(
+            avg_value=Avg("value"),
+            min_value=Min("value"),
+            max_value=Max("value"),
+            count=Count("id"),
+            sum_value=Sum("value"),
+        )
+    )
+
+    metric_rollups_created = 0
+    async for group in metric_groups:
+        await MetricRollup.objects.aupdate_or_create(
+            name=group["name"],
+            metric_type=group["metric_type"],
+            window=window_label,
+            timestamp=window_start,
+            defaults={
+                "avg": group["avg_value"] or 0,
+                "min": group["min_value"] or 0,
+                "max": group["max_value"] or 0,
+                "count": group["count"],
+                "sum": group["sum_value"] or 0,
+            },
+        )
+        metric_rollups_created += 1
+
+    # Aggregate performance metrics by endpoint + method
+    perf_groups = (
+        PerformanceMetric.objects.filter(timestamp__gte=window_start, timestamp__lt=window_end)
+        .values("endpoint", "method")
+        .annotate(
+            avg_response_time=Avg("response_time_ms"),
+            max_response_time=Max("response_time_ms"),
+            error_count=Count("id", filter=~Q(status_code__range=(200, 299))),
+            total=Count("id"),
+        )
+    )
+
+    perf_rollups_created = 0
+    async for group in perf_groups:
+        await PerformanceMetricRollup.objects.aupdate_or_create(
+            endpoint=group["endpoint"],
+            method=group["method"],
+            window=window_label,
+            timestamp=window_start,
+            defaults={
+                "avg_response_time": group["avg_response_time"] or 0,
+                "max_response_time": group["max_response_time"] or 0,
+                "error_count": group["error_count"],
+                "total": group["total"],
+            },
+        )
+        perf_rollups_created += 1
+
+    # Overall stats for cache
     metric_stats = await Metric.objects.filter(
         timestamp__gte=window_start, timestamp__lt=window_end
     ).aaggregate(count=Count('id'), avg_value=Avg('value'))
@@ -57,6 +120,8 @@ async def _aggregate_metrics(window_start: datetime, window_end: datetime):
         "request_count": perf_stats.get('count', 0),
         "avg_response_time_ms": perf_stats.get('avg_response_time') or 0,
         "error_count": perf_stats.get('error_count', 0),
+        "metric_rollups_created": metric_rollups_created,
+        "perf_rollups_created": perf_rollups_created,
         "window_start": window_start.isoformat(),
         "window_end": window_end.isoformat(),
     }
@@ -73,7 +138,7 @@ def _run_rollup(window: str, interval_minutes: int, ttl: int, window_format: str
             end = _get_window_floor(interval_minutes)
             start = end - timedelta(minutes=interval_minutes)
 
-        result = _run_async(_aggregate_metrics(start, end))
+        result = _run_async(_aggregate_metrics(start, end, window_label=window))
         cache_key = f"analytics:rollup:{window}:{end.strftime(window_format)}"
         cache.set(cache_key, json.dumps(result, default=str), timeout=ttl)
 

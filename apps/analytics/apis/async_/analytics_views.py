@@ -423,9 +423,21 @@ async def get_user_analytics(
     }
 
 
-@router.get('/realtime/')
+@router.get(
+    '/realtime/',
+    throttle=get_ninja_throttle(UserBurstThrottle, UserSustainedThrottle),
+)
 async def get_realtime_analytics(request: HttpRequest) -> dict:
-    """GET /api/v1/ninja/analytics/realtime/"""
+    """
+    Get real-time analytics snapshot (staff only).
+    Endpoint: GET /api/v1/ninja/analytics/realtime/
+
+    Returns the latest cached snapshot from Redis. If no snapshot
+    is available, returns 202 with a "computing" status and triggers
+    async generation via Celery.
+
+    WebSocket: Connect to ws://host/ws/analytics/realtime/ for live updates.
+    """
     user = request.auth
     if not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
         raise HttpError(403, "Staff access required.")
@@ -434,13 +446,108 @@ async def get_realtime_analytics(request: HttpRequest) -> dict:
     cached = cache.get(cache_key)
     if cached:
         try:
-            return json.loads(cached) if isinstance(cached, str) else cached
+            data = json.loads(cached) if isinstance(cached, str) else cached
+            data["websocket_url"] = "ws://host/ws/analytics/realtime/"
+            return data
         except Exception:
             pass
 
+    # Trigger async generation
+    from asgiref.sync import sync_to_async
+
+    @sync_to_async
+    def trigger():
+        from apps.analytics.tasks.analytics_tasks import run_realtime_analytics
+        run_realtime_analytics.delay()
+
+    await trigger()
+
     return {
         "generated_at": timezone.now().isoformat(),
-        "status": "realtime snapshot not yet generated",
+        "status": "computing",
+        "message": "Real-time snapshot is being generated. Try again in a few seconds.",
+        "websocket_url": "ws://host/ws/analytics/realtime/",
+    }
+
+
+@router.get(
+    '/rollups/',
+    throttle=get_ninja_throttle(UserBurstThrottle, UserSustainedThrottle),
+)
+async def get_metric_rollups(
+    request: HttpRequest,
+    metric_name: Optional[str] = None,
+    window: str = "1h",
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    limit: int = 100,
+) -> dict:
+    """
+    Get pre-aggregated metric rollups for fast dashboard queries (staff only).
+    Endpoint: GET /api/v1/ninja/analytics/rollups/?metric_name=order_created&window=1h
+
+    Queries MetricRollup table for pre-computed aggregations.
+    Falls back to raw Metric queries if no rollups exist.
+    """
+    user = request.auth
+    if not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
+        raise HttpError(403, "Staff access required.")
+
+    valid_windows = {"1m", "5m", "1h", "1d"}
+    if window not in valid_windows:
+        raise HttpError(400, f"Invalid window '{window}'. Allowed: {valid_windows}")
+
+    from apps.analytics.models import MetricRollup
+    from datetime import datetime as dt
+
+    dt_from = None
+    dt_to = None
+    if date_from:
+        try:
+            dt_from = dt.fromisoformat(date_from)
+        except ValueError:
+            raise HttpError(400, "Invalid date_from format. Use ISO format.")
+    if date_to:
+        try:
+            dt_to = dt.fromisoformat(date_to)
+        except ValueError:
+            raise HttpError(400, "Invalid date_to format. Use ISO format.")
+
+    if metric_name:
+        rollups = await MetricRollup.aget_rollup(
+            name=metric_name,
+            window=window,
+            date_from=dt_from,
+            date_to=dt_to,
+            limit=limit,
+        )
+    else:
+        queryset = MetricRollup.objects.filter(window=window)
+        if dt_from:
+            queryset = queryset.filter(timestamp__gte=dt_from)
+        if dt_to:
+            queryset = queryset.filter(timestamp__lte=dt_to)
+        rollups = [r async for r in queryset.order_by("-timestamp")[:limit]]
+
+    return {
+        "window": window,
+        "metric_name": metric_name,
+        "count": len(rollups),
+        "results": [
+            {
+                "id": r.id,
+                "name": r.name,
+                "metric_type": r.metric_type,
+                "window": r.window,
+                "timestamp": r.timestamp.isoformat(),
+                "avg": r.avg,
+                "min": r.min,
+                "max": r.max,
+                "count": r.count,
+                "sum": r.sum,
+            }
+            for r in rollups
+        ],
     }
 
 
