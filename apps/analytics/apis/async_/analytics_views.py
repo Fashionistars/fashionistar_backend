@@ -74,11 +74,14 @@ class BusinessMetricSchema(BaseModel):
 
 class AlertSchema(BaseModel):
     id: int
+    rule_id: int
     rule_name: str
     status: str
+    severity: str
     metric_value: float
     message: str
     fired_at: str
+    resolved_at: Optional[str] = None
 
 
 class DashboardResponse(BaseModel):
@@ -410,15 +413,22 @@ async def get_metrics(
     request: HttpRequest,
     metric_name: Optional[str] = None,
     metric_type: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
     limit: int = 100,
 ):
     """
     Get analytics metrics (async).
     Endpoint: GET /api/v1/ninja/analytics/metrics/
     """
+    date_from_dt = parse_datetime(date_from) if date_from else None
+    date_to_dt = parse_datetime(date_to) if date_to else None
+
     metrics = await aget_metrics(
         metric_name=metric_name,
         metric_type=metric_type,
+        date_from=date_from_dt,
+        date_to=date_to_dt,
         limit=limit,
     )
 
@@ -464,6 +474,13 @@ async def create_metric(request: HttpRequest, payload: CreateMetricRequest):
         value=payload.value,
         tags=tags,
     )
+    AnalyticsAuditService.log_metric_recorded(
+        actor=request.auth,
+        metric_name=payload.name,
+        metric_type=payload.metric_type,
+        value=payload.value,
+        request=request,
+    )
 
     return MetricCreatedResponse(
         id=metric.id,
@@ -478,6 +495,8 @@ async def create_metric(request: HttpRequest, payload: CreateMetricRequest):
 async def get_performance_metrics(
     request: HttpRequest,
     endpoint: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
     hours: int = 24,
     limit: int = 100,
 ):
@@ -485,10 +504,13 @@ async def get_performance_metrics(
     Get performance metrics (async).
     Endpoint: GET /api/v1/ninja/analytics/performance/
     """
-    date_from = timezone.now() - timedelta(hours=hours)
+    date_from_dt = parse_datetime(date_from) if date_from else timezone.now() - timedelta(hours=hours)
+    date_to_dt = parse_datetime(date_to) if date_to else None
+
     metrics = await aget_performance_metrics(
         endpoint=endpoint,
-        date_from=date_from,
+        date_from=date_from_dt,
+        date_to=date_to_dt,
         limit=limit,
     )
 
@@ -508,17 +530,24 @@ async def get_performance_metrics(
 @router.get('/user-activity/', response=List[UserActivitySchema])
 async def get_user_activity(
     request: HttpRequest,
-    user_id: Optional[int] = None,
+    user_id: Optional[str] = None,
     action: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
     limit: int = 100,
 ):
     """
     Get user activity events (async).
     Endpoint: GET /api/v1/ninja/analytics/user-activity/
     """
+    date_from_dt = parse_datetime(date_from) if date_from else None
+    date_to_dt = parse_datetime(date_to) if date_to else None
+
     activities = await aget_user_activity(
-        user_id=str(user_id) if user_id else None,
+        user_id=user_id,
         action=action,
+        date_from=date_from_dt,
+        date_to=date_to_dt,
         limit=limit,
     )
 
@@ -538,6 +567,8 @@ async def get_user_activity(
 async def get_business_metrics(
     request: HttpRequest,
     metric_name: Optional[str] = None,
+    period_start: Optional[str] = None,
+    period_end: Optional[str] = None,
     days: int = 30,
     limit: int = 100,
 ):
@@ -545,10 +576,13 @@ async def get_business_metrics(
     Get business metrics (async).
     Endpoint: GET /api/v1/ninja/analytics/business-metrics/
     """
-    date_from = timezone.now() - timedelta(days=days)
+    period_start_dt = parse_datetime(period_start) if period_start else timezone.now() - timedelta(days=days)
+    period_end_dt = parse_datetime(period_end) if period_end else None
+
     metrics = await aget_business_metrics(
         metric_name=metric_name,
-        period_start=date_from,
+        period_start=period_start_dt,
+        period_end=period_end_dt,
         limit=limit,
     )
     
@@ -587,6 +621,13 @@ async def create_business_metric(
         metric_type="business",
         name=payload.metric_name,
     )
+    AnalyticsAuditService.log_business_metric_updated(
+        actor=request.auth,
+        metric_name=payload.metric_name,
+        value=payload.value,
+        period=f"{metric.period_start.isoformat()} - {metric.period_end.isoformat()}",
+        request=request,
+    )
 
     return BusinessMetricCreatedResponse(
         id=metric.id,
@@ -610,15 +651,18 @@ async def get_alerts(
     Endpoint: GET /api/v1/ninja/analytics/alerts/
     """
     alerts = await aget_alerts(status=status, severity=severity, limit=limit)
-    
+
     return [
         AlertSchema(
             id=a.id,
+            rule_id=a.rule.id,
             rule_name=a.rule.name,
             status=a.status,
+            severity=a.rule.severity,
             metric_value=a.metric_value,
             message=a.message,
             fired_at=a.fired_at.isoformat(),
+            resolved_at=a.resolved_at.isoformat() if a.resolved_at else None,
         )
         for a in alerts
     ]
@@ -638,6 +682,13 @@ async def resolve_alert(
 
     alert = await sync_to_async(get_object_or_404)(Alert, id=alert_id)
     await alert.aresolve(resolution_notes=payload.resolution_notes)
+
+    AnalyticsAuditService.log_alert_resolved(
+        actor=request.auth,
+        alert_id=alert.id,
+        resolution_notes=payload.resolution_notes or 'Alert resolved',
+        request=request,
+    )
 
     return AlertResolvedResponse(
         id=alert.id,
