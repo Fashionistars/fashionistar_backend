@@ -58,3 +58,33 @@ def mock_report():
         "anomalies": [],
         "llm_insights": "",
     }
+
+
+@pytest.fixture
+def alert_firing(db):
+    """Return a firing Alert instance for resolution tests."""
+    from apps.analytics.models import Alert, AlertRule
+    from django.contrib.auth import get_user_model
+    from django.utils import timezone
+
+    User = get_user_model()
+    user = User.objects.create_user(
+        email="alertuser@analytics.test", password="testpass123", is_active=True
+    )
+    rule = AlertRule.objects.create(
+        name="Test Rule",
+        metric_name="response_time",
+        threshold=100.0,
+        operator=">",
+        severity="warning",
+        is_active=True,
+    )
+    alert = Alert.objects.create(
+        rule=rule,
+        user=user,
+        status="firing",
+        metric_value=200.0,
+        message="Threshold exceeded",
+        fired_at=timezone.now(),
+    )
+    return alert

@@ -16,96 +16,203 @@ from apps.analytics.models import Metric, UserActivity, PerformanceMetric, Busin
 # Sync Selectors (Thin wrappers for backward compatibility)
 # ============================================================================
 
-def get_metrics(name: str = None, metric_type: str = None, limit: int = 100) -> List[Metric]:
-    """Get metrics with optional name/type filtering (sync)."""
+def get_metrics(
+    metric_name: str = None,
+    metric_type: str = None,
+    date_from=None,
+    date_to=None,
+    limit: int = 100,
+) -> List[Metric]:
+    """Get metrics with optional name/type/date filtering (sync)."""
     queryset = Metric.objects.all()
-    if name:
-        queryset = queryset.filter(name=name)
+    if metric_name:
+        queryset = queryset.filter(name=metric_name)
     if metric_type:
         queryset = queryset.filter(metric_type=metric_type)
+    if date_from:
+        queryset = queryset.filter(timestamp__gte=date_from)
+    if date_to:
+        queryset = queryset.filter(timestamp__lte=date_to)
     return list(queryset.order_by('-timestamp')[:limit])
 
 
-def get_user_activity(user_id: str, limit: int = 100) -> List[UserActivity]:
-    """Get user activity for a specific user (sync)."""
-    return list(UserActivity.objects.filter(user_id=user_id).order_by('-timestamp')[:limit])
+def get_user_activity(
+    user_id: str = None,
+    action: str = None,
+    date_from=None,
+    date_to=None,
+    limit: int = 100,
+) -> List[UserActivity]:
+    """Get user activity with optional user/action/date filtering (sync)."""
+    queryset = UserActivity.objects.all()
+    if user_id:
+        queryset = queryset.filter(user_id=user_id)
+    if action:
+        queryset = queryset.filter(action=action)
+    if date_from:
+        queryset = queryset.filter(timestamp__gte=date_from)
+    if date_to:
+        queryset = queryset.filter(timestamp__lte=date_to)
+    return list(queryset.order_by('-timestamp')[:limit])
 
 
-def get_performance_metrics(hours: int = 24, limit: int = 100) -> List[PerformanceMetric]:
-    """Get recent performance metrics (sync)."""
-    since = timezone.now() - timedelta(hours=hours)
-    return list(PerformanceMetric.objects.filter(timestamp__gte=since).order_by('-timestamp')[:limit])
+def get_performance_metrics(
+    endpoint: str = None,
+    date_from=None,
+    date_to=None,
+    limit: int = 100,
+) -> List[PerformanceMetric]:
+    """Get performance metrics with optional endpoint/date filtering (sync)."""
+    queryset = PerformanceMetric.objects.all()
+    if endpoint:
+        queryset = queryset.filter(endpoint=endpoint)
+    if date_from:
+        queryset = queryset.filter(timestamp__gte=date_from)
+    if date_to:
+        queryset = queryset.filter(timestamp__lte=date_to)
+    return list(queryset.order_by('-timestamp')[:limit])
 
 
-def get_business_metrics(metric_name: str = None, days: int = 30, limit: int = 100) -> List[BusinessMetric]:
-    """Get recent business metrics (sync)."""
+def get_business_metrics(
+    metric_name: str = None,
+    period_start=None,
+    period_end=None,
+    limit: int = 100,
+) -> List[BusinessMetric]:
+    """Get business metrics with optional name/period filtering (sync)."""
     queryset = BusinessMetric.objects.all()
     if metric_name:
         queryset = queryset.filter(metric_name=metric_name)
-    since = timezone.now() - timedelta(days=days)
-    queryset = queryset.filter(created_at__gte=since)
-    return list(queryset.order_by('-created_at')[:limit])
+    if period_start:
+        queryset = queryset.filter(period_start__gte=period_start)
+    if period_end:
+        queryset = queryset.filter(period_end__lte=period_end)
+    return list(queryset.order_by('-period_start')[:limit])
 
 
-def get_alerts(status: str = 'firing', limit: int = 100) -> List[Alert]:
-    """Get alerts by status (sync). Defaults to firing alerts."""
-    return list(Alert.objects.filter(status=status).order_by('-fired_at')[:limit])
+def get_alerts(
+    status: str = None, severity: str = None, limit: int = 50
+) -> List[Alert]:
+    """Get alerts by status/severity (sync)."""
+    queryset = Alert.objects.all()
+    if status:
+        queryset = queryset.filter(status=status)
+    if severity:
+        queryset = queryset.filter(rule__severity=severity)
+    return list(queryset.order_by('-fired_at')[:limit])
 
 
 # ============================================================================
 # Async Selectors (Native Django 6.0 async ORM)
 # ============================================================================
 
-async def aget_metrics(name: str = None, metric_type: str = None, limit: int = 100) -> List[Metric]:
-    """Get metrics with optional name/type filtering (async)."""
-    if name:
-        return await Metric.aget_by_name(name, limit=limit)
+async def aget_metrics(
+    metric_name: str = None,
+    metric_type: str = None,
+    date_from=None,
+    date_to=None,
+    limit: int = 100,
+) -> List[Metric]:
+    """Get metrics with optional name/type/date filtering (async)."""
+    queryset = Metric.objects.all()
+    if metric_name:
+        queryset = queryset.filter(name=metric_name)
     if metric_type:
-        return await Metric.aget_by_type(metric_type, limit=limit)
-    return await Metric.aget_latest(limit)
+        queryset = queryset.filter(metric_type=metric_type)
+    if date_from:
+        queryset = queryset.filter(timestamp__gte=date_from)
+    if date_to:
+        queryset = queryset.filter(timestamp__lte=date_to)
+    return [m async for m in queryset.order_by('-timestamp')[:limit]]
 
 
-async def aget_user_activity(user_id: str, limit: int = 100) -> List[UserActivity]:
-    """Get user activity for a specific user (async)."""
-    return await UserActivity.aget_by_user(user_id, limit=limit)
+async def aget_user_activity(
+    user_id: str = None,
+    action: str = None,
+    date_from=None,
+    date_to=None,
+    limit: int = 100,
+) -> List[UserActivity]:
+    """Get user activity with optional user/action/date filtering (async)."""
+    queryset = UserActivity.objects.all()
+    if user_id:
+        queryset = queryset.filter(user_id=user_id)
+    if action:
+        queryset = queryset.filter(action=action)
+    if date_from:
+        queryset = queryset.filter(timestamp__gte=date_from)
+    if date_to:
+        queryset = queryset.filter(timestamp__lte=date_to)
+    return [a async for a in queryset.order_by('-timestamp')[:limit]]
 
 
-async def aget_performance_metrics(hours: int = 24, limit: int = 100) -> List[PerformanceMetric]:
-    """Get recent performance metrics (async)."""
-    return await PerformanceMetric.aget_recent_metrics(hours=hours, limit=limit)
+async def aget_performance_metrics(
+    endpoint: str = None,
+    date_from=None,
+    date_to=None,
+    limit: int = 100,
+) -> List[PerformanceMetric]:
+    """Get performance metrics with optional endpoint/date filtering (async)."""
+    queryset = PerformanceMetric.objects.all()
+    if endpoint:
+        queryset = queryset.filter(endpoint=endpoint)
+    if date_from:
+        queryset = queryset.filter(timestamp__gte=date_from)
+    if date_to:
+        queryset = queryset.filter(timestamp__lte=date_to)
+    return [p async for p in queryset.order_by('-timestamp')[:limit]]
 
 
 async def aget_business_metrics(
-    metric_name: str = None, days: int = 30, limit: int = 100
+    metric_name: str = None,
+    period_start=None,
+    period_end=None,
+    limit: int = 100,
 ) -> List[BusinessMetric]:
-    """Get recent business metrics (async)."""
-    return await BusinessMetric.aget_recent_metrics(days=days, limit=limit)
+    """Get business metrics with optional name/period filtering (async)."""
+    queryset = BusinessMetric.objects.all()
+    if metric_name:
+        queryset = queryset.filter(metric_name=metric_name)
+    if period_start:
+        queryset = queryset.filter(period_start__gte=period_start)
+    if period_end:
+        queryset = queryset.filter(period_end__lte=period_end)
+    return [b async for b in queryset.order_by('-period_start')[:limit]]
 
 
-async def aget_alerts(status: str = 'firing', limit: int = 100) -> List[Alert]:
-    """Get alerts by status (async). Defaults to firing alerts."""
-    if status == 'firing':
-        return await Alert.aget_firing_alerts(limit)
-    return await Alert.aget_by_status(status, limit)
+async def aget_alerts(
+    status: str = None, severity: str = None, limit: int = 50
+) -> List[Alert]:
+    """Get alerts by status/severity (async)."""
+    queryset = Alert.objects.all()
+    if status:
+        queryset = queryset.filter(status=status)
+    if severity:
+        queryset = queryset.filter(rule__severity=severity)
+    return [a async for a in queryset.order_by('-fired_at')[:limit]]
 
 
 # ============================================================================
 # Parallel Loading Selectors
 # ============================================================================
 
-async def aget_analytics_dashboard_parallel(user_id: Optional[str] = None) -> Dict[str, Any]:
+async def aget_analytics_dashboard_parallel(
+    user_id: Optional[str] = None,
+    date_from=None,
+    date_to=None,
+) -> Dict[str, Any]:
     """
     Get analytics dashboard data in parallel using asyncio.gather.
     This is the primary async dashboard data fetcher.
     """
     tasks = [
-        aget_performance_metrics(hours=24, limit=50),
-        aget_business_metrics(days=7, limit=50),
+        aget_performance_metrics(date_from=date_from, date_to=date_to, limit=50),
+        aget_business_metrics(period_start=date_from, period_end=date_to, limit=50),
         aget_alerts(status='firing', limit=10),
     ]
 
     if user_id:
-        tasks.append(aget_user_activity(user_id, limit=50))
+        tasks.append(aget_user_activity(user_id=user_id, date_from=date_from, date_to=date_to, limit=50))
 
     results = await asyncio.gather(*tasks, return_exceptions=True)
 

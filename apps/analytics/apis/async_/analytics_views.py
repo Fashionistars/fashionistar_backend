@@ -8,8 +8,11 @@ import json
 from datetime import timedelta
 from typing import List, Optional
 
+from asgiref.sync import sync_to_async
 from django.core.cache import cache
 from django.http import HttpRequest
+from django.shortcuts import get_object_or_404
+from django.utils.dateparse import parse_datetime
 from django.utils import timezone
 from ninja import Router
 from ninja.errors import HttpError
@@ -403,19 +406,22 @@ async def get_realtime_analytics(request: HttpRequest) -> dict:
 
 
 @router.get('/metrics/', response=List[MetricSchema])
-async def get_metrics(request: HttpRequest, name: Optional[str] = None, limit: int = 100):
+async def get_metrics(
+    request: HttpRequest,
+    metric_name: Optional[str] = None,
+    metric_type: Optional[str] = None,
+    limit: int = 100,
+):
     """
     Get analytics metrics (async).
     Endpoint: GET /api/v1/ninja/analytics/metrics/
     """
-    if name:
-        metrics = await aget_metrics(name=name, limit=limit)
-    else:
-        from apps.analytics.models import Metric
-        from datetime import timedelta
-        since = timezone.now() - timedelta(hours=24)
-        metrics = await Metric.aget_recent_metrics(hours=24, limit=limit)
-    
+    metrics = await aget_metrics(
+        metric_name=metric_name,
+        metric_type=metric_type,
+        limit=limit,
+    )
+
     return [
         MetricSchema(
             id=m.id,
@@ -429,14 +435,63 @@ async def get_metrics(request: HttpRequest, name: Optional[str] = None, limit: i
     ]
 
 
+@router.post('/metrics/', response=MetricCreatedResponse)
+async def create_metric(request: HttpRequest, payload: CreateMetricRequest):
+    """
+    Record a new analytics metric.
+    Endpoint: POST /api/v1/ninja/analytics/metrics/
+    """
+    from apps.analytics.models import Metric
+    from apps.analytics.services.realtime_service import publish_analytics_event
+    from apps.analytics.services.metrics_service import get_metrics_service
+
+    tags = payload.tags or {}
+    metric = await Metric.objects.acreate(
+        name=payload.name,
+        metric_type=payload.metric_type,
+        value=payload.value,
+        tags=tags,
+    )
+
+    get_metrics_service().record_metric_ingested(
+        metric_type=payload.metric_type,
+        name=payload.name,
+    )
+    publish_analytics_event(
+        event_type="metric_recorded",
+        metric_name=payload.name,
+        metric_type=payload.metric_type,
+        value=payload.value,
+        tags=tags,
+    )
+
+    return MetricCreatedResponse(
+        id=metric.id,
+        name=metric.name,
+        metric_type=metric.metric_type,
+        value=metric.value,
+        timestamp=metric.timestamp.isoformat(),
+    )
+
+
 @router.get('/performance/', response=List[PerformanceMetricSchema])
-async def get_performance_metrics(request: HttpRequest, hours: int = 24, limit: int = 100):
+async def get_performance_metrics(
+    request: HttpRequest,
+    endpoint: Optional[str] = None,
+    hours: int = 24,
+    limit: int = 100,
+):
     """
     Get performance metrics (async).
     Endpoint: GET /api/v1/ninja/analytics/performance/
     """
-    metrics = await aget_performance_metrics(hours, limit)
-    
+    date_from = timezone.now() - timedelta(hours=hours)
+    metrics = await aget_performance_metrics(
+        endpoint=endpoint,
+        date_from=date_from,
+        limit=limit,
+    )
+
     return [
         PerformanceMetricSchema(
             id=m.id,
@@ -447,6 +502,39 @@ async def get_performance_metrics(request: HttpRequest, hours: int = 24, limit: 
             timestamp=m.timestamp.isoformat(),
         )
         for m in metrics
+    ]
+
+
+@router.get('/user-activity/', response=List[UserActivitySchema])
+async def get_user_activity(
+    request: HttpRequest,
+    user_id: Optional[int] = None,
+    action: Optional[str] = None,
+    limit: int = 100,
+):
+    """
+    Get user activity events (async).
+    Endpoint: GET /api/v1/ninja/analytics/user-activity/
+    """
+    from apps.analytics.models import UserActivity
+
+    queryset = UserActivity.objects.all()
+    if user_id:
+        queryset = queryset.filter(user_id=user_id)
+    if action:
+        queryset = queryset.filter(action=action)
+
+    activities = [a async for a in queryset.order_by('-timestamp')[:limit]]
+
+    return [
+        UserActivitySchema(
+            id=a.id,
+            action=a.action,
+            resource=a.resource,
+            resource_id=a.resource_id,
+            timestamp=a.timestamp.isoformat(),
+        )
+        for a in activities
     ]
 
 
@@ -469,6 +557,39 @@ async def get_business_metrics(request: HttpRequest, days: int = 30, limit: int 
         )
         for m in metrics
     ]
+
+
+@router.post('/business-metrics/', response=BusinessMetricCreatedResponse)
+async def create_business_metric(
+    request: HttpRequest, payload: CreateBusinessMetricRequest
+):
+    """
+    Record a new business metric.
+    Endpoint: POST /api/v1/ninja/analytics/business-metrics/
+    """
+    from apps.analytics.models import BusinessMetric
+    from apps.analytics.services.metrics_service import get_metrics_service
+
+    metric = await BusinessMetric.objects.acreate(
+        metric_name=payload.metric_name,
+        value=payload.value,
+        period_start=parse_datetime(payload.period_start) or timezone.now(),
+        period_end=parse_datetime(payload.period_end) or timezone.now(),
+    )
+
+    get_metrics_service().record_metric_ingested(
+        metric_type="business",
+        name=payload.metric_name,
+    )
+
+    return BusinessMetricCreatedResponse(
+        id=metric.id,
+        metric_name=metric.metric_name,
+        value=metric.value,
+        period_start=metric.period_start.isoformat(),
+        period_end=metric.period_end.isoformat(),
+        created_at=metric.created_at.isoformat(),
+    )
 
 
 @router.get('/alerts/', response=List[AlertSchema])
@@ -496,7 +617,30 @@ async def get_alerts(request: HttpRequest, status: Optional[str] = None, limit: 
     ]
 
 
-@router.get('/health/', response=HealthCheckResponse)
+@router.post('/alerts/{int:alert_id}/resolve/', response=AlertResolvedResponse)
+async def resolve_alert(
+    request: HttpRequest,
+    alert_id: int,
+    payload: ResolveAlertRequest,
+):
+    """
+    Resolve a firing analytics alert.
+    Endpoint: POST /api/v1/ninja/analytics/alerts/{id}/resolve/
+    """
+    from apps.analytics.models import Alert
+
+    alert = await sync_to_async(get_object_or_404)(Alert, id=alert_id)
+    await alert.aresolve(resolution_notes=payload.resolution_notes)
+
+    return AlertResolvedResponse(
+        id=alert.id,
+        status=alert.status,
+        resolved_at=alert.resolved_at.isoformat(),
+        message=alert.message,
+    )
+
+
+@router.get('/health/', response=HealthCheckResponse, auth=None)
 async def get_analytics_health(request: HttpRequest):
     """
     Get analytics service health check (async).
@@ -508,7 +652,7 @@ async def get_analytics_health(request: HttpRequest):
     return HealthCheckResponse(**health)
 
 
-@router.get('/metrics/export/')
+@router.get('/metrics/export/', auth=None)
 def get_analytics_metrics_export(request: HttpRequest):
     """
     Export analytics metrics in Prometheus text format.
