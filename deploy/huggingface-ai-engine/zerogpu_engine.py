@@ -142,11 +142,10 @@ def _load_siglip() -> bool:
         _siglip_model = AutoModel.from_pretrained(
             SIGLIP_MODEL_ID,
             dtype=torch.float16,  # dtype= replaces deprecated torch_dtype=
-            low_cpu_mem_usage=False,
+            device_map="cuda",
             token=HF_TOKEN or None,
             trust_remote_code=True,
         )
-        _siglip_model = _siglip_model.to("cuda")
         _siglip_model.eval()
         logger.info("✅ %s loaded on CUDA", SIGLIP_MODEL_ID)
         return True
