@@ -265,6 +265,57 @@ def run_realtime_analytics(self) -> dict:
 
 
 @shared_task(
+    name="apps.analytics.tasks.analytics_tasks.cleanup_expired_data",
+    queue="analytics",
+    soft_time_limit=300,
+    time_limit=360,
+    ignore_result=False,
+)
+def cleanup_expired_data() -> dict:
+    """
+    Delete analytics records older than their configured retention period.
+
+    Uses per-model retention days from ANALYTICS_SETTINGS['DATA_RETENTION']:
+      - Metric:              METRICS_DAYS (default 30)
+      - UserActivity:        USER_ACTIVITY_DAYS (default 90)
+      - PerformanceMetric:   PERFORMANCE_METRICS_DAYS (default 30)
+      - BusinessMetric:      BUSINESS_METRICS_DAYS (default 365)
+      - Alert:               ALERTS_DAYS (default 90)
+
+    Returns:
+        dict: Summary of deleted counts per model.
+    """
+    from datetime import timedelta
+    from django.utils import timezone
+    from apps.analytics.models import Metric, UserActivity, PerformanceMetric, BusinessMetric, Alert
+    from apps.analytics.settings import ANALYTICS_SETTINGS
+
+    retention = ANALYTICS_SETTINGS["DATA_RETENTION"]
+    now = timezone.now()
+    results = {}
+
+    model_configs = [
+        ("metrics", Metric, retention["METRICS_DAYS"], "timestamp"),
+        ("user_activity", UserActivity, retention["USER_ACTIVITY_DAYS"], "timestamp"),
+        ("performance_metrics", PerformanceMetric, retention["PERFORMANCE_METRICS_DAYS"], "timestamp"),
+        ("business_metrics", BusinessMetric, retention["BUSINESS_METRICS_DAYS"], "period_end"),
+        ("alerts", Alert, retention["ALERTS_DAYS"], "fired_at"),
+    ]
+
+    for label, model, days, field in model_configs:
+        cutoff = now - timedelta(days=days)
+        try:
+            deleted, _ = model.objects.filter(**{f"{field}__lt": cutoff}).delete()
+            results[label] = {"deleted": deleted, "cutoff": cutoff.isoformat(), "retention_days": days}
+            logger.info("[cleanup_expired_data] %s: deleted %d records older than %s", label, deleted, cutoff.isoformat())
+        except Exception as exc:
+            logger.error("[cleanup_expired_data] %s failed: %s", label, exc)
+            results[label] = {"error": str(exc)}
+
+    return {"status": "success", "results": results}
+
+
+@shared_task(
     name="apps.analytics.tasks.analytics_tasks.generate_daily_report",
     queue="analytics",
     soft_time_limit=900,    # 15 minutes

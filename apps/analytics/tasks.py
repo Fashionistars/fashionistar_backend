@@ -105,33 +105,36 @@ def calculate_daily_metrics():
 @shared_task
 def cleanup_old_metrics():
     """
-    پاک‌سازی متریک‌های قدیمی
+    پاک‌سازی متریک‌های قدیمی بر اساس سیاست نگهداری داده
     """
     try:
-        from .models import Metric, UserActivity, PerformanceMetric
-        
-        # پاک‌سازی داده‌های قدیمی‌تر از 30 روز
-        cutoff_date = timezone.now() - timedelta(days=30)
-        
-        # حذف متریک‌های قدیمی
-        deleted_metrics = Metric.objects.filter(timestamp__lt=cutoff_date).delete()
-        
-        # حذف فعالیت‌های قدیمی
-        deleted_activities = UserActivity.objects.filter(timestamp__lt=cutoff_date).delete()
-        
-        # حذف متریک‌های عملکرد قدیمی
-        deleted_performance = PerformanceMetric.objects.filter(timestamp__lt=cutoff_date).delete()
-        
-        logger.info(f"پاک‌سازی داده‌های قدیمی کامل شد. حذف شده: {deleted_metrics[0]} متریک، {deleted_activities[0]} فعالیت، {deleted_performance[0]} متریک عملکرد")
-        
+        from .models import Metric, UserActivity, PerformanceMetric, BusinessMetric, Alert
+        from .settings import ANALYTICS_SETTINGS
+
+        retention = ANALYTICS_SETTINGS['DATA_RETENTION']
+        now = timezone.now()
+        results = {}
+
+        model_configs = [
+            ('metrics', Metric, retention['METRICS_DAYS'], 'timestamp'),
+            ('user_activity', UserActivity, retention['USER_ACTIVITY_DAYS'], 'timestamp'),
+            ('performance_metrics', PerformanceMetric, retention['PERFORMANCE_METRICS_DAYS'], 'timestamp'),
+            ('business_metrics', BusinessMetric, retention['BUSINESS_METRICS_DAYS'], 'period_end'),
+            ('alerts', Alert, retention['ALERTS_DAYS'], 'fired_at'),
+        ]
+
+        for label, model, days, field in model_configs:
+            cutoff_date = now - timedelta(days=days)
+            deleted = model.objects.filter(**{f'{field}__lt': cutoff_date}).delete()
+            results[label] = {'deleted': deleted[0], 'retention_days': days}
+
+        logger.info(f"پاک‌سازی داده‌های قدیمی کامل شد: {results}")
+
         return {
             'status': 'success',
-            'cutoff_date': cutoff_date.isoformat(),
-            'deleted_metrics': deleted_metrics[0],
-            'deleted_activities': deleted_activities[0],
-            'deleted_performance_metrics': deleted_performance[0]
+            'results': results,
         }
-        
+
     except Exception as e:
         logger.error(f"خطا در پاک‌سازی داده‌های قدیمی: {str(e)}")
         return {

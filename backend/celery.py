@@ -314,6 +314,7 @@ app.conf.task_routes = {
     "apps.analytics.tasks.analytics_tasks.run_vendor_analytics":               {"queue": "analytics"},
     "apps.analytics.tasks.analytics_tasks.run_realtime_analytics":             {"queue": "analytics"},
     "apps.analytics.tasks.analytics_tasks.generate_daily_report":              {"queue": "analytics"},
+    "apps.analytics.tasks.analytics_tasks.cleanup_expired_data":               {"queue": "analytics"},
     # Analytics aggregation rollups
     "apps.analytics.tasks.aggregation_tasks.rollup_1m":                        {"queue": "analytics"},
     "apps.analytics.tasks.aggregation_tasks.rollup_5m":                        {"queue": "analytics"},
@@ -443,6 +444,14 @@ app.conf.beat_schedule = {
         "task":    "apps.ai.tasks.ingestion_tasks.refresh_trending_cache",
         "schedule": crontab(minute=0),   # Every hour on the hour
         "options": {"queue": "ai_ingestion"},
+    },
+
+    # Analytics data-retention cleanup — daily at 03:00 UTC (after daily report at 02:30)
+    # Purges expired analytics records per model based on ANALYTICS_SETTINGS['DATA_RETENTION']
+    "analytics-data-retention-cleanup": {
+        "task":     "apps.analytics.tasks.analytics_tasks.cleanup_expired_data",
+        "schedule": crontab(hour=3, minute=0),
+        "options":  {"queue": "analytics"},
     },
 
     # Weekly DBChangeEvent cleanup — Monday 04:00 UTC (30-day retention)
