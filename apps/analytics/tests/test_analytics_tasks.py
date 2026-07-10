@@ -140,7 +140,9 @@ def test_rollup_1m_caches_result():
     from django.core.cache import cache
     from django.utils import timezone
 
-    with patch("apps.analytics.tasks.aggregation_tasks._run_async") as mock_run:
+    with patch("apps.analytics.tasks.aggregation_tasks._run_async") as mock_run, patch(
+        "apps.analytics.tasks.aggregation_tasks.AnalyticsAuditService.log_metric_aggregation_executed"
+    ):
         mock_run.return_value = {
             "metric_count": 5,
             "request_count": 10,
@@ -160,7 +162,9 @@ def test_rollup_5m_caches_result():
     from django.core.cache import cache
     from django.utils import timezone
 
-    with patch("apps.analytics.tasks.aggregation_tasks._run_async") as mock_run:
+    with patch("apps.analytics.tasks.aggregation_tasks._run_async") as mock_run, patch(
+        "apps.analytics.tasks.aggregation_tasks.AnalyticsAuditService.log_metric_aggregation_executed"
+    ):
         mock_run.return_value = {
             "metric_count": 3,
             "request_count": 7,
@@ -180,7 +184,9 @@ def test_rollup_1h_caches_result():
     from django.core.cache import cache
     from django.utils import timezone
 
-    with patch("apps.analytics.tasks.aggregation_tasks._run_async") as mock_run:
+    with patch("apps.analytics.tasks.aggregation_tasks._run_async") as mock_run, patch(
+        "apps.analytics.tasks.aggregation_tasks.AnalyticsAuditService.log_metric_aggregation_executed"
+    ):
         mock_run.return_value = {
             "metric_count": 50,
             "request_count": 120,
@@ -200,7 +206,9 @@ def test_rollup_1d_caches_result():
     from django.core.cache import cache
     from django.utils import timezone
 
-    with patch("apps.analytics.tasks.aggregation_tasks._run_async") as mock_run:
+    with patch("apps.analytics.tasks.aggregation_tasks._run_async") as mock_run, patch(
+        "apps.analytics.tasks.aggregation_tasks.AnalyticsAuditService.log_metric_aggregation_executed"
+    ):
         mock_run.return_value = {
             "metric_count": 500,
             "request_count": 1000,

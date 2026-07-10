@@ -16,7 +16,12 @@ from celery import shared_task
 from django.core.cache import cache
 from django.utils import timezone
 
+from apps.analytics.services.metrics_service import get_metrics_service
+from apps.audit_logs.services.analytics.analytics_audit import AnalyticsAuditService
+from apps.analytics.services.sentry_service import AnalyticsSentryService
+
 logger = logging.getLogger(__name__)
+metrics_service = get_metrics_service()
 
 
 def _get_window_floor(interval_minutes: int) -> datetime:
@@ -57,6 +62,38 @@ async def _aggregate_metrics(window_start: datetime, window_end: datetime):
     }
 
 
+def _run_rollup(window: str, interval_minutes: int, ttl: int, window_format: str) -> None:
+    """Shared helper for a single rollup task."""
+    logger.info("[rollup_%s] Starting aggregation", window)
+    try:
+        if window == "1d":
+            end = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            start = end - timedelta(days=1)
+        else:
+            end = _get_window_floor(interval_minutes)
+            start = end - timedelta(minutes=interval_minutes)
+
+        result = _run_async(_aggregate_metrics(start, end))
+        cache_key = f"analytics:rollup:{window}:{end.strftime(window_format)}"
+        cache.set(cache_key, json.dumps(result, default=str), timeout=ttl)
+
+        metrics_service.record_aggregation(window=window)
+        AnalyticsAuditService.log_metric_aggregation_executed(
+            actor=None,
+            aggregation_window=window,
+            record_count=result.get("metric_count", 0) + result.get("request_count", 0),
+        )
+        logger.info("[rollup_%s] Cached %s", window, cache_key)
+    except Exception as exc:
+        logger.exception("[rollup_%s] failed: %s", window, exc)
+        metrics_service.record_error(source=f"rollup_{window}")
+        AnalyticsSentryService.capture_exception(
+            exception=exc,
+            context={"task": f"rollup_{window}"},
+            tags={"domain": "analytics", "task": f"rollup_{window}"},
+        )
+
+
 @shared_task(
     name="apps.analytics.tasks.aggregation_tasks.rollup_1m",
     queue="analytics",
@@ -64,16 +101,7 @@ async def _aggregate_metrics(window_start: datetime, window_end: datetime):
 )
 def rollup_1m() -> None:
     """Roll up analytics metrics for the last completed minute."""
-    logger.info("[rollup_1m] Starting 1-minute aggregation")
-    try:
-        end = _get_window_floor(1)
-        start = end - timedelta(minutes=1)
-        result = _run_async(_aggregate_metrics(start, end))
-        cache_key = f"analytics:rollup:1m:{end.strftime('%Y%m%d%H%M')}"
-        cache.set(cache_key, json.dumps(result, default=str), timeout=600)
-        logger.info("[rollup_1m] Cached %s", cache_key)
-    except Exception as exc:
-        logger.exception("[rollup_1m] failed: %s", exc)
+    _run_rollup("1m", 1, 600, "%Y%m%d%H%M")
 
 
 @shared_task(
@@ -83,16 +111,7 @@ def rollup_1m() -> None:
 )
 def rollup_5m() -> None:
     """Roll up analytics metrics for the last completed 5-minute window."""
-    logger.info("[rollup_5m] Starting 5-minute aggregation")
-    try:
-        end = _get_window_floor(5)
-        start = end - timedelta(minutes=5)
-        result = _run_async(_aggregate_metrics(start, end))
-        cache_key = f"analytics:rollup:5m:{end.strftime('%Y%m%d%H%M')}"
-        cache.set(cache_key, json.dumps(result, default=str), timeout=1800)
-        logger.info("[rollup_5m] Cached %s", cache_key)
-    except Exception as exc:
-        logger.exception("[rollup_5m] failed: %s", exc)
+    _run_rollup("5m", 5, 1800, "%Y%m%d%H%M")
 
 
 @shared_task(
@@ -102,16 +121,7 @@ def rollup_5m() -> None:
 )
 def rollup_1h() -> None:
     """Roll up analytics metrics for the last completed hour."""
-    logger.info("[rollup_1h] Starting 1-hour aggregation")
-    try:
-        end = _get_window_floor(60)
-        start = end - timedelta(hours=1)
-        result = _run_async(_aggregate_metrics(start, end))
-        cache_key = f"analytics:rollup:1h:{end.strftime('%Y%m%d%H')}"
-        cache.set(cache_key, json.dumps(result, default=str), timeout=7200)
-        logger.info("[rollup_1h] Cached %s", cache_key)
-    except Exception as exc:
-        logger.exception("[rollup_1h] failed: %s", exc)
+    _run_rollup("1h", 60, 7200, "%Y%m%d%H")
 
 
 @shared_task(
@@ -121,16 +131,7 @@ def rollup_1h() -> None:
 )
 def rollup_1d() -> None:
     """Roll up analytics metrics for the last completed day."""
-    logger.info("[rollup_1d] Starting 1-day aggregation")
-    try:
-        end = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        start = end - timedelta(days=1)
-        result = _run_async(_aggregate_metrics(start, end))
-        cache_key = f"analytics:rollup:1d:{end.strftime('%Y%m%d')}"
-        cache.set(cache_key, json.dumps(result, default=str), timeout=86400)
-        logger.info("[rollup_1d] Cached %s", cache_key)
-    except Exception as exc:
-        logger.exception("[rollup_1d] failed: %s", exc)
+    _run_rollup("1d", 1440, 86400, "%Y%m%d")
 
 
 def _run_async(coro):

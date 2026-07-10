@@ -87,11 +87,56 @@ class DashboardResponse(BaseModel):
 
 
 class HealthCheckResponse(BaseModel):
+    service: str
     status: str
-    database_status: str
-    metrics_count: int
-    recent_activities_24h: int
-    firing_alerts_count: int
+    response_time_ms: float
+    checks: list
+
+
+class PrometheusMetricsResponse(BaseModel):
+    metrics: str
+
+
+class CreateMetricRequest(BaseModel):
+    name: str
+    metric_type: str
+    value: float
+    tags: Optional[dict] = None
+
+
+class MetricCreatedResponse(BaseModel):
+    id: int
+    name: str
+    metric_type: str
+    value: float
+    timestamp: str
+
+
+class CreateBusinessMetricRequest(BaseModel):
+    metric_name: str
+    value: float
+    period_start: str
+    period_end: str
+
+
+class BusinessMetricCreatedResponse(BaseModel):
+    id: int
+    metric_name: str
+    value: float
+    period_start: str
+    period_end: str
+    created_at: str
+
+
+class ResolveAlertRequest(BaseModel):
+    resolution_notes: Optional[str] = None
+
+
+class AlertResolvedResponse(BaseModel):
+    id: int
+    status: str
+    resolved_at: str
+    message: str
 
 
 class AnalyticsReportSchema(BaseModel):
@@ -457,45 +502,23 @@ async def get_analytics_health(request: HttpRequest):
     Get analytics service health check (async).
     Endpoint: GET /api/v1/ninja/analytics/health/
     """
-    from apps.analytics.models import Metric, UserActivity, Alert
-    from django.core.cache import cache
-    
-    # Check database connectivity
-    try:
-        metrics_count = await Metric.objects.acount()
-        database_status = "healthy"
-    except Exception:
-        metrics_count = 0
-        database_status = "unhealthy"
-    
-    # Check cache connectivity
-    try:
-        cache.set('analytics_health_check', 'ok', 10)
-        cache.get('analytics_health_check')
-        cache_status = "healthy"
-    except Exception:
-        cache_status = "unhealthy"
-    
-    # Get recent activity metrics
-    since = timezone.now() - timedelta(hours=24)
-    try:
-        recent_activities_24h = await UserActivity.objects.filter(timestamp__gte=since).acount()
-    except Exception:
-        recent_activities_24h = 0
-    
-    # Get firing alerts
-    try:
-        firing_alerts_count = await Alert.objects.filter(status='firing').acount()
-    except Exception:
-        firing_alerts_count = 0
-    
-    # Overall status
-    overall_status = "healthy" if database_status == "healthy" and cache_status == "healthy" else "degraded"
-    
-    return HealthCheckResponse(
-        status=overall_status,
-        database_status=database_status,
-        metrics_count=metrics_count,
-        recent_activities_24h=recent_activities_24h,
-        firing_alerts_count=firing_alerts_count,
+    from apps.analytics.services.health_service import aget_analytics_health
+
+    health = await aget_analytics_health()
+    return HealthCheckResponse(**health)
+
+
+@router.get('/metrics/export/')
+def get_analytics_metrics_export(request: HttpRequest):
+    """
+    Export analytics metrics in Prometheus text format.
+    Endpoint: GET /api/v1/ninja/analytics/metrics/export/
+    """
+    from django.http import HttpResponse
+    from apps.analytics.services.metrics_service import get_metrics_service
+
+    metrics_service = get_metrics_service()
+    return HttpResponse(
+        metrics_service.render_prometheus(),
+        content_type="text/plain; version=0.0.4; charset=utf-8",
     )
