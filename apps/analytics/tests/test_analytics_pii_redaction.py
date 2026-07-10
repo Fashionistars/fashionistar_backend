@@ -105,8 +105,9 @@ class TestPIIRedaction:
 
         redacted = _redact_user_activity(activity)
 
-        # Should have user_id as integer, not the email
+        # Should have user_id as string (UUID), not the email
         if "user" in redacted:
             assert redacted["user"] != "userid@test.com"
         if "user_id" in redacted:
-            assert isinstance(redacted["user_id"], int)
+            assert redacted["user_id"] != "userid@test.com"
+            assert isinstance(redacted["user_id"], str)
