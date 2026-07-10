@@ -320,6 +320,13 @@ app.conf.task_routes = {
     "apps.analytics.tasks.aggregation_tasks.rollup_5m":                        {"queue": "analytics"},
     "apps.analytics.tasks.aggregation_tasks.rollup_1h":                        {"queue": "analytics"},
     "apps.analytics.tasks.aggregation_tasks.rollup_1d":                        {"queue": "analytics"},
+    # Analytics alert evaluation
+    "apps.analytics.tasks.alert_evaluation_tasks.evaluate_alert_rules":         {"queue": "analytics"},
+    # Analytics cache warming
+    "apps.analytics.tasks.cache_warming_tasks.warm_dashboard_cache":            {"queue": "analytics"},
+    "apps.analytics.tasks.cache_warming_tasks.refresh_materialized_views":      {"queue": "analytics"},
+    "apps.analytics.tasks.cache_warming_tasks.warm_query_builder_cache":        {"queue": "analytics"},
+    "apps.analytics.tasks.cache_warming_tasks.warm_capacity_cache":             {"queue": "analytics"},
     # DB ingestion — triggered by Django signals on model saves
     "apps.ai.tasks.ingestion_tasks.ingest_db_change":                   {"queue": "ai_ingestion"},
     "apps.ai.tasks.ingestion_tasks.refresh_trending_cache":             {"queue": "ai_ingestion"},
@@ -451,6 +458,41 @@ app.conf.beat_schedule = {
     "analytics-data-retention-cleanup": {
         "task":     "apps.analytics.tasks.analytics_tasks.cleanup_expired_data",
         "schedule": crontab(hour=3, minute=0),
+        "options":  {"queue": "analytics"},
+    },
+
+    # Analytics alert rule evaluation — every minute
+    "analytics-alert-evaluation": {
+        "task":     "apps.analytics.tasks.alert_evaluation_tasks.evaluate_alert_rules",
+        "schedule": crontab(minute="*"),
+        "options":  {"queue": "analytics"},
+    },
+
+    # Analytics dashboard cache warming — every 5 minutes
+    "analytics-warm-dashboard-cache": {
+        "task":     "apps.analytics.tasks.cache_warming_tasks.warm_dashboard_cache",
+        "schedule": crontab(minute="*/5"),
+        "options":  {"queue": "analytics"},
+    },
+
+    # Analytics materialized view refresh — every hour
+    "analytics-refresh-materialized-views": {
+        "task":     "apps.analytics.tasks.cache_warming_tasks.refresh_materialized_views",
+        "schedule": crontab(minute=15),
+        "options":  {"queue": "analytics"},
+    },
+
+    # Analytics query builder cache warming — every 10 minutes
+    "analytics-warm-query-builder-cache": {
+        "task":     "apps.analytics.tasks.cache_warming_tasks.warm_query_builder_cache",
+        "schedule": crontab(minute="*/10"),
+        "options":  {"queue": "analytics"},
+    },
+
+    # Analytics capacity cache warming — every 2 minutes
+    "analytics-warm-capacity-cache": {
+        "task":     "apps.analytics.tasks.cache_warming_tasks.warm_capacity_cache",
+        "schedule": crontab(minute="*/2"),
         "options":  {"queue": "analytics"},
     },
 
