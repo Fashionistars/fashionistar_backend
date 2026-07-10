@@ -131,21 +131,14 @@ def _load_siglip() -> bool:
     """Load marqo-FashionSigLIP onto CUDA at module level (ZeroGPU requirement)."""
     global _siglip_model, _siglip_processor
     try:
+        import open_clip
         import torch
-        from transformers import AutoModel, AutoProcessor
 
         logger.info("Loading %s ...", SIGLIP_MODEL_ID)
-        _siglip_processor = AutoProcessor.from_pretrained(
-            SIGLIP_MODEL_ID, token=HF_TOKEN or None,
-            trust_remote_code=True,
+        _siglip_model, _, _siglip_processor = open_clip.create_model_and_transforms(
+            f"hf-hub:{SIGLIP_MODEL_ID}",
         )
-        _siglip_model = AutoModel.from_pretrained(
-            SIGLIP_MODEL_ID,
-            dtype=torch.float16,  # dtype= replaces deprecated torch_dtype=
-            device_map="cuda",
-            token=HF_TOKEN or None,
-            trust_remote_code=True,
-        )
+        _siglip_model = _siglip_model.to("cuda")
         _siglip_model.eval()
         logger.info("✅ %s loaded on CUDA", SIGLIP_MODEL_ID)
         return True
@@ -350,11 +343,10 @@ def generate_fashion_embedding(image_b64: str) -> dict[str, Any]:
         img_bytes = base64.b64decode(image_b64)
         img_pil   = Image.open(BytesIO(img_bytes)).convert("RGB")
 
-        inputs = _siglip_processor(images=img_pil, return_tensors="pt")
-        inputs = {k: v.to("cuda") for k, v in inputs.items()}
+        inputs = _siglip_processor(img_pil).unsqueeze(0).to("cuda")
 
         with torch.no_grad():
-            feats     = _siglip_model.get_image_features(**inputs)
+            feats     = _siglip_model.encode_image(inputs)
             embedding = feats[0].float().cpu().numpy()
 
         norm      = float(np.linalg.norm(embedding))
