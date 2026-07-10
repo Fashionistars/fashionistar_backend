@@ -16,12 +16,12 @@ from ninja.errors import HttpError
 from pydantic import BaseModel
 
 from apps.analytics.selectors.analytics_selectors import (
+    aget_alerts,
     aget_analytics_dashboard_parallel,
     aget_business_metrics,
-    aget_firing_alerts,
-    aget_metrics_by_name,
+    aget_metrics,
     aget_performance_metrics,
-    aget_user_activities,
+    aget_user_activity,
 )
 from apps.analytics.services import AnalyticsService
 from apps.audit_logs.services.analytics.analytics_audit import AnalyticsAuditService
@@ -364,7 +364,7 @@ async def get_metrics(request: HttpRequest, name: Optional[str] = None, limit: i
     Endpoint: GET /api/v1/ninja/analytics/metrics/
     """
     if name:
-        metrics = await aget_metrics_by_name(name, limit)
+        metrics = await aget_metrics(name=name, limit=limit)
     else:
         from apps.analytics.models import Metric
         from datetime import timedelta
@@ -436,7 +436,7 @@ async def get_alerts(request: HttpRequest, status: Optional[str] = None, limit: 
         from apps.analytics.models import Alert
         alerts = await Alert.aget_by_status(status, limit)
     else:
-        alerts = await aget_firing_alerts(limit)
+        alerts = await aget_alerts(status='firing', limit=limit)
     
     return [
         AlertSchema(

@@ -18,6 +18,12 @@ from apps.analytics.tasks.analytics_tasks import (
     run_user_behavior_analysis,
     run_vendor_analytics,
 )
+from apps.analytics.tasks.aggregation_tasks import (
+    rollup_1d,
+    rollup_1h,
+    rollup_1m,
+    rollup_5m,
+)
 
 
 @pytest.mark.django_db
@@ -126,3 +132,83 @@ def test_run_realtime_analytics_caches_snapshot():
 
     assert "generated_at" in result
     assert cache.get("analytics:realtime:snapshot") is not None
+
+
+@pytest.mark.django_db
+def test_rollup_1m_caches_result():
+    """1-minute rollup task should cache an aggregated result."""
+    from django.core.cache import cache
+    from django.utils import timezone
+
+    with patch("apps.analytics.tasks.aggregation_tasks._run_async") as mock_run:
+        mock_run.return_value = {
+            "metric_count": 5,
+            "request_count": 10,
+            "window_start": timezone.now().isoformat(),
+            "window_end": timezone.now().isoformat(),
+        }
+        rollup_1m()
+
+    cache_key = f"analytics:rollup:1m:{timezone.now().strftime('%Y%m%d%H%M')}"
+    cached = cache.get(cache_key)
+    assert cached is not None
+
+
+@pytest.mark.django_db
+def test_rollup_5m_caches_result():
+    """5-minute rollup task should cache an aggregated result."""
+    from django.core.cache import cache
+    from django.utils import timezone
+
+    with patch("apps.analytics.tasks.aggregation_tasks._run_async") as mock_run:
+        mock_run.return_value = {
+            "metric_count": 3,
+            "request_count": 7,
+            "window_start": timezone.now().isoformat(),
+            "window_end": timezone.now().isoformat(),
+        }
+        rollup_5m()
+
+    cache_key = f"analytics:rollup:5m:{timezone.now().strftime('%Y%m%d%H%M')}"
+    cached = cache.get(cache_key)
+    assert cached is not None
+
+
+@pytest.mark.django_db
+def test_rollup_1h_caches_result():
+    """1-hour rollup task should cache an aggregated result."""
+    from django.core.cache import cache
+    from django.utils import timezone
+
+    with patch("apps.analytics.tasks.aggregation_tasks._run_async") as mock_run:
+        mock_run.return_value = {
+            "metric_count": 50,
+            "request_count": 120,
+            "window_start": timezone.now().isoformat(),
+            "window_end": timezone.now().isoformat(),
+        }
+        rollup_1h()
+
+    cache_key = f"analytics:rollup:1h:{timezone.now().strftime('%Y%m%d%H')}"
+    cached = cache.get(cache_key)
+    assert cached is not None
+
+
+@pytest.mark.django_db
+def test_rollup_1d_caches_result():
+    """1-day rollup task should cache an aggregated result."""
+    from django.core.cache import cache
+    from django.utils import timezone
+
+    with patch("apps.analytics.tasks.aggregation_tasks._run_async") as mock_run:
+        mock_run.return_value = {
+            "metric_count": 500,
+            "request_count": 1000,
+            "window_start": timezone.now().isoformat(),
+            "window_end": timezone.now().isoformat(),
+        }
+        rollup_1d()
+
+    cache_key = f"analytics:rollup:1d:{timezone.now().strftime('%Y%m%d')}"
+    cached = cache.get(cache_key)
+    assert cached is not None

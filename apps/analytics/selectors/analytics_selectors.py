@@ -9,20 +9,25 @@ from typing import List, Dict, Any, Optional
 from datetime import timedelta
 from django.utils import timezone
 
-from apps.analytics.models import Metric, UserActivity, PerformanceMetric, BusinessMetric, AlertRule, Alert
+from apps.analytics.models import Metric, UserActivity, PerformanceMetric, BusinessMetric, Alert
 
 
 # ============================================================================
 # Sync Selectors (Thin wrappers for backward compatibility)
 # ============================================================================
 
-def get_metrics_by_name(name: str, limit: int = 100) -> List[Metric]:
-    """Get metrics by name (sync)."""
-    return list(Metric.objects.filter(name=name).order_by('-timestamp')[:limit])
+def get_metrics(name: str = None, metric_type: str = None, limit: int = 100) -> List[Metric]:
+    """Get metrics with optional name/type filtering (sync)."""
+    queryset = Metric.objects.all()
+    if name:
+        queryset = queryset.filter(name=name)
+    if metric_type:
+        queryset = queryset.filter(metric_type=metric_type)
+    return list(queryset.order_by('-timestamp')[:limit])
 
 
-def get_user_activities(user_id: str, limit: int = 100) -> List[UserActivity]:
-    """Get user activities (sync)."""
+def get_user_activity(user_id: str, limit: int = 100) -> List[UserActivity]:
+    """Get user activity for a specific user (sync)."""
     return list(UserActivity.objects.filter(user_id=user_id).order_by('-timestamp')[:limit])
 
 
@@ -32,45 +37,61 @@ def get_performance_metrics(hours: int = 24, limit: int = 100) -> List[Performan
     return list(PerformanceMetric.objects.filter(timestamp__gte=since).order_by('-timestamp')[:limit])
 
 
-def get_business_metrics(days: int = 30, limit: int = 100) -> List[BusinessMetric]:
+def get_business_metrics(metric_name: str = None, days: int = 30, limit: int = 100) -> List[BusinessMetric]:
     """Get recent business metrics (sync)."""
+    queryset = BusinessMetric.objects.all()
+    if metric_name:
+        queryset = queryset.filter(metric_name=metric_name)
     since = timezone.now() - timedelta(days=days)
-    return list(BusinessMetric.objects.filter(created_at__gte=since).order_by('-created_at')[:limit])
+    queryset = queryset.filter(created_at__gte=since)
+    return list(queryset.order_by('-created_at')[:limit])
 
 
-def get_firing_alerts(limit: int = 100) -> List[Alert]:
-    """Get currently firing alerts (sync)."""
-    return list(Alert.objects.filter(status='firing').order_by('-fired_at')[:limit])
+def get_alerts(status: str = 'firing', limit: int = 100) -> List[Alert]:
+    """Get alerts by status (sync). Defaults to firing alerts."""
+    return list(Alert.objects.filter(status=status).order_by('-fired_at')[:limit])
 
 
 # ============================================================================
 # Async Selectors (Native Django 6.0 async ORM)
 # ============================================================================
 
-async def aget_metrics_by_name(name: str, limit: int = 100) -> List[Metric]:
-    """Get metrics by name (async)."""
-    return await Metric.aget_by_name(name, limit)
+async def aget_metrics(name: str = None, metric_type: str = None, limit: int = 100) -> List[Metric]:
+    """Get metrics with optional name/type filtering (async)."""
+    if name:
+        return await Metric.aget_by_name(name, limit=limit)
+    if metric_type:
+        return await Metric.aget_by_type(metric_type, limit=limit)
+    return await Metric.aget_latest(limit)
 
 
-async def aget_user_activities(user_id: str, limit: int = 100) -> List[UserActivity]:
-    """Get user activities (async)."""
-    return await UserActivity.aget_by_user(user_id, limit)
+async def aget_user_activity(user_id: str, limit: int = 100) -> List[UserActivity]:
+    """Get user activity for a specific user (async)."""
+    return await UserActivity.aget_by_user(user_id, limit=limit)
 
 
 async def aget_performance_metrics(hours: int = 24, limit: int = 100) -> List[PerformanceMetric]:
     """Get recent performance metrics (async)."""
-    return await PerformanceMetric.aget_recent_metrics(hours, limit)
+    return await PerformanceMetric.aget_recent_metrics(hours=hours, limit=limit)
 
 
-async def aget_business_metrics(days: int = 30, limit: int = 100) -> List[BusinessMetric]:
+async def aget_business_metrics(
+    metric_name: str = None, days: int = 30, limit: int = 100
+) -> List[BusinessMetric]:
     """Get recent business metrics (async)."""
-    return await BusinessMetric.aget_recent_metrics(days, limit)
+    return await BusinessMetric.aget_recent_metrics(days=days, limit=limit)
 
 
-async def aget_firing_alerts(limit: int = 100) -> List[Alert]:
-    """Get currently firing alerts (async)."""
-    return await Alert.aget_firing_alerts(limit)
+async def aget_alerts(status: str = 'firing', limit: int = 100) -> List[Alert]:
+    """Get alerts by status (async). Defaults to firing alerts."""
+    if status == 'firing':
+        return await Alert.aget_firing_alerts(limit)
+    return await Alert.aget_by_status(status, limit)
 
+
+# ============================================================================
+# Parallel Loading Selectors
+# ============================================================================
 
 async def aget_analytics_dashboard_parallel(user_id: Optional[str] = None) -> Dict[str, Any]:
     """
@@ -80,32 +101,31 @@ async def aget_analytics_dashboard_parallel(user_id: Optional[str] = None) -> Di
     tasks = [
         aget_performance_metrics(hours=24, limit=50),
         aget_business_metrics(days=7, limit=50),
-        aget_firing_alerts(limit=10),
+        aget_alerts(status='firing', limit=10),
     ]
-    
+
     if user_id:
-        tasks.append(aget_user_activities(user_id, limit=50))
-    
+        tasks.append(aget_user_activity(user_id, limit=50))
+
     results = await asyncio.gather(*tasks, return_exceptions=True)
-    
+
     performance_metrics = results[0] if not isinstance(results[0], Exception) else []
     business_metrics = results[1] if not isinstance(results[1], Exception) else []
     firing_alerts = results[2] if not isinstance(results[2], Exception) else []
-    
+
     if user_id:
         user_activities = results[3] if not isinstance(results[3], Exception) else []
     else:
         user_activities = []
-    
-    # Calculate aggregates
+
     avg_response_time = 0
     if performance_metrics:
         avg_response_time = sum(m.response_time_ms for m in performance_metrics) / len(performance_metrics)
-    
+
     return {
         'performance_metrics': performance_metrics,
         'business_metrics': business_metrics,
-        'firing_alerts': firing_alerts,
+        'alerts': firing_alerts,
         'user_activities': user_activities,
         'avg_response_time_ms': avg_response_time,
         'performance_count': len(performance_metrics),
@@ -115,129 +135,64 @@ async def aget_analytics_dashboard_parallel(user_id: Optional[str] = None) -> Di
     }
 
 
-async def aget_analytics_dashboard_by_date(
-    date_from, date_to, user_id: Optional[str] = None
-) -> Dict[str, Any]:
+async def aget_performance_dashboard_parallel(hours: int = 24) -> Dict[str, Any]:
     """
-    Fetch dashboard data within a date range in parallel.
+    Get performance-focused dashboard data in parallel.
     """
-    tasks = [
-        PerformanceMetric.aget_performance_summary(date_from, date_to),
-        BusinessMetric.aget_by_name(
-            metric_name="total_gmv", period_start=date_from, period_end=date_to
-        ),
-        Alert.aget_firing_alerts(limit=10),
-        UserActivity.aget_analytics_summary(date_from, date_to),
-    ]
-
-    if user_id:
-        tasks.append(UserActivity.aget_by_user(user_id, date_from, date_to, limit=50))
-
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-
-    performance_summary = results[0] if not isinstance(results[0], Exception) else {}
-    business_metrics = results[1] if not isinstance(results[1], Exception) else []
-    firing_alerts = results[2] if not isinstance(results[2], Exception) else []
-    activity_summary = results[3] if not isinstance(results[3], Exception) else {}
-    user_activities = (
-        results[4]
-        if user_id and not isinstance(results[4], Exception)
-        else []
-    )
-
-    return {
-        'performance_summary': performance_summary,
-        'business_metrics': business_metrics,
-        'firing_alerts': firing_alerts,
-        'activity_summary': activity_summary,
-        'user_activities': user_activities,
-        'performance_count': performance_summary.get('total_requests', 0),
-        'business_count': len(business_metrics),
-        'alert_count': len(firing_alerts),
-        'activity_count': activity_summary.get('total_activities', 0),
-    }
-
-
-async def aget_realtime_analytics_summary(minutes: int = 5) -> Dict[str, Any]:
-    """
-    Fetch real-time analytics summary for the last N minutes in parallel.
-    """
-    since = timezone.now() - timedelta(minutes=minutes)
+    now = timezone.now()
+    since = now - timedelta(hours=hours)
 
     tasks = [
-        _acount_metric_since(since),
-        _acount_performance_since(since),
-        _acount_activity_since(since),
-        _asum_slow_requests_since(since),
+        aget_performance_metrics(hours=hours, limit=100),
+        PerformanceMetric.aget_slow_queries(threshold_ms=500, date_from=since, date_to=now, limit=20),
+        PerformanceMetric.aget_performance_summary(since, now),
     ]
 
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    metric_count = results[0] if not isinstance(results[0], Exception) else 0
-    request_count = results[1] if not isinstance(results[1], Exception) else 0
-    activity_count = results[2] if not isinstance(results[2], Exception) else 0
-    avg_response_time = results[3] if not isinstance(results[3], Exception) else 0
+    performance_metrics = results[0] if not isinstance(results[0], Exception) else []
+    slow_queries = results[1] if not isinstance(results[1], Exception) else []
+    summary = results[2] if not isinstance(results[2], Exception) else {}
 
-    return {
-        'minutes': minutes,
-        'metric_count': metric_count,
-        'request_count': request_count,
-        'activity_count': activity_count,
-        'avg_response_time_ms': avg_response_time,
-        'slow_request_count': 0,  # calculated inside _asum_slow_requests_since if needed
-    }
-
-
-async def _acount_metric_since(since):
-    return await Metric.objects.filter(timestamp__gte=since).acount()
-
-
-async def _acount_performance_since(since):
-    return await PerformanceMetric.objects.filter(timestamp__gte=since).acount()
-
-
-async def _acount_activity_since(since):
-    return await UserActivity.objects.filter(timestamp__gte=since).acount()
-
-
-async def _asum_slow_requests_since(since, threshold_ms: int = 500):
-    from django.db.models import Avg
-
-    result = await PerformanceMetric.objects.filter(
-        timestamp__gte=since
-    ).aaggregate(avg_response_time=Avg('response_time_ms'))
-    return result.get('avg_response_time', 0)
-
-
-async def aget_platform_health_summary() -> Dict[str, Any]:
-    """
-    Fetch a concise platform health summary in parallel.
-    """
-    from datetime import timedelta
-
-    since = timezone.now() - timedelta(hours=1)
-
-    tasks = [
-        PerformanceMetric.aget_performance_summary(since, timezone.now()),
-        Alert.aget_firing_alerts(limit=5),
-        BusinessMetric.aget_recent_metrics(days=1, limit=5),
-    ]
-
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-
-    performance_summary = results[0] if not isinstance(results[0], Exception) else {}
-    firing_alerts = results[1] if not isinstance(results[1], Exception) else []
-    business_metrics = results[2] if not isinstance(results[2], Exception) else []
-
-    total_requests = performance_summary.get('total_requests', 0)
-    error_count = performance_summary.get('error_rate', 0)
+    total_requests = summary.get('total_requests', 0)
+    error_count = summary.get('error_rate', 0)
     error_rate = (error_count / total_requests * 100) if total_requests else 0
 
     return {
-        'health_status': 'healthy' if error_rate < 5 and not firing_alerts else 'degraded',
-        'total_requests_1h': total_requests,
-        'avg_response_time_ms': performance_summary.get('avg_response_time', 0),
+        'performance_metrics': performance_metrics,
+        'slow_queries': slow_queries,
+        'summary': summary,
+        'avg_response_time_ms': summary.get('avg_response_time', 0),
+        'max_response_time_ms': summary.get('max_response_time', 0),
+        'total_requests': total_requests,
         'error_rate_percent': error_rate,
-        'firing_alerts_count': len(firing_alerts),
-        'latest_business_metric': business_metrics[0] if business_metrics else None,
+        'slow_query_count': len(slow_queries),
+    }
+
+
+async def aget_alert_dashboard_parallel(limit: int = 100) -> Dict[str, Any]:
+    """
+    Get alert-focused dashboard data in parallel.
+    """
+    from apps.analytics.models import AlertRule
+
+    tasks = [
+        aget_alerts(status='firing', limit=limit),
+        aget_alerts(status='resolved', limit=limit),
+        AlertRule.aget_active_rules(),
+    ]
+
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    firing = results[0] if not isinstance(results[0], Exception) else []
+    resolved = results[1] if not isinstance(results[1], Exception) else []
+    active_rules = results[2] if not isinstance(results[2], Exception) else []
+
+    return {
+        'firing_alerts': firing,
+        'resolved_alerts': resolved,
+        'active_rules': active_rules,
+        'firing_count': len(firing),
+        'resolved_count': len(resolved),
+        'active_rule_count': len(active_rules),
     }
