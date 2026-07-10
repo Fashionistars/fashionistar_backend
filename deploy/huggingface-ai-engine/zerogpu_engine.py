@@ -142,6 +142,7 @@ def _load_siglip() -> bool:
         _siglip_model = AutoModel.from_pretrained(
             SIGLIP_MODEL_ID,
             dtype=torch.float16,  # dtype= replaces deprecated torch_dtype=
+            low_cpu_mem_usage=False,
             token=HF_TOKEN or None,
             trust_remote_code=True,
         )
