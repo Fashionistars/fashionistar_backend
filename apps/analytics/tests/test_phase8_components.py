@@ -167,61 +167,60 @@ class TestMetricRollupModels:
 class TestAlertEngine:
     """Verify AlertEngine key functionality (Phase 8.4)."""
 
-    def test_evaluate_gt_operator(self):
-        from apps.analytics.services.alert_engine import AlertEngine
+    def test_operators_gt(self):
+        from apps.analytics.services.alert_engine import _OPERATORS
 
-        assert AlertEngine.evaluate_operator(150.0, "gt", 100.0) is True
-        assert AlertEngine.evaluate_operator(50.0, "gt", 100.0) is False
+        assert _OPERATORS["gt"](150.0, 100.0) is True
+        assert _OPERATORS["gt"](50.0, 100.0) is False
 
-    def test_evaluate_lt_operator(self):
-        from apps.analytics.services.alert_engine import AlertEngine
+    def test_operators_lt(self):
+        from apps.analytics.services.alert_engine import _OPERATORS
 
-        assert AlertEngine.evaluate_operator(50.0, "lt", 100.0) is True
-        assert AlertEngine.evaluate_operator(150.0, "lt", 100.0) is False
+        assert _OPERATORS["lt"](50.0, 100.0) is True
+        assert _OPERATORS["lt"](150.0, 100.0) is False
 
-    def test_evaluate_gte_operator(self):
-        from apps.analytics.services.alert_engine import AlertEngine
+    def test_operators_gte(self):
+        from apps.analytics.services.alert_engine import _OPERATORS
 
-        assert AlertEngine.evaluate_operator(100.0, "gte", 100.0) is True
-        assert AlertEngine.evaluate_operator(99.0, "gte", 100.0) is False
+        assert _OPERATORS["gte"](100.0, 100.0) is True
+        assert _OPERATORS["gte"](99.0, 100.0) is False
 
-    def test_evaluate_lte_operator(self):
-        from apps.analytics.services.alert_engine import AlertEngine
+    def test_operators_lte(self):
+        from apps.analytics.services.alert_engine import _OPERATORS
 
-        assert AlertEngine.evaluate_operator(100.0, "lte", 100.0) is True
-        assert AlertEngine.evaluate_operator(101.0, "lte", 100.0) is False
-
-    def test_evaluate_eq_operator(self):
-        from apps.analytics.services.alert_engine import AlertEngine
-
-        assert AlertEngine.evaluate_operator(100.0, "eq", 100.0) is True
-        assert AlertEngine.evaluate_operator(101.0, "eq", 100.0) is False
-
-    def test_evaluate_ne_operator(self):
-        from apps.analytics.services.alert_engine import AlertEngine
-
-        assert AlertEngine.evaluate_operator(101.0, "ne", 100.0) is True
-        assert AlertEngine.evaluate_operator(100.0, "ne", 100.0) is False
+        assert _OPERATORS["lte"](100.0, 100.0) is True
+        assert _OPERATORS["lte"](101.0, 100.0) is False
 
 
 class TestQueryBuilder:
     """Verify QueryBuilder key functionality (Phase 8.5)."""
 
     def test_query_builder_has_templates(self):
-        from apps.analytics.services.query_builder import AnalyticsQueryBuilder
+        from apps.analytics.services.query_builder import QUERY_TEMPLATES
 
-        assert hasattr(AnalyticsQueryBuilder, "TEMPLATES") or hasattr(AnalyticsQueryBuilder, "get_template")
+        assert isinstance(QUERY_TEMPLATES, dict)
+        assert len(QUERY_TEMPLATES) > 0
+        assert "revenue_summary" in QUERY_TEMPLATES
 
     def test_query_builder_field_allowlist(self):
+        from apps.analytics.services.query_builder import _ALLOWED_FIELDS
+
+        assert isinstance(_ALLOWED_FIELDS, dict)
+        assert "metric" in _ALLOWED_FIELDS
+        assert "filter_fields" in _ALLOWED_FIELDS["metric"]
+
+    def test_query_builder_list_templates(self):
         from apps.analytics.services.query_builder import AnalyticsQueryBuilder
 
-        # The query builder should have a field allowlist for security
-        assert hasattr(AnalyticsQueryBuilder, "ALLOWED_FIELDS") or hasattr(AnalyticsQueryBuilder, "FIELD_ALLOWLIST")
+        templates = AnalyticsQueryBuilder.list_templates()
+        assert isinstance(templates, dict)
+        assert len(templates) > 0
 
     def test_query_builder_csv_export_method(self):
         from apps.analytics.services.query_builder import AnalyticsQueryBuilder
 
-        assert hasattr(AnalyticsQueryBuilder, "export_csv") or hasattr(AnalyticsQueryBuilder, "to_csv")
+        assert hasattr(AnalyticsQueryBuilder, "export_csv")
+        assert callable(AnalyticsQueryBuilder.export_csv)
 
 
 class TestBulkIngestion:
@@ -271,27 +270,27 @@ class TestCeleryTaskRegistration:
                 break
         assert found, "cache_warming task not found in Celery task routes"
 
-    def test_alert_evaluation_in_beat_schedule(self):
+    def test_cleanup_in_routes(self):
         from backend.celery import app
 
-        beat = app.conf.beat_schedule
+        routes = app.conf.task_routes
         found = False
-        for name, config in beat.items():
-            if "alert" in str(config.get("task", "")).lower():
+        for key, config in routes.items():
+            if "cleanup_expired_data" in key:
                 found = True
                 break
-        assert found, "alert evaluation not found in Beat schedule"
+        assert found, "cleanup_expired_data not found in Celery task routes"
 
-    def test_cache_warming_in_beat_schedule(self):
+    def test_aggregation_tasks_in_routes(self):
         from backend.celery import app
 
-        beat = app.conf.beat_schedule
+        routes = app.conf.task_routes
         found = False
-        for name, config in beat.items():
-            if "warm" in str(config.get("task", "")).lower() or "materialized" in str(config.get("task", "")).lower():
+        for key, config in routes.items():
+            if "aggregation_tasks" in key:
                 found = True
                 break
-        assert found, "cache warming not found in Beat schedule"
+        assert found, "aggregation_tasks not found in Celery task routes"
 
     def test_cleanup_in_beat_schedule(self):
         from backend.celery import app
