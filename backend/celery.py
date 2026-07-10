@@ -221,6 +221,14 @@ app.conf.task_queues = (
         routing_key="ai_ingestion",
         queue_arguments={"x-max-priority": 4},
     ),
+    # ── Analytics queue — aggregation and reporting workloads ────────────────
+    # Workers: celery -A backend worker -Q analytics --concurrency=2 --loglevel=info
+    Queue(
+        "analytics",
+        Exchange("analytics", type="direct"),
+        routing_key="analytics",
+        queue_arguments={"x-max-priority": 5},
+    ),
     # ── Default catch-all ─────────────────────────────────────────────────────
     Queue(
         "default",
@@ -299,11 +307,11 @@ app.conf.task_routes = {
     "apps.ai.tasks.embedding_tasks.generate_product_embedding":         {"queue": "ai"},
     "apps.ai.tasks.embedding_tasks.batch_generate_embeddings":          {"queue": "ai"},
     "apps.ai.tasks.embedding_tasks.backfill_missing_embeddings":        {"queue": "ai"},
-    # Analytics pipeline
-    "apps.ai.tasks.analytics_tasks.run_platform_analytics":             {"queue": "ai"},
-    "apps.ai.tasks.analytics_tasks.run_user_behavior_analysis":         {"queue": "ai"},
-    "apps.ai.tasks.analytics_tasks.run_product_performance_analysis":   {"queue": "ai"},
-    "apps.ai.tasks.analytics_tasks.generate_daily_report":              {"queue": "ai"},
+    # Analytics pipeline (migrated to apps/analytics)
+    "apps.analytics.tasks.analytics_tasks.run_platform_analytics":             {"queue": "analytics"},
+    "apps.analytics.tasks.analytics_tasks.run_user_behavior_analysis":         {"queue": "analytics"},
+    "apps.analytics.tasks.analytics_tasks.run_product_performance_analysis":   {"queue": "analytics"},
+    "apps.analytics.tasks.analytics_tasks.generate_daily_report":              {"queue": "analytics"},
     # DB ingestion — triggered by Django signals on model saves
     "apps.ai.tasks.ingestion_tasks.ingest_db_change":                   {"queue": "ai_ingestion"},
     "apps.ai.tasks.ingestion_tasks.refresh_trending_cache":             {"queue": "ai_ingestion"},
@@ -387,10 +395,10 @@ app.conf.beat_schedule = {
 
     # Daily platform analytics — runs at 02:30 UTC (after audit cleanup at 02:00)
     # Generates 1-day, 7-day, and 30-day rolling reports
-    "ai-daily-analytics-report": {
-        "task":     "apps.ai.tasks.analytics_tasks.generate_daily_report",
+    "analytics-daily-report": {
+        "task":     "apps.analytics.tasks.analytics_tasks.generate_daily_report",
         "schedule": crontab(hour=2, minute=30),
-        "options":  {"queue": "ai"},
+        "options":  {"queue": "analytics"},
     },
 
     # Weekly embedding backfill — Sunday 03:00 UTC

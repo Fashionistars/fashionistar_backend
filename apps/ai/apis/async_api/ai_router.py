@@ -10,9 +10,8 @@ Mounted at: /api/v1/ninja/ai/
 Endpoints:
   GET  /api/v1/ninja/ai/scan/{session_id}/status/     — Scan session status
   GET  /api/v1/ninja/ai/recommendations/              — User product recommendations
-  GET  /api/v1/ninja/ai/analytics/platform/           — Platform analytics report
-  GET  /api/v1/ninja/ai/analytics/vendor/{vendor_id}/ — Vendor analytics report
   GET  /api/v1/ninja/ai/size-advice/{product_id}/     — AI size advice for product
+  GET  /api/v1/ninja/ai/health/                       — AI engine sub-system health check
 """
 
 from __future__ import annotations
@@ -53,18 +52,6 @@ class RecommendationsResponseSchema(Schema):
     cached:       bool = True
     generated_at: str | None = None
     recommendations: list[RecommendationSchema] = []
-
-
-class AnalyticsReportSchema(Schema):
-    generated_at:    str
-    days:            int
-    scope:           str
-    order_metrics:   dict = {}
-    product_metrics: dict = {}
-    user_metrics:    dict = {}
-    vendor_metrics:  dict = {}
-    anomalies:       list = []
-    llm_insights:    str  = ""
 
 
 class SizeAdviceSchema(Schema):
@@ -210,64 +197,6 @@ async def get_recommendations(request) -> dict:
         "cached":          False,
         "generated_at":    None,
         "recommendations": [],
-    }
-
-
-@router.get(
-    "/analytics/platform/",
-    auth=django_auth,
-    response=AnalyticsReportSchema,
-    summary="Get platform analytics report",
-    description=(
-        "Returns the latest analytics report for the platform. "
-        "Served from Redis cache (generated daily at 02:30 UTC). "
-        "Requires staff or admin access."
-    ),
-    operation_id="ai_analytics_platform",
-)
-async def get_platform_analytics(
-    request,
-    days: int = 7,
-) -> dict:
-    """GET /api/v1/ninja/ai/analytics/platform/?days=7"""
-    from ninja.errors import HttpError
-
-    if not (request.user.is_staff or request.user.is_superuser):
-        raise HttpError(403, "Staff access required.")
-
-    cache_key = f"ai:analytics:platform:platform:{days}d"
-    cached = cache.get(cache_key)
-
-    if cached:
-        try:
-            return json.loads(cached) if isinstance(cached, str) else cached
-        except Exception:
-            pass
-
-    # Trigger generation if not cached
-    try:
-        from asgiref.sync import sync_to_async
-
-        @sync_to_async
-        def trigger():
-            from apps.ai.tasks.analytics_tasks import run_platform_analytics
-            run_platform_analytics.delay(days=days)
-
-        await trigger()
-    except Exception as exc:
-        logger.warning("[get_platform_analytics] Trigger failed: %s", exc)
-
-    from django.utils import timezone
-    return {
-        "generated_at":    timezone.now().isoformat(),
-        "days":            days,
-        "scope":           "platform",
-        "order_metrics":   {},
-        "product_metrics": {},
-        "user_metrics":    {},
-        "vendor_metrics":  {},
-        "anomalies":       [],
-        "llm_insights":    "Report generation in progress...",
     }
 
 
