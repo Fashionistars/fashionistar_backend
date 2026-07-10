@@ -25,7 +25,7 @@ User = get_user_model()
 def test_sync_selectors():
     """Sync selectors should return the requested analytics records."""
     metric = Metric.objects.create(name="m1", metric_type="gauge", value=1.0)
-    metrics = get_metrics(name="m1")
+    metrics = get_metrics(metric_name="m1")
     assert len(metrics) == 1
     assert metrics[0].id == metric.id
 
@@ -45,7 +45,7 @@ def test_sync_selectors():
 async def test_aget_metrics():
     """Async metric selector should filter by name and type."""
     await Metric.objects.acreate(name="m2", metric_type="counter", value=1.0)
-    by_name = await aget_metrics(name="m2")
+    by_name = await aget_metrics(metric_name="m2")
     assert len(by_name) == 1
 
     by_type = await aget_metrics(metric_type="counter")

@@ -250,7 +250,7 @@ async def aget_performance_dashboard_parallel(hours: int = 24) -> Dict[str, Any]
     since = now - timedelta(hours=hours)
 
     tasks = [
-        aget_performance_metrics(hours=hours, limit=100),
+        aget_performance_metrics(date_from=since, date_to=now, limit=100),
         PerformanceMetric.aget_slow_queries(threshold_ms=500, date_from=since, date_to=now, limit=20),
         PerformanceMetric.aget_performance_summary(since, now),
     ]

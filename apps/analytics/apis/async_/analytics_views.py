@@ -516,15 +516,11 @@ async def get_user_activity(
     Get user activity events (async).
     Endpoint: GET /api/v1/ninja/analytics/user-activity/
     """
-    from apps.analytics.models import UserActivity
-
-    queryset = UserActivity.objects.all()
-    if user_id:
-        queryset = queryset.filter(user_id=user_id)
-    if action:
-        queryset = queryset.filter(action=action)
-
-    activities = [a async for a in queryset.order_by('-timestamp')[:limit]]
+    activities = await aget_user_activity(
+        user_id=str(user_id) if user_id else None,
+        action=action,
+        limit=limit,
+    )
 
     return [
         UserActivitySchema(
@@ -539,12 +535,22 @@ async def get_user_activity(
 
 
 @router.get('/business-metrics/', response=List[BusinessMetricSchema])
-async def get_business_metrics(request: HttpRequest, days: int = 30, limit: int = 100):
+async def get_business_metrics(
+    request: HttpRequest,
+    metric_name: Optional[str] = None,
+    days: int = 30,
+    limit: int = 100,
+):
     """
     Get business metrics (async).
     Endpoint: GET /api/v1/ninja/analytics/business-metrics/
     """
-    metrics = await aget_business_metrics(days, limit)
+    date_from = timezone.now() - timedelta(days=days)
+    metrics = await aget_business_metrics(
+        metric_name=metric_name,
+        period_start=date_from,
+        limit=limit,
+    )
     
     return [
         BusinessMetricSchema(
@@ -593,16 +599,17 @@ async def create_business_metric(
 
 
 @router.get('/alerts/', response=List[AlertSchema])
-async def get_alerts(request: HttpRequest, status: Optional[str] = None, limit: int = 100):
+async def get_alerts(
+    request: HttpRequest,
+    status: Optional[str] = None,
+    severity: Optional[str] = None,
+    limit: int = 50,
+):
     """
     Get alerts (async).
     Endpoint: GET /api/v1/ninja/analytics/alerts/
     """
-    if status:
-        from apps.analytics.models import Alert
-        alerts = await Alert.aget_by_status(status, limit)
-    else:
-        alerts = await aget_alerts(status='firing', limit=limit)
+    alerts = await aget_alerts(status=status, severity=severity, limit=limit)
     
     return [
         AlertSchema(
