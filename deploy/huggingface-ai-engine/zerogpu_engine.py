@@ -15,7 +15,7 @@ ZeroGPU Architecture:
 
 Models:
   - Body Pose:   MediaPipe Tasks PoseLandmarker (pose_landmarker_heavy.task)
-  - Embeddings:  Marqo/marqo-FashionSigLIP-B-16 (512-dim, Apache 2.0)
+  - Embeddings:  Marqo/marqo-fashionSigLIP (512-dim, Apache 2.0)
   - LLM:         Groq API / Llama-3.3-70B-Versatile (if GROQ_API_KEY set)
 
 External URL: https://fashionistar-fashionistar-ai-engine.hf.space
@@ -41,7 +41,7 @@ logger = logging.getLogger("fashionistar.zerogpu_engine")
 # ── Constants ──────────────────────────────────────────────────────────────────
 AI_ENGINE_VERSION = "3.0.0"
 
-SIGLIP_MODEL_ID   = os.environ.get("SIGLIP_MODEL_ID",   "Marqo/marqo-FashionSigLIP-B-16")
+SIGLIP_MODEL_ID   = os.environ.get("SIGLIP_MODEL_ID",   "Marqo/marqo-fashionSigLIP")
 SAMBANOVA_API_KEY = os.environ.get("SAMBANOVA_API_KEY",  "")
 SAMBANOVA_MODEL   = os.environ.get("SAMBANOVA_MODEL",    "Meta-Llama-3.3-70B-Instruct")
 CEREBRAS_API_KEY  = os.environ.get("CEREBRAS_API_KEY",   "")
