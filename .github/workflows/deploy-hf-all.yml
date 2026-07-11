@@ -85,6 +85,16 @@ jobs:
         with:
           version: '0.8.22'
 
+      - name: Validate UTF-8 encoding for all Python files
+        run: |
+          BAD_FILES=$(find . -name "*.py" -exec file {} + | grep -v "UTF-8\|ASCII" || true)
+          if [ -n "$BAD_FILES" ]; then
+            echo "❌ Non-UTF-8 encoded Python files found:"
+            echo "$BAD_FILES"
+            exit 1
+          fi
+          echo "✅ All Python files are UTF-8 encoded"
+
       - name: Install dependencies
         run: uv sync --frozen --no-dev
 
@@ -108,6 +118,24 @@ jobs:
             grep -v "WARNINGS:" | \
             grep -v "?: (security\." || true
           echo "✅ Django system check passed"
+
+      - name: Check for migration drift
+        env:
+          DJANGO_SETTINGS_MODULE: backend.config.production
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
+          SECRET_KEY: ci-test-secret-key-minimum-50-characters-for-django-validation
+          DEBUG: 'False'
+          ALLOWED_HOSTS: '*'
+        run: |
+          uv run python manage.py makemigrations --check --dry-run 2>&1 || true
+          OUTPUT=$(uv run python manage.py makemigrations --check --dry-run 2>&1)
+          if echo "$OUTPUT" | grep -q "No changes detected"; then
+            echo "✅ No migration drift detected"
+          else
+            echo "❌ Migration drift detected! Run 'makemigrations' and commit the new migration."
+            echo "$OUTPUT"
+            exit 1
+          fi
 
   # ── Job 1: Deploy API Gateway (fashionistar-api-v1) ────────────────────────
   deploy-api-v1:
