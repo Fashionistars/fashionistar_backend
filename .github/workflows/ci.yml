@@ -1,0 +1,65 @@
+name: Backend CI
+
+# Backend CI gates for the fashionistar_backend monorepo.
+# Runs on PRs and pushes to main so that migration drift, syntax errors,
+# and UTF-16/Codacy-breaking files are caught before the HF deploy workflow.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend-ci:
+    name: Backend CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      DJANGO_SETTINGS_MODULE: backend.config.production
+      DATABASE_URL: postgresql://test:test@localhost:5432/test
+      SECRET_KEY: ci-test-secret-key-minimum-50-characters-for-django-validation
+      DEBUG: "False"
+      ALLOWED_HOSTS: "*"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.8.22"
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Syntax check (ASGI/WSGI/entrypoints)
+        run: |
+          uv run python -m py_compile backend/asgi.py
+          uv run python -m py_compile backend/wsgi.py
+          uv run python -m py_compile gunicorn.conf.py
+          uv run python -m py_compile deploy/huggingface/hf_health_server.py
+          uv run python -m py_compile scripts/validate_utf8.py
+          uv run python -m py_compile scripts/hf_monitor.py
+
+      - name: Django system check
+        run: uv run python manage.py check --deploy --database default
+
+      - name: Migration drift check
+        run: uv run python manage.py makemigrations --check --dry-run
+
+      - name: Validate Python file encoding
+        run: uv run python scripts/validate_utf8.py
+
+      - name: ZeroGPU model loading smoke test
+        run: uv run pytest apps/ai/tests/test_zerogpu_smoke.py -v

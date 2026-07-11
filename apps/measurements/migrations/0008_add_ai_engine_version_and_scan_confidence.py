@@ -1,4 +1,4 @@
-﻿# apps/measurements/migrations/0008_add_ai_engine_version_and_scan_confidence.py
+# apps/measurements/migrations/0008_add_ai_engine_version_and_scan_confidence.py
 """
 Migration: Rec 6 + Rec 7 — AI Engine Provenance Fields
 
