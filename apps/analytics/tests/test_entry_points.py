@@ -20,7 +20,7 @@ def test_get_llm_engine_returns_engine_when_available():
     mock_engine.is_available.return_value = True
 
     with patch(
-        "apps.analytics.entry_points._get_ai_llm_engine",
+        "apps.ai.engines.llm_engine.get_llm_engine",
         return_value=mock_engine,
     ):
         engine = get_llm_engine()
@@ -34,7 +34,7 @@ def test_get_llm_engine_returns_none_when_unavailable():
     mock_engine.is_available.return_value = False
 
     with patch(
-        "apps.analytics.entry_points._get_ai_llm_engine",
+        "apps.ai.engines.llm_engine.get_llm_engine",
         return_value=mock_engine,
     ):
         engine = get_llm_engine()

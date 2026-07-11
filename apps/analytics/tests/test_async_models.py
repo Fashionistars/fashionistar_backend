@@ -38,7 +38,7 @@ async def test_metric_aget_by_type_and_latest():
 @pytest.mark.asyncio
 async def test_user_activity_aget_analytics_summary():
     """UserActivity async summary should aggregate activity counts."""
-    user = await User.objects.acreate(email="async@test.com")
+    user = User.objects.create_user(email="async@test.com", password="TestPass123!")
     await UserActivity.objects.acreate(user=user, action="login", resource="auth")
     await UserActivity.objects.acreate(user=user, action="view", resource="product")
 
@@ -80,12 +80,13 @@ async def test_performance_metric_aget_slow_queries_and_summary():
 async def test_business_metric_aget_trend():
     """BusinessMetric async trend should return the latest N records."""
     now = timezone.now()
+    from datetime import timedelta
     for i in range(3):
         await BusinessMetric.objects.acreate(
             metric_name="total_gmv",
             value=float(i + 1),
-            period_start=now,
-            period_end=now,
+            period_start=now - timedelta(hours=3 - i),
+            period_end=now - timedelta(hours=2 - i),
         )
 
     trend = await BusinessMetric.aget_trend("total_gmv", periods=3)

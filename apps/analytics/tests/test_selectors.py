@@ -29,7 +29,7 @@ def test_sync_selectors():
     assert len(metrics) == 1
     assert metrics[0].id == metric.id
 
-    user = User.objects.create(email="sync@test.com")
+    user = User.objects.create_user(email="sync@test.com", password="TestPass123!")
     UserActivity.objects.create(user=user, action="login")
     activities = get_user_activity(user_id=user.id)
     assert len(activities) == 1
@@ -56,7 +56,7 @@ async def test_aget_metrics():
 @pytest.mark.asyncio
 async def test_aget_analytics_dashboard_parallel():
     """Parallel dashboard selector should return combined data."""
-    user = await User.objects.acreate(email="dash@test.com")
+    user = User.objects.create_user(email="dash@test.com", password="TestPass123!")
     await UserActivity.objects.acreate(user=user, action="login")
     await PerformanceMetric.objects.acreate(
         endpoint="/", method="GET", response_time_ms=100, status_code=200

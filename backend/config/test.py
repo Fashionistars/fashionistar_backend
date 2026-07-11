@@ -30,7 +30,10 @@ else:
             'OPTIONS': {
                 'uri': True,
                 'timeout': 60,
-            }
+            },
+            'TEST': {
+                'NAME': 'file:sharedmem?mode=memory&cache=shared',
+            },
         }
     }
 

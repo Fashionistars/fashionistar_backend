@@ -32,7 +32,7 @@ def test_run_platform_analytics_uses_migrated_workflow():
     mock_workflow = MagicMock()
     mock_workflow.execute.return_value = {"anomalies": [], "llm_insights": ""}
 
-    with patch("apps.analytics.tasks.analytics_tasks.AnalyticsWorkflow", return_value=mock_workflow):
+    with patch("apps.analytics.workflows.analytics.AnalyticsWorkflow", return_value=mock_workflow):
         result = run_platform_analytics(days=7, scope="platform")
 
     assert result["anomalies"] == []
@@ -52,7 +52,7 @@ def test_run_user_behavior_analysis_uses_migrated_workflow():
     }
 
     with patch(
-        "apps.analytics.tasks.analytics_tasks.UserBehaviorWorkflow",
+        "apps.analytics.workflows.user_behavior.UserBehaviorWorkflow",
         return_value=mock_workflow,
     ):
         result = run_user_behavior_analysis(user_id=user_id, days=30)
@@ -75,7 +75,7 @@ def test_run_product_performance_analysis_uses_migrated_workflow():
     }
 
     with patch(
-        "apps.analytics.tasks.analytics_tasks.ProductPerformanceWorkflow",
+        "apps.analytics.workflows.product_performance.ProductPerformanceWorkflow",
         return_value=mock_workflow,
     ):
         result = run_product_performance_analysis(product_id=product_id, days=30)
@@ -110,7 +110,7 @@ def test_run_vendor_analytics_uses_migrated_workflow():
     mock_workflow.execute.return_value = {"vendor_id": vendor_id, "gmv": 1000}
 
     with patch(
-        "apps.analytics.tasks.analytics_tasks.VendorPerformanceWorkflow",
+        "apps.analytics.workflows.vendor_performance.VendorPerformanceWorkflow",
         return_value=mock_workflow,
     ):
         result = run_vendor_analytics(vendor_id=vendor_id, days=30)

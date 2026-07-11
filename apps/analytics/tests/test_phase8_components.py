@@ -150,10 +150,6 @@ class TestMetricRollupModels:
             )
 
     @pytest.mark.asyncio
-    @pytest.mark.skipif(
-        True,
-        reason="Requires migration runner (DisableMigrations prevents table creation for new models)",
-    )
     async def test_metric_rollup_aget_rollup(self):
         from apps.analytics.models import MetricRollup
         from django.utils import timezone
