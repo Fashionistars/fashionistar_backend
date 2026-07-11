@@ -12,6 +12,8 @@ name: 🎀 FASHIONISTAR — Deploy All 4 Spaces to Hugging Face
 #
 # Trigger:     push to main branch OR manual dispatch from GitHub Actions UI
 # Secrets:     HF_TOKEN — Hugging Face write-access token (set in GitHub repo secrets)
+#              Token must have repo.write on ALL 4 Spaces (fine-grained tokens: scope each Space)
+# Deploy rev:  2 — re-trigger after HF token write-scope granted for celery-beat & celery-queues
 # =============================================================================
 
 on:

@@ -79,8 +79,11 @@ try:
     import spaces as _sp
     _hf_token = os.environ.get("HF_TOKEN")
     if _hf_token:
-        _sp.configure(hf_token=_hf_token)
-        logger.info("ZeroGPU authenticated with HF_TOKEN (8x quota)")
+        if hasattr(_sp, "configure"):
+            _sp.configure(hf_token=_hf_token)
+            logger.info("ZeroGPU authenticated with HF_TOKEN (8x quota)")
+        else:
+            logger.warning("Installed spaces package has no configure(); continuing without token configuration")
     else:
         logger.warning("HF_TOKEN not set -- ZeroGPU running with reduced quota")
 except Exception as _spaces_err:

@@ -15,7 +15,7 @@ ZeroGPU Architecture:
 
 Models:
   - Body Pose:   MediaPipe Tasks PoseLandmarker (pose_landmarker_heavy.task)
-  - Embeddings:  Marqo/marqo-FashionSigLIP-B-16 (512-dim, Apache 2.0)
+  - Embeddings:  Marqo/marqo-fashionSigLIP (512-dim, Apache 2.0)
   - LLM:         Groq API / Llama-3.3-70B-Versatile (if GROQ_API_KEY set)
 
 External URL: https://fashionistar-fashionistar-ai-engine.hf.space
@@ -41,7 +41,7 @@ logger = logging.getLogger("fashionistar.zerogpu_engine")
 # ── Constants ──────────────────────────────────────────────────────────────────
 AI_ENGINE_VERSION = "3.0.0"
 
-SIGLIP_MODEL_ID   = os.environ.get("SIGLIP_MODEL_ID",   "Marqo/marqo-FashionSigLIP-B-16")
+SIGLIP_MODEL_ID   = os.environ.get("SIGLIP_MODEL_ID",   "Marqo/marqo-fashionSigLIP")
 SAMBANOVA_API_KEY = os.environ.get("SAMBANOVA_API_KEY",  "")
 SAMBANOVA_MODEL   = os.environ.get("SAMBANOVA_MODEL",    "Meta-Llama-3.3-70B-Instruct")
 CEREBRAS_API_KEY  = os.environ.get("CEREBRAS_API_KEY",   "")
@@ -131,17 +131,12 @@ def _load_siglip() -> bool:
     """Load marqo-FashionSigLIP onto CUDA at module level (ZeroGPU requirement)."""
     global _siglip_model, _siglip_processor
     try:
+        import open_clip
         import torch
-        from transformers import AutoModel, AutoProcessor
 
         logger.info("Loading %s ...", SIGLIP_MODEL_ID)
-        _siglip_processor = AutoProcessor.from_pretrained(
-            SIGLIP_MODEL_ID, token=HF_TOKEN or None,
-        )
-        _siglip_model = AutoModel.from_pretrained(
-            SIGLIP_MODEL_ID,
-            dtype=torch.float16,  # dtype= replaces deprecated torch_dtype=
-            token=HF_TOKEN or None,
+        _siglip_model, _, _siglip_processor = open_clip.create_model_and_transforms(
+            f"hf-hub:{SIGLIP_MODEL_ID}",
         )
         _siglip_model = _siglip_model.to("cuda")
         _siglip_model.eval()
@@ -348,11 +343,10 @@ def generate_fashion_embedding(image_b64: str) -> dict[str, Any]:
         img_bytes = base64.b64decode(image_b64)
         img_pil   = Image.open(BytesIO(img_bytes)).convert("RGB")
 
-        inputs = _siglip_processor(images=img_pil, return_tensors="pt")
-        inputs = {k: v.to("cuda") for k, v in inputs.items()}
+        inputs = _siglip_processor(img_pil).unsqueeze(0).to("cuda")
 
         with torch.no_grad():
-            feats     = _siglip_model.get_image_features(**inputs)
+            feats     = _siglip_model.encode_image(inputs)
             embedding = feats[0].float().cpu().numpy()
 
         norm      = float(np.linalg.norm(embedding))
