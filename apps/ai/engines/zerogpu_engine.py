@@ -39,7 +39,7 @@ from PIL import Image
 logger = logging.getLogger("fashionistar.zerogpu_engine")
 
 # ── Constants ──────────────────────────────────────────────────────────────────
-AI_ENGINE_VERSION = "3.0.0"
+AI_ENGINE_VERSION = "1.0.0"
 
 SIGLIP_MODEL_ID   = os.environ.get("SIGLIP_MODEL_ID",   "Marqo/marqo-fashionSigLIP")
 SAMBANOVA_API_KEY = os.environ.get("SAMBANOVA_API_KEY",  "")

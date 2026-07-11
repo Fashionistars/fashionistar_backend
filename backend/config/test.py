@@ -30,7 +30,10 @@ else:
             'OPTIONS': {
                 'uri': True,
                 'timeout': 60,
-            }
+            },
+            'TEST': {
+                'NAME': 'file:sharedmem?mode=memory&cache=shared',
+            },
         }
     }
 
@@ -59,13 +62,13 @@ REST_FRAMEWORK = {
     },
 }
 
-# ─── Cache — DummyCache so throttle counts never persist between requests ────
-# BurstRateThrottle is applied directly on RegisterView (not via global setting),
-# so it reads from cache. DummyCache returns None for all gets (miss), so the
-# throttle count never accumulates — no 429 responses in tests.
+# ─── Cache — LocMemCache so cache.set/get work in tests (DummyCache is no-op) ──
+# LocMemCache is in-process, thread-safe, and doesn't persist between test runs.
+# Throttling is disabled via REST_FRAMEWORK settings above, so no 429 issues.
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'test-cache',
     }
 }
 

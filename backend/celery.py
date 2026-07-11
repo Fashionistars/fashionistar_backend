@@ -221,6 +221,14 @@ app.conf.task_queues = (
         routing_key="ai_ingestion",
         queue_arguments={"x-max-priority": 4},
     ),
+    # ── Analytics queue — aggregation and reporting workloads ────────────────
+    # Workers: celery -A backend worker -Q analytics --concurrency=2 --loglevel=info
+    Queue(
+        "analytics",
+        Exchange("analytics", type="direct"),
+        routing_key="analytics",
+        queue_arguments={"x-max-priority": 5},
+    ),
     # ── Default catch-all ─────────────────────────────────────────────────────
     Queue(
         "default",
@@ -299,11 +307,26 @@ app.conf.task_routes = {
     "apps.ai.tasks.embedding_tasks.generate_product_embedding":         {"queue": "ai"},
     "apps.ai.tasks.embedding_tasks.batch_generate_embeddings":          {"queue": "ai"},
     "apps.ai.tasks.embedding_tasks.backfill_missing_embeddings":        {"queue": "ai"},
-    # Analytics pipeline
-    "apps.ai.tasks.analytics_tasks.run_platform_analytics":             {"queue": "ai"},
-    "apps.ai.tasks.analytics_tasks.run_user_behavior_analysis":         {"queue": "ai"},
-    "apps.ai.tasks.analytics_tasks.run_product_performance_analysis":   {"queue": "ai"},
-    "apps.ai.tasks.analytics_tasks.generate_daily_report":              {"queue": "ai"},
+    # Analytics pipeline (migrated to apps/analytics)
+    "apps.analytics.tasks.analytics_tasks.run_platform_analytics":             {"queue": "analytics"},
+    "apps.analytics.tasks.analytics_tasks.run_user_behavior_analysis":         {"queue": "analytics"},
+    "apps.analytics.tasks.analytics_tasks.run_product_performance_analysis":   {"queue": "analytics"},
+    "apps.analytics.tasks.analytics_tasks.run_vendor_analytics":               {"queue": "analytics"},
+    "apps.analytics.tasks.analytics_tasks.run_realtime_analytics":             {"queue": "analytics"},
+    "apps.analytics.tasks.analytics_tasks.generate_daily_report":              {"queue": "analytics"},
+    "apps.analytics.tasks.analytics_tasks.cleanup_expired_data":               {"queue": "analytics"},
+    # Analytics aggregation rollups
+    "apps.analytics.tasks.aggregation_tasks.rollup_1m":                        {"queue": "analytics"},
+    "apps.analytics.tasks.aggregation_tasks.rollup_5m":                        {"queue": "analytics"},
+    "apps.analytics.tasks.aggregation_tasks.rollup_1h":                        {"queue": "analytics"},
+    "apps.analytics.tasks.aggregation_tasks.rollup_1d":                        {"queue": "analytics"},
+    # Analytics alert evaluation
+    "apps.analytics.tasks.alert_evaluation_tasks.evaluate_alert_rules":         {"queue": "analytics"},
+    # Analytics cache warming
+    "apps.analytics.tasks.cache_warming_tasks.warm_dashboard_cache":            {"queue": "analytics"},
+    "apps.analytics.tasks.cache_warming_tasks.refresh_materialized_views":      {"queue": "analytics"},
+    "apps.analytics.tasks.cache_warming_tasks.warm_query_builder_cache":        {"queue": "analytics"},
+    "apps.analytics.tasks.cache_warming_tasks.warm_capacity_cache":             {"queue": "analytics"},
     # DB ingestion — triggered by Django signals on model saves
     "apps.ai.tasks.ingestion_tasks.ingest_db_change":                   {"queue": "ai_ingestion"},
     "apps.ai.tasks.ingestion_tasks.refresh_trending_cache":             {"queue": "ai_ingestion"},
@@ -387,10 +410,32 @@ app.conf.beat_schedule = {
 
     # Daily platform analytics — runs at 02:30 UTC (after audit cleanup at 02:00)
     # Generates 1-day, 7-day, and 30-day rolling reports
-    "ai-daily-analytics-report": {
-        "task":     "apps.ai.tasks.analytics_tasks.generate_daily_report",
+    "analytics-daily-report": {
+        "task":     "apps.analytics.tasks.analytics_tasks.generate_daily_report",
         "schedule": crontab(hour=2, minute=30),
-        "options":  {"queue": "ai"},
+        "options":  {"queue": "analytics"},
+    },
+
+    # Analytics metric rollups (migrated to apps/analytics)
+    "analytics-rollup-1m": {
+        "task":     "apps.analytics.tasks.aggregation_tasks.rollup_1m",
+        "schedule": crontab(minute="*"),
+        "options":  {"queue": "analytics"},
+    },
+    "analytics-rollup-5m": {
+        "task":     "apps.analytics.tasks.aggregation_tasks.rollup_5m",
+        "schedule": crontab(minute="*/5"),
+        "options":  {"queue": "analytics"},
+    },
+    "analytics-rollup-1h": {
+        "task":     "apps.analytics.tasks.aggregation_tasks.rollup_1h",
+        "schedule": crontab(minute=0),
+        "options":  {"queue": "analytics"},
+    },
+    "analytics-rollup-1d": {
+        "task":     "apps.analytics.tasks.aggregation_tasks.rollup_1d",
+        "schedule": crontab(hour=0, minute=5),
+        "options":  {"queue": "analytics"},
     },
 
     # Weekly embedding backfill — Sunday 03:00 UTC
@@ -406,6 +451,49 @@ app.conf.beat_schedule = {
         "task":    "apps.ai.tasks.ingestion_tasks.refresh_trending_cache",
         "schedule": crontab(minute=0),   # Every hour on the hour
         "options": {"queue": "ai_ingestion"},
+    },
+
+    # Analytics data-retention cleanup — daily at 03:00 UTC (after daily report at 02:30)
+    # Purges expired analytics records per model based on ANALYTICS_SETTINGS['DATA_RETENTION']
+    "analytics-data-retention-cleanup": {
+        "task":     "apps.analytics.tasks.analytics_tasks.cleanup_expired_data",
+        "schedule": crontab(hour=3, minute=0),
+        "options":  {"queue": "analytics"},
+    },
+
+    # Analytics alert rule evaluation — every minute
+    "analytics-alert-evaluation": {
+        "task":     "apps.analytics.tasks.alert_evaluation_tasks.evaluate_alert_rules",
+        "schedule": crontab(minute="*"),
+        "options":  {"queue": "analytics"},
+    },
+
+    # Analytics dashboard cache warming — every 5 minutes
+    "analytics-warm-dashboard-cache": {
+        "task":     "apps.analytics.tasks.cache_warming_tasks.warm_dashboard_cache",
+        "schedule": crontab(minute="*/5"),
+        "options":  {"queue": "analytics"},
+    },
+
+    # Analytics materialized view refresh — every hour
+    "analytics-refresh-materialized-views": {
+        "task":     "apps.analytics.tasks.cache_warming_tasks.refresh_materialized_views",
+        "schedule": crontab(minute=15),
+        "options":  {"queue": "analytics"},
+    },
+
+    # Analytics query builder cache warming — every 10 minutes
+    "analytics-warm-query-builder-cache": {
+        "task":     "apps.analytics.tasks.cache_warming_tasks.warm_query_builder_cache",
+        "schedule": crontab(minute="*/10"),
+        "options":  {"queue": "analytics"},
+    },
+
+    # Analytics capacity cache warming — every 2 minutes
+    "analytics-warm-capacity-cache": {
+        "task":     "apps.analytics.tasks.cache_warming_tasks.warm_capacity_cache",
+        "schedule": crontab(minute="*/2"),
+        "options":  {"queue": "analytics"},
     },
 
     # Weekly DBChangeEvent cleanup — Monday 04:00 UTC (30-day retention)

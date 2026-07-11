@@ -69,9 +69,30 @@ class Metric(models.Model):
             return None
     
     @classmethod
-    async def aget_by_name(cls, name: str, limit: int = 100):
-        queryset = cls.objects.filter(name=name).order_by('-timestamp')[:limit]
-        return [m async for m in queryset]
+    async def aget_by_name(
+        cls, name: str, date_from=None, date_to=None, limit: int = 100
+    ):
+        queryset = cls.objects.filter(name=name)
+        if date_from:
+            queryset = queryset.filter(timestamp__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(timestamp__lte=date_to)
+        return [m async for m in queryset.order_by('-timestamp')[:limit]]
+    
+    @classmethod
+    async def aget_by_type(
+        cls, metric_type: str, date_from=None, date_to=None, limit: int = 100
+    ):
+        queryset = cls.objects.filter(metric_type=metric_type)
+        if date_from:
+            queryset = queryset.filter(timestamp__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(timestamp__lte=date_to)
+        return [m async for m in queryset.order_by('-timestamp')[:limit]]
+    
+    @classmethod
+    async def aget_latest(cls, limit: int = 10):
+        return [m async for m in cls.objects.order_by('-timestamp')[:limit]]
     
     @classmethod
     async def acreate_from_dict(cls, data: dict):
@@ -157,14 +178,37 @@ class UserActivity(models.Model):
             return None
     
     @classmethod
-    async def aget_by_user(cls, user_id: str, limit: int = 100):
-        queryset = cls.objects.filter(user_id=user_id).order_by('-timestamp')[:limit]
-        return [a async for a in queryset]
+    async def aget_by_user(
+        cls, user_id: str, date_from=None, date_to=None, limit: int = 100
+    ):
+        queryset = cls.objects.filter(user_id=user_id)
+        if date_from:
+            queryset = queryset.filter(timestamp__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(timestamp__lte=date_to)
+        return [a async for a in queryset.order_by('-timestamp')[:limit]]
     
     @classmethod
-    async def aget_by_action(cls, action: str, limit: int = 100):
-        queryset = cls.objects.filter(action=action).order_by('-timestamp')[:limit]
-        return [a async for a in queryset]
+    async def aget_by_action(
+        cls, action: str, date_from=None, date_to=None, limit: int = 100
+    ):
+        queryset = cls.objects.filter(action=action)
+        if date_from:
+            queryset = queryset.filter(timestamp__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(timestamp__lte=date_to)
+        return [a async for a in queryset.order_by('-timestamp')[:limit]]
+    
+    @classmethod
+    async def aget_analytics_summary(cls, date_from, date_to):
+        from django.db.models import Count
+        queryset = cls.objects.filter(timestamp__range=(date_from, date_to))
+        result = await queryset.aaggregate(
+            total_activities=Count('id'),
+            unique_users=Count('user', distinct=True),
+            unique_actions=Count('action', distinct=True)
+        )
+        return result
     
     @classmethod
     async def aget_recent_activities(cls, hours: int = 24, limit: int = 100):
@@ -237,9 +281,38 @@ class PerformanceMetric(models.Model):
             return None
     
     @classmethod
-    async def aget_by_endpoint(cls, endpoint: str, limit: int = 100):
-        queryset = cls.objects.filter(endpoint=endpoint).order_by('-timestamp')[:limit]
-        return [m async for m in queryset]
+    async def aget_by_endpoint(
+        cls, endpoint: str, date_from=None, date_to=None, limit: int = 100
+    ):
+        queryset = cls.objects.filter(endpoint=endpoint)
+        if date_from:
+            queryset = queryset.filter(timestamp__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(timestamp__lte=date_to)
+        return [p async for p in queryset.order_by('-timestamp')[:limit]]
+    
+    @classmethod
+    async def aget_slow_queries(
+        cls, threshold_ms: int, date_from=None, date_to=None, limit: int = 50
+    ):
+        queryset = cls.objects.filter(response_time_ms__gte=threshold_ms)
+        if date_from:
+            queryset = queryset.filter(timestamp__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(timestamp__lte=date_to)
+        return [p async for p in queryset.order_by('-response_time_ms')[:limit]]
+    
+    @classmethod
+    async def aget_performance_summary(cls, date_from, date_to):
+        from django.db.models import Count, Avg, Max, Q
+        queryset = cls.objects.filter(timestamp__range=(date_from, date_to))
+        result = await queryset.aaggregate(
+            total_requests=Count('id'),
+            avg_response_time=Avg('response_time_ms'),
+            max_response_time=Max('response_time_ms'),
+            error_rate=Count('id', filter=~Q(status_code__range=(200, 299)))
+        )
+        return result
     
     @classmethod
     async def aget_by_user(cls, user_id: str, limit: int = 100):
@@ -303,9 +376,20 @@ class BusinessMetric(models.Model):
             return None
     
     @classmethod
-    async def aget_by_name(cls, metric_name: str, limit: int = 100):
-        queryset = cls.objects.filter(metric_name=metric_name).order_by('-created_at')[:limit]
-        return [m async for m in queryset]
+    async def aget_by_name(
+        cls, metric_name: str, period_start=None, period_end=None
+    ):
+        queryset = cls.objects.filter(metric_name=metric_name)
+        if period_start:
+            queryset = queryset.filter(period_start__gte=period_start)
+        if period_end:
+            queryset = queryset.filter(period_end__lte=period_end)
+        return [b async for b in queryset.order_by('-period_start')]
+    
+    @classmethod
+    async def aget_trend(cls, metric_name: str, periods: int = 12):
+        queryset = cls.objects.filter(metric_name=metric_name).order_by('-period_start')[:periods]
+        return [b async for b in queryset]
     
     @classmethod
     async def aget_by_period(cls, period_start, period_end):
@@ -403,8 +487,12 @@ class AlertRule(models.Model):
     
     @classmethod
     async def aget_active_rules(cls):
-        queryset = cls.objects.filter(is_active=True)
+        queryset = cls.objects.filter(is_active=True).order_by('-created_at')
         return [r async for r in queryset]
+    
+    @classmethod
+    async def aget_by_severity(cls, severity: str):
+        return [r async for r in cls.objects.filter(severity=severity, is_active=True)]
     
     @classmethod
     async def aget_by_metric(cls, metric_name: str):
@@ -475,9 +563,15 @@ class Alert(models.Model):
             return None
     
     @classmethod
-    async def aget_by_rule(cls, rule_id: int, limit: int = 100):
-        queryset = cls.objects.filter(rule_id=rule_id).order_by('-fired_at')[:limit]
-        return [a async for a in queryset]
+    async def aget_by_rule(
+        cls, rule_id: int, date_from=None, date_to=None, limit: int = 100
+    ):
+        queryset = cls.objects.filter(rule_id=rule_id)
+        if date_from:
+            queryset = queryset.filter(fired_at__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(fired_at__lte=date_to)
+        return [a async for a in queryset.order_by('-fired_at')[:limit]]
     
     @classmethod
     async def aget_by_status(cls, status: str, limit: int = 100):
@@ -488,3 +582,156 @@ class Alert(models.Model):
     async def aget_firing_alerts(cls, limit: int = 100):
         queryset = cls.objects.filter(status='firing').order_by('-fired_at')[:limit]
         return [a async for a in queryset]
+    
+    async def aresolve(self, resolution_notes: str = None):
+        self.status = 'resolved'
+        self.resolved_at = timezone.now()
+        if resolution_notes:
+            self.message = resolution_notes
+        await self.asave(update_fields=['status', 'resolved_at', 'message'])
+
+
+class MetricRollup(models.Model):
+    """
+    Pre-aggregated metric rollups for fast dashboard queries.
+
+    Stores aggregated values for Metric data across time windows
+    (1m, 5m, 1h, 1d) to avoid expensive real-time aggregations.
+    """
+    WINDOW_CHOICES = [
+        ('1m', '1 Minute'),
+        ('5m', '5 Minutes'),
+        ('1h', '1 Hour'),
+        ('1d', '1 Day'),
+    ]
+
+    name = models.CharField(
+        max_length=255,
+        verbose_name='Metric Name',
+    )
+    metric_type = models.CharField(
+        max_length=20,
+        default='gauge',
+        verbose_name='Metric Type',
+    )
+    window = models.CharField(
+        max_length=5,
+        choices=WINDOW_CHOICES,
+        verbose_name='Aggregation Window',
+    )
+    timestamp = models.DateTimeField(
+        verbose_name='Window Start Timestamp',
+    )
+    avg = models.FloatField(
+        default=0,
+        verbose_name='Average Value',
+    )
+    min = models.FloatField(
+        default=0,
+        verbose_name='Minimum Value',
+    )
+    max = models.FloatField(
+        default=0,
+        verbose_name='Maximum Value',
+    )
+    count = models.PositiveIntegerField(
+        default=0,
+        verbose_name='Sample Count',
+    )
+    sum = models.FloatField(
+        default=0,
+        verbose_name='Sum of Values',
+    )
+
+    class Meta:
+        verbose_name = 'Metric Rollup'
+        verbose_name_plural = 'Metric Rollups'
+        ordering = ['-timestamp']
+        unique_together = ['name', 'metric_type', 'window', 'timestamp']
+        indexes = [
+            models.Index(fields=['name', 'window', 'timestamp']),
+            models.Index(fields=['window', 'timestamp']),
+        ]
+
+    def __str__(self):
+        return f"{self.name} [{self.window}]: avg={self.avg:.2f} count={self.count} ({self.timestamp})"
+
+    @classmethod
+    async def aget_rollup(cls, name, window, date_from=None, date_to=None, limit=100):
+        queryset = cls.objects.filter(name=name, window=window)
+        if date_from:
+            queryset = queryset.filter(timestamp__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(timestamp__lte=date_to)
+        return [r async for r in queryset.order_by('-timestamp')[:limit]]
+
+
+class PerformanceMetricRollup(models.Model):
+    """
+    Pre-aggregated performance metric rollups for fast dashboard queries.
+
+    Stores aggregated values for PerformanceMetric data across time windows
+    (1m, 5m, 1h, 1d) to avoid expensive real-time aggregations.
+    """
+    WINDOW_CHOICES = [
+        ('1m', '1 Minute'),
+        ('5m', '5 Minutes'),
+        ('1h', '1 Hour'),
+        ('1d', '1 Day'),
+    ]
+
+    endpoint = models.CharField(
+        max_length=255,
+        verbose_name='Endpoint Route',
+    )
+    method = models.CharField(
+        max_length=10,
+        default='GET',
+        verbose_name='HTTP Method',
+    )
+    window = models.CharField(
+        max_length=5,
+        choices=WINDOW_CHOICES,
+        verbose_name='Aggregation Window',
+    )
+    timestamp = models.DateTimeField(
+        verbose_name='Window Start Timestamp',
+    )
+    avg_response_time = models.FloatField(
+        default=0,
+        verbose_name='Average Response Time (ms)',
+    )
+    max_response_time = models.PositiveIntegerField(
+        default=0,
+        verbose_name='Max Response Time (ms)',
+    )
+    error_count = models.PositiveIntegerField(
+        default=0,
+        verbose_name='Error Count (non-2xx)',
+    )
+    total = models.PositiveIntegerField(
+        default=0,
+        verbose_name='Total Requests',
+    )
+
+    class Meta:
+        verbose_name = 'Performance Metric Rollup'
+        verbose_name_plural = 'Performance Metric Rollups'
+        ordering = ['-timestamp']
+        unique_together = ['endpoint', 'method', 'window', 'timestamp']
+        indexes = [
+            models.Index(fields=['endpoint', 'window', 'timestamp']),
+            models.Index(fields=['window', 'timestamp']),
+        ]
+
+    def __str__(self):
+        return f"{self.method} {self.endpoint} [{self.window}]: avg={self.avg_response_time:.2f}ms total={self.total} ({self.timestamp})"
+
+    @classmethod
+    async def aget_rollup(cls, endpoint, window, date_from=None, date_to=None, limit=100):
+        queryset = cls.objects.filter(endpoint=endpoint, window=window)
+        if date_from:
+            queryset = queryset.filter(timestamp__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(timestamp__lte=date_to)
+        return [r async for r in queryset.order_by('-timestamp')[:limit]]

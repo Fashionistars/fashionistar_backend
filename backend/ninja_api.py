@@ -330,3 +330,11 @@ try:
 except Exception as exc:  # pragma: no cover
     logger.warning("ℹ️ NinjaAPI: analytics router FAILED to register: %s", exc)
 
+# Analytics dashboard: /api/v1/ninja/analytics/dashboard/
+try:
+    from apps.analytics.apis.async_.dashboard_views import router as analytics_dashboard_router
+    ninja_api.add_router("/analytics/dashboard/", analytics_dashboard_router)
+    logger.info("✅ NinjaAPI: analytics dashboard router registered at /api/v1/ninja/analytics/dashboard/")
+except Exception as exc:  # pragma: no cover
+    logger.warning("ℹ️ NinjaAPI: analytics dashboard router FAILED to register: %s", exc)
+

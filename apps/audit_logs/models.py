@@ -283,6 +283,9 @@ class EventType(models.TextChoices):
     ANALYTICS_ALERT_RESOLVED        = "analytics_alert_resolved",        _("Alert Resolved")
     ANALYTICS_DASHBOARD_VIEWED      = "analytics_dashboard_viewed",      _("Analytics Dashboard Viewed")
     ANALYTICS_REPORT_GENERATED      = "analytics_report_generated",      _("Analytics Report Generated")
+    ANALYTICS_QUERY_EXECUTED        = "analytics_query_executed",        _("Analytics Query Executed")
+    METRIC_AGGREGATION_EXECUTED     = "metric_aggregation_executed",     _("Metric Aggregation Executed")
+    DATA_RETENTION_APPLIED          = "data_retention_applied",          _("Data Retention Applied")
     ANALYTICS_DATA_EXPORTED         = "analytics_data_exported",         _("Analytics Data Exported")
 
     # ── DevOps & Infrastructure ───────────────────────────────────────────────

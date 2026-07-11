@@ -210,13 +210,81 @@ class WebhookThrottle(BaseThrottle):
 # Django Ninja helper
 # ---------------------------------------------------------------------------
 
+# Ninja-compatible throttle wrappers (inherit from ninja.throttling.BaseThrottle)
+# Created lazily to avoid import errors when Django Ninja is not installed.
+
+def _make_ninja_throttle_class(scope_name: str, rate: str, anon: bool = False):
+    """Create a Ninja-compatible throttle class on the fly."""
+    from ninja.throttling import UserRateThrottle, AnonRateThrottle
+
+    base = AnonRateThrottle if anon else UserRateThrottle
+
+    # Convert DRF rate format to Ninja rate format
+    # DRF: '120/minute', '5000/day', '20/hour'
+    # Ninja: '120/min', '5000/day', '20/hour' (accepts s, sec, m, min, h, hour, d, day)
+    ninja_rate = rate.replace("/minute", "/min")
+
+    class _NinjaThrottle(base):
+        scope = scope_name
+
+        def __init__(self, throttle_rate: str = ninja_rate):
+            super().__init__(rate=throttle_rate)
+
+    _NinjaThrottle.__name__ = f"Ninja{scope_name.title().replace('_', '')}Throttle"
+    return _NinjaThrottle
+
+
+# Cache for generated Ninja throttle classes
+_ninja_throttle_cache: dict = {}
+
+
 def get_ninja_throttle(*throttle_classes: type) -> list:
     """
     Instantiate throttle classes for use in Ninja endpoint decorators.
+
+    Converts DRF throttle classes to Ninja-compatible ones automatically
+    by reading the scope and rate from the DRF class and creating a
+    Ninja SimpleRateThrottle subclass with the same configuration.
 
     Usage::
 
         @router.post('/auth/login', throttle=get_ninja_throttle(AuthSensitiveThrottle))
         def login(request, payload: LoginSchema): ...
     """
-    return [cls() for cls in throttle_classes]
+    from ninja.throttling import BaseThrottle as NinjaBaseThrottle
+
+    result = []
+    for cls in throttle_classes:
+        # If it's already a Ninja throttle, just instantiate
+        if issubclass(cls, NinjaBaseThrottle):
+            result.append(cls())
+            continue
+
+        # DRF throttle — convert to Ninja-compatible
+        scope = getattr(cls, "scope", None)
+        if scope is None:
+            continue
+
+        # Get the rate from the DRF class
+        try:
+            instance = cls()
+            rate = instance.get_rate()
+        except Exception:
+            rate = None
+
+        if rate is None:
+            continue
+
+        # Check if anon throttle (inherits from AnonRateThrottle)
+        from rest_framework.throttling import AnonRateThrottle as DRFAnonRateThrottle
+        is_anon = issubclass(cls, DRFAnonRateThrottle)
+
+        # Get or create Ninja-compatible class
+        cache_key = f"{scope}:{rate}:{is_anon}"
+        if cache_key not in _ninja_throttle_cache:
+            _ninja_throttle_cache[cache_key] = _make_ninja_throttle_class(scope, rate, anon=is_anon)
+
+        ninja_cls = _ninja_throttle_cache[cache_key]
+        result.append(ninja_cls())
+
+    return result

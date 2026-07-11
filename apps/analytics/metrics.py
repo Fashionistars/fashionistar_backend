@@ -98,7 +98,7 @@ class AnalyticsMetrics:
         queryset = BusinessMetric.objects.filter(created_at__gte=since)
 
         metrics_by_name = {}
-        async for metric in queryset:
+        for metric in queryset:
             if metric.metric_name not in metrics_by_name:
                 metrics_by_name[metric.metric_name] = []
             metrics_by_name[metric.metric_name].append(metric.value)

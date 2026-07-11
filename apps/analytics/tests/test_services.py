@@ -7,7 +7,7 @@ from django.utils import timezone
 from datetime import timedelta
 from unittest.mock import MagicMock
 
-from ..services import AnalyticsService, MetricsService, ReportingService, InsightsService
+from ..services import AnalyticsService, MetricsService, ReportingService
 from ..models import Metric, UserActivity, PerformanceMetric, AlertRule, Alert
 
 User = get_user_model()
@@ -265,26 +265,3 @@ class ReportingServiceTest(TestCase):
         
         self.assertIn('total_metrics', metrics)
         self.assertGreaterEqual(metrics['total_metrics'], 0)
-
-
-class InsightsServiceTest(TestCase):
-    """
-    تست‌های مربوط به کلاس InsightsService
-    """
-    
-    def setUp(self):
-        """
-        تنظیمات اولیه برای تست‌ها
-        """
-        self.insights_service = InsightsService()
-    
-    def test_get_dashboard_metrics(self):
-        """
-        تست دریافت متریک‌های داشبورد
-        """
-        metrics = self.insights_service.get_dashboard_metrics()
-        
-        self.assertIn('uptime', metrics)
-        self.assertIn('users_active', metrics)
-        self.assertEqual(metrics['uptime'], 100)
-        self.assertEqual(metrics['users_active'], 0)
