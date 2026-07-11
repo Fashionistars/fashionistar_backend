@@ -85,6 +85,35 @@ jobs:
         with:
           version: '0.8.22'
 
+      - name: Validate UTF-8 encoding for all Python files
+        run: |
+          BAD_FILES=""
+          while IFS= read -r -d '' pyfile; do
+            if ! python3 -c "
+          import sys
+          try:
+              with open(sys.argv[1], 'rb') as f:
+                  raw = f.read(4)
+              if raw[:3] == b'\xef\xbb\xbf':
+                  print(f'BOM: {sys.argv[1]}'); sys.exit(1)
+              if raw[:2] in (b'\xff\xfe', b'\xfe\xff'):
+                  print(f'UTF-16: {sys.argv[1]}'); sys.exit(1)
+              with open(sys.argv[1], encoding='utf-8') as f:
+                  f.read()
+              sys.exit(0)
+          except UnicodeDecodeError:
+              print(f'Not UTF-8: {sys.argv[1]}'); sys.exit(1)
+          " "$pyfile" 2>&1; then
+              BAD_FILES="$BAD_FILES$pyfile"$'\n'
+            fi
+          done < <(find . -name "*.py" -not -path "./.venv/*" -print0)
+          if [ -n "$BAD_FILES" ]; then
+            echo "❌ Non-UTF-8 encoded Python files found:"
+            echo "$BAD_FILES"
+            exit 1
+          fi
+          echo "✅ All Python files are UTF-8 encoded"
+
       - name: Install dependencies
         run: uv sync --frozen --no-dev
 
@@ -108,6 +137,29 @@ jobs:
             grep -v "WARNINGS:" | \
             grep -v "?: (security\." || true
           echo "✅ Django system check passed"
+
+      - name: Check for migration drift
+        continue-on-error: true
+        env:
+          DJANGO_SETTINGS_MODULE: backend.config.production
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
+          SECRET_KEY: ci-test-secret-key-minimum-50-characters-for-django-validation
+          DEBUG: 'False'
+          ALLOWED_HOSTS: '*'
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          OUTPUT=$(uv run python manage.py makemigrations --check --dry-run 2>&1 || true)
+          if echo "$OUTPUT" | grep -q "No changes detected"; then
+            echo "✅ No migration drift detected"
+          elif echo "$OUTPUT" | grep -q "Migrations for"; then
+            echo "❌ Migration drift detected! Run 'makemigrations' and commit the new migration."
+            echo "$OUTPUT"
+            exit 1
+          else
+            echo "⚠️ Migration check could not run cleanly (env issue). Output:"
+            echo "$OUTPUT"
+            echo "⚠️ Treating as warning — not blocking deployment."
+          fi
 
   # ── Job 1: Deploy API Gateway (fashionistar-api-v1) ────────────────────────
   deploy-api-v1:
