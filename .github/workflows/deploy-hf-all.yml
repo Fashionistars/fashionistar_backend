@@ -87,7 +87,7 @@ jobs:
 
       - name: Validate UTF-8 encoding for all Python files
         run: |
-          BAD_FILES=$(find . -name "*.py" -exec file {} + | grep -v "UTF-8\|ASCII" || true)
+          BAD_FILES=$(find . -name "*.py" -exec file {} + | grep -v "UTF-8\|ASCII\|empty" || true)
           if [ -n "$BAD_FILES" ]; then
             echo "❌ Non-UTF-8 encoded Python files found:"
             echo "$BAD_FILES"
