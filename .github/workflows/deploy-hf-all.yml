@@ -87,7 +87,26 @@ jobs:
 
       - name: Validate UTF-8 encoding for all Python files
         run: |
-          BAD_FILES=$(find . -name "*.py" -exec file {} + | grep -v "UTF-8\|ASCII\|empty" || true)
+          BAD_FILES=""
+          while IFS= read -r -d '' pyfile; do
+            if ! python3 -c "
+          import sys
+          try:
+              with open(sys.argv[1], 'rb') as f:
+                  raw = f.read(4)
+              if raw[:3] == b'\xef\xbb\xbf':
+                  print(f'BOM: {sys.argv[1]}'); sys.exit(1)
+              if raw[:2] in (b'\xff\xfe', b'\xfe\xff'):
+                  print(f'UTF-16: {sys.argv[1]}'); sys.exit(1)
+              with open(sys.argv[1], encoding='utf-8') as f:
+                  f.read()
+              sys.exit(0)
+          except UnicodeDecodeError:
+              print(f'Not UTF-8: {sys.argv[1]}'); sys.exit(1)
+          " "$pyfile" 2>&1; then
+              BAD_FILES="$BAD_FILES$pyfile"$'\n'
+            fi
+          done < <(find . -name "*.py" -not -path "./.venv/*" -print0)
           if [ -n "$BAD_FILES" ]; then
             echo "❌ Non-UTF-8 encoded Python files found:"
             echo "$BAD_FILES"
