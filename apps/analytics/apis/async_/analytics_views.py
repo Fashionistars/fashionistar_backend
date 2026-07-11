@@ -620,10 +620,12 @@ async def create_metric(request: HttpRequest, payload: CreateMetricRequest):
     )
     publish_analytics_event(
         event_type="metric_recorded",
-        metric_name=payload.name,
-        metric_type=payload.metric_type,
-        value=payload.value,
-        tags=tags,
+        metadata={
+            "metric_name": payload.name,
+            "metric_type": payload.metric_type,
+            "value": payload.value,
+            "tags": tags,
+        },
     )
     AnalyticsAuditService.log_metric_recorded(
         actor=request.auth,

@@ -19,7 +19,7 @@ from apps.analytics.models import (
 User = get_user_model()
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
 async def test_metric_aget_by_type_and_latest():
     """Metric async methods should filter by type and return latest records."""
@@ -34,11 +34,12 @@ async def test_metric_aget_by_type_and_latest():
     assert len(latest) == 2
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
 async def test_user_activity_aget_analytics_summary():
     """UserActivity async summary should aggregate activity counts."""
-    user = User.objects.create_user(email="async@test.com", password="TestPass123!")
+    from asgiref.sync import sync_to_async
+    user = await sync_to_async(User.objects.create_user)(email="async@test.com", password="TestPass123!")
     await UserActivity.objects.acreate(user=user, action="login", resource="auth")
     await UserActivity.objects.acreate(user=user, action="view", resource="product")
 
@@ -52,7 +53,7 @@ async def test_user_activity_aget_analytics_summary():
     assert summary["unique_actions"] == 2
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
 async def test_performance_metric_aget_slow_queries_and_summary():
     """PerformanceMetric async methods should identify slow queries and summarize."""
@@ -75,7 +76,7 @@ async def test_performance_metric_aget_slow_queries_and_summary():
     assert summary["error_rate"] == 1
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
 async def test_business_metric_aget_trend():
     """BusinessMetric async trend should return the latest N records."""
@@ -93,7 +94,7 @@ async def test_business_metric_aget_trend():
     assert len(trend) == 3
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
 async def test_alert_rule_aget_by_severity():
     """AlertRule async severity selector should return active rules by severity."""
@@ -109,7 +110,7 @@ async def test_alert_rule_aget_by_severity():
     assert high_rules[0].name == "rule_high"
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
 async def test_alert_aget_by_rule_and_aresolve():
     """Alert async methods should filter by rule and resolve alerts."""

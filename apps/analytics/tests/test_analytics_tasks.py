@@ -140,6 +140,8 @@ def test_rollup_1m_caches_result():
     from django.core.cache import cache
     from django.utils import timezone
 
+    from apps.analytics.tasks.aggregation_tasks import _get_window_floor
+
     with patch("apps.analytics.tasks.aggregation_tasks._run_async") as mock_run, patch(
         "apps.analytics.tasks.aggregation_tasks.AnalyticsAuditService.log_metric_aggregation_executed"
     ):
@@ -151,7 +153,8 @@ def test_rollup_1m_caches_result():
         }
         rollup_1m()
 
-    cache_key = f"analytics:rollup:1m:{timezone.now().strftime('%Y%m%d%H%M')}"
+    end = _get_window_floor(1)
+    cache_key = f"analytics:rollup:1m:{end.strftime('%Y%m%d%H%M')}"
     cached = cache.get(cache_key)
     assert cached is not None
 
@@ -161,6 +164,8 @@ def test_rollup_5m_caches_result():
     """5-minute rollup task should cache an aggregated result."""
     from django.core.cache import cache
     from django.utils import timezone
+
+    from apps.analytics.tasks.aggregation_tasks import _get_window_floor
 
     with patch("apps.analytics.tasks.aggregation_tasks._run_async") as mock_run, patch(
         "apps.analytics.tasks.aggregation_tasks.AnalyticsAuditService.log_metric_aggregation_executed"
@@ -173,7 +178,8 @@ def test_rollup_5m_caches_result():
         }
         rollup_5m()
 
-    cache_key = f"analytics:rollup:5m:{timezone.now().strftime('%Y%m%d%H%M')}"
+    end = _get_window_floor(5)
+    cache_key = f"analytics:rollup:5m:{end.strftime('%Y%m%d%H%M')}"
     cached = cache.get(cache_key)
     assert cached is not None
 
@@ -183,6 +189,8 @@ def test_rollup_1h_caches_result():
     """1-hour rollup task should cache an aggregated result."""
     from django.core.cache import cache
     from django.utils import timezone
+
+    from apps.analytics.tasks.aggregation_tasks import _get_window_floor
 
     with patch("apps.analytics.tasks.aggregation_tasks._run_async") as mock_run, patch(
         "apps.analytics.tasks.aggregation_tasks.AnalyticsAuditService.log_metric_aggregation_executed"
@@ -195,7 +203,8 @@ def test_rollup_1h_caches_result():
         }
         rollup_1h()
 
-    cache_key = f"analytics:rollup:1h:{timezone.now().strftime('%Y%m%d%H')}"
+    end = _get_window_floor(60)
+    cache_key = f"analytics:rollup:1h:{end.strftime('%Y%m%d%H')}"
     cached = cache.get(cache_key)
     assert cached is not None
 
@@ -217,6 +226,7 @@ def test_rollup_1d_caches_result():
         }
         rollup_1d()
 
-    cache_key = f"analytics:rollup:1d:{timezone.now().strftime('%Y%m%d')}"
+    end = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    cache_key = f"analytics:rollup:1d:{end.strftime('%Y%m%d')}"
     cached = cache.get(cache_key)
     assert cached is not None

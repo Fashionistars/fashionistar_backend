@@ -18,7 +18,7 @@ def test_log_metric_recorded():
             actor=MagicMock(), metric_name="m1", metric_type="gauge", value=1.0
         )
         mock_log.assert_called_once()
-        details = mock_log.call_args.kwargs["details"]
+        details = mock_log.call_args.kwargs["metadata"]
         assert details["metric_name"] == "m1"
         assert details["value"] == 1.0
 
@@ -30,7 +30,7 @@ def test_log_user_activity_logged():
         AnalyticsAuditService.log_user_activity_logged(
             actor=MagicMock(), user_id="42", action="login", resource="auth"
         )
-        details = mock_log.call_args.kwargs["details"]
+        details = mock_log.call_args.kwargs["metadata"]
         assert details["user_id"] == "42"
         assert details["action"] == "login"
         assert details["resource"] == "auth"
@@ -43,7 +43,7 @@ def test_log_performance_metric_recorded():
         AnalyticsAuditService.log_performance_metric_recorded(
             actor=MagicMock(), endpoint="/api/v1/test", response_time_ms=120, status_code=200
         )
-        details = mock_log.call_args.kwargs["details"]
+        details = mock_log.call_args.kwargs["metadata"]
         assert details["endpoint"] == "/api/v1/test"
         assert details["status_code"] == 200
 
@@ -55,7 +55,7 @@ def test_log_business_metric_updated():
         AnalyticsAuditService.log_business_metric_updated(
             actor=MagicMock(), metric_name="gmv", value=1000.0, period="daily"
         )
-        details = mock_log.call_args.kwargs["details"]
+        details = mock_log.call_args.kwargs["metadata"]
         assert details["metric_name"] == "gmv"
         assert details["period"] == "daily"
 
@@ -67,7 +67,7 @@ def test_log_alert_triggered():
         AnalyticsAuditService.log_alert_triggered(
             actor=MagicMock(), alert_rule_id=7, metric_value=99.0, severity="high"
         )
-        details = mock_log.call_args.kwargs["details"]
+        details = mock_log.call_args.kwargs["metadata"]
         assert details["alert_rule_id"] == 7
         assert details["severity"] == "high"
 
@@ -79,7 +79,7 @@ def test_log_alert_resolved():
         AnalyticsAuditService.log_alert_resolved(
             actor=MagicMock(), alert_id=5, resolution_notes="auto-resolved"
         )
-        details = mock_log.call_args.kwargs["details"]
+        details = mock_log.call_args.kwargs["metadata"]
         assert details["alert_id"] == 5
         assert details["resolution_notes"] == "auto-resolved"
 
@@ -91,7 +91,7 @@ def test_log_analytics_query_executed():
         AnalyticsAuditService.log_analytics_query_executed(
             actor=MagicMock(), query_type="dashboard", time_range="24h"
         )
-        details = mock_log.call_args.kwargs["details"]
+        details = mock_log.call_args.kwargs["metadata"]
         assert details["query_type"] == "dashboard"
         assert details["time_range"] == "24h"
 
@@ -103,7 +103,7 @@ def test_log_metric_aggregation_executed():
         AnalyticsAuditService.log_metric_aggregation_executed(
             actor=MagicMock(), aggregation_window="5m", record_count=42
         )
-        details = mock_log.call_args.kwargs["details"]
+        details = mock_log.call_args.kwargs["metadata"]
         assert details["aggregation_window"] == "5m"
         assert details["record_count"] == 42
 
@@ -115,6 +115,6 @@ def test_log_data_retention_applied():
         AnalyticsAuditService.log_data_retention_applied(
             actor=MagicMock(), retention_days=90, deleted_count=100
         )
-        details = mock_log.call_args.kwargs["details"]
+        details = mock_log.call_args.kwargs["metadata"]
         assert details["retention_days"] == 90
         assert details["deleted_count"] == 100

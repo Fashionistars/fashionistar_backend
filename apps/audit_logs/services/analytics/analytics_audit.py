@@ -20,7 +20,7 @@ class AnalyticsAuditService:
             actor=actor,
             action="Analytics metric recorded",
             request=request,
-            details={
+            metadata={
                 'metric_name': metric_name,
                 'metric_type': metric_type,
                 'value': value,
@@ -36,7 +36,7 @@ class AnalyticsAuditService:
             actor=actor,
             action="User activity logged",
             request=request,
-            details={
+            metadata={
                 'user_id': user_id,
                 'action': action,
                 'resource': resource,
@@ -54,7 +54,7 @@ class AnalyticsAuditService:
             actor=actor,
             action="Performance metric recorded",
             request=request,
-            details={
+            metadata={
                 'endpoint': endpoint,
                 'response_time_ms': response_time_ms,
                 'status_code': status_code,
@@ -72,7 +72,7 @@ class AnalyticsAuditService:
             actor=actor,
             action="Business metric updated",
             request=request,
-            details={
+            metadata={
                 'metric_name': metric_name,
                 'value': value,
                 'period': period,
@@ -90,7 +90,7 @@ class AnalyticsAuditService:
             actor=actor,
             action="Alert triggered",
             request=request,
-            details={
+            metadata={
                 'alert_rule_id': alert_rule_id,
                 'metric_value': metric_value,
                 'severity': severity,
@@ -106,7 +106,7 @@ class AnalyticsAuditService:
             actor=actor,
             action="Alert resolved",
             request=request,
-            details={
+            metadata={
                 'alert_id': alert_id,
                 'resolution_notes': resolution_notes,
             },
@@ -123,7 +123,7 @@ class AnalyticsAuditService:
             actor=actor,
             action="Analytics query executed",
             request=request,
-            details={
+            metadata={
                 'query_type': query_type,
                 'time_range': time_range,
             },
@@ -138,7 +138,7 @@ class AnalyticsAuditService:
             actor=actor,
             action="Analytics dashboard viewed",
             request=request,
-            details={
+            metadata={
                 'dashboard_type': dashboard_type,
             },
         )
@@ -152,7 +152,7 @@ class AnalyticsAuditService:
             actor=actor,
             action="Analytics report generated",
             request=request,
-            details={
+            metadata={
                 'report_type': report_type,
                 'period_start': period_start.isoformat() if period_start else None,
                 'period_end': period_end.isoformat() if period_end else None,
@@ -170,7 +170,7 @@ class AnalyticsAuditService:
             actor=actor,
             action="Metric aggregation executed",
             request=request,
-            details={
+            metadata={
                 'aggregation_window': aggregation_window,
                 'record_count': record_count,
             },
@@ -187,7 +187,7 @@ class AnalyticsAuditService:
             actor=actor,
             action="Data retention applied",
             request=request,
-            details={
+            metadata={
                 'retention_days': retention_days,
                 'deleted_count': deleted_count,
             },

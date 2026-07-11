@@ -42,7 +42,7 @@ class AnalyticsService:
 
     def _generate_cache_key(self, prefix: str, **kwargs) -> str:
         """Generate a unique cache key for analytics parameters."""
-        cache_data = {k: v for k, v in sorted(kwargs.items())}
+        cache_data = {k: str(v) if v is not None else None for k, v in sorted(kwargs.items())}
         cache_hash = hashlib.md5(json.dumps(cache_data, sort_keys=True).encode()).hexdigest()
         return f"{self.cache_prefix}{prefix}:{cache_hash}"
 

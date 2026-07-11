@@ -39,7 +39,7 @@ def user_token(regular_user):
     return str(refresh.access_token)
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
 async def test_get_platform_analytics_returns_cached_report(
     async_client, staff_token, mock_report
@@ -62,7 +62,7 @@ async def test_get_platform_analytics_returns_cached_report(
     cache.delete(cache_key)
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
 async def test_get_platform_analytics_triggers_generation_when_missing(
     async_client, staff_token
@@ -84,7 +84,7 @@ async def test_get_platform_analytics_triggers_generation_when_missing(
     mock_task.delay.assert_called_once_with(days=7)
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
 async def test_get_platform_analytics_forbidden_for_regular_user(
     async_client, user_token
@@ -98,7 +98,7 @@ async def test_get_platform_analytics_forbidden_for_regular_user(
     assert response.status_code == 403
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
 async def test_legacy_ai_analytics_platform_path_removed(
     async_client, staff_token
@@ -112,7 +112,7 @@ async def test_legacy_ai_analytics_platform_path_removed(
     assert response.status_code == 404
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
 async def test_get_vendor_analytics_triggers_generation(
     async_client, staff_token
@@ -134,7 +134,7 @@ async def test_get_vendor_analytics_triggers_generation(
     mock_task.delay.assert_called_once_with(days=7, scope="vendor", scope_id=3)
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
 async def test_get_order_analytics_returns_stub(async_client, staff_token):
     """GET /api/v1/ninja/analytics/orders/ returns an order analytics stub."""
@@ -149,7 +149,7 @@ async def test_get_order_analytics_returns_stub(async_client, staff_token):
     assert data["days"] == 30
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
 async def test_get_product_analytics_returns_stub(async_client, staff_token):
     """GET /api/v1/ninja/analytics/products/ returns a product analytics stub."""
@@ -163,7 +163,7 @@ async def test_get_product_analytics_returns_stub(async_client, staff_token):
     assert data["scope"] == "products"
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
 async def test_get_user_analytics_returns_stub(async_client, staff_token):
     """GET /api/v1/ninja/analytics/users/ returns a user analytics stub."""
@@ -177,7 +177,7 @@ async def test_get_user_analytics_returns_stub(async_client, staff_token):
     assert data["scope"] == "users"
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
 async def test_get_realtime_analytics_returns_snapshot_or_stub(
     async_client, staff_token
@@ -226,7 +226,7 @@ async def test_get_analytics_metrics_export_is_public(async_client):
     assert response["content-type"].startswith("text/plain")
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
 async def test_post_metric_creates_record(async_client, staff_token):
     """POST /api/v1/ninja/analytics/metrics/ should create a metric."""
@@ -249,7 +249,7 @@ async def test_post_metric_creates_record(async_client, staff_token):
     assert data["value"] == pytest.approx(1234.56)
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
 async def test_post_business_metric_creates_record(async_client, staff_token):
     """POST /api/v1/ninja/analytics/business-metrics/ should create a business metric."""
@@ -275,7 +275,7 @@ async def test_post_business_metric_creates_record(async_client, staff_token):
     assert data["value"] == pytest.approx(99.0)
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
 async def test_post_resolve_alert_updates_status(async_client, staff_token, alert_firing):
     """POST /api/v1/ninja/analytics/alerts/{id}/resolve/ should resolve an alert."""
@@ -292,7 +292,7 @@ async def test_post_resolve_alert_updates_status(async_client, staff_token, aler
     assert "resolved_at" in data
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
 async def test_get_user_activity_returns_list(async_client, staff_token):
     """GET /api/v1/ninja/analytics/user-activity/ should return user activity."""
@@ -303,4 +303,5 @@ async def test_get_user_activity_returns_list(async_client, staff_token):
 
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list)
+    assert "results" in data
+    assert isinstance(data["results"], list)

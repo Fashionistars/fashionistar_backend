@@ -40,23 +40,24 @@ def test_sync_selectors():
     assert len(alerts) == 1
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
 async def test_aget_metrics():
     """Async metric selector should filter by name and type."""
-    await Metric.objects.acreate(name="m2", metric_type="counter", value=1.0)
-    by_name = await aget_metrics(metric_name="m2")
+    await Metric.objects.acreate(name="m2_unique", metric_type="counter", value=1.0)
+    by_name = await aget_metrics(metric_name="m2_unique")
     assert len(by_name) == 1
 
     by_type = await aget_metrics(metric_type="counter")
     assert len(by_type) == 1
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
 async def test_aget_analytics_dashboard_parallel():
     """Parallel dashboard selector should return combined data."""
-    user = User.objects.create_user(email="dash@test.com", password="TestPass123!")
+    from asgiref.sync import sync_to_async
+    user = await sync_to_async(User.objects.create_user)(email="dash@test.com", password="TestPass123!")
     await UserActivity.objects.acreate(user=user, action="login")
     await PerformanceMetric.objects.acreate(
         endpoint="/", method="GET", response_time_ms=100, status_code=200
@@ -75,7 +76,7 @@ async def test_aget_analytics_dashboard_parallel():
     assert data["activity_count"] >= 1
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
 async def test_aget_performance_dashboard_parallel():
     """Performance dashboard parallel selector should summarize performance metrics."""
@@ -88,7 +89,7 @@ async def test_aget_performance_dashboard_parallel():
     assert "summary" in data
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
 async def test_aget_alert_dashboard_parallel():
     """Alert dashboard parallel selector should return firing and resolved alerts."""

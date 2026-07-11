@@ -13,6 +13,17 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 
+@pytest.fixture(autouse=True)
+def _flush_after_transaction_test(request):
+    """Flush DB after transaction=True tests to prevent data leaking
+    via shared in-memory SQLite to subsequent TestCase-based tests."""
+    yield
+    marker = request.node.get_closest_marker("django_db")
+    if marker and marker.kwargs.get("transaction"):
+        from django.core.management import call_command
+        call_command("flush", verbosity=0, interactive=False, reset_sequences=False)
+
+
 @pytest.fixture
 def staff_user(db):
     """Return a staff user for analytics endpoints that require elevated access."""

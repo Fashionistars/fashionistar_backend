@@ -181,9 +181,9 @@ def test_user_behavior_workflow_caches_report(regular_user):
             workflow = UserBehaviorWorkflow()
             result = workflow.execute({"user_id": regular_user.id, "days": 30})
 
-    assert result["user_id"] == regular_user.id
+    assert result["user_id"] == int(regular_user.id)
     assert "shirts" in result["purchase_categories"]
-    assert cache.get(f"analytics:report:user:{regular_user.id}") is not None
+    assert cache.get(f"analytics:report:user:{int(regular_user.id)}") is not None
 
 
 @pytest.mark.django_db
