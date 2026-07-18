@@ -540,3 +540,133 @@ async def get_ai_health(request) -> dict:
         }
 
     return await check_health()
+
+
+# ─── TASK-019: Height Prediction Endpoint ─────────────────────────────────────
+
+class HeightPredictionSchema(Schema):
+    predicted_cm:   float
+    predicted_inch: str
+    range_low_cm:   float
+    range_high_cm:  float
+    confidence:     str   # "high" | "medium" | "low"
+    note:           str = ""
+
+
+# WHO/NCHS adult height reference (cm) by (sex, age_group)
+# Source: CDC 2021 + WHO 2006/2007 + NHANES 2017-2020
+_HEIGHT_TABLE: dict[str, dict[str, tuple[float, float, float]]] = {
+    # sex → age_bracket → (p10, p50, p90) in cm
+    "male": {
+        "10-13": (133.0, 149.0, 165.0),
+        "14-17": (155.0, 173.0, 185.0),
+        "18-25": (166.0, 176.4, 186.0),
+        "26-35": (165.0, 175.8, 185.5),
+        "36-50": (163.5, 174.5, 184.5),
+        "51-65": (161.0, 172.0, 182.5),
+        "66+":   (158.0, 169.0, 180.0),
+    },
+    "female": {
+        "10-13": (131.0, 148.0, 163.0),
+        "14-17": (152.0, 163.0, 173.0),
+        "18-25": (155.0, 163.5, 172.0),
+        "26-35": (154.0, 163.2, 172.0),
+        "36-50": (153.0, 162.5, 171.5),
+        "51-65": (151.0, 160.5, 170.0),
+        "66+":   (148.0, 157.0, 167.0),
+    },
+    "neutral": {  # Average of male/female
+        "10-13": (132.0, 148.5, 164.0),
+        "14-17": (153.5, 168.0, 179.0),
+        "18-25": (160.5, 170.0, 179.0),
+        "26-35": (159.5, 169.5, 178.8),
+        "36-50": (158.3, 168.5, 178.0),
+        "51-65": (156.0, 166.3, 176.3),
+        "66+":   (153.0, 163.0, 173.5),
+    },
+}
+
+
+def _age_to_bracket(age: int) -> str:
+    if age <= 13:   return "10-13"
+    if age <= 17:   return "14-17"
+    if age <= 25:   return "18-25"
+    if age <= 35:   return "26-35"
+    if age <= 50:   return "36-50"
+    if age <= 65:   return "51-65"
+    return "66+"
+
+
+def _cm_to_inch_str(cm: float) -> str:
+    total_inches = cm / 2.54
+    feet   = int(total_inches // 12)
+    inches = round(total_inches % 12)
+    return f"{feet}'{inches}\""
+
+
+@router.get(
+    "/height-predict/",
+    auth=None,   # Public — no auth needed (marketing page usage)
+    response=HeightPredictionSchema,
+    summary="Predict height from age and sex",
+    description=(
+        "Returns WHO/NCHS reference height range for the given age and biological sex. "
+        "Used for pre-filling the measurement entry modal and BMI-correcting backend estimates. "
+        "Results cached 24h by (age, sex) pair."
+    ),
+    operation_id="ai_height_predict",
+)
+async def predict_height(
+    request,
+    age: int,
+    sex: str = "neutral",
+) -> dict:
+    """
+    Predict height from age + sex using WHO growth reference tables.
+
+    Args:
+        age: User age in years (10-100)
+        sex: 'male' | 'female' | 'neutral' (default: 'neutral')
+
+    Returns:
+        HeightPredictionSchema with predicted_cm, range, confidence, inch display.
+
+    Caching: 24h by cache key ai_height_predict:{sex}:{age}
+    """
+    # Validate inputs
+    if age < 10 or age > 100:
+        from ninja.errors import HttpError
+        raise HttpError(400, "Age must be between 10 and 100.")
+
+    sex_clean = sex.lower().strip()
+    if sex_clean not in _HEIGHT_TABLE:
+        sex_clean = "neutral"
+
+    cache_key = f"ai_height_predict:{sex_clean}:{age}"
+    cached    = cache.get(cache_key)
+    if cached:
+        return cached
+
+    bracket = _age_to_bracket(age)
+    p10, p50, p90 = _HEIGHT_TABLE[sex_clean][bracket]
+
+    # Confidence: adults 18-65 have more data → higher confidence
+    confidence = "high" if 18 <= age <= 65 else "medium" if age >= 14 else "low"
+    note = (
+        "Based on WHO/NHANES adult reference data. "
+        "Enter your actual height for improved measurement accuracy."
+        if confidence == "high"
+        else "Growth reference data — accuracy improves with actual height."
+    )
+
+    result = {
+        "predicted_cm":   p50,
+        "predicted_inch": _cm_to_inch_str(p50),
+        "range_low_cm":   p10,
+        "range_high_cm":  p90,
+        "confidence":     confidence,
+        "note":           note,
+    }
+
+    cache.set(cache_key, result, 60 * 60 * 24)  # 24h
+    return result

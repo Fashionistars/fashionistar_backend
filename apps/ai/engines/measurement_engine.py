@@ -23,6 +23,7 @@ import logging
 import math
 from typing import Any
 
+from .bmi_correction import apply_bmi_corrections
 
 logger = logging.getLogger(__name__)
 
@@ -68,8 +69,10 @@ class MeasurementEngine:
 
     def process(
         self,
-        landmarks: list[dict],
+        landmarks:      list[dict],
         user_height_cm: float,
+        weight_kg:      float | None     = None,
+        side_landmarks: list[dict] | None = None,
     ) -> dict[str, Any]:
         """
         Main entry point: process landmarks and return measurement results.
@@ -77,6 +80,8 @@ class MeasurementEngine:
         Args:
             landmarks:       List of 33 dicts with keys: x, y, z, visibility
             user_height_cm:  User-provided height in cm (or auto-estimated)
+            weight_kg:       Optional weight for BMI-based circumference correction
+            side_landmarks:  Optional 33-point list from 90° side pose for depth estimation
 
         Returns:
             dict with keys:
@@ -84,6 +89,8 @@ class MeasurementEngine:
                 quality_score:    Float 0-1 (overall confidence)
                 errors:           List of validation error strings
                 height_source:    'user_provided' | 'auto_estimated'
+                correction_applied: str describing which corrections were applied
+                bmi:              float | None
         """
         errors: list[str] = []
 
@@ -130,11 +137,22 @@ class MeasurementEngine:
             k: round(float(v), 1) for k, v in all_measurements.items()
         }
 
+        # ── 7. BMI correction + side-pose depth (TASK-022) ─────────────────────
+        all_measurements = apply_bmi_corrections(
+            measurements=all_measurements,
+            height_cm=user_height_cm,
+            weight_kg=weight_kg,
+            side_landmarks=side_landmarks,
+            scale_factor=scale_factor,
+        )
+
         return {
-            "measurements":  all_measurements,
-            "quality_score": round(quality_score, 3),
-            "errors":        errors,
-            "height_source": height_source,
+            "measurements":       all_measurements,
+            "quality_score":      round(quality_score, 3),
+            "errors":             errors,
+            "height_source":      height_source,
+            "correction_applied": all_measurements.pop("correction_applied", "none"),
+            "bmi":                all_measurements.pop("bmi", None),
         }
 
     # ── Private methods ────────────────────────────────────────────────────────
