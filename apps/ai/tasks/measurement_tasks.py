@@ -122,3 +122,61 @@ def prepare_scan_session(session_id: str) -> None:
         from apps.ai.utils import geometry  # noqa: F401
     except Exception:
         pass
+
+
+@shared_task(
+    bind=True,
+    name="apps.ai.tasks.measurement_tasks.upload_qr_code_to_cloudinary",
+    queue="default",           # Not AI queue — this is a lightweight I/O task
+    max_retries=3,
+    default_retry_delay=5,     # Retry after 5s (Cloudinary transient errors)
+    ignore_result=True,
+)
+def upload_qr_code_to_cloudinary(self, session_id: str, qr_b64: str) -> None:
+    """
+    Upload the QR code PNG to Cloudinary and persist the URL to BodyScanSession.
+
+    Called non-blocking immediately after InitiateScanView creates the session.
+    On success: updates BodyScanSession.qr_code_url with the Cloudinary URL.
+    On failure: retries up to 3 times (5s exponential backoff), then logs + silently fails.
+    The qr_code_b64 in the API response is the primary display mechanism;
+    the Cloudinary URL is for long-term audit and re-retrieval.
+
+    Args:
+        session_id: UUID string of the BodyScanSession.
+        qr_b64:     Base64-encoded PNG string (without data: prefix).
+    """
+    logger.info("[upload_qr_code_to_cloudinary] Starting upload for session=%s", session_id)
+
+    try:
+        from apps.measurements.services.qr_service import upload_qr_to_cloudinary
+        cloudinary_url = upload_qr_to_cloudinary(qr_b64, session_id)
+
+        if cloudinary_url:
+            from apps.measurements.models.scan import BodyScanSession
+            updated = BodyScanSession.objects.filter(
+                session_id=session_id
+            ).update(qr_code_url=cloudinary_url)
+
+            if updated:
+                logger.info(
+                    "[upload_qr_code_to_cloudinary] QR URL saved for session=%s: %s",
+                    session_id, cloudinary_url,
+                )
+            else:
+                logger.warning(
+                    "[upload_qr_code_to_cloudinary] Session not found for update: %s",
+                    session_id,
+                )
+        else:
+            logger.warning(
+                "[upload_qr_code_to_cloudinary] Cloudinary returned empty URL for session=%s",
+                session_id,
+            )
+
+    except Exception as exc:
+        logger.warning(
+            "[upload_qr_code_to_cloudinary] Failed for session=%s: %s. Retrying...",
+            session_id, exc,
+        )
+        raise self.retry(exc=exc, countdown=5 * (self.request.retries + 1))

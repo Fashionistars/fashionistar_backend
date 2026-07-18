@@ -9,6 +9,10 @@
 # 1. CORE FRAMEWORK  (install first — everything depends on these)
 # ═══════════════════════════════════════════════════════════
 Django==6.0.3
+
+# ── QR Code Generation (device-aware measurement routing) ─────────────────────
+qrcode[pil]>=7.4.2              # Server-side QR code PNG generation (brand-coloured, no external API)
+Pillow>=10.3.0                  # Image backend for qrcode — also used by Django ImageField
 djangorestframework
 django-ninja
 adrf                            # Async DRF views (used by async_views.py)

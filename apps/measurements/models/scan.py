@@ -56,6 +56,8 @@ class BodyScanSession(TimeStampedModel):
         processing_started_at: Set when Celery task picks up the scan.
         completed_at: Set on COMPLETED or FAILED.
         error_message: Filled on FAILED status.
+        measurement_url: Full frontend URL for this scan session (for QR & audit).
+        qr_code_url: Cloudinary URL for the persisted QR code PNG.
         ip_address: Client IP for audit.
         user_agent: Client UA string for fraud/audit.
     """
@@ -148,6 +150,24 @@ class BodyScanSession(TimeStampedModel):
         blank=True,
         verbose_name=_("Error Message"),
     )
+
+    # ── QR Code & Measurement URL (device-routing + audit) ────────────────────
+    measurement_url = models.CharField(
+        max_length=500,
+        blank=True,
+        verbose_name=_("Measurement URL"),
+        help_text=_(
+            "Full frontend URL for this scan session. "
+            "Used to generate the QR code and for cross-device handoff."
+        ),
+    )
+    qr_code_url = models.CharField(
+        max_length=500,
+        blank=True,
+        verbose_name=_("QR Code URL"),
+        help_text=_("Cloudinary URL of the persisted QR code PNG for this session."),
+    )
+
     ip_address = models.GenericIPAddressField(
         null=True,
         blank=True,

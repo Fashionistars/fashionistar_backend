@@ -29,6 +29,10 @@ from rest_framework import serializers as drf_serializers
 from apps.common.permissions import IsAuthenticatedAndActive
 from apps.common.renderers import CustomJSONRenderer, success_response, error_response
 from apps.measurements.models.scan import BodyScanSession
+from apps.measurements.services.qr_service import (
+    generate_measurement_url,
+    generate_qr_code_b64,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -147,17 +151,40 @@ class InitiateScanView(APIView):
             user_agent=request.META.get("HTTP_USER_AGENT", "")[:300],
         )
 
+        # ── Generate measurement URL + QR code (synchronous, < 50 ms) ──────────
+        session_id_str   = str(session.session_id)
+        measurement_url  = generate_measurement_url(session_id_str)
+        qr_code_b64      = generate_qr_code_b64(measurement_url)
+
+        # Persist measurement_url immediately (synchronous DB write)
+        BodyScanSession.objects.filter(pk=session.pk).update(
+            measurement_url=measurement_url,
+        )
+
+        # Upload QR PNG to Cloudinary asynchronously (non-blocking)
+        if qr_code_b64:
+            try:
+                from apps.ai.tasks.measurement_tasks import upload_qr_code_to_cloudinary
+                upload_qr_code_to_cloudinary.delay(session_id_str, qr_code_b64)
+            except Exception as exc:
+                logger.warning(
+                    "[InitiateScanView] Cloudinary upload task failed to enqueue: %s", exc
+                )
+
         # Pre-warm the Celery AI worker (non-blocking)
         try:
             from apps.ai.tasks.measurement_tasks import prepare_scan_session
-            prepare_scan_session.delay(str(session.session_id))
+            prepare_scan_session.delay(session_id_str)
         except Exception as exc:
             logger.warning("[InitiateScanView] prepare_scan_session failed: %s", exc)
 
         return success_response(
             data={
-                "session_id": str(session.session_id),
-                "status":     "pending",
+                "session_id":      session_id_str,
+                "status":          "pending",
+                "measurement_url": measurement_url,
+                "qr_code_b64":     qr_code_b64,
+                "qr_code_url":     "",  # populated async by Cloudinary upload task
             },
             status=http_status.HTTP_201_CREATED,
             message="Scan session created. Submit your landmarks when ready.",
