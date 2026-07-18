@@ -670,3 +670,190 @@ async def predict_height(
 
     cache.set(cache_key, result, 60 * 60 * 24)  # 24h
     return result
+
+
+# ─── Health Check (Phase 15 / TASK-048) ──────────────────────────────────────
+
+
+class SubSystemStatus(Schema):
+    """Status of a single backend sub-system."""
+    name:        str
+    status:      str          # "ok" | "degraded" | "error" | "unknown"
+    latency_ms:  float | None = None
+    detail:      str | None   = None
+
+
+class HealthResponseSchema(Schema):
+    """
+    Aggregated health response for the FASHIONISTAR AI backend.
+    Returned by: GET /api/v1/ninja/ai/health/
+
+    HTTP 200 always returned — use 'overall' field to detect degraded state.
+    HTTP 503 only when overall == 'error' (all sub-systems down).
+    """
+    overall:     str                   # "ok" | "degraded" | "error"
+    version:     str
+    service:     str
+    timestamp:   str
+    subsystems:  list[SubSystemStatus]
+
+
+@router.get(
+    "/health/",
+    auth=None,              # PUBLIC — no auth required for uptime monitors
+    response=HealthResponseSchema,
+    summary="AI engine health check",
+    description=(
+        "Aggregated health check across DB, Redis, Celery, and MeasurementEngine. "
+        "Returns 200 always. Check 'overall' field for 'ok' | 'degraded' | 'error'. "
+        "Suitable for Vercel health checks, Render health probes, and uptime robots."
+    ),
+    operation_id="ai_health_check",
+)
+async def get_health(request) -> dict:
+    """
+    GET /api/v1/ninja/ai/health/
+
+    Public, unauthenticated endpoint.
+    Checks each sub-system independently and aggregates to 'overall'.
+
+    Sub-systems:
+      - database  — Django ORM can query BodyScanSession table
+      - cache     — Redis PING via Django cache framework
+      - engine    — MeasurementEngine imports and instantiates correctly
+      - celery    — Celery app reachable (inspect ping, timeout 1s)
+    """
+    import time
+    from datetime import datetime, timezone
+    from asgiref.sync import sync_to_async
+
+    subsystems: list[dict] = []
+
+    # ── 1. Database ──────────────────────────────────────────────────────────
+    async def check_database() -> dict:
+        t0 = time.monotonic()
+        try:
+            count_fn = sync_to_async(
+                lambda: __import__(
+                    "apps.measurements.models.scan",
+                    fromlist=["BodyScanSession"]
+                ).BodyScanSession.objects.count()
+            )
+            await count_fn()
+            return {
+                "name":       "database",
+                "status":     "ok",
+                "latency_ms": round((time.monotonic() - t0) * 1000, 1),
+                "detail":     "PostgreSQL reachable",
+            }
+        except Exception as exc:
+            logger.warning("[health] DB check failed: %s", exc)
+            return {
+                "name":   "database",
+                "status": "error",
+                "detail": str(exc)[:120],
+            }
+
+    # ── 2. Redis cache ────────────────────────────────────────────────────────
+    async def check_cache() -> dict:
+        t0 = time.monotonic()
+        try:
+            probe_fn = sync_to_async(
+                lambda: cache.set("_health_probe", "1", timeout=5)
+            )
+            await probe_fn()
+            return {
+                "name":       "cache",
+                "status":     "ok",
+                "latency_ms": round((time.monotonic() - t0) * 1000, 1),
+                "detail":     "Redis SET probe OK",
+            }
+        except Exception as exc:
+            logger.warning("[health] Cache check failed: %s", exc)
+            return {
+                "name":   "cache",
+                "status": "degraded",   # Degraded, not error — app still works without cache
+                "detail": str(exc)[:120],
+            }
+
+    # ── 3. MeasurementEngine ─────────────────────────────────────────────────
+    async def check_engine() -> dict:
+        t0 = time.monotonic()
+        try:
+            import_fn = sync_to_async(
+                lambda: __import__(
+                    "apps.ai.engines.measurement_engine",
+                    fromlist=["MeasurementEngine"]
+                ).MeasurementEngine()
+            )
+            await import_fn()
+            return {
+                "name":       "engine",
+                "status":     "ok",
+                "latency_ms": round((time.monotonic() - t0) * 1000, 1),
+                "detail":     "MeasurementEngine instantiated",
+            }
+        except Exception as exc:
+            logger.warning("[health] Engine check failed: %s", exc)
+            return {
+                "name":   "engine",
+                "status": "degraded",
+                "detail": str(exc)[:120],
+            }
+
+    # ── 4. Celery broker ──────────────────────────────────────────────────────
+    async def check_celery() -> dict:
+        t0 = time.monotonic()
+        try:
+            ping_fn = sync_to_async(
+                lambda: __import__(
+                    "backend.celery",
+                    fromlist=["app"]
+                ).app.control.ping(timeout=1.0)
+            )
+            ping_result = await ping_fn()
+            celery_ok = bool(ping_result)
+            return {
+                "name":       "celery",
+                "status":     "ok" if celery_ok else "degraded",
+                "latency_ms": round((time.monotonic() - t0) * 1000, 1),
+                "detail":     f"{len(ping_result)} worker(s) responding" if celery_ok else "No workers responded",
+            }
+        except Exception as exc:
+            logger.warning("[health] Celery check failed: %s", exc)
+            return {
+                "name":   "celery",
+                "status": "degraded",
+                "detail": str(exc)[:120],
+            }
+
+    # ── Run all checks concurrently ───────────────────────────────────────────
+    import asyncio
+    checks = await asyncio.gather(
+        check_database(),
+        check_cache(),
+        check_engine(),
+        check_celery(),
+        return_exceptions=False,
+    )
+    subsystems = list(checks)
+
+    # ── Aggregate overall status ──────────────────────────────────────────────
+    statuses = [s["status"] for s in subsystems]
+    if all(s == "ok" for s in statuses):
+        overall = "ok"
+    elif any(s == "error" for s in statuses):
+        overall = "error"
+    else:
+        overall = "degraded"
+
+    from django.conf import settings as django_settings
+    version = getattr(django_settings, "AI_ENGINE_VERSION", "3.0.0")
+
+    return {
+        "overall":    overall,
+        "version":    version,
+        "service":    "fashionistar-ai-backend",
+        "timestamp":  datetime.now(tz=timezone.utc).isoformat(),
+        "subsystems": subsystems,
+    }
