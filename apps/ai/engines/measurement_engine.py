@@ -138,21 +138,35 @@ class MeasurementEngine:
         }
 
         # ── 7. BMI correction + side-pose depth (TASK-022) ─────────────────────
-        all_measurements = apply_bmi_corrections(
+        corrected = apply_bmi_corrections(
             measurements=all_measurements,
             height_cm=user_height_cm,
             weight_kg=weight_kg,
             side_landmarks=side_landmarks,
             scale_factor=scale_factor,
         )
+        correction_applied = corrected.pop("correction_applied", "none")
+        bmi               = corrected.pop("bmi", None)
+
+        # ── 8. Anthropometric plausibility filter (TASK-023 Step 23) ───────────
+        filtered, plausibility_warnings = self._verify_plausibility(
+            corrected, user_height_cm
+        )
+
+        # ── 9. Add inches alongside cm (Step 25) ───────────────────────────────
+        measurements_cm     = filtered
+        measurements_inches = self._add_inches(filtered)
 
         return {
-            "measurements":       all_measurements,
-            "quality_score":      round(quality_score, 3),
-            "errors":             errors,
-            "height_source":      height_source,
-            "correction_applied": all_measurements.pop("correction_applied", "none"),
-            "bmi":                all_measurements.pop("bmi", None),
+            "measurements":           measurements_cm,
+            "measurements_cm":        measurements_cm,
+            "measurements_inches":    measurements_inches,
+            "quality_score":          round(quality_score, 3),
+            "errors":                 errors,
+            "height_source":          height_source,
+            "correction_applied":     correction_applied,
+            "bmi":                    bmi,
+            "plausibility_warnings": plausibility_warnings,
         }
 
     # ── Private methods ────────────────────────────────────────────────────────
@@ -332,4 +346,78 @@ class MeasurementEngine:
             "waist": round(waist, 1) if waist else None,
             "hips":  round(hip, 1)   if hip   else None,
             "thigh": round(thigh, 1) if thigh else None,
+        }
+
+    def _verify_plausibility(
+        self,
+        measurements: dict[str, float | None],
+        height_cm: float,
+    ) -> tuple[dict[str, float | None], list[str]]:
+        """
+        Anthropometric plausibility filter (Step 23).
+
+        Validates each measurement against WHO/NHANES physiological ranges
+        expressed as proportions of user height.
+
+        Any measurement outside the range is nulled and added to warnings.
+        The warnings are returned to the frontend for user feedback.
+
+        Returns:
+            (filtered_measurements, list_of_warning_strings)
+        """
+        if not height_cm or height_cm <= 0:
+            return measurements, []
+
+        PLAUSIBILITY_RULES: dict[str, tuple[float, float]] = {
+            # key: (min_cm, max_cm) as proportion of height
+            "bust":           (0.38 * height_cm, 0.78 * height_cm),
+            "waist":          (0.28 * height_cm, 0.72 * height_cm),
+            "hips":           (0.38 * height_cm, 0.82 * height_cm),
+            "shoulder_width": (0.18 * height_cm, 0.42 * height_cm),
+            "arm_length":     (0.22 * height_cm, 0.48 * height_cm),
+            "inseam":         (0.32 * height_cm, 0.58 * height_cm),
+            "thigh":          (0.14 * height_cm, 0.45 * height_cm),
+            "torso_length":   (0.18 * height_cm, 0.40 * height_cm),
+            "leg_length":     (0.35 * height_cm, 0.60 * height_cm),
+        }
+
+        warnings: list[str] = []
+        filtered: dict[str, float | None] = {}
+
+        for key, value in measurements.items():
+            if value is None:
+                filtered[key] = None
+                continue
+
+            if key in PLAUSIBILITY_RULES:
+                min_val, max_val = PLAUSIBILITY_RULES[key]
+                if min_val <= value <= max_val:
+                    filtered[key] = value
+                else:
+                    warnings.append(
+                        f"{key} ({value:.1f}cm) is outside the expected range "
+                        f"[{min_val:.0f}–{max_val:.0f}cm] for height {height_cm:.0f}cm. "
+                        "Consider retaking the scan."
+                    )
+                    # Null-out implausible value — do not save garbage data
+                    filtered[key] = None
+                    logger.warning(
+                        "[MeasurementEngine] Plausibility fail: %s=%.1fcm (range %.0f–%.0f)",
+                        key, value, min_val, max_val,
+                    )
+            else:
+                # No rule for this key — pass through unchecked
+                filtered[key] = value
+
+        return filtered, warnings
+
+    @staticmethod
+    def _add_inches(measurements_cm: dict[str, float | None]) -> dict[str, float | None]:
+        """
+        Convert all measurement values from cm to inches (Step 25).
+        Returns a parallel dict with identical keys, values in inches.
+        """
+        return {
+            key: round(val / 2.54, 1) if val is not None else None
+            for key, val in measurements_cm.items()
         }
