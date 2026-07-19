@@ -99,7 +99,15 @@ class MeasurementProfileWriteSerializer(serializers.Serializer):
     def to_model_data(self, validated_data: dict) -> dict:
         """
         Extract fields suitable for MeasurementProfile model creation/update.
-        Excludes service-control fields like set_as_default.
+
+        Excluded fields:
+          - set_as_default: service-control flag, not a model field
+          - notes: serializer accepts it but MeasurementProfile has no notes
+            column yet. Prevents `TypeError: 'notes' is an invalid keyword
+            argument for MeasurementProfile` → 500 in production.
+            TODO: add `notes = TextField(blank=True, default="")` to
+            MeasurementProfile and run a migration to re-enable this.
         """
-        excluded = {"set_as_default"}
+        # Fields that exist in the serializer but NOT on the DB model
+        excluded = {"set_as_default", "notes"}
         return {k: v for k, v in validated_data.items() if k not in excluded}
