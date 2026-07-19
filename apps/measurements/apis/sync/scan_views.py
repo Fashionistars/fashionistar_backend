@@ -51,31 +51,66 @@ class LandmarkSubmitSerializer(drf_serializers.Serializer):
     """
     Validates the landmark submission payload from the browser.
 
-    Expected payload:
+    V2 payload (dual-pose):
     {
         "user_height_cm": 175.5,
-        "user_weight_kg": 70.0,    // optional
-        "device_type": "web",      // optional, defaults to "web"
-        "landmarks": [             // 33 MediaPipe world landmarks
-            {"x": 0.01, "y": -0.5, "z": 0.02, "visibility": 0.98},
-            ...
-        ]
+        "user_weight_kg": 70.0,      // optional — BMI correction layer
+        "user_age": 28,              // B-1 FIX: age-based anthropometric anchor
+        "device_type": "web",        // optional
+        "landmarks": [...],          // 33 front pose landmarks (legacy alias)
+        "front_landmarks": [...],    // 33 front pose landmarks (V2 preferred)
+        "side_landmarks": [...]      // 33 side pose landmarks (optional — depth estimation)
     }
     """
     user_height_cm = drf_serializers.FloatField(min_value=50.0, max_value=300.0)
     user_weight_kg = drf_serializers.FloatField(
         min_value=10.0, max_value=500.0, required=False, allow_null=True
     )
+    # B-1 FIX: user_age accepted — enables age-corrected anthropometric ratios in geometry engine
+    user_age = drf_serializers.IntegerField(
+        min_value=5, max_value=120, required=False, allow_null=True,
+        help_text="Age in years. Improves ratio selection for <25 and >50 age groups."
+    )
     device_type = drf_serializers.ChoiceField(
         choices=["web", "ios", "android"],
         default="web",
         required=False,
     )
+    # Legacy field — kept for back-compat with existing web clients
     landmarks = drf_serializers.ListField(
         child=LandmarkPointSerializer(),
         min_length=33,
         max_length=33,
+        required=False,
     )
+    # V2: front_landmarks is the canonical field name
+    front_landmarks = drf_serializers.ListField(
+        child=LandmarkPointSerializer(),
+        min_length=33,
+        max_length=33,
+        required=False,
+        help_text="Front-facing pose. 33 MediaPipe world landmarks."
+    )
+    # GAP-5 FIX: side_landmarks accepted and forwarded to workflow for depth estimation
+    side_landmarks = drf_serializers.ListField(
+        child=LandmarkPointSerializer(),
+        min_length=33,
+        max_length=33,
+        required=False,
+        allow_null=True,
+        help_text="90° right-side pose. Enables ellipse circumference formula for bust/waist."
+    )
+
+    def validate(self, attrs):
+        """Ensure at least one of landmarks or front_landmarks is provided."""
+        if not attrs.get("landmarks") and not attrs.get("front_landmarks"):
+            raise drf_serializers.ValidationError(
+                {"front_landmarks": "Either 'front_landmarks' or 'landmarks' must be provided."}
+            )
+        # Normalise: front_landmarks takes precedence over legacy landmarks
+        if not attrs.get("front_landmarks") and attrs.get("landmarks"):
+            attrs["front_landmarks"] = attrs["landmarks"]
+        return attrs
 
 
 # ── Views ──────────────────────────────────────────────────────────────────────
@@ -259,6 +294,11 @@ class SubmitLandmarksView(APIView):
 
         data = serializer.validated_data
 
+        # Resolve front landmarks (V2 front_landmarks preferred; fall back to legacy landmarks)
+        front_lms  = data.get("front_landmarks") or data.get("landmarks") or []
+        side_lms   = data.get("side_landmarks")  # GAP-5 FIX: forwarded to workflow
+        user_age   = data.get("user_age")         # B-1 FIX: forwarded for anthropometric calibration
+
         # Mark session as PROCESSING
         from django.utils import timezone
         BodyScanSession.objects.filter(pk=session.pk).update(
@@ -271,10 +311,12 @@ class SubmitLandmarksView(APIView):
             from apps.ai.tasks.measurement_tasks import process_body_scan
             process_body_scan.delay(
                 session_id=str(session.session_id),
-                landmarks=data["landmarks"],
+                landmarks=front_lms,               # front pose (primary)
                 user_height_cm=data["user_height_cm"],
                 user_id=request.user.pk,
                 user_weight_kg=data.get("user_weight_kg"),
+                user_age=user_age,                 # B-1 FIX: age anchor
+                side_landmarks=side_lms,           # GAP-5 FIX: side pose for depth
             )
         except Exception as exc:
             logger.exception("[SubmitLandmarksView] Failed to dispatch Celery task")

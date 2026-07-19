@@ -33,6 +33,8 @@ def process_body_scan(
     user_height_cm: float,
     user_id: int,
     user_weight_kg: float | None = None,
+    user_age: int | None = None,            # B-1 FIX: age-based anthropometric calibration
+    side_landmarks: list | None = None,     # GAP-5 FIX: side pose for depth estimation
 ) -> dict:
     """
     Main AI body measurement processing pipeline.
@@ -45,21 +47,28 @@ def process_body_scan(
          - compute_scale_factor (calibration)
          - extract_linear_measurements (world coords → cm)
          - estimate_circumferences_geometric (anthropometric models)
+         - apply_bmi_corrections (BMI-scaled circumference adjustment)
+         - verify_anthropometric_plausibility (flag implausible values)
       2. create_or_update_ai_scan_profile → MeasurementProfile
       3. Update BodyScanSession status → COMPLETED
       4. Fire run_profile_recommendations.delay()
 
     Args:
         session_id:      BodyScanSession UUID
-        landmarks:       33 MediaPipe world landmarks (from browser)
+        landmarks:       33 MediaPipe world landmarks — FRONT pose (primary)
         user_height_cm:  User-provided height (cm) for scale calibration
         user_id:         Owner user PK
         user_weight_kg:  Optional user-provided weight (kg) for BMI correction
+        user_age:        Optional age in years for anthropometric ratio adjustment
+        side_landmarks:  Optional 33 side-pose landmarks for depth estimation
 
     Returns:
         dict: {status, profile_id, quality_score, errors}
     """
-    logger.info("[process_body_scan] session=%s user=%s", session_id, user_id)
+    logger.info(
+        "[process_body_scan] session=%s user=%s age=%s has_side=%s",
+        session_id, user_id, user_age, side_landmarks is not None
+    )
 
     try:
         from apps.ai.workflows.measurement import MeasurementWorkflow
@@ -70,7 +79,9 @@ def process_body_scan(
             "user_id":        user_id,
             "user_height_cm": user_height_cm,
             "user_weight_kg": user_weight_kg,
+            "user_age":       user_age,          # B-1 FIX
             "landmarks":      landmarks,
+            "side_landmarks": side_landmarks,    # GAP-5 FIX
             "celery_task_id": self.request.id or "",
         })
 
