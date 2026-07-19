@@ -146,7 +146,7 @@ dependencies = [
     # ── PDF / QR ──────────────────────────────────────────────────────────────
     "weasyprint",
     "fonttools",
-    "qrcode",
+    "qrcode[pil]>=7.4.2",          # Server-side QR PNG generation (brand-coloured, ERROR_CORRECT_H)
     "stripe",
 ]
 
