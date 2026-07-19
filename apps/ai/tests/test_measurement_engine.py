@@ -24,12 +24,16 @@ from apps.ai.engines.measurement_engine import MeasurementEngine
 
 @pytest.fixture
 def engine():
-    """Return a MeasurementEngine instance with mocked model."""
-    with patch("apps.ai.engines.measurement_engine.PoseLandmarker", MagicMock()):
-        eng = MeasurementEngine.__new__(MeasurementEngine)
-        eng._model = MagicMock()
-        eng._ready = True
-        return eng
+    """Return a MeasurementEngine instance without any mocking.
+    
+    MeasurementEngine.__init__ only sets up instance state.
+    The BMI correction and plausibility methods are pure Python
+    and require no MediaPipe model to be loaded.
+    """
+    eng = MeasurementEngine.__new__(MeasurementEngine)
+    eng._model   = None
+    eng._ready   = True
+    return eng
 
 
 # ─── Helper: Minimal valid landmark set (33 landmarks, all at origin) ─────────

@@ -40,8 +40,14 @@ class TestGenerateMeasurementUrl:
         url = generate_measurement_url(SAMPLE_SESSION_ID)
         assert url.endswith(f"/scan/{SAMPLE_SESSION_ID}")
 
-    def test_url_uses_https(self):
-        """URL must use HTTPS by default."""
+    def test_url_uses_https(self, settings):
+        """URL must use HTTPS when FRONTEND_URL is set to an https address.
+        
+        The test environment uses FRONTEND_URL=http://localhost:3000 for local
+        development convenience.  This test verifies the production default by
+        overriding the setting to the canonical production URL.
+        """
+        settings.FRONTEND_URL = "https://fashionistar.net"
         from apps.measurements.services.qr_service import generate_measurement_url
         url = generate_measurement_url(SAMPLE_SESSION_ID)
         assert url.startswith("https://")

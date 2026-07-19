@@ -31,14 +31,23 @@ def api_client():
 
 @pytest.fixture
 def authenticated_client(api_client, django_user_model):
-    """Return an authenticated DRF test client."""
+    """Return an authenticated DRF test client.
+
+    UnifiedUserManager.create_user() signature:
+        create_user(email=None, phone=None, password=None, **extra_fields)
+
+    Note: is_active=True + is_verified=True required — InitiateScanView
+    uses IsAuthenticated + IsVerified permissions (403 for inactive accounts).
+    """
     user = django_user_model.objects.create_user(
-        username="testscanuser",
         email="scan@fashionistar.test",
         password="TestPass123!",
+        is_active=True,
+        is_verified=True,
     )
     api_client.force_authenticate(user=user)
     return api_client, user
+
 
 
 # ─── InitiateScanView QR fields ────────────────────────────────────────────────

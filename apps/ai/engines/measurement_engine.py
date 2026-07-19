@@ -169,6 +169,66 @@ class MeasurementEngine:
             "plausibility_warnings": plausibility_warnings,
         }
 
+    def _apply_bmi_correction(
+        self,
+        measurements: dict[str, float | None],
+        bmi: float,
+    ) -> dict[str, float | None]:
+        """
+        Apply NHANES 2017-2020 BMI-based per-field correction factors.
+
+        Single-camera geometry underestimates circumferences proportionally
+        more at higher BMI due to body depth (the axis perpendicular to the
+        lens). Waist is affected most; hips less so; bust moderately.
+        Structural fields (shoulder_width, arm_length, inseam) are unchanged.
+
+        Per-field factors by BMI category:
+          Underweight < 18.5:
+            waist × 0.90, hips × 0.95, bust × 0.95
+          Normal 18.5–24.9:
+            All × 1.00 (no correction — baseline)
+          Overweight 25–29.9:
+            waist × 1.15, hips × 1.08, bust × 1.05, thigh × 1.05
+          Obese ≥ 30:
+            waist × 1.30, hips × 1.15, bust × 1.10, thigh × 1.12
+
+        Keys NOT corrected: shoulder_width, arm_length, inseam, torso_length,
+            leg_length, thigh_length, height_cm, estimated_height
+        """
+        # ── Per-field factor tables ────────────────────────────────────────────
+        if bmi < 18.5:
+            FACTORS: dict[str, float] = {
+                "waist": 0.90, "waist_cm": 0.90,
+                "hips":  0.95, "hip":      0.95, "hip_cm": 0.95,
+                "bust":  0.95, "chest":    0.95, "chest_cm": 0.95,
+                "thigh": 0.95, "belly_button": 0.95, "belly_button_cm": 0.95,
+            }
+        elif bmi < 25.0:
+            FACTORS = {}   # Normal BMI — identity, no correction needed
+        elif bmi < 30.0:
+            FACTORS = {
+                "waist": 1.15, "waist_cm": 1.15,
+                "hips":  1.08, "hip":      1.08, "hip_cm": 1.08,
+                "bust":  1.05, "chest":    1.05, "chest_cm": 1.05,
+                "thigh": 1.05, "belly_button": 1.05, "belly_button_cm": 1.05,
+            }
+        else:  # obese ≥ 30
+            FACTORS = {
+                "waist": 1.30, "waist_cm": 1.30,
+                "hips":  1.15, "hip":      1.15, "hip_cm": 1.15,
+                "bust":  1.10, "chest":    1.10, "chest_cm": 1.10,
+                "thigh": 1.12, "belly_button": 1.12, "belly_button_cm": 1.12,
+            }
+
+        result: dict[str, float | None] = {}
+        for key, value in measurements.items():
+            if value is None or key not in FACTORS:
+                result[key] = value
+            else:
+                result[key] = round(value * FACTORS[key], 1)
+
+        return result
+
     # ── Private methods ────────────────────────────────────────────────────────
 
     def _compute_quality_score(self, landmarks: list[dict]) -> float:
