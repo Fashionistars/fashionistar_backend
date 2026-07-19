@@ -37,5 +37,5 @@ short_description: FASHIONISTAR AI Fashion Platform — Django ASGI API
 ## Status
 
 - 🟢 **API**: Running on port 7860
-- 🟢 **Celery Worker**: Hosted on Northflank
-- 🟢 **Celery Beat**: Hosted on Northflank
+- 🟢 **Celery Worker**: Hosted on Hugging Space
+- 🟢 **Celery Beat**: Hosted on Hugging Space

@@ -12,7 +12,7 @@ description: >
 When asked to test any Fashionistar dashboard, use the following credentials.
 
 ## Production URL
-https://fashionistar-frontend-964702203189.europe-west1.run.app
+https://fashionistar.net
 
 ## Admin
 - Email: `admin@fashionistar.io`
