@@ -173,6 +173,13 @@ async def get_scan_session_status(request, session_id: str):
                 if session.measurement_profile_id else None
             ),
             "extracted_measurements": session.extracted_measurements or {},
+            "measurements_cm":        session.extracted_measurements or {},
+            "plausibility_warnings":  (
+                session.plausibility_warnings
+                if hasattr(session, "plausibility_warnings")
+                   and session.plausibility_warnings
+                else []
+            ),
             "error_message":          session.error_message or "",
             "processing_started_at":  (
                 session.processing_started_at.isoformat()
