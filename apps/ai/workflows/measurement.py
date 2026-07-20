@@ -6,7 +6,7 @@ Triggered by: Celery task apps.ai.tasks.measurement_tasks.process_body_scan
 Input: MediaPipe world landmarks JSON + user height + optional weight/age/side_landmarks
 Output: Completed MeasurementProfile + enriched BodyScanSession
 
-Graph (V2 — Dual-Pose + BMI Correction + Plausibility):
+Graph (V1 — Dual-Pose + BMI Correction + Plausibility):
   run_full_pipeline
       ↓ (is_valid)
   apply_bmi_corrections       ← GAP-1 FIX: BMI-weighted circumference scaling
@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 class MeasurementState(TypedDict):
     """
-    Typed state dictionary for the MeasurementWorkflow graph (V2).
+    Typed state dictionary for the MeasurementWorkflow graph (V1).
 
     Keys:
         session_id: str            BodyScanSession UUID
@@ -129,7 +129,7 @@ _WHR_MAX = 1.20
 
 class MeasurementWorkflow:
     """
-    LangGraph workflow (V2) for processing MediaPipe body scan data into
+    LangGraph workflow (V1) for processing MediaPipe body scan data into
     a persisted MeasurementProfile with BMI correction + plausibility checks.
 
     Usage (from Celery task):
@@ -159,14 +159,14 @@ class MeasurementWorkflow:
     """
 
     workflow_type = "measurement"
-    model_version = "mediapipe-tasks-0.10.14+geometry-v2+bmi+plausibility"
+    model_version = "mediapipe-tasks-0.10.14+geometry-V1+bmi+plausibility"
 
     def __init__(self):
         """Initialize the workflow and build the LangGraph state machine."""
         self.graph = self._build_graph()
 
     def _build_graph(self) -> StateGraph:
-        """Build the LangGraph state machine with nodes and edges (V2)."""
+        """Build the LangGraph state machine with nodes and edges (V1)."""
         workflow = StateGraph(MeasurementState)
 
         # ── Add nodes ───────────────────────────────────────────────────────────
