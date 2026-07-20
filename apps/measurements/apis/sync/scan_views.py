@@ -51,14 +51,14 @@ class LandmarkSubmitSerializer(drf_serializers.Serializer):
     """
     Validates the landmark submission payload from the browser.
 
-    V2 payload (dual-pose):
+    Expected payload (dual-pose):
     {
         "user_height_cm": 175.5,
         "user_weight_kg": 70.0,      // optional — BMI correction layer
         "user_age": 28,              // B-1 FIX: age-based anthropometric anchor
         "device_type": "web",        // optional
         "landmarks": [...],          // 33 front pose landmarks (legacy alias)
-        "front_landmarks": [...],    // 33 front pose landmarks (V2 preferred)
+        "front_landmarks": [...],    // 33 front pose landmarks (V1 preferred)
         "side_landmarks": [...]      // 33 side pose landmarks (optional — depth estimation)
     }
     """
@@ -83,7 +83,7 @@ class LandmarkSubmitSerializer(drf_serializers.Serializer):
         max_length=33,
         required=False,
     )
-    # V2: front_landmarks is the canonical field name
+    # V1: front_landmarks is the canonical field name
     front_landmarks = drf_serializers.ListField(
         child=LandmarkPointSerializer(),
         min_length=33,
@@ -294,7 +294,7 @@ class SubmitLandmarksView(APIView):
 
         data = serializer.validated_data
 
-        # Resolve front landmarks (V2 front_landmarks preferred; fall back to legacy landmarks)
+        # Resolve front landmarks (V1 front_landmarks preferred; fall back to legacy landmarks)
         front_lms  = data.get("front_landmarks") or data.get("landmarks") or []
         side_lms   = data.get("side_landmarks")  # GAP-5 FIX: forwarded to workflow
         user_age   = data.get("user_age")         # B-1 FIX: forwarded for anthropometric calibration
