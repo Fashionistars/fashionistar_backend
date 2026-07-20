@@ -250,8 +250,10 @@ class MeasurementProfile(TimeStampedModel):
     )
     notes = models.TextField(
         blank=True,
+        default="",
         help_text="Optional notes from client or tailor (e.g. 'prefer relaxed fit').",
     )
+
 
     # ── AI Recommendation Snapshot ────────────────────────────────────────────
     # Cached by apps.ai.workflows.recommendation.RecommendationWorkflow._persist_recommendations()
