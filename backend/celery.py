@@ -58,7 +58,7 @@ from kombu import Exchange, Queue
 # ─────────────────────────────────────────────────────────────────────────────
 # Must be set BEFORE the Celery app is instantiated so that
 # app.config_from_object() can pull CELERY_* vars from Django settings.
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.config.development")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # APPLICATION INSTANCE
