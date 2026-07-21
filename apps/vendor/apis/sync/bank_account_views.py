@@ -225,6 +225,7 @@ class VendorBankAccountDeleteView(GenericAPIView):
     """
     permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
+    serializer_class   = BankAccountOutputSerializer
     queryset           = VendorBankAccount.objects.none()
 
     def delete(self, request, pk: str, *args, **kwargs):
@@ -257,6 +258,7 @@ class VendorBankAccountSetDefaultView(GenericAPIView):
     """
     permission_classes = [IsAuthenticated, IsVendor]
     renderer_classes   = [CustomJSONRenderer, BrowsableAPIRenderer]
+    serializer_class   = BankAccountOutputSerializer
     queryset           = VendorBankAccount.objects.none()
 
     def patch(self, request, pk: str, *args, **kwargs):

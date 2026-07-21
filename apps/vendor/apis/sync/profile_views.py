@@ -282,6 +282,7 @@ class PublicVendorListView(GenericAPIView):
 
     permission_classes  = [AllowAny]
     renderer_classes    = [CustomJSONRenderer, BrowsableAPIRenderer]
+    serializer_class    = VendorProfileOutputSerializer
 
     def get(self, request, *args, **kwargs):
         from apps.vendor.models import VendorProfile
@@ -360,6 +361,7 @@ class PublicVendorDetailView(GenericAPIView):
 
     permission_classes  = [AllowAny]
     renderer_classes    = [CustomJSONRenderer, BrowsableAPIRenderer]
+    serializer_class    = VendorProfileOutputSerializer
 
     def get(self, request, store_slug: str, *args, **kwargs):
         from apps.vendor.models import VendorProfile

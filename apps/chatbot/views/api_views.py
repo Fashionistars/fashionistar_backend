@@ -48,7 +48,9 @@ class ClientChatbotViewSet(viewsets.GenericViewSet):
     permission_classes = [permissions.IsAuthenticated, GDPRConsentPermission]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'client_chatbot'
-    
+    serializer_class = ChatbotSessionSerializer
+    queryset = ChatbotSession.objects.none()
+
     def get_chatbot_service(self):
         """
         یک خطی:
@@ -277,7 +279,9 @@ class VendorChatbotViewSet(viewsets.GenericViewSet):
     permission_classes = [permissions.IsAuthenticated, GDPRConsentPermission]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'vendor_chatbot'
-    
+    serializer_class = ChatbotSessionSerializer
+    queryset = ChatbotSession.objects.none()
+
     def get_chatbot_service(self):
         """
         بازگرداندن نمونه‌ی VendorChatbotService متصل به کاربر جاری.

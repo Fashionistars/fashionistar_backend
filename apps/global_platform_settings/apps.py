@@ -31,9 +31,15 @@ class GlobalPlatformSettingsConfig(AppConfig):
         """Import signal handlers when the application registry is ready."""
         import apps.global_platform_settings.signals  # noqa: F401  — registers post_migrate handler
 
-        # Warm up the cache synchronously to avoid async context ORM operations at runtime
+        # Warm up the cache synchronously to avoid async context ORM operations at runtime.
+        # Skip when inside an async event loop (Uvicorn ASGI startup) — get_platform_settings()
+        # now handles async contexts internally via sync_to_async.
         try:
-            from apps.global_platform_settings.cache import get_platform_settings
-            get_platform_settings()
-        except Exception:
-            pass
+            import asyncio
+            asyncio.get_running_loop()
+        except RuntimeError:
+            try:
+                from apps.global_platform_settings.cache import get_platform_settings
+                get_platform_settings()
+            except Exception:
+                pass
