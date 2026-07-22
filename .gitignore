@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Database backups (django-dbbackup)
+backups/
+
 # C extensions
 *.so
 */migrations/*

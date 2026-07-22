@@ -503,6 +503,44 @@ app.conf.beat_schedule = {
         "options": {"queue": "ai_ingestion"},
         "kwargs":  {"days": 30},
     },
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # DATABASE BACKUP SCHEDULE (django-dbbackup)
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Tier 1: Rolling backup every 5 minutes — overwrites same file (latest.sql.gz)
+    "dbbackup-rolling": {
+        "task":     "dbbackup.rolling_backup",
+        "schedule": crontab(minute="*/5"),
+        "options":  {"queue": "default"},
+    },
+
+    # Tier 2: Hourly backup — timestamped file, 24/day, 30-day retention
+    "dbbackup-hourly": {
+        "task":     "dbbackup.hourly_backup",
+        "schedule": crontab(minute=0),  # Every hour on the hour
+        "options":  {"queue": "default"},
+    },
+
+    # Tier 3: Monthly backup — 1st of each month at 00:30 UTC
+    "dbbackup-monthly": {
+        "task":     "dbbackup.monthly_backup",
+        "schedule": crontab(hour=0, minute=30, day_of_month=1),
+        "options":  {"queue": "default"},
+    },
+
+    # Cleanup 1: Delete hourly backups older than 30 days — daily at 04:00 UTC
+    "dbbackup-cleanup-hourly": {
+        "task":     "dbbackup.cleanup_hourly_backups",
+        "schedule": crontab(hour=4, minute=0),
+        "options":  {"queue": "cleanup"},
+    },
+
+    # Cleanup 2: Delete monthly backups older than 365 days — 2nd of each month at 04:00 UTC
+    "dbbackup-cleanup-monthly": {
+        "task":     "dbbackup.cleanup_monthly_backups",
+        "schedule": crontab(hour=4, minute=0, day_of_month=2),
+        "options":  {"queue": "cleanup"},
+    },
 }
 
 app.conf.beat_scheduler = "django_celery_beat.schedulers:DatabaseScheduler"

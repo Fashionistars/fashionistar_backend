@@ -148,6 +148,7 @@ dependencies = [
     "fonttools",
     "qrcode[pil]>=7.4.2",          # Server-side QR PNG generation (brand-coloured, ERROR_CORRECT_H)
     "stripe",
+    "django-dbbackup>=5.3.0",
 ]
 
 [project.optional-dependencies]

@@ -239,6 +239,8 @@ INSTALLED_APPS = [
     "dj_celery_panel",
     "dj_signals_panel",
     "dj_control_room",
+    # ── Database Backups ─────────────────────────────────────────────────────
+    "dbbackup",
 ]
 
 
@@ -467,6 +469,53 @@ STATICFILES_DIRS = [
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
+
+
+# =============================================================================
+# DJANGO-DBBACKUP — Database Backup Configuration (base defaults)
+# =============================================================================
+# Three-tier backup strategy:
+#   1. Rolling  (every 5 min)  — single overwriting file, latest DB state
+#   2. Hourly   (every 1 hour) — timestamped file, 24 files/day, 30-day retention
+#   3. Monthly  (1st of month)  — timestamped file, 12-month retention
+#
+# Storage: django-dbbackup 5.3+ uses Django's STORAGES dict.
+# A 'dbbackups' key is added to STORAGES in development.py and production.py.
+import tempfile as _tempfile
+
+# Backup directory layout (used by local filesystem storage in dev)
+DBBACKUP_BACKUP_DIRECTORY = os.path.join(BASE_DIR, "backups")
+
+# Subdirectories for each backup tier
+DBBACKUP_ROLLING_DIR = "rolling"
+DBBACKUP_HOURLY_DIR = "hourly"
+DBBACKUP_MONTHLY_DIR = "monthly"
+
+# Cloudinary folder prefix (used in production; ignored in dev with local storage)
+DBBACKUP_CLOUDINARY_FOLDER = env("DBBACKUP_CLOUDINARY_FOLDER", default="backups")  # noqa: F405
+
+# Compression — gzip for all backups
+DBBACKUP_COMPRESS = True
+
+# Encryption — disabled by default, enable via env in production
+DBBACKUP_ENCRYPT = env.bool("DBBACKUP_ENCRYPT", default=False)  # noqa: F405
+DBBACKUP_ENCRYPT_PASSPHRASE = env("DBBACKUP_ENCRYPT_PASSPHRASE", default="")  # noqa: F405
+
+# Filename templates
+DBBACKUP_FILENAME_TEMPLATE = "{datetime}.{extension}"
+DBBACKUP_MEDIA_FILENAME_TEMPLATE = "{datetime}.{extension}"
+
+# Database backup suffix (compressed)
+DBBACKUP_SUFFIX = "sql.gz"
+
+# Number of backups to keep (0 = unlimited; cleanup handled by Celery Beat)
+DBBACKUP_KEEP_BACKUPS = 0
+
+# Failure notifications
+DBBACKUP_FAILURE_RECIPIENTS = env.list("DBBACKUP_FAILURE_RECIPIENTS", default=[])  # noqa: F405
+
+# Temp directory for backup processing
+DBBACKUP_TMP_DIR = _tempfile.gettempdir()
 
 
 # Cloudinary Configuration — SDK-level only (NOT used as Django storage backend)

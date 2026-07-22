@@ -107,8 +107,10 @@ CORS_ALLOWED_ORIGINS = build_origin_list(  # noqa: F405
 
 
 # =============================================================================
-# STATIC FILES — Use simple storage in dev (no compression needed)
+# STATIC FILES - Use simple storage in dev (no compression needed)
 # =============================================================================
+import os as _os
+
 STORAGES = {
     "default": {
         "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
@@ -116,7 +118,26 @@ STORAGES = {
     "staticfiles": {
         "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
     },
+    # django-dbbackup 5.3+ reads storage from STORAGES['dbbackups']
+    "dbbackups": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+        "OPTIONS": {
+            "location": _os.path.join(BASE_DIR, "backups"),  # noqa: F405
+        },
+    },
 }
+
+
+# =============================================================================
+# DJANGO-DBBACKUP - Development overrides
+# =============================================================================
+# In development, backups go to local filesystem under /backups/
+# Three subdirectories: rolling/, hourly/, monthly/
+
+# Ensure backup directories exist
+for _subdir in ("rolling", "hourly", "monthly"):
+    _path = _os.path.join(BASE_DIR, "backups", _subdir)  # noqa: F405
+    _os.makedirs(_path, exist_ok=True)
 
 
 # =============================================================================

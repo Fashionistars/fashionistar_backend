@@ -140,7 +140,27 @@ STORAGES = {
     "staticfiles": {
         "BACKEND": "backend.config.production.NonStrictCompressedManifestStaticFilesStorage",
     },
+    # django-dbbackup 5.3+ reads storage from STORAGES['dbbackups']
+    # In production: Cloudinary Raw media storage (accepts any file type, not just images)
+    "dbbackups": {
+        "BACKEND": "cloudinary_storage.storage.RawMediaCloudinaryStorage",
+    },
 }
+
+
+# =============================================================================
+# DJANGO-DBBACKUP - Production overrides (Cloudinary storage)
+# =============================================================================
+# In production (Docker/HF Spaces), backups go directly to Cloudinary
+# so they survive container restarts/reboots.
+# Folder structure in Cloudinary: backups/rolling/, backups/hourly/, backups/monthly/
+
+# Cloudinary folder prefix for all backups
+DBBACKUP_CLOUDINARY_FOLDER = "backups"
+
+# Optional: enable GPG encryption in production via env
+DBBACKUP_ENCRYPT = env.bool("DBBACKUP_ENCRYPT", default=False)  # noqa: F405
+DBBACKUP_ENCRYPT_PASSPHRASE = env("DBBACKUP_ENCRYPT_PASSPHRASE", default="")  # noqa: F405
 
 WHITENOISE_MANIFEST_STRICT = False
 

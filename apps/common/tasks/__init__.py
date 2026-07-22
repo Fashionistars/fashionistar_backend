@@ -59,6 +59,15 @@ from apps.common.tasks.lifecycle import (         # noqa: F401
     increment_lifecycle_login_counter,
 )
 
+# ── Database Backups ──────────────────────────────────────────────────────────
+from apps.common.tasks.dbbackups import (          # noqa: F401
+    rolling_backup,
+    hourly_backup,
+    monthly_backup,
+    cleanup_hourly_backups,
+    cleanup_monthly_backups,
+)
+
 __all__ = [
     # health
     "keep_service_awake",
@@ -78,4 +87,10 @@ __all__ = [
     # lifecycle
     "upsert_user_lifecycle_registry",
     "increment_lifecycle_login_counter",
+    # dbbackups
+    "rolling_backup",
+    "hourly_backup",
+    "monthly_backup",
+    "cleanup_hourly_backups",
+    "cleanup_monthly_backups",
 ]

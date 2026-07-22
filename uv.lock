@@ -1235,6 +1235,18 @@ wheels = [
 ]
 
 [[package]]
+name = "django-dbbackup"
+version = "5.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "django" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/2b/8b/6a963f6e3d13eb689a842c8d942a22bd0f477f328c1ce98e40334ac0031b/django_dbbackup-5.3.0.tar.gz", hash = "sha256:2c880dba7650539e8a724174fedb5213062c4fcda3aa09e1c5f3f573192106cb", size = 27843, upload-time = "2026-04-10T01:49:43.02Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6e/fa/24891c73c6fc76e6005389a496fa1752a69d6ff8c609692f86513ab373ad/django_dbbackup-5.3.0-py3-none-any.whl", hash = "sha256:ff80b5facd524e3f6479235aeb330b094a1c982f8b0b9503c24ba0dc613162ed", size = 36170, upload-time = "2026-04-10T01:49:41.534Z" },
+]
+
+[[package]]
 name = "django-debug-toolbar"
 version = "7.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1658,6 +1670,7 @@ dependencies = [
     { name = "django-cors-headers" },
     { name = "django-cryptography" },
     { name = "django-csp" },
+    { name = "django-dbbackup" },
     { name = "django-debug-toolbar" },
     { name = "django-encrypted-model-fields" },
     { name = "django-environ" },
@@ -1809,6 +1822,7 @@ requires-dist = [
     { name = "django-cors-headers" },
     { name = "django-cryptography" },
     { name = "django-csp" },
+    { name = "django-dbbackup", specifier = ">=5.3.0" },
     { name = "django-debug-toolbar" },
     { name = "django-encrypted-model-fields" },
     { name = "django-environ" },
