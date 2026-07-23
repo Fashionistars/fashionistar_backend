@@ -68,6 +68,13 @@ from apps.common.tasks.dbbackups import (          # noqa: F401
     cleanup_monthly_backups,
 )
 
+# ── Database Restoration ──────────────────────────────────────────────────────
+from apps.common.tasks.dbrestore import (          # noqa: F401
+    restore_backup_task,
+    verify_backup_task,
+    list_available_backups_task,
+)
+
 __all__ = [
     # health
     "keep_service_awake",
@@ -93,4 +100,8 @@ __all__ = [
     "monthly_backup",
     "cleanup_hourly_backups",
     "cleanup_monthly_backups",
+    # dbrestore
+    "restore_backup_task",
+    "verify_backup_task",
+    "list_available_backups_task",
 ]
