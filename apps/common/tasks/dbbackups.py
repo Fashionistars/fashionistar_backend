@@ -19,7 +19,12 @@ Storage:
   - Production:  Cloudinary (backups/rolling/, backups/hourly/, backups/monthly/)
   Both use Django's storage API, so the tasks are fully storage-agnostic.
 
-All backups use gzip compression. Encryption optional via DBBACKUP_ENCRYPT env var.
+All backups use gzip compression.
+Backup-level encryption is supported via DBBACKUP_ENCRYPTION_KEY env var (Fernet symmetric encryption).
+When DBBACKUP_ENCRYPTION_KEY is set, the pipeline becomes:
+  pg_dump -> gzip -> Fernet encrypt -> upload to storage
+When not set, the pipeline is:
+  pg_dump -> gzip -> upload to storage
 Backups are created via pg_dump subprocess for full fidelity (extensions, vectors, etc).
 """
 
@@ -205,6 +210,36 @@ def _gzip_file(source_path, dest_path):
     return os.path.getsize(dest_path)
 
 
+def _is_encryption_enabled():
+    """Check if backup encryption is enabled via DBBACKUP_ENCRYPTION_KEY env var."""
+    return bool(os.environ.get("DBBACKUP_ENCRYPTION_KEY", "").strip())
+
+
+def _encrypt_file(source_path, dest_path):
+    """
+    Encrypt a file using Fernet symmetric encryption.
+    The entire file is read, encrypted, and written to dest_path.
+    Used after gzip compression when DBBACKUP_ENCRYPTION_KEY is set.
+    """
+    from cryptography.fernet import Fernet
+
+    key = os.environ.get("DBBACKUP_ENCRYPTION_KEY", "").strip()
+    if not key:
+        raise ValueError("DBBACKUP_ENCRYPTION_KEY not set but encryption requested")
+
+    fernet = Fernet(key.encode() if isinstance(key, str) else key)
+
+    with open(source_path, "rb") as f:
+        plaintext = f.read()
+
+    ciphertext = fernet.encrypt(plaintext)
+
+    with open(dest_path, "wb") as f:
+        f.write(ciphertext)
+
+    return os.path.getsize(dest_path)
+
+
 def _upload_to_storage(local_path, storage_path):
     """
     Upload a local file to the configured Django storage backend.
@@ -239,6 +274,9 @@ def _create_backup(tier, filename):
     tmp_dir = tempfile.mkdtemp(prefix=f"dbbackup_{tier}_")
     tmp_sql = os.path.join(tmp_dir, "dump.sql")
     tmp_gz = os.path.join(tmp_dir, "dump.sql.gz")
+    tmp_enc = os.path.join(tmp_dir, "dump.sql.gz.enc")
+
+    encrypt = _is_encryption_enabled()
 
     try:
         if not _run_pg_dump(tmp_sql):
@@ -247,18 +285,28 @@ def _create_backup(tier, filename):
         compressed_size = _gzip_file(tmp_sql, tmp_gz)
         logger.info("[DBBACKUP] Compressed: %.2f KB", compressed_size / 1024)
 
-        saved_path = _upload_to_storage(tmp_gz, storage_path)
+        if encrypt:
+            encrypted_size = _encrypt_file(tmp_gz, tmp_enc)
+            logger.info("[DBBACKUP] Encrypted: %.2f KB", encrypted_size / 1024)
+            upload_source = tmp_enc
+            result_size = encrypted_size
+        else:
+            upload_source = tmp_gz
+            result_size = compressed_size
+
+        saved_path = _upload_to_storage(upload_source, storage_path)
         logger.info("[DBBACKUP] Uploaded to storage: %s", saved_path)
 
         return {
             "status": "ok",
             "path": saved_path,
             "tier": tier,
-            "size_kb": round(compressed_size / 1024, 2),
-            "timestamp": datetime.utcnow().isoformat(),
+            "size_kb": round(result_size / 1024, 2),
+            "encrypted": encrypt,
+            "timestamp": datetime.now(datetime.timezone.utc).isoformat(),
         }
     finally:
-        for tmp_file in (tmp_sql, tmp_gz):
+        for tmp_file in (tmp_sql, tmp_gz, tmp_enc):
             try:
                 if os.path.exists(tmp_file):
                     os.remove(tmp_file)
@@ -403,7 +451,7 @@ def monthly_backup(self):
     File: {folder}/monthly/YYYYMM_01_HHMMSS.sql.gz
     Cleaned up after 365 days (12 months).
     """
-    timestamp = datetime.utcnow().strftime("%Y%m_01_%H%M%S")
+    timestamp = datetime.now(datetime.timezone.utc).strftime("%Y%m_01_%H%M%S")
     filename = f"{timestamp}.sql.gz"
 
     try:
@@ -426,7 +474,7 @@ def cleanup_hourly_backups():
     Delete hourly backup files older than 30 days.
     Runs daily at 4 AM UTC via Celery Beat.
     """
-    cutoff = datetime.utcnow() - timedelta(days=30)
+    cutoff = datetime.now(datetime.timezone.utc) - timedelta(days=30)
     files = _list_storage_files("hourly")
 
     deleted_count = 0
@@ -457,7 +505,7 @@ def cleanup_monthly_backups():
     Delete monthly backup files older than 365 days (12 months / 1 year).
     Runs monthly on the 2nd of each month via Celery Beat.
     """
-    cutoff = datetime.utcnow() - timedelta(days=365)
+    cutoff = datetime.now(datetime.timezone.utc) - timedelta(days=365)
     files = _list_storage_files("monthly")
 
     deleted_count = 0

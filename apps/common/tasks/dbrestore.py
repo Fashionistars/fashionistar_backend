@@ -147,27 +147,88 @@ def _detect_target_engine():
 # BACKUP FILE DOWNLOAD & DECOMPRESSION
 # =============================================================================
 
+def _is_encrypted_file(file_path):
+    """
+    Detect if a file is Fernet-encrypted by checking for the Fernet token prefix.
+    Fernet tokens start with 'gAAAAA' (base64-encoded version byte 0x80 + timestamp).
+    """
+    try:
+        with open(file_path, "rb") as f:
+            header = f.read(16)
+        # Fernet tokens always start with 0x80 byte (base64 'gAAAAA')
+        return header[:6] == b"gAAAAA"
+    except Exception:
+        return False
+
+
+def _decrypt_file(source_path, dest_path):
+    """
+    Decrypt a Fernet-encrypted file.
+    Reads the entire encrypted file, decrypts it, and writes plaintext to dest_path.
+    """
+    from cryptography.fernet import Fernet
+
+    key = os.environ.get("DBBACKUP_ENCRYPTION_KEY", "").strip()
+    if not key:
+        raise ValueError(
+            "DBBACKUP_ENCRYPTION_KEY not set but backup file is encrypted. "
+            "Set DBBACKUP_ENCRYPTION_KEY in your environment to restore encrypted backups."
+        )
+
+    fernet = Fernet(key.encode() if isinstance(key, str) else key)
+
+    with open(source_path, "rb") as f:
+        ciphertext = f.read()
+
+    plaintext = fernet.decrypt(ciphertext)
+
+    with open(dest_path, "wb") as f:
+        f.write(plaintext)
+
+    return os.path.getsize(dest_path)
+
+
 def _download_from_storage(storage_path):
     """
     Download a backup file from the configured storage backend.
-    Returns the local file path to a decompressed .sql file.
+    Handles both encrypted and non-encrypted backups automatically.
+
+    Pipeline:
+      1. Download file from storage
+      2. If encrypted (Fernet): decrypt → decompress gzip → .sql
+      3. If not encrypted: decompress gzip → .sql
+
+    Returns (path_to_decompressed_sql_file, tmp_dir_path).
     """
     from apps.common.tasks.dbbackups import _get_storage
 
     storage = _get_storage()
 
     tmp_dir = tempfile.mkdtemp(prefix="dbrestore_")
-    tmp_gz = os.path.join(tmp_dir, "backup.sql.gz")
+    tmp_raw = os.path.join(tmp_dir, "backup.raw")
+    tmp_dec = os.path.join(tmp_dir, "backup.dec.gz")
     tmp_sql = os.path.join(tmp_dir, "backup.sql")
 
     try:
-        # Download from storage
-        with open(tmp_gz, "wb") as f:
+        # Step 1: Download from storage
+        with open(tmp_raw, "wb") as f:
             f.write(storage.open(storage_path).read())
-        logger.info("[DBRESTORE] Downloaded: %s (%s bytes)", storage_path, os.path.getsize(tmp_gz))
+        logger.info("[DBRESTORE] Downloaded: %s (%s bytes)", storage_path, os.path.getsize(tmp_raw))
 
-        # Decompress
-        with gzip.open(tmp_gz, "rb") as src:
+        # Step 2: Check if the file is encrypted
+        encrypted = _is_encrypted_file(tmp_raw)
+
+        if encrypted:
+            logger.info("[DBRESTORE] Backup is encrypted, decrypting with Fernet...")
+            decrypted_size = _decrypt_file(tmp_raw, tmp_dec)
+            logger.info("[DBRESTORE] Decrypted: %s bytes", decrypted_size)
+            gzip_source = tmp_dec
+        else:
+            logger.info("[DBRESTORE] Backup is not encrypted, proceeding to decompress.")
+            gzip_source = tmp_raw
+
+        # Step 3: Decompress gzip
+        with gzip.open(gzip_source, "rb") as src:
             with open(tmp_sql, "wb") as dst:
                 shutil.copyfileobj(src, dst)
         logger.info("[DBRESTORE] Decompressed: %s (%s bytes)", tmp_sql, os.path.getsize(tmp_sql))
@@ -176,7 +237,7 @@ def _download_from_storage(storage_path):
 
     except Exception as exc:
         # Clean up on failure
-        for f in (tmp_gz, tmp_sql):
+        for f in (tmp_raw, tmp_dec, tmp_sql):
             try:
                 if os.path.exists(f):
                     os.remove(f)
@@ -186,7 +247,7 @@ def _download_from_storage(storage_path):
             os.rmdir(tmp_dir)
         except Exception:
             pass
-        raise Exception(f"Failed to download/decompress backup: {exc}")
+        raise Exception(f"Failed to download/decrypt/decompress backup: {exc}")
 
 
 def _cleanup_temp(tmp_dir, *files):
@@ -1243,7 +1304,7 @@ def _restore_backup(
         return result
 
     finally:
-        _cleanup_temp(tmp_dir, os.path.join(tmp_dir, "backup.sql.gz"), os.path.join(tmp_dir, "backup.sql"))
+        _cleanup_temp(tmp_dir)
 
 
 # =============================================================================
@@ -1320,7 +1381,7 @@ def verify_backup_task(self, storage_path):
             return result
 
         finally:
-            _cleanup_temp(tmp_dir, os.path.join(tmp_dir, "backup.sql.gz"), os.path.join(tmp_dir, "backup.sql"))
+            _cleanup_temp(tmp_dir)
 
     except Exception as exc:
         logger.error("[DBRESTORE] Verify task failed: %s", exc)
