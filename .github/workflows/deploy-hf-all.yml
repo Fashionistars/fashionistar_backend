@@ -5,10 +5,10 @@ name: 🎀 FASHIONISTAR — Deploy All 4 Spaces to Hugging Face
 # =============================================================================
 # Deploys all 4 HF Spaces in parallel after passing integration tests:
 #
-#   1. fashionistar/fashionistar-api-v1        CPU Docker  — Django ASGI API
-#   2. fashionistar/fashionistar-celery-beat   CPU Docker  — Celery Beat Scheduler
-#   3. fashionistar/fashionistar-celery-queues ZeroGPU     — Celery AI Task Workers
-#   4. fashionistar/fashionistar-ai-engine     ZeroGPU     — ML Models (MediaPipe, SigLIP)
+#   1. fashionistar-ai/fashionistar-api-v1        CPU Docker  — Django ASGI API
+#   2. fashionistar-ai/fashionistar-celery-beat   CPU Docker  — Celery Beat Scheduler
+#   3. fashionistar-ai/fashionistar-celery-queues ZeroGPU     — Celery AI Task Workers
+#   4. fashionistar-ai/fashionistar-ai-engine     ZeroGPU     — ML Models (MediaPipe, SigLIP)
 #
 # Trigger:     push to main branch OR manual dispatch from GitHub Actions UI
 # Secrets:     HF_TOKEN — Hugging Face write-access token (set in GitHub repo secrets)
@@ -173,8 +173,8 @@ jobs:
       (github.event.inputs.service == 'all' || github.event.inputs.service == 'api-v1' || github.event_name == 'push')
 
     env:
-      SPACE_ID: fashionistar/fashionistar-api-v1
-      SPACE_URL: https://fashionistar-fashionistar-api-v1.hf.space
+      SPACE_ID: fashionistar-ai/fashionistar-api-v1
+      SPACE_URL: https://fashionistar-ai-fashionistar-api-v1.hf.space
       DEPLOY_DIR: /tmp/hf_api_v1_deploy
 
     steps:
@@ -274,8 +274,8 @@ jobs:
       (github.event.inputs.service == 'all' || github.event.inputs.service == 'celery-beat' || github.event_name == 'push')
 
     env:
-      SPACE_ID: fashionistar/fashionistar-celery-beat
-      SPACE_URL: https://fashionistar-fashionistar-celery-beat.hf.space
+      SPACE_ID: fashionistar-ai/fashionistar-celery-beat
+      SPACE_URL: https://fashionistar-ai-fashionistar-celery-beat.hf.space
       DEPLOY_DIR: /tmp/hf_beat_deploy
 
     steps:
@@ -360,8 +360,8 @@ jobs:
       (github.event.inputs.service == 'all' || github.event.inputs.service == 'celery-queues' || github.event_name == 'push')
 
     env:
-      SPACE_ID: fashionistar/fashionistar-celery-queues
-      SPACE_URL: https://fashionistar-fashionistar-celery-queues.hf.space
+      SPACE_ID: fashionistar-ai/fashionistar-celery-queues
+      SPACE_URL: https://fashionistar-ai-fashionistar-celery-queues.hf.space
       DEPLOY_DIR: /tmp/hf_queues_deploy
 
     steps:
@@ -446,8 +446,8 @@ jobs:
       (github.event.inputs.service == 'all' || github.event.inputs.service == 'ai-engine' || github.event_name == 'push')
 
     env:
-      SPACE_ID: fashionistar/fashionistar-ai-engine
-      SPACE_URL: https://fashionistar-fashionistar-ai-engine.hf.space
+      SPACE_ID: fashionistar-ai/fashionistar-ai-engine
+      SPACE_URL: https://fashionistar-ai-fashionistar-ai-engine.hf.space
       DEPLOY_DIR: /tmp/hf_ai_engine_deploy
 
     steps:
@@ -479,7 +479,7 @@ jobs:
               -d "{
                 \"type\": \"space\",
                 \"name\": \"fashionistar-ai-engine\",
-                \"organization\": \"fashionistar\",
+                \"organization\": \"fashionistar-ai\",
                 \"sdk\": \"gradio\",
                 \"hardware\": \"zero-gpu\",
                 \"private\": false,
@@ -595,10 +595,10 @@ jobs:
           echo ""
           echo "  PRODUCTION URLS:"
           echo "  ─────────────────────────────────────────────────────────"
-          echo "  API Gateway:   https://fashionistar-fashionistar-api-v1.hf.space"
-          echo "  Health Check:  https://fashionistar-fashionistar-api-v1.hf.space/api/v1/health/"
-          echo "  AI Health:     https://fashionistar-fashionistar-api-v1.hf.space/api/v1/ninja/ai/health/"
-          echo "  API Docs:      https://fashionistar-fashionistar-api-v1.hf.space/api/docs/"
+          echo "  API Gateway:   https://fashionistar-ai-fashionistar-api-v1.hf.space"
+          echo "  Health Check:  https://fashionistar-ai-fashionistar-api-v1.hf.space/api/v1/health/"
+          echo "  AI Health:     https://fashionistar-ai-fashionistar-api-v1.hf.space/api/v1/ninja/ai/health/"
+          echo "  API Docs:      https://fashionistar-ai-fashionistar-api-v1.hf.space/api/docs/"
           echo ""
           echo "  SPACES:"
           echo "  ─────────────────────────────────────────────────────────"

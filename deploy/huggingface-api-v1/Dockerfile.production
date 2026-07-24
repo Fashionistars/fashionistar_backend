@@ -1,7 +1,7 @@
 # =============================================================================
 # FASHIONISTAR — API Gateway Dockerfile (Hugging Face Spaces — v1)
 # =============================================================================
-# Target:  huggingface.co/spaces/fashionistar/fashionistar-api-v1
+# Target:  huggingface.co/spaces/fashionistar-ai/fashionistar-api-v1
 # Port:    7860 (HF mandatory, Django ASGI via Gunicorn + Uvicorn workers)
 # UID:     1000 (HF mandatory)
 #

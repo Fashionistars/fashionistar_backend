@@ -27,19 +27,19 @@ This space runs the **Django 6.0 LTS API Gateway** using:
 
 | Space | Role | Hardware |
 |---|---|---|
-| `fashionistar/fashionistar-api-v1` | **This space** — API Gateway | CPU (16GB) |
-| `fashionistar/fashionistar-celery-beat` | Task scheduler | CPU (16GB) |
-| `fashionistar/fashionistar-celery-queues` | AI task workers | ZeroGPU |
-| `fashionistar/fashionistar-ai-engine` | ML models (MediaPipe, SigLIP) | ZeroGPU |
+| `fashionistar-ai/fashionistar-api-v1` | **This space** — API Gateway | CPU (16GB) |
+| `fashionistar-ai/fashionistar-celery-beat` | Task scheduler | CPU (16GB) |
+| `fashionistar-ai/fashionistar-celery-queues` | AI task workers | ZeroGPU |
+| `fashionistar-ai/fashionistar-ai-engine` | ML models (MediaPipe, SigLIP) | ZeroGPU |
 
 ## Health Check
 
 ```
-GET https://fashionistar-fashionistar-api-v1.hf.space/api/v1/health/
+GET https://fashionistar-ai-fashionistar-api-v1.hf.space/api/v1/health/
 ```
 
 ## API Documentation
 
 ```
-GET https://fashionistar-fashionistar-api-v1.hf.space/api/docs/
+GET https://fashionistar-ai-fashionistar-api-v1.hf.space/api/docs/
 ```
